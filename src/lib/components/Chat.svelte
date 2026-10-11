@@ -584,8 +584,62 @@
 
 <div class="flex h-full flex-col gap-2 p-2 {visible ? '' : 'hidden'}">
   <!-- Logo kommt aus static/logo.svg; eigenes Logo: Datei ersetzen. -->
-  <header class="flex shrink-0 justify-center py-1">
-    <img src="/logo.svg" alt="Logo" class="h-10 select-none" draggable="false" />
+  <!-- Steuerung oben statt unter der Eingabe: Chat endet buendig mit dem Panel rechts -->
+  <header class="flex shrink-0 items-center gap-3 px-1 py-1">
+    <img src="/logo.svg" alt="Logo" class="h-10 shrink-0 select-none" draggable="false" />
+    <div class="text-muted-foreground bg-card ml-auto flex min-w-0 items-center gap-2 rounded-xl px-2 py-1.5 text-xs shadow-lg ring-1 shadow-black/10 ring-foreground/5">
+      {#key modeKey}
+        <Select
+          value={mode}
+          options={[...MODES.map(([label, v]) => [label, v] as const), ["Alles erlauben", "bypassPermissions"] as const]}
+          onchange={setMode}
+          disabled={dead}
+          class={mode === "bypassPermissions" ? "border-destructive/60 text-destructive" : ""}
+          title={mode === "bypassPermissions" ? "Keine Rückfragen, nur für diese Sitzung" : MODES.find(([, v]) => v === mode)?.[2]}
+          aria-label="Berechtigungsmodus"
+        />
+      {/key}
+      <button
+        type="button"
+        class="border-border hover:text-foreground flex h-6 items-center gap-1 rounded border px-1.5"
+        disabled={dead}
+        title="MCP-Server (/mcp)"
+        onclick={() => (mcpOpen = true)}><PlugIcon class="size-3" /> MCP</button
+      >
+      {#if models.length}
+        <Select
+          value={model}
+          options={models.map((x) => [x.displayName, x.value] as const)}
+          onchange={pickModel}
+          disabled={dead}
+          placeholder="Modell"
+          title="Modell für diese Sitzung"
+          aria-label="Modell"
+        />
+      {/if}
+      {#if current?.supportedEffortLevels?.length}
+        <Select
+          value={effort}
+          options={current.supportedEffortLevels.map((v) => [EFFORT[v] ?? v, v] as const)}
+          onchange={pickEffort}
+          disabled={dead}
+          placeholder="Effort"
+          title="Wie gründlich Claude nachdenkt"
+          aria-label="Effort"
+        />
+      {/if}
+      {#if current?.supportsFastMode}
+        <button
+          type="button"
+          class="flex h-6 items-center gap-1 rounded border px-1.5 {fast ? 'border-primary/60 text-primary' : 'border-border hover:text-foreground'}"
+          aria-pressed={fast}
+          disabled={dead}
+          title="Fast-Modus: schnellere Antworten, kostet mehr"
+          onclick={toggleFast}><ZapIcon class="size-3" /> Fast</button
+        >
+      {/if}
+      <span class="truncate opacity-60">Umschalt+Tab wechselt den Modus</span>
+    </div>
   </header>
 
   <div
@@ -809,59 +863,6 @@
     {:else}
       <Button size="icon" class="shrink-0" onclick={send} disabled={dead || (!draft.trim() && !imgs.length)} title="Senden" aria-label="Senden"><SendIcon /></Button>
     {/if}
-  </div>
-  <div class="text-muted-foreground flex shrink-0 items-center gap-2 px-1 text-xs">
-    {#key modeKey}
-      <Select
-        value={mode}
-        options={[...MODES.map(([label, v]) => [label, v] as const), ["Alles erlauben", "bypassPermissions"] as const]}
-        onchange={setMode}
-        disabled={dead}
-        class={mode === "bypassPermissions" ? "border-destructive/60 text-destructive" : ""}
-        title={mode === "bypassPermissions" ? "Keine Rückfragen, nur für diese Sitzung" : MODES.find(([, v]) => v === mode)?.[2]}
-        aria-label="Berechtigungsmodus"
-      />
-    {/key}
-    <button
-      type="button"
-      class="border-border hover:text-foreground flex h-6 items-center gap-1 rounded border px-1.5"
-      disabled={dead}
-      title="MCP-Server (/mcp)"
-      onclick={() => (mcpOpen = true)}><PlugIcon class="size-3" /> MCP</button
-    >
-    {#if models.length}
-      <Select
-        value={model}
-        options={models.map((x) => [x.displayName, x.value] as const)}
-        onchange={pickModel}
-        disabled={dead}
-        placeholder="Modell"
-        title="Modell für diese Sitzung"
-        aria-label="Modell"
-      />
-    {/if}
-    {#if current?.supportedEffortLevels?.length}
-      <Select
-        value={effort}
-        options={current.supportedEffortLevels.map((v) => [EFFORT[v] ?? v, v] as const)}
-        onchange={pickEffort}
-        disabled={dead}
-        placeholder="Effort"
-        title="Wie gründlich Claude nachdenkt"
-        aria-label="Effort"
-      />
-    {/if}
-    {#if current?.supportsFastMode}
-      <button
-        type="button"
-        class="flex h-6 items-center gap-1 rounded border px-1.5 {fast ? 'border-primary/60 text-primary' : 'border-border hover:text-foreground'}"
-        aria-pressed={fast}
-        disabled={dead}
-        title="Fast-Modus: schnellere Antworten, kostet mehr"
-        onclick={toggleFast}><ZapIcon class="size-3" /> Fast</button
-      >
-    {/if}
-    <span class="opacity-60">Umschalt+Tab wechselt den Modus</span>
   </div>
 </div>
 <McpDialog bind:open={mcpOpen} {cwd} {control} onrestart={() => relaunch()} />
