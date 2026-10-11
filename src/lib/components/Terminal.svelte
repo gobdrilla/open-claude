@@ -138,7 +138,9 @@
     t.attachCustomKeyEventHandler(onKeyEvent);
     // Trackpad unter macOS: Im Verlauf teilt xterms Scrollable die Deltas und glaettet je nach
     // Heuristik, fuer Maus-Apps/Alt-Screen drosselt xterm Deltas < 50 px auf 30 %. Langsam wischen
-    // kriecht, schnell rast. Darum selbst: Verlauf 1:1 in Pixeln, sonst gesammelt als 50-px-Events.
+    // kriecht, schnell rast. Darum selbst: Verlauf 1:1 in Pixeln, sonst ein Event je Zeilenhoehe Weg.
+    // claude erkennt xterm.js nicht (kein XTVERSION) und scrollt je Wheel-Meldung genau eine Zeile;
+    // xterm meldet je Event genau einmal. 50 px Delta je Event umgehen xterms 30-%-Drossel.
     // Capture auf dem Container, sonst hat xterms Scrollable das Event schon.
     let wheelPx = 0;
     if (navigator.userAgent.includes("Mac")) {
@@ -153,10 +155,14 @@
             t.scrollLines(e.deltaY / (el.clientHeight / t.rows));
             return;
           }
+          // Richtungswechsel: Rest der alten Richtung verwerfen, sonst reagiert die Umkehr verzoegert.
+          if (Math.sign(wheelPx) !== Math.sign(e.deltaY)) wheelPx = 0;
           wheelPx += e.deltaY;
-          while (Math.abs(wheelPx) >= 50) {
-            const deltaY = Math.sign(wheelPx) * 50;
-            wheelPx -= deltaY;
+          const line = el.clientHeight / t.rows;
+          if (!(line > 0)) return;
+          while (Math.abs(wheelPx) >= line) {
+            wheelPx -= Math.sign(wheelPx) * line;
+            const deltaY = Math.sign(e.deltaY) * 50;
             const { clientX, clientY } = e;
             e.target?.dispatchEvent(new WheelEvent("wheel", { deltaY, clientX, clientY, bubbles: true, cancelable: true }));
           }
