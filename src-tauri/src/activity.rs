@@ -18,6 +18,8 @@ use crate::git::blocking;
 pub struct Activity {
     session: Option<String>,
     runs: Vec<Run>,
+    /// Agents aus dem Agent-Tool (ausserhalb von Workflows); label = description, phase = agentType
+    agents: Vec<Agent>,
     images: Vec<Img>,
     /// Session-Daten der eingebauten Mod (siehe panel_file), unveraendert durchgereicht.
     panel: Option<Value>,
@@ -144,6 +146,8 @@ struct State {
     imgs: Vec<(ImgRef, Img)>,
     sums: HashMap<PathBuf, Sum>,
     done: HashMap<String, Run>,
+    /// agentId -> (Zeitpunkt, Endstatus) aus dem Haupttranskript, siehe ended()
+    ended: HashMap<String, (u64, String)>,
 }
 
 /// Cache pro Session-ID: Tab-Wechsel liest nichts neu, Bild-ids bleiben je Session stabil.
@@ -262,6 +266,9 @@ fn content(v: &Value) -> &[Value] {
 
 fn scan_images(st: &mut State, path: &Path) {
     for (offset, line) in new_lines(path, &mut st.offsets) {
+        if let Some((id, at, status)) = ended(&line) {
+            st.ended.insert(id, (at, status));
+        }
         if line.contains("\"name\":\"Read\"") {
             if let Ok(v) = serde_json::from_str::<Value>(&line) {
                 let map = st.reads.entry(path.to_path_buf()).or_default();
@@ -299,6 +306,59 @@ fn scan_images(st: &mut State, path: &Path) {
             ));
         }
     }
+}
+
+/// Ende eines Agent-Tool-Agents: <task-notification> (Hintergrund) oder toolUseResult mit agentId (Vordergrund).
+fn ended(line: &str) -> Option<(String, u64, String)> {
+    let note = line.contains("\"content\":\"<task-notification>");
+    if !note && !line.contains("\"toolUseResult\"") {
+        return None;
+    }
+    let v: Value = serde_json::from_str(line).ok()?;
+    let (id, status) = if note {
+        let tag = |t: &str| Some(line.split_once(&format!("<{t}>"))?.1.split_once(&format!("</{t}>"))?.0.to_string());
+        (tag("task-id")?, tag("status")?)
+    } else {
+        let r = v.get("toolUseResult")?;
+        (r.get("agentId")?.as_str()?.to_string(), str_of(r, "status").to_string())
+    };
+    let status = match status.as_str() {
+        "completed" => "done",
+        "failed" | "error" => "error",
+        "killed" | "stopped" => "killed",
+        _ => return None, // async_launched u. a.: laeuft noch
+    };
+    Some((id, iso_ms(str_of(&v, "timestamp")), status.into()))
+}
+
+/// Agent-Tool-Agent aus subagents/agent-<id>.jsonl + .meta.json; Status aus st.ended, sonst laeuft er mit der Session.
+fn solo(st: &mut State, path: &Path, alive: bool) -> Option<Agent> {
+    let id = path.file_stem()?.to_str()?.strip_prefix("agent-")?.to_string();
+    if !id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return None;
+    }
+    let meta: Value = fs::read_to_string(path.with_extension("meta.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let s = sum_agent(st, path);
+    let state = match st.ended.get(&id) {
+        // Fortgesetzter Agent schreibt nach der Meldung weiter: laeuft wieder
+        Some((at, end)) if *at >= s.last_at || !alive => end.clone(),
+        _ if alive => "running".into(),
+        _ => "aborted".into(),
+    };
+    Some(Agent {
+        label: str_of(&meta, "description").into(),
+        phase: str_of(&meta, "agentType").into(),
+        id,
+        state,
+        started: s.started,
+        last_at: s.last_at,
+        tokens: s.tokens,
+        tool_calls: s.tool_calls,
+        steps: s.steps,
+        text: s.text,
+        result: None,
+        prompt: s.prompt,
+    })
 }
 
 fn step(c: &Value, at: u64) -> Step {
@@ -387,14 +447,15 @@ fn agent_log(path: &Path) -> Vec<Entry> {
 pub async fn claude_agent_log(cwd: String, sid: String, run: String, agent: String) -> Result<Vec<Entry>, String> {
     let ok = |s: &str, f: fn(&u8) -> bool| !s.is_empty() && s.bytes().all(|b| f(&b));
     let valid = ok(&sid, |b| b.is_ascii_hexdigit() || *b == b'-')
-        && run.starts_with("wf_")
-        && ok(&run, |b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-')
+        // leerer run = Agent-Tool-Agent direkt in subagents/
+        && (run.is_empty() || run.starts_with("wf_") && ok(&run, |b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-'))
         && ok(&agent, u8::is_ascii_alphanumeric);
     if !valid {
         return Err("Ungueltige Kennung".into());
     }
     blocking(move || {
-        let dir = config_dir().join("projects").join(slug(&real(&cwd))).join(&sid).join("subagents/workflows").join(&run);
+        let sub = config_dir().join("projects").join(slug(&real(&cwd))).join(&sid).join("subagents");
+        let dir = if run.is_empty() { sub } else { sub.join("workflows").join(&run) };
         Ok(agent_log(&dir.join(format!("agent-{agent}.jsonl"))))
     })
     .await
@@ -617,7 +678,7 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>)> {
 fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     let p = c.join("projects").join(slug(cwd));
     let Some((sid, alive)) = session(c, cwd, &p) else {
-        return Activity { session: None, runs: vec![], images: vec![], panel: None, modes: vec![] };
+        return Activity { session: None, runs: vec![], agents: vec![], images: vec![], panel: None, modes: vec![] };
     };
     // ponytail: max. 4 Sessions im Cache, dann alles verwerfen; LRU erst wenn das stoert
     if cache.len() >= 4 && !cache.contains_key(&sid) {
@@ -637,6 +698,10 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     for f in &subs {
         scan_images(st, f);
     }
+
+    // Agent-Tool-Agents liegen direkt in subagents/, Workflow-Agents darunter
+    let top = base.join("subagents");
+    let mut agents: Vec<Agent> = subs.iter().filter(|f| f.parent() == Some(top.as_path())).filter_map(|f| solo(st, f, alive.is_some())).collect();
 
     // Workflows
     let mut runs = Vec::new();
@@ -666,7 +731,9 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     for r in &mut runs {
         r.agents.sort_by_key(|a| rank(&a.state));
     }
-    Activity { session: Some(sid), runs, images: st.imgs.iter().map(|x| x.1.clone()).collect(), panel: None, modes: vec![] }
+    agents.sort_by_key(|a| (rank(&a.state), std::cmp::Reverse(a.started)));
+    agents.truncate(50);
+    Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), panel: None, modes: vec![] }
 }
 
 #[tauri::command]
@@ -932,6 +999,33 @@ mod tests {
         let st = &cache[SID];
         assert_eq!(image_at(&st.imgs[1].0).unwrap(), "data:image/png;base64,REVG");
         assert_eq!(image_at(&st.imgs[0].0).unwrap(), "data:image/png;base64,QUJD");
+    }
+
+    #[test]
+    fn agent_tool_agents() {
+        let (c, base) = setup("solo", true);
+        let main = c.join(format!("projects/-w-p/{SID}.jsonl"));
+        let t = |s: u32| format!(r#"{{"type":"assistant","timestamp":"1970-01-01T00:00:0{s}.000Z","message":{{"content":[]}}}}"#) + "\n";
+        put(&base.join("subagents/agent-a1.jsonl"), &t(1));
+        put(&base.join("subagents/agent-a1.meta.json"), r#"{"agentType":"Explore","description":"Suche"}"#);
+        put(&base.join("subagents/agent-a2.jsonl"), &t(1));
+        put(&base.join("subagents/workflows/wf_1/agent-a3.jsonl"), &t(1));
+        put(
+            &main,
+            concat!(
+                r#"{"type":"user","timestamp":"1970-01-01T00:00:05.000Z","message":{"content":"<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n</task-notification>"}}"#, "\n",
+                r#"{"type":"user","timestamp":"1970-01-01T00:00:05.000Z","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a2"}}"#, "\n",
+            ),
+        );
+        let mut cache = Cache::new();
+        let a = activity_in(&mut cache, &c, "/w/p", 0);
+        let st: Vec<_> = a.agents.iter().map(|a| (a.id.as_str(), a.state.as_str())).collect();
+        assert_eq!(st, [("a2", "running"), ("a1", "done")]);
+        assert_eq!((a.agents[1].label.as_str(), a.agents[1].phase.as_str()), ("Suche", "Explore"));
+        // fortgesetzt: schreibt nach der Meldung weiter
+        append(&base.join("subagents/agent-a1.jsonl"), &t(9));
+        let a = activity_in(&mut cache, &c, "/w/p", 0);
+        assert!(a.agents.iter().all(|a| a.state == "running"));
     }
 
     #[test]

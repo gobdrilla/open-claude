@@ -67,14 +67,14 @@
     todos: { content: string; status: string }[];
   };
   type Mode = { name: string; level: string };
-  type Activity = { session: string | null; runs: Run[]; images: Img[]; panel: Panel | null; modes: Mode[] };
+  type Activity = { session: string | null; runs: Run[]; agents: Agent[]; images: Img[]; panel: Panel | null; modes: Mode[] };
 
   let { cwd, id }: { cwd: string; id: string } = $props();
 
   let data = $state<Activity | null>(null);
   let error = $state("");
   let tplError = $state("");
-  let tab = $state<"session" | "wf" | "img">("session");
+  let tab = $state<"session" | "wf" | "agents" | "img">("session");
   // Session-Daten der Mod im Terminal; Countdowns rechnen gegen now.
   let panel = $state<Panel | null>(null);
   let now = $state(Date.now());
@@ -112,7 +112,7 @@
   };
   const status = (s: string) => STATUS[s] ?? ["○", "text-muted-foreground", s];
 
-  const live = $derived((data?.runs.some((r) => r.status === "running") || panel?.active.some((a) => a.state === "run")) ?? false);
+  const live = $derived((data?.runs.some((r) => r.status === "running") || data?.agents.some((a) => a.state === "running") || panel?.active.some((a) => a.state === "run")) ?? false);
   // Neueste Bilder zuerst
   const imgs = $derived([...(data?.images ?? [])].reverse());
 
@@ -195,8 +195,12 @@
   const startTemplate = (f: WfFile) =>
     ptyWrite(id, `Fuehre den Workflow mit dem Workflow-Tool aus, scriptPath: ${JSON.stringify(f.path)}. Args: `).catch((e) => (tplError = String(e)));
 
+  // Agent-Tool-Agents als Pseudo-Run mit id "": gleiche Liste und Zeitleiste wie Workflow-Agents
+  const solo = $derived<Run>({ id: "", name: "Agents", status: "", started: 0, duration_ms: 0, tokens: 0, phases: [], agents: data?.agents ?? [] });
+  // Fokus gehoert zum Tab, aus dem er geoeffnet wurde
+  const inFocus = $derived(!!focus && (tab === "agents" ? focus.run === "" : tab === "wf" && focus.run !== ""));
   const focused = $derived.by(() => {
-    const r = data?.runs.find((r) => r.id === focus?.run);
+    const r = focus?.run === "" ? solo : data?.runs.find((r) => r.id === focus?.run);
     const a = r?.agents.find((a) => a.id === focus?.agent);
     return r && a ? { r, a } : null;
   });
@@ -355,6 +359,7 @@
     tabs={[
       { id: "session", label: "Session" },
       { id: "wf", label: "Workflows" },
+      { id: "agents", label: "Agents", count: data?.agents.length },
       { id: "img", label: "Bilder", count: imgs.length },
     ]}
   >
@@ -365,7 +370,7 @@
     {/if}
   </Tabs>
 
-  {#if tab === "wf" && focus}
+  {#if inFocus}
     <!-- Ausserhalb des Scrollbereichs: sticky lag dort ueber breitem Inhalt. -->
     <div class="border-border shrink-0 border-b px-2 py-1.5 text-xs">
       <button class="text-muted-foreground hover:text-foreground flex max-w-full items-center gap-0.5" onclick={() => (focus = null)}>
@@ -376,7 +381,7 @@
   {/if}
 
   <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-xs">
-    {#if tab === "wf" && !focus}
+    {#if tab === "wf" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
       <section class="border-border/60 mb-2 rounded-lg border">
         <div class="flex items-center justify-between px-2 py-1">
@@ -509,8 +514,14 @@
       {/if}
     {:else if !data.session}
       <p class="text-muted-foreground p-2">Keine laufende Claude-Session gefunden.</p>
-    {:else if tab === "wf" && focus}
+    {:else if inFocus}
       {@render agentLog()}
+    {:else if tab === "agents"}
+      {#if solo.agents.length}
+        <section class="border-border/60 rounded-lg border [&>ul]:border-t-0">{@render phases(solo)}</section>
+      {:else}
+        <p class="text-muted-foreground p-2">Keine Agents in dieser Session.</p>
+      {/if}
     {:else if tab === "wf"}
       {#each data.runs as r (r.id)}
         {@const open = openRuns[r.id] ?? r.status === "running"}
