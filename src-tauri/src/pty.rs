@@ -177,7 +177,7 @@ pub fn pty_open(
         .map(|e| e.with_file_name(format!("ocui-sh{}", std::env::consts::EXE_SUFFIX)))
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let settings = theme_settings(&app, &theme).map(|p| p.to_string_lossy().into_owned());
+    let settings = session_settings(&app, &theme).map(|p| p.to_string_lossy().into_owned());
     let (program, args) =
         shell(cfg!(windows), &own, settings.is_some(), |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
     let dirs = mod_dirs(&app);
@@ -197,14 +197,22 @@ pub fn pty_open(
     spawn(app, &ptys, id, &cwd, &program, args, cols, rows, &env, false)
 }
 
-/// Hat der User ein Open-Claude-Theme gewaehlt, das nicht zum App-Modus passt: Settings-Datei, die es
-/// fuer diese Session umstellt. Per `--settings`, weil /config (`$.config.set`) keine Custom-Themes annimmt.
-fn theme_settings(app: &AppHandle, mode: &str) -> Option<PathBuf> {
-    let user = std::fs::read_to_string(crate::activity::config_dir().join("settings.json")).ok()?;
-    let user: serde_json::Value = serde_json::from_str(&user).ok()?;
-    let want = theme_for(user.get("theme")?.as_str()?, mode)?;
-    let p = app.path().app_data_dir().ok()?.join(format!("theme-{mode}.json"));
-    let text = serde_json::json!({ "theme": want }).to_string();
+/// subagentStatusLine: je Agent-Task eine Zeile mit leerem content; claude blendet solche Zeilen unter dem
+/// Prompt aus (die Agents zeigt das Panel). Bekommt die Tasks als kompaktes JSON auf stdin; ueberzaehlige
+/// ids (z. B. die der Session) ignoriert claude. Unter Windows laeuft es in der Git-Bash von Claude Code.
+const HIDE_AGENTS: &str = r#"grep -o '"id":"[^"]*"' | sed 's/^/{/; s/$/,"content":""}/'"#;
+
+/// Settings-Datei fuer diese Session per `--settings`: Agent-Zeilen aus (HIDE_AGENTS) und, hat der User ein
+/// Open-Claude-Theme gewaehlt, das nicht zum App-Modus passt, das passende (/config nimmt keine Custom-Themes).
+fn session_settings(app: &AppHandle, mode: &str) -> Option<PathBuf> {
+    let mut settings = serde_json::json!({ "subagentStatusLine": { "type": "command", "command": HIDE_AGENTS } });
+    let user = std::fs::read_to_string(crate::activity::config_dir().join("settings.json")).ok();
+    let user: Option<serde_json::Value> = user.and_then(|u| serde_json::from_str(&u).ok());
+    if let Some(want) = user.as_ref().and_then(|u| u.get("theme")?.as_str()).and_then(|t| theme_for(t, mode)) {
+        settings["theme"] = want.into();
+    }
+    let p = app.path().app_data_dir().ok()?.join(format!("session-{mode}.json"));
+    let text = settings.to_string();
     if std::fs::read_to_string(&p).ok().as_deref() != Some(&text) {
         std::fs::create_dir_all(p.parent()?).ok()?;
         std::fs::write(&p, text).ok()?;
@@ -552,7 +560,24 @@ pub async fn pty_close(ptys: State<'_, Ptys>, id: String) -> Result<(), String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, UNIX_SHELL};
+    use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, HIDE_AGENTS, UNIX_SHELL};
+
+    #[cfg(unix)]
+    #[test]
+    fn agent_zeilen_mit_leerem_content() {
+        use std::io::Write;
+        let mut sh = std::process::Command::new("sh")
+            .args(["-c", HIDE_AGENTS])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let input = r#"{"session_id":"s","tasks":[{"id":"a1","name":"x","status":"running"},{"id":"b-2","cwd":"/p"}]}"#;
+        sh.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+        let out = String::from_utf8(sh.wait_with_output().unwrap().stdout).unwrap();
+        let lines: Vec<serde_json::Value> = out.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lines, [serde_json::json!({"id": "a1", "content": ""}), serde_json::json!({"id": "b-2", "content": ""})]);
+    }
 
     #[test]
     fn plugin_dirs_haengt_an() {
