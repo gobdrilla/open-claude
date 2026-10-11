@@ -560,11 +560,12 @@ pub async fn pty_close(ptys: State<'_, Ptys>, id: String) -> Result<(), String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, HIDE_AGENTS, UNIX_SHELL};
+    use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, UNIX_SHELL};
 
     #[cfg(unix)]
     #[test]
     fn agent_zeilen_mit_leerem_content() {
+        use super::HIDE_AGENTS;
         use std::io::Write;
         let mut sh = std::process::Command::new("sh")
             .args(["-c", HIDE_AGENTS])
