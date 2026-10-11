@@ -227,6 +227,71 @@ pub(crate) fn user_write(home: &Path, text: &str, expected: &str) -> Result<(), 
     atomic_write(&home.join(".claude").join("settings.json"), text)
 }
 
+/// Schalter aus /config, die Claude Code in ~/.claude.json statt settings.json ablegt. Nur diese Keys sind schreibbar:
+/// die Datei haelt auch Projekte, OAuth-Konto usw.
+pub(crate) const GLOBAL_KEYS: [&str; 12] = [
+    "autoCompactEnabled",
+    "fileCheckpointingEnabled",
+    "terminalProgressBarEnabled",
+    "showMessageTimestamps",
+    "showTurnDuration",
+    "respectGitignore",
+    "diffTool",
+    "copyOnSelect",
+    "copyFullResponse",
+    "autoConnectIde",
+    "autoInstallIdeExtension",
+    "preferredNotifChannel",
+];
+
+fn global_file(home: &Path) -> PathBuf {
+    home.join(".claude.json")
+}
+
+pub(crate) fn global_read(home: &Path) -> Result<Map<String, Value>, String> {
+    let text = match std::fs::read_to_string(global_file(home)) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Map::new()),
+        Err(e) => return Err(e.to_string()),
+    };
+    let Ok(Value::Object(all)) = serde_json::from_str(&text) else { return Err("~/.claude.json ist kein JSON-Objekt".into()) };
+    Ok(all.into_iter().filter(|(k, _)| GLOBAL_KEYS.contains(&k.as_str())).collect())
+}
+
+/// Liest frisch und setzt nur die uebergebenen Keys (null = entfernen), der Rest der Datei bleibt, wie Claude Code ihn schrieb.
+pub(crate) fn global_write(home: &Path, values: Map<String, Value>) -> Result<(), String> {
+    if let Some(k) = values.keys().find(|k| !GLOBAL_KEYS.contains(&k.as_str())) {
+        return Err(format!("Unbekannte Einstellung: {k}"));
+    }
+    let file = global_file(home);
+    let mut all = match std::fs::read_to_string(&file) {
+        Ok(t) => match serde_json::from_str(&t) {
+            Ok(Value::Object(m)) => m,
+            _ => return Err("~/.claude.json ist kein JSON-Objekt".into()),
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Map::new(),
+        Err(e) => return Err(e.to_string()),
+    };
+    for (k, v) in values {
+        if v.is_null() {
+            all.remove(&k);
+        } else {
+            all.insert(k, v);
+        }
+    }
+    atomic_write(&file, &(serde_json::to_string_pretty(&all).map_err(|e| e.to_string())? + "\n"))
+}
+
+#[tauri::command]
+pub async fn claude_global_read() -> Result<Map<String, Value>, String> {
+    blocking(|| global_read(&home())).await
+}
+
+#[tauri::command]
+pub async fn claude_global_write(values: Map<String, Value>) -> Result<(), String> {
+    blocking(move || global_write(&home(), values)).await
+}
+
 #[tauri::command]
 pub async fn claude_settings_read() -> Result<String, String> {
     blocking(|| user_read(&home())).await

@@ -263,3 +263,14 @@ fn parallele_schreiber_zerstoeren_sich_keine_temp_datei() {
     assert_eq!(names, ["settings.local.json"]);
     assert_eq!(read(&repo)["skillOverrides"].as_object().unwrap().len(), 1);
 }
+
+#[test]
+fn globale_config_nur_erlaubte_keys() {
+    let h = tmp("global");
+    std::fs::write(h.join(".claude.json"), r#"{"oauthAccount":{"x":1},"autoCompactEnabled":false,"projects":{}}"#).unwrap();
+    assert_eq!(global_read(&h).unwrap(), obj(json!({"autoCompactEnabled": false})).unwrap());
+    assert!(global_write(&h, obj(json!({"oauthAccount": null})).unwrap()).is_err());
+    global_write(&h, obj(json!({"autoCompactEnabled": null, "diffTool": "terminal"})).unwrap()).unwrap();
+    let all: Value = serde_json::from_str(&std::fs::read_to_string(h.join(".claude.json")).unwrap()).unwrap();
+    assert_eq!(all, json!({"oauthAccount": {"x": 1}, "projects": {}, "diffTool": "terminal"}));
+}
