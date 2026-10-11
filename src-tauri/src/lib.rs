@@ -10,7 +10,6 @@ use walkdir::WalkDir;
 
 // Terminal in der App (ersetzt das externe wt.exe-Fenster).
 mod pty;
-mod chat;
 // GitHub/GitLab: Konten, Repos, PRs, Klonen.
 mod forge;
 // Neue Repos anlegen (Scaffold, git init, erster Commit).
@@ -539,7 +538,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(pty::Ptys::default())
-        .manage(chat::Chats::default())
         .manage(preview::PreviewRoots::default())
         .manage(runner::Runs::default())
         .register_asynchronous_uri_scheme_protocol("preview", |ctx, req, responder| {
@@ -553,19 +551,11 @@ pub fn run() {
             set_tray,
             deps::deps_missing,
             deps::deps_install,
+            pty::pty_open,
             pty::pty_write,
             pty::pty_resize,
             pty::pty_close,
             pty::run_start,
-            chat::chat_open,
-            chat::chat_send,
-            chat::chat_close,
-            chat::chat_sessions,
-            chat::chat_history,
-            chat::chat_image,
-            chat::chat_bash,
-            chat::chat_mcp_add,
-            chat::chat_mcp_remove,
             forge::forge_login,
             forge::forge_logout,
             forge::forge_import_cli,
@@ -629,6 +619,7 @@ pub fn run() {
             unity::unity_open,
             unity::unity_close,
             unity::unity_test,
+            files::fs_image,
             files::fs_list,
             files::fs_read,
             files::fs_write,
@@ -687,7 +678,6 @@ pub fn run() {
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {
                 app.state::<pty::Ptys>().close_all();
-                app.state::<chat::Chats>().close_all();
                 unity::kill_all();
                 app.state::<runner::Runs>().kill_all();
             }
@@ -770,7 +760,7 @@ mod tests {
         // XDG_DATA_DIRS haengt das AppDir vorne an; der Systemteil muss bleiben.
         let env = &[("XDG_DATA_DIRS", "/tmp/.mount_OpenCl42/usr/share:/usr/share:/usr/local/share")];
         assert_eq!(wert(env, "XDG_DATA_DIRS"), Some(Some("/usr/share:/usr/local/share".into())));
-        // PATH beginnt mit $APPDIR/usr/bin — sonst findet ein Kind dort die gebundelten Bins.
+        // PATH beginnt mit $APPDIR/usr/bin — sonst findet ein Kind dort ocui-sh.
         let path = &[("PATH", "/tmp/.mount_OpenCl42/usr/bin:/usr/bin:/bin")];
         assert_eq!(wert(path, "PATH"), Some(Some("/usr/bin:/bin".into())));
     }

@@ -109,7 +109,13 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import { Segmented, Select, Switch } from "$lib/components/kit";
-  import { MODES } from "$lib/chat.logic";
+  const MODES = [
+    ["Manuell", "default", "Fragt vor Änderungen und Befehlen"],
+    ["Edits annehmen", "acceptEdits", "Dateiänderungen ohne Rückfrage"],
+    ["Plan", "plan", "Nur lesen und planen"],
+    ["Auto", "auto", "Claude entscheidet, was sicher ist"],
+    ["Nicht fragen", "dontAsk", "Nur Erlaubtes, alles andere wird abgelehnt"],
+  ] as const;
   import XIcon from "@lucide/svelte/icons/x";
 
   let { open = $bindable(false) }: { open: boolean } = $props();
@@ -231,7 +237,7 @@
   <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-2xl">
     <Dialog.Header>
       <Dialog.Title>Claude-Einstellungen</Dialog.Title>
-      <Dialog.Description>Wie /config im Terminal. Gilt für neue Sitzungen; Umschalt+Tab im Chat wechselt den Modus sofort.</Dialog.Description>
+      <Dialog.Description>Wie /config im Terminal. Gilt für neue Sitzungen; Umschalt+Tab im Terminal wechselt den Modus sofort.</Dialog.Description>
     </Dialog.Header>
 
     <div class="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 text-xs">

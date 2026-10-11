@@ -46,7 +46,7 @@
   import { clampZoom, zoomKey, zoomStep, ZOOM_MAX, ZOOM_MIN } from "$lib/zoom";
   import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
   import IdleAmongUs from "$lib/components/IdleAmongUs.svelte";
-  import Chat from "$lib/components/Chat.svelte";
+  import Terminal from "$lib/components/Terminal.svelte";
   import ActivityPanel from "$lib/components/ActivityPanel.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
@@ -130,7 +130,7 @@
   const RATES: [string, number][] = [["Selten", 3], ["Normal", 1], ["Oft", 0.4]];
   let input = $state<HTMLInputElement | null>(null);
   // Eine Session pro Projekt; die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
-  let sessions = $state<{ id: string; repo: Repo; resume?: string }[]>([]);
+  let sessions = $state<{ id: string; repo: Repo }[]>([]);
   let active = $state<string | null>(null);
   const activeSession = $derived(sessions.find((s) => s.id === active));
   // Aktivitaets-Panel rechts neben dem Terminal: Breite und offen/zu ueberleben den Neustart.
@@ -734,19 +734,11 @@
     if (await confirm("Sitzung beenden? Ein laufender claude-Prozess wird abgebrochen.", "Beenden")) closeSession(id);
   }
 
-  /** Aus der Liste nehmen; der Chat-Unmount beendet claude. */
+  /** Aus der Liste nehmen; der Terminal-Unmount schliesst die PTY. */
   function closeSession(id: string) {
     sessions = sessions.filter((s) => s.id !== id);
     // Wie bei Tabs ueblich zur letzten verbliebenen Session, erst ohne Session zurueck zur Liste.
     if (active === id) sessions.length ? (active = sessions.at(-1)!.id) : back();
-  }
-
-  /** /resume: neuer Chat mit neuer id statt Neustart unter alter id, sonst wirft dessen Exit-Thread den neuen Prozess aus der Map. */
-  function resumeIn(id: string, sid: string) {
-    const i = sessions.findIndex((s) => s.id === id);
-    if (i < 0) return;
-    sessions[i] = { id: crypto.randomUUID(), repo: sessions[i].repo, resume: sid };
-    if (active === id) active = sessions[i].id;
   }
 
   // Klick/Enter oeffnet Git, mit Strg+Enter bzw. Umschalt+Klick Claude (Strg+Klick ist auf dem Mac Rechtsklick).
@@ -1352,7 +1344,7 @@
     </Command.List>
   </Command.Root>
 
-  <!-- Alle Chats bleiben gemountet, sonst stirbt claude beim Zurueckgehen. -->
+  <!-- Alle Terminals bleiben gemountet, sonst stirbt claude beim Zurueckgehen. -->
   {#if view === "term" && sessions.length > 1}
     <div class="bg-chrome border-border flex shrink-0 gap-px overflow-x-auto border-b px-1 text-[11px]" role="tablist">
       {#each sessions as s (s.id)}
@@ -1380,12 +1372,10 @@
   <div class="flex min-h-0 flex-1 {view === 'term' ? '' : 'hidden'}">
     <div class="min-w-0 flex-1">
       {#each sessions as s (s.id)}
-        <Chat
+        <Terminal
           id={s.id}
           cwd={s.repo.path}
           visible={s.id === active}
-          resume={s.resume}
-          onresume={(sid) => resumeIn(s.id, sid)}
           onexit={() => closeSession(s.id)}
         />
       {/each}

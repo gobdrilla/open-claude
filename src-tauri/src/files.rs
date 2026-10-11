@@ -232,6 +232,32 @@ fn diff(repo: &str, path: &str, content: &str) -> Result<String, String> {
     Ok(format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n{hunks}"))
 }
 
+/// Bildtyp nach Endung; nur was Browser und API sicher anzeigen.
+fn image_type(path: &str) -> Option<&'static str> {
+    match Path::new(path).extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+/// Lokales Bild (absoluter Pfad, z. B. aus Claudes Markdown) als data:-URL.
+#[tauri::command]
+pub async fn fs_image(path: String) -> Result<String, String> {
+    use base64::Engine;
+    let mt = image_type(&path).ok_or("Kein Bild (png, jpg, gif, webp)")?;
+    blocking(move || {
+        if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > 50 << 20 {
+            return Err("Bild groesser als 50 MB".into());
+        }
+        let b = std::fs::read(&path).map_err(|e| e.to_string())?;
+        Ok(format!("data:{mt};base64,{}", base64::engine::general_purpose::STANDARD.encode(b)))
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn fs_list(repo: String, dir: String) -> Result<Vec<Entry>, String> {
     blocking(move || list(&repo, &dir)).await
@@ -300,6 +326,14 @@ pub async fn fs_delete(repo: String, path: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bildtyp_nach_endung() {
+        assert_eq!(image_type("/a/B.JPG"), Some("image/jpeg"));
+        assert_eq!(image_type("x.webp"), Some("image/webp"));
+        assert_eq!(image_type("x.svg"), None);
+        assert_eq!(image_type("png"), None);
+    }
 
     fn tmp(name: &str) -> String {
         let dir = std::env::temp_dir().join(format!("ocui-files-{name}-{}", std::process::id()));

@@ -10,7 +10,7 @@
   import { forge } from "$lib/git";
 
   /** base: Seite, gegen die relative Links aufgeloest werden (z. B. Release-URL). size: Schriftgroesse (Tailwind).
-   *  root: Ordner, gegen den relative Bildpfade aufgeloest werden (Projekt des Chats). */
+   *  root: Ordner, gegen den relative Bildpfade aufgeloest werden (Projekt der Sitzung). */
   let {
     text,
     base,
@@ -42,7 +42,7 @@
         path = `${root.replace(/[\\/]+$/, "")}/${path}`;
       }
       // Fehlschlag nicht merken: das Bild entsteht evtl. erst noch.
-      if (!local.has(path)) local.set(path, invoke<string>("chat_image", { path }).catch((e) => (local.delete(path), Promise.reject(e))));
+      if (!local.has(path)) local.set(path, invoke<string>("fs_image", { path }).catch((e) => (local.delete(path), Promise.reject(e))));
       local.get(path)!.then((u) => (img.src = u)).catch(() => {});
     }
   });
