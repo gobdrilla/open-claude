@@ -495,10 +495,20 @@
     if (field.value) field.style.height = `${field.scrollHeight}px`;
   }
 
-  // Waechst der Verlauf (neue Nachricht, Markdown, Bilder, Tool-Status), unten bleiben.
+  // Nur Hochscrollen loest; ein Scroll-Event von vor dem letzten Wachsen sieht sonst wie "nicht mehr unten" aus.
+  let lastTop = 0;
+  function onscroll() {
+    const t = log.scrollTop;
+    if (log.scrollHeight - t - log.clientHeight < 40) stick = true;
+    else if (t < lastTop) stick = false;
+    lastTop = t;
+  }
+
+  // Waechst der Verlauf (neue Nachricht, Markdown, Bilder, Tool-Status) oder schrumpft das Fenster (Eingabe waechst), unten bleiben.
   $effect(() => {
     const ro = new ResizeObserver(() => stick && (log.scrollTop = log.scrollHeight));
     ro.observe(content);
+    ro.observe(log);
     return () => ro.disconnect();
   });
 
@@ -584,7 +594,7 @@
   >
     <div
       bind:this={log}
-      onscroll={() => (stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40)}
+      {onscroll}
       class="h-full overflow-y-auto px-4 py-3 text-sm"
     >
       <div bind:this={content} class="flex flex-col gap-3">
