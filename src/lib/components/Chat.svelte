@@ -107,7 +107,7 @@
 
   // Kurzbeschreibung eines Tool-Aufrufs wie im Session-Panel der Mod.
   const detail = (input: Record<string, unknown>) =>
-    String(["file_path", "pattern", "command", "description", "url", "query"].map((k) => input?.[k]).find((v) => typeof v === "string") ?? "");
+    String(["file_path", "pattern", "command", "description", "url", "query", "skill"].map((k) => input?.[k]).find((v) => typeof v === "string") ?? "");
 
   function onLine(line: string) {
     let m: any;

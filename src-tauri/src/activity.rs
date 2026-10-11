@@ -303,7 +303,7 @@ fn scan_images(st: &mut State, path: &Path) {
 
 fn step(c: &Value, at: u64) -> Step {
     let input = c.get("input").unwrap_or(&Value::Null);
-    let summary = ["command", "file_path", "pattern", "url", "query", "description"]
+    let summary = ["command", "file_path", "pattern", "url", "query", "description", "skill"]
         .iter()
         .find_map(|k| input.get(k).and_then(Value::as_str))
         .unwrap_or("");
