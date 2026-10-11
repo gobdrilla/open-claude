@@ -605,7 +605,9 @@ fn finished(v: &Value, id: &str, dir: &Path) -> Run {
 fn live(st: &mut State, dir: &Path, scripts: &Path, id: &str, alive: Option<u64>, now: u64) -> Run {
     let journal = dir.join("journal.jsonl");
     let created = fs::metadata(&journal).and_then(|m| m.created()).map(ms).ok();
-    let running = alive.is_some_and(|s| created.is_none_or(|c| s <= c));
+    // Geaendert statt angelegt: ein fortgesetzter Run (z. B. nach dem Session-Limit) laeuft in einem aelteren Journal weiter.
+    let modified = fs::metadata(&journal).and_then(|m| m.modified()).map(ms).ok();
+    let running = alive.is_some_and(|s| modified.is_none_or(|c| s <= c));
     let mut agents: Vec<(String, Agent)> = Vec::new();
     for line in fs::read_to_string(&journal).unwrap_or_default().lines() {
         let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
@@ -720,11 +722,18 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     let mut runs = Vec::new();
     for e in fs::read_dir(base.join("subagents/workflows")).into_iter().flatten().flatten() {
         let Some(id) = e.file_name().to_str().filter(|n| n.starts_with("wf_")).map(String::from) else { continue };
+        let json = base.join("workflows").join(format!("{id}.json"));
+        // Fortgesetzt: Journal neuer als das Ergebnis, die alte JSON gilt erst wieder, wenn der Run sie neu schreibt.
+        let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+        if matches!((mtime(&e.path().join("journal.jsonl")), mtime(&json)), (Some(j), Some(w)) if j > w) {
+            st.done.remove(&id);
+            runs.push(live(st, &e.path(), &base.join("workflows/scripts"), &id, alive, now));
+            continue;
+        }
         if let Some(r) = st.done.get(&id) {
             runs.push(r.clone());
             continue;
         }
-        let json = base.join("workflows").join(format!("{id}.json"));
         if let Some(v) = fs::read_to_string(&json).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
             let r = finished(&v, &id, &e.path());
             st.done.insert(id, r.clone());
@@ -1040,6 +1049,22 @@ mod tests {
         append(&base.join("subagents/agent-a1.jsonl"), &t(9));
         let a = activity_in(&mut cache, &c, "/w/p", 0);
         assert!(a.agents.iter().all(|a| a.state == "running"));
+    }
+
+    #[test]
+    fn fortgesetzter_run() {
+        let (c, base) = setup("resume", true);
+        let journal = base.join("subagents/workflows/wf_3/journal.jsonl");
+        put(&journal, JOURNAL);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        put(&base.join("workflows/wf_3.json"), r#"{"status":"completed","workflowProgress":[]}"#);
+        let mut cache = Cache::new();
+        assert_eq!(activity_in(&mut cache, &c, "/w/p", now_ms()).runs[0].status, "completed");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        append(&journal, "{\"type\":\"started\",\"key\":\"k4\",\"agentId\":\"a4\",\"label\":\"vier\"}\n");
+        let r = &activity_in(&mut cache, &c, "/w/p", now_ms()).runs[0];
+        assert_eq!(r.status, "running");
+        assert!(r.agents.iter().any(|a| a.label == "vier" && a.state == "running"));
     }
 
     #[test]
