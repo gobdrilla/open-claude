@@ -525,9 +525,11 @@ pub fn run() {
             preview::quit(app);
         }
     });
+    // Muss als erstes Plugin rein. Zweiter Start (z.B. neben Autostart) holt nur das Fenster vor.
+    // Nicht im Dev-Build, sonst uebergibt `tauri dev` an die installierte App und beendet sich.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| reopen(app)));
     builder
-        // Muss als erstes Plugin rein. Zweiter Start (z.B. neben Autostart) holt nur das Fenster vor.
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| reopen(app)))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
