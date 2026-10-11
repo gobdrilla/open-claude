@@ -1,5 +1,5 @@
 //! GitHub/GitLab-Anbindung: Konten, Repo-Suche, PRs/MRs, Klonen.
-//! Token liegen nur im Windows-Anmeldeinfo-Speicher und tauchen nie in argv, Logs oder Fehlern auf.
+//! Token liegen nur im Schluesselbund des Systems (keyring) und tauchen nie in argv, Logs oder Fehlern auf.
 
 use std::io::Read;
 use std::process::Stdio;

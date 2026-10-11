@@ -1,9 +1,10 @@
 # Open Claude
 
 Desktop-Launcher für Claude Code. Findet alle Git-Repos unter einem Dev-Ordner und startet
-`claude` im gewählten Projekt in einem eingebauten Terminal (mit der eigenen Shell `ocui-sh`).
-Dazu kommt ein eingebauter Git-Client: Änderungen stagen und committen, Verlauf mit Graph,
-Branches, Stashes, Tags, Merge-Editor und Klonen von GitHub und GitLab.
+`claude` im gewählten Projekt in einem eingebauten Terminal, daneben ein Aktivitäts-Panel mit
+Session, Workflows und Agents. Dazu kommen ein Git-Client (Änderungen stagen und committen, Verlauf
+mit Graph, Branches, Stashes, Tags, Merge-Editor, Klonen von GitHub und GitLab) und ein Editor mit
+Dateibaum, Vorschau, Run-Leiste und Test-Explorer.
 
 Tauri v2 (Rust) + SvelteKit + shadcn-svelte.
 
@@ -54,11 +55,13 @@ suchbar (`rust`).
 | Taste | Aktion |
 | --- | --- |
 | `⏎` / Klick | Git-Ansicht öffnen |
-| `Strg` + `⏎` / `Strg` + Klick | Claude im Projekt starten |
+| `Strg` + `⏎` / `Umschalt` + Klick | Claude im Projekt starten |
 | `↑` `↓` | Projekt wählen |
 | `Strg` + `1`…`9` | Claude im Treffer starten |
 | `Strg` + `G` | Git-Ansicht öffnen |
+| `Strg` + `Shift` + `E` | Editor öffnen |
 | `Strg` + `N` | Repo klonen |
+| `Strg` + `Shift` + `N` | Neues Repo anlegen |
 | `Strg` + `T` | Claude ohne Projekt starten (im Home-Ordner) |
 | `Strg` + `K` | Suche fokussieren |
 | `Strg` + `P` | Projekt anpinnen |
@@ -66,6 +69,7 @@ suchbar (`rust`).
 | `Strg` + `R` | Neu einlesen |
 | `Strg` + `O` | Dev-Ordner wechseln |
 | `F1` | Kürzel-Übersicht |
+| Rechtsklick | Weitere Aktionen, z. B. vom Gerät löschen |
 | `Esc` | Suche leeren, sonst schließen (je nach Einstellung ins Tray) |
 
 Im Terminal gehen alle Tasten an die Shell, außer:
@@ -75,6 +79,7 @@ Im Terminal gehen alle Tasten an die Shell, außer:
 | `Shift` + `Esc` oder `Strg` + `Shift` + `W` | Zurück zur Liste, Sitzung läuft weiter |
 | `Alt` + `G` | Git-Ansicht des Projekts |
 | `Alt` + `E` | Ordner im Explorer öffnen |
+| `Strg` + `Shift` + `E` | Editor öffnen |
 | `Strg` + `Shift` + `C` | Auswahl kopieren |
 | `Strg` + `V` | Einfügen |
 
@@ -86,15 +91,25 @@ Unity-Projekte zeigen `Unity <Version>` mit einem Punkt für Editor offen/zu; pe
 einrichten (siehe [Unity-Ansicht](#unity)).
 
 Beim ersten Start fragt die App nach dem Dev-Ordner, vorbelegt mit `%DEV%`, sonst `%USERPROFILE%\Dev`;
-später wechselt `Strg` + `O` ihn. Einstellungen,
-Pins und der Repo-Cache liegen in `%APPDATA%\com.marlonschmitz.openclaude\settings.json`.
+später wechselt `Strg` + `O` ihn. Einstellungen, Pins und der Repo-Cache liegen in `settings.json`
+im App-Datenordner `com.marlonschmitz.openclaude` (Windows `%APPDATA%`, macOS
+`~/Library/Application Support`, Linux `~/.local/share`).
 
 Pro Projekt läuft höchstens eine Sitzung. Erneutes Starten springt zur offenen Sitzung,
 laufende Sitzungen sind in der Liste markiert. Beenden (Titelleiste oder das X am Badge *läuft*)
-fragt vorher nach. Das Terminal startet `ocui-sh`, die neben der App liegt: erst `claude`, danach
-eine einfache Shell. Fehlt sie, nimmt die App Git-Bash, `pwsh` oder `cmd`.
+fragt vorher nach. Das Terminal startet erst `claude`, danach bleibt eine Shell offen: unter macOS
+und Linux die Login-Shell aus `$SHELL`, unter Windows die eigene Shell `ocui-sh`, die neben der App
+liegt. Fehlt sie, nimmt die App Git-Bash, `pwsh` oder `cmd`.
 
-Das Zahnrad rechts in der Suchleiste hat unter Windows und Linux zwei Schalter:
+*Aktivität* in der Titelleiste blendet rechts das Panel zur Sitzung ein: Kontext, Limits, Kosten und
+Todos der laufenden Session, Workflows mit Phasen und Agents, Agent-Aufrufe und Bilder. Gespeicherte
+Workflow-Vorlagen lassen sich dort bearbeiten und starten. Die Daten liefert die eingebaute Mod
+(`src-tauri/mods/open-claude`), die jedes gestartete `claude` mitbekommt; eigene Mods kommen aus
+`~/.claude/open-claude-mods`.
+
+Das Zahnrad rechts in der Suchleiste enthält Zoom, Hell/Dunkel/System, die Rückfragen bei
+Git-Aktionen, *Skill-Profile*, *Claude-Einstellungen* (wie `/config`) und *Nach Updates suchen*.
+Unter Windows und Linux kommen zwei Schalter dazu:
 
 - *Schließen legt ins Tray* (Standard: an): Schließen versteckt das Fenster nur, es kommt per
   Klick aufs Tray-Icon zurück; beendet wird die App über *Beenden* im Kontextmenü des Tray-Icons.
@@ -104,7 +119,22 @@ Das Zahnrad rechts in der Suchleiste hat unter Windows und Linux zwei Schalter:
 Unter macOS gibt es beide nicht: Schließen versteckt das Fenster, ein Klick aufs Dock- oder Menüleisten-Icon holt es
 zurück, Cmd+Q beendet die App. Autostart läuft dort über die Anmeldeobjekte der Systemeinstellungen.
 
-Daneben liegen *Neu einlesen*, *Klonen* und *Konten* als Icons.
+Daneben liegen *Neu einlesen*, *Claude ohne Projekt*, *Neues Repo*, *Klonen* und *Konten* als Icons.
+
+## Editor
+
+`Strg` + `Shift` + `E` öffnet den Editor des Projekts: Dateibaum, Tabs, die sich per Ziehen
+umsortieren und an den Kanten teilen lassen, `Strg` + `P` zum Suchen und `Strg` + `S` zum Speichern.
+Hat sich eine Datei seit dem Öffnen auf der Platte geändert, speichert der Editor nicht still drüber.
+Zeilenenden (LF/CRLF) und BOM bleiben erhalten, Löschen geht in den Papierkorb.
+
+- **Vorschau:** HTML, Markdown und Bilder, dazu der laufende Dev-Server, sobald die Run-Leiste
+  eine lokale Adresse ausgibt. Unter Windows auch WPF-XAML (braucht die .NET 8 Desktop Runtime,
+  Freigabe pro Projekt).
+- **Run-Leiste:** startet Skripte aus `package.json` (npm, pnpm, yarn, bun) sowie `cargo` und
+  `dotnet` mit Build-Profilen (Debug/Release, Zusatzargumente).
+- **Tests:** erkennt vitest, jest, `node --test`, `cargo test`, dotnet und pytest und zeigt
+  Ergebnisse je Test; einzelne Dateien oder Tests lassen sich gezielt starten.
 
 ## Git-Ansicht
 
@@ -160,8 +190,8 @@ einer zweiten Rückfrage trotzdem löschen.
 | `F5` | Aktualisieren, passiert auch bei Fensterfokus |
 | `Esc` oder `Strg` + `Shift` + `W` | Zurück zur Liste |
 
-Fetch, Pull und Push melden sich über den Git Credential Manager an, der bei Git for Windows
-dabei ist.
+Fetch, Pull und Push melden sich mit dem Token des Kontos an, das dem Repo zugeordnet ist,
+sonst über die Credential-Helper von Git (z. B. den Git Credential Manager aus Git for Windows).
 
 ## Konten und Klonen
 
@@ -172,10 +202,12 @@ dabei ist.
 | Anbieter | Scopes |
 | --- | --- |
 | GitHub | `repo`, `read:org` |
-| GitLab | `read_api`, `read_repository` |
+| GitLab | `api`, `read_repository`, `write_repository` |
 
-Der Token liegt nur in der Windows-Anmeldeinformationsverwaltung (Dienst `ocui`), die
-Kontoliste ohne Token in `settings.json`.
+GitLab braucht `api`, damit Pipelines neu gestartet und Releases angelegt werden können.
+Der Token liegt nur im Schlüsselbund des Systems (Dienst `ocui`: Windows-Anmeldeinformations-
+verwaltung, macOS-Schlüsselbund, unter Linux Secret Service), die Kontoliste ohne Token in
+`settings.json`.
 
 *Klonen* (`Strg` + `N`) listet die eigenen Repos des gewählten Kontos, zuletzt aktive zuerst.
 Tippen filtert lokal, `⏎` bzw. *Überall suchen* sucht auf dem Server. Alternativ eine beliebige
@@ -187,11 +219,11 @@ gespeichert. Danach liest die App neu ein und markiert das Projekt.
 
 ```sh
 npm install
-npm run tauri dev
+npm run tauri dev                      # baut vorher ocui-sh mit
 
 npm run check                          # Svelte + TypeScript
-node --test src/lib/*.test.ts          # Suche, Diff, Graph, Konflikte
-cd src-tauri && cargo test             # Scan, Git-Parser, Forge
+node --test src/lib/*.test.ts          # Frontend-Logik (Node 24, ohne Vitest)
+cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo test
 ```
 
 Bauen:

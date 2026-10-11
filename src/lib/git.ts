@@ -74,7 +74,7 @@ const call = <T>(cmd: string, args: Record<string, unknown>) => invoke<T>(cmd, a
 
 export const git = {
   status: (repo: string) => call<Status>("git_status", { repo }),
-  /** rev null = alle Refs (--all). */
+  /** rev null = Branches, Remotes, Tags und HEAD. */
   log: (repo: string, rev: string | null, skip: number, limit: number) =>
     call<Commit[]>("git_log", { repo, rev, skip, limit }),
   show: (repo: string, sha: string) => call<CommitDetail>("git_show", { repo, sha }),
@@ -151,7 +151,7 @@ export const git = {
 export type ForgeKind = "github" | "gitlab";
 
 export type RepoLang = { id: string; label: string; tool: string | null; found: boolean };
-/** Token liegt im Windows-Anmeldeinfo-Speicher, nie im Store. */
+/** Token liegt im Schluesselbund des Systems (keyring), nie im Store. */
 export type Account = { kind: ForgeKind; host: string; user: string; avatar: string | null };
 
 /** Konto-ID "kind:host:user", z. B. "github:github.com:octocat" (host darf einen Port enthalten). */
