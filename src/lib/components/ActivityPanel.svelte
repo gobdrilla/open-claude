@@ -15,6 +15,8 @@
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+  import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
   import PlayIcon from "@lucide/svelte/icons/play";
   import PencilIcon from "@lucide/svelte/icons/pencil";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -80,6 +82,12 @@
   let openRuns = $state<Record<string, boolean>>({});
   // Aufgeklappte Prompts, Schluessel `${run}:${agent}`; standardmaessig zu.
   let openPrompts = $state<Record<string, boolean>>({});
+  // Phasen-Override des Users, Schluessel `${run}:${phase}`; ohne Eintrag offen, solange sie laeuft oder Fehler hat.
+  let openPhases = $state<Record<string, boolean>>({});
+  // Run im grossen Dialog und dessen Statusfilter
+  let big = $state<string | null>(null);
+  let filter = $state<"all" | "running" | "error">("all");
+  let bigScroller = $state<HTMLElement>();
   // Geoeffneter Agent: volle Zeitleiste statt Liste.
   let focus = $state<{ run: string; agent: string } | null>(null);
   let log = $state<Entry[] | null>(null);
@@ -201,7 +209,7 @@
       const l = await invoke<Entry[]>("claude_agent_log", { cwd, sid, run: f.run, agent: f.agent });
       if (f !== focus) return;
       // Nur mitscrollen, wenn man schon unten war; sonst springt es beim Lesen weg.
-      const el = scroller;
+      const el = big ? bigScroller : scroller;
       const stick = !!log && !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       log = l;
       if (stick) requestAnimationFrame(() => el!.scrollTo({ top: el!.scrollHeight }));
@@ -213,8 +221,20 @@
   function openAgent(r: Run, a: Agent) {
     focus = { run: r.id, agent: a.id };
     log = null;
-    scroller?.scrollTo({ top: 0 });
+    (big ? bigScroller : scroller)?.scrollTo({ top: 0 });
     loadLog();
+  }
+
+  const failed = (a: Agent) => a.state === "error" || a.state === "failed";
+  const shows = (a: Agent) => filter === "all" || (filter === "error" ? failed(a) : a.state === filter);
+  const bigRun = $derived(data?.runs.find((r) => r.id === big) ?? null);
+  // Startet beim ersten Fehler, sonst beim ersten laufenden Agent.
+  function openBig(r: Run) {
+    big = r.id;
+    filter = "all";
+    const a = r.agents.find((a) => a.id && failed(a)) ?? r.agents.find((a) => a.id && a.state === "running");
+    if (a) openAgent(r, a);
+    else (focus = null), (log = null);
   }
 
   const key = (id: number) => `${data?.session}:${id}`;
@@ -351,17 +371,7 @@
       <button class="text-muted-foreground hover:text-foreground flex max-w-full items-center gap-0.5" onclick={() => (focus = null)}>
         <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate">{focused?.r.name ?? "Zurück"}</span>
       </button>
-      {#if focused}
-        {@const { r, a } = focused}
-        {@const [ai, ac, at] = status(a.state)}
-        <div class="mt-1 flex items-center gap-2">
-          <span class={ac} title={at}>{ai}</span>
-          <span class="min-w-0 flex-1 truncate font-medium">{a.label || a.id}</span>
-        </div>
-        <div class="text-muted-foreground mt-0.5 truncate pl-5 tabular-nums">
-          {[at, a.phase, dur(agentDur(r, a)), `${a.tool_calls} Tools`, a.tokens ? tokens(a.tokens) : ""].filter(Boolean).join(" · ")}
-        </div>
-      {/if}
+      {@render agentHead()}
     </div>
   {/if}
 
@@ -500,133 +510,27 @@
     {:else if !data.session}
       <p class="text-muted-foreground p-2">Keine laufende Claude-Session gefunden.</p>
     {:else if tab === "wf" && focus}
-      {#if !focused}
-        <p class="text-muted-foreground p-2">Agent nicht mehr in der Liste.</p>
-      {:else if !log}
-        <p class="text-muted-foreground p-2">Lade Verlauf …</p>
-      {:else}
-        {@const a = focused.a}
-        <ol class="space-y-1">
-          {#each log as e, i (i)}
-            <li>
-              {#if e.kind === "prompt"}
-                <details class="bg-secondary/50 rounded-md px-2 py-1">
-                  <summary class="text-muted-foreground cursor-pointer">Auftrag</summary>
-                  <pre class="mt-1 max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
-                </details>
-              {:else if e.kind === "text"}
-                <!-- Breite Tabellen/Code scrollen hier, nicht das ganze Panel unter die Kopfzeile. -->
-                <div class="border-primary/40 min-w-0 overflow-x-auto border-l-2 py-0.5 pl-2"><Markdown text={e.body} /></div>
-              {:else}
-                {@const [si, sc, st] =
-                  e.output !== null
-                    ? e.error
-                      ? ["✕", "text-destructive", "Fehler"]
-                      : ["✓", "text-success", "fertig"]
-                    : a.state === "running"
-                      ? ["◐", "text-primary animate-pulse", "läuft"]
-                      : ["⊘", "text-muted-foreground", "ohne Ergebnis"]}
-                <details class="hover:bg-accent/40 open:bg-accent/30 rounded-md">
-                  <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-[11px]">
-                    <span class="text-muted-foreground shrink-0 tabular-nums">{e.at ? clock(e.at) : ""}</span>
-                    <span class="shrink-0 {sc}" title={st}>{si}</span>
-                    <span class="text-foreground shrink-0">{e.tool}</span>
-                    <span class="text-muted-foreground min-w-0 truncate">{e.summary}</span>
-                  </summary>
-                  <div class="space-y-1 px-1 pb-1.5">
-                    <pre class="bg-background/60 max-h-48 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
-                    {#if e.output !== null}
-                      <pre
-                        class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap {e.error
-                          ? 'text-destructive'
-                          : ''}">{e.output || "(leer)"}</pre>
-                    {/if}
-                  </div>
-                </details>
-              {/if}
-            </li>
-          {:else}
-            <li class="text-muted-foreground p-2">Kein Verlauf gefunden.</li>
-          {/each}
-        </ol>
-        {#if a.result}
-          <div class="border-border/60 mt-2 rounded-lg border p-2">
-            <div class="text-muted-foreground mb-1">Ergebnis</div>
-            <div class="min-w-0 overflow-x-auto"><Markdown text={a.result} /></div>
-          </div>
-        {/if}
-      {/if}
+      {@render agentLog()}
     {:else if tab === "wf"}
       {#each data.runs as r (r.id)}
         {@const open = openRuns[r.id] ?? r.status === "running"}
         {@const [icon, color, text] = status(r.status)}
         <section class="border-border/60 mb-2 rounded-lg border">
-          <button
-            class="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left"
-            aria-expanded={open}
-            onclick={() => (openRuns[r.id] = !open)}
-          >
-            <span class={color} title={text}>{icon}</span>
-            <span class="min-w-0 flex-1 truncate font-medium">{r.name}</span>
-            <span class="text-muted-foreground shrink-0 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
-          </button>
-          {#if open}
-            {#each groups(r) as g (g.p)}
-              {#if r.phases.length}
-                {@const [pi, pc, pt] = status(phaseState(g.agents))}
-                {@const n = g.agents.filter((a) => a.state === "done").length}
-                <div class="border-border/60 bg-secondary/30 flex items-center gap-2 border-t px-2 py-1">
-                  <span class={pc} title={pt}>{pi}</span>
-                  <span class="min-w-0 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}">{g.p || "Ohne Phase"}</span>
-                  <span class="text-muted-foreground shrink-0 tabular-nums"
-                    >{pt} · {n}/{g.agents.length}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
-                        g.agents.reduce((t, a) => t + a.tokens, 0),
-                      )}{/if}</span
-                  >
-                </div>
-              {/if}
-              <ul class="border-border/60 {g.agents.length ? 'border-t' : ''}">
-                {#each g.agents as a, i (i)}
-                  {@const [ai, ac, at] = status(a.state)}
-                  {@const last = a.steps.at(-1)}
-                  {@const pk = `${r.id}:${a.id || g.p + i}`}
-                  <li>
-                    <div class="flex items-start">
-                      <button
-                        class="hover:bg-accent/40 group/agent min-w-0 flex-1 px-2 py-1 text-left disabled:cursor-default"
-                        disabled={!a.id}
-                        title={a.id ? "Verlauf anzeigen" : undefined}
-                        onclick={() => openAgent(r, a)}
-                      >
-                        <div class="flex items-center gap-2">
-                          <span class={ac} title={at}>{ai}</span>
-                          <span class="min-w-0 flex-1 truncate">{a.label || a.id}</span>
-                          <span class="text-muted-foreground shrink-0 tabular-nums"
-                            >{dur(agentDur(r, a))}{#if a.tokens} · {tokens(a.tokens)}{/if}</span
-                          >
-                          {#if a.id}<ChevronRightIcon class="text-muted-foreground size-3.5 shrink-0 opacity-0 group-hover/agent:opacity-100" />{/if}
-                        </div>
-                        {#if last}
-                          <div class="text-muted-foreground truncate pl-5 font-mono text-[11px]">{last.tool} {last.summary}</div>
-                        {/if}
-                      </button>
-                      {#if a.prompt}
-                        <!-- Eigener Button neben dem Agent-Button (nicht darin): klappt nur den Prompt -->
-                        <button
-                          class="text-muted-foreground hover:text-foreground shrink-0 px-1.5 py-1 text-[10px]"
-                          aria-expanded={!!openPrompts[pk]}
-                          onclick={() => (openPrompts[pk] = !openPrompts[pk])}>Prompt {openPrompts[pk] ? "▾" : "▸"}</button
-                        >
-                      {/if}
-                    </div>
-                    {#if a.prompt && openPrompts[pk]}
-                      <div class="bg-secondary/50 mx-2 mb-1 max-h-64 min-w-0 overflow-auto rounded-md px-2 py-1"><Markdown text={a.prompt} /></div>
-                    {/if}
-                  </li>
-                {/each}
-              </ul>
-            {/each}
-          {/if}
+          <div class="flex items-center">
+            <button
+              class="hover:bg-accent/40 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left"
+              aria-expanded={open}
+              onclick={() => (openRuns[r.id] = !open)}
+            >
+              <span class={color} title={text}>{icon}</span>
+              <span class="min-w-0 flex-1 truncate font-medium">{r.name}</span>
+              <span class="text-muted-foreground shrink-0 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
+            </button>
+            <button class="text-muted-foreground hover:text-foreground shrink-0 p-1.5" title="Groß anzeigen" aria-label="Groß anzeigen" onclick={() => openBig(r)}
+              ><Maximize2Icon class="size-3.5" /></button
+            >
+          </div>
+          {#if open}{@render phases(r)}{/if}
         </section>
       {:else}
         <p class="text-muted-foreground p-2">Keine Workflows in dieser Session.</p>
@@ -649,6 +553,150 @@
   </div>
 </div>
 
+{#snippet agentHead()}
+  {#if focused}
+    {@const { r, a } = focused}
+    {@const [ai, ac, at] = status(a.state)}
+    <div class="mt-1 flex items-center gap-2">
+      <span class={ac} title={at}>{ai}</span>
+      <span class="min-w-0 flex-1 truncate font-medium">{a.label || a.id}</span>
+    </div>
+    <div class="text-muted-foreground mt-0.5 truncate pl-5 tabular-nums">
+      {[at, a.phase, dur(agentDur(r, a)), `${a.tool_calls} Tools`, a.tokens ? tokens(a.tokens) : ""].filter(Boolean).join(" · ")}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet agentLog()}
+  {#if !focused}
+    <p class="text-muted-foreground p-2">Agent nicht mehr in der Liste.</p>
+  {:else if !log}
+    <p class="text-muted-foreground p-2">Lade Verlauf …</p>
+  {:else}
+    {@const a = focused.a}
+    <ol class="space-y-1">
+      {#each log as e, i (i)}
+        <li>
+          {#if e.kind === "prompt"}
+            <details class="bg-secondary/50 rounded-md px-2 py-1">
+              <summary class="text-muted-foreground cursor-pointer">Auftrag</summary>
+              <pre class="mt-1 max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
+            </details>
+          {:else if e.kind === "text"}
+            <!-- Breite Tabellen/Code scrollen hier, nicht das ganze Panel unter die Kopfzeile. -->
+            <div class="border-primary/40 min-w-0 overflow-x-auto border-l-2 py-0.5 pl-2"><Markdown text={e.body} /></div>
+          {:else}
+            {@const [si, sc, st] =
+              e.output !== null
+                ? e.error
+                  ? ["✕", "text-destructive", "Fehler"]
+                  : ["✓", "text-success", "fertig"]
+                : a.state === "running"
+                  ? ["◐", "text-primary animate-pulse", "läuft"]
+                  : ["⊘", "text-muted-foreground", "ohne Ergebnis"]}
+            <details class="hover:bg-accent/40 open:bg-accent/30 rounded-md">
+              <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-[11px]">
+                <span class="text-muted-foreground shrink-0 tabular-nums">{e.at ? clock(e.at) : ""}</span>
+                <span class="shrink-0 {sc}" title={st}>{si}</span>
+                <span class="text-foreground shrink-0">{e.tool}</span>
+                <span class="text-muted-foreground min-w-0 truncate">{e.summary}</span>
+              </summary>
+              <div class="space-y-1 px-1 pb-1.5">
+                <pre class="bg-background/60 max-h-48 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
+                {#if e.output !== null}
+                  <pre
+                    class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap {e.error
+                      ? 'text-destructive'
+                      : ''}">{e.output || "(leer)"}</pre>
+                {/if}
+              </div>
+            </details>
+          {/if}
+        </li>
+      {:else}
+        <li class="text-muted-foreground p-2">Kein Verlauf gefunden.</li>
+      {/each}
+    </ol>
+    {#if a.result}
+      <div class="border-border/60 mt-2 rounded-lg border p-2">
+        <div class="text-muted-foreground mb-1">Ergebnis</div>
+        <div class="min-w-0 overflow-x-auto"><Markdown text={a.result} /></div>
+      </div>
+    {/if}
+  {/if}
+{/snippet}
+
+{#snippet phases(r: Run, dlg = false)}
+  {#each groups(r) as g (g.p)}
+    {@const st = phaseState(g.agents)}
+    {@const ok = `${r.id}:${g.p}`}
+    {@const open = !r.phases.length || (openPhases[ok] ?? (st === "running" || st === "error"))}
+    <!-- Im Dialog filtert der Status; die Kopfzeile zaehlt trotzdem die ganze Phase. -->
+    {@const shown = dlg ? g.agents.filter(shows) : g.agents}
+    {#if r.phases.length && (shown.length || filter === "all" || !dlg)}
+      {@const [pi, pc, pt] = status(st)}
+      {@const n = g.agents.filter((a) => a.state === "done").length}
+      {@const err = g.agents.filter(failed).length}
+      <button
+        class="border-border/60 bg-secondary/30 hover:bg-accent/40 flex w-full items-center gap-2 border-t px-2 py-1 text-left {dlg ? 'sticky top-0 z-10 backdrop-blur' : ''}"
+        aria-expanded={open}
+        onclick={() => (openPhases[ok] = !open)}
+      >
+        <ChevronDownIcon class="text-muted-foreground size-3.5 shrink-0 transition-transform {open ? '' : '-rotate-90'}" />
+        <span class={pc} title={pt}>{pi}</span>
+        <span class="min-w-0 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}">{g.p || "Ohne Phase"}</span>
+        <span class="text-muted-foreground shrink-0 tabular-nums"
+          >{pt} · {n}/{g.agents.length}{#if err}<span class="text-destructive"> · {err} ✕</span>{/if}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
+              g.agents.reduce((t, a) => t + a.tokens, 0),
+            )}{/if}</span
+        >
+      </button>
+    {/if}
+    {#if open}
+    <ul class="border-border/60 {shown.length ? 'border-t' : ''}">
+      {#each shown as a, i (i)}
+        {@const [ai, ac, at] = status(a.state)}
+        {@const last = a.steps.at(-1)}
+        {@const pk = `${r.id}:${a.id || g.p + i}`}
+        <li>
+          <div class="flex items-start">
+            <button
+              class="hover:bg-accent/40 group/agent min-w-0 flex-1 px-2 py-1 text-left disabled:cursor-default {dlg && a.id && a.id === focus?.agent ? 'bg-accent/60' : ''}"
+              disabled={!a.id}
+              title={a.id ? "Verlauf anzeigen" : undefined}
+              onclick={() => openAgent(r, a)}
+            >
+              <div class="flex items-center gap-2">
+                <span class={ac} title={at}>{ai}</span>
+                <span class="min-w-0 flex-1 truncate">{a.label || a.id}</span>
+                <span class="text-muted-foreground shrink-0 tabular-nums"
+                  >{dur(agentDur(r, a))}{#if a.tokens} · {tokens(a.tokens)}{/if}</span
+                >
+                {#if a.id}<ChevronRightIcon class="text-muted-foreground size-3.5 shrink-0 opacity-0 group-hover/agent:opacity-100" />{/if}
+              </div>
+              {#if last}
+                <div class="text-muted-foreground truncate pl-5 font-mono text-[11px]">{last.tool} {last.summary}</div>
+              {/if}
+            </button>
+            {#if a.prompt}
+              <!-- Eigener Button neben dem Agent-Button (nicht darin): klappt nur den Prompt -->
+              <button
+                class="text-muted-foreground hover:text-foreground shrink-0 px-1.5 py-1 text-[10px]"
+                aria-expanded={!!openPrompts[pk]}
+                onclick={() => (openPrompts[pk] = !openPrompts[pk])}>Prompt {openPrompts[pk] ? "▾" : "▸"}</button
+              >
+            {/if}
+          </div>
+          {#if a.prompt && openPrompts[pk]}
+            <div class="bg-secondary/50 mx-2 mb-1 max-h-64 min-w-0 overflow-auto rounded-md px-2 py-1"><Markdown text={a.prompt} /></div>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    {/if}
+  {/each}
+{/snippet}
+
 {#snippet gauge(label: string, p: number, sub: string)}
   <div class="flex justify-between"><span>{label}</span><span class="tabular-nums {txt(p)}">{Math.round(p)}%</span></div>
   <div class="my-1 h-1 overflow-hidden rounded-full bg-foreground/5">
@@ -658,6 +706,48 @@
 {/snippet}
 
 <WorkflowDialog bind:open={wfOpen} {cwd} entry={wfEntry} taken={templates} onsaved={loadTemplates} />
+
+<Dialog.Root open={!!bigRun} onOpenChange={(o) => !o && ((big = null), (focus = null), (log = null))}>
+  <Dialog.Content class="flex h-[85vh] flex-col gap-3 text-xs sm:max-w-[min(92vw,1400px)]">
+    {#if bigRun}
+      {@const r = bigRun}
+      {@const [icon, color, text] = status(r.status)}
+      {@const cnt = (k: string) => r.agents.filter((a) => (k === "error" ? failed(a) : a.state === k)).length}
+      <div class="pr-8">
+        <Dialog.Title class="flex items-center gap-2 text-sm">
+          <span class={color} title={text}>{icon}</span><span class="min-w-0 truncate">{r.name}</span>
+        </Dialog.Title>
+        <div class="text-muted-foreground mt-0.5 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)} · {cnt("done")}/{r.agents.length} Agents fertig</div>
+        <!-- Segmentierter Fortschritt: fertig / Fehler / laeuft -->
+        <div class="mt-2 flex h-1 overflow-hidden rounded-full bg-foreground/5">
+          {#each [["done", "bg-success"], ["error", "bg-destructive"], ["running", "bg-primary animate-pulse"]] as [k, c] (k)}
+            <div class={c} style:width="{(cnt(k) / Math.max(1, r.agents.length)) * 100}%"></div>
+          {/each}
+        </div>
+        <div class="mt-2 flex gap-1">
+          {#each [["all", "Alle", r.agents.length], ["running", "Laufend", cnt("running")], ["error", "Fehler", cnt("error")]] as const as [k, l, n] (k)}
+            <button
+              class="rounded-md px-2 py-0.5 {filter === k ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'}"
+              aria-pressed={filter === k}
+              onclick={() => (filter = k)}>{l} <span class="tabular-nums">{n}</span></button
+            >
+          {/each}
+        </div>
+      </div>
+      <div class="border-border/60 grid min-h-0 flex-1 grid-cols-[minmax(260px,2fr)_3fr] overflow-hidden rounded-lg border">
+        <div class="border-border/60 min-h-0 overflow-y-auto border-r">{@render phases(r, true)}</div>
+        <div class="flex min-h-0 min-w-0 flex-col">
+          {#if focus}
+            <div class="border-border/60 shrink-0 border-b px-2 pb-1.5">{@render agentHead()}</div>
+            <div bind:this={bigScroller} class="min-h-0 flex-1 overflow-y-auto p-2">{@render agentLog()}</div>
+          {:else}
+            <p class="text-muted-foreground p-2">Agent links auswählen.</p>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </Dialog.Content>
+</Dialog.Root>
 
 <Dialog.Root open={current !== null} onOpenChange={(o) => !o && (shown = null)}>
   <Dialog.Content class="max-h-[90vh] sm:max-w-[min(90vw,1200px)]" {onkeydown}>
