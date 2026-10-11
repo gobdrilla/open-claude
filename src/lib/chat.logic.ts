@@ -113,3 +113,44 @@ export function mcpConfig(kind: "stdio" | "http", text: string): { command: stri
   const [command, ...args] = t.split(/\s+/).filter(Boolean);
   return command ? { command, args } : null;
 }
+
+export type Usage = {
+  head: string[];
+  limits: { label: string; percent: number; reset: string }[];
+  intro: string[];
+  periods: { title: string; meta: string; facts: { percent: number; text: string }[]; top: { kind: string; items: { name: string; percent: number }[] }[] }[];
+};
+
+/** Text von /usage (claude liefert ihn nur als Text) fuer den Dialog zerlegen; null, wenn das Format nicht passt. */
+export function parseUsage(text: string): Usage | null {
+  const u: Usage = { head: [], limits: [], intro: [], periods: [] };
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) continue;
+    const lim = /^(\S.*?):\s*(\d+(?:\.\d+)?)% used(?:\s*·\s*(.+))?$/.exec(line);
+    const per = /^(Last \S+)\s*·\s*(.+)$/.exec(line);
+    const fact = /^\s+(\d+(?:\.\d+)?)% (.+)$/.exec(line);
+    const top = /^\s+Top ([^:]+):\s*(.+)$/.exec(line);
+    const cur = u.periods.at(-1);
+    if (lim && !u.periods.length)
+      u.limits.push({
+        label: lim[1].replace(/^Current session$/, "Session").replace(/^Current week/, "Woche").replace("(all models)", "(alle Modelle)"),
+        percent: Number(lim[2]),
+        reset: (lim[3] ?? "").replace(/^resets /, "Reset "),
+      });
+    else if (per) u.periods.push({ title: per[1].replace(/^Last /, "Letzte "), meta: per[2], facts: [], top: [] });
+    else if (cur && fact) cur.facts.push({ percent: Number(fact[1]), text: fact[2] });
+    else if (cur && top)
+      cur.top.push({
+        kind: top[1],
+        items: top[2].split(/,\s*/).flatMap((s) => {
+          const m = /^(.+?)\s+(\d+(?:\.\d+)?)%$/.exec(s.trim());
+          return m ? [{ name: m[1], percent: Number(m[2]) }] : [];
+        }),
+      });
+    else if (!u.limits.length) u.head.push(line.trim());
+    else if (!u.periods.length) u.intro.push(line.trim());
+    else cur?.facts.push({ percent: NaN, text: line.trim() });
+  }
+  return u.limits.length ? u : null;
+}

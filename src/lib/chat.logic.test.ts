@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { answers, fmt, mcpConfig, nextMode, resultText, route, suggestionLabel } from "./chat.logic.ts";
+import { answers, fmt, mcpConfig, nextMode, parseUsage, resultText, route, suggestionLabel } from "./chat.logic.ts";
 
 const claude = [
   { name: "usage", description: "", aliases: ["cost"] },
@@ -55,4 +55,27 @@ test("mcpConfig: Befehl mit Argumenten, nur http(s)-URLs", () => {
   assert.equal(mcpConfig("stdio", "   "), null);
   assert.deepEqual(mcpConfig("http", "https://example.com/mcp"), { type: "http", url: "https://example.com/mcp" });
   for (const bad of ["example.com/mcp", "file:///x", "https://a b"]) assert.equal(mcpConfig("http", bad), null, bad);
+});
+
+test("parseUsage: Limits, Zeitraeume, Top-Listen; fremder Text = null", () => {
+  const t = `You are currently using your subscription to power your Claude Code usage
+
+Current session: 21% used · resets Oct 12 at 2:29am (Europe/Berlin)
+Current week (all models): 20% used · resets Oct 17 at 5:59pm (Europe/Berlin)
+
+What's contributing to your limits usage?
+Approximate, based on local sessions.
+
+Last 24h · 2891 requests · 4 sessions
+  95% of your usage came from subagent-heavy sessions
+  Top subagents: workflow-subagent 73%, general-purpose 9%`;
+  const u = parseUsage(t)!;
+  assert.deepEqual(u.head, ["You are currently using your subscription to power your Claude Code usage"]);
+  assert.deepEqual(u.limits[0], { label: "Session", percent: 21, reset: "Reset Oct 12 at 2:29am (Europe/Berlin)" });
+  assert.equal(u.limits[1].label, "Woche (alle Modelle)");
+  assert.equal(u.intro.length, 2);
+  assert.deepEqual(u.periods[0].facts, [{ percent: 95, text: "of your usage came from subagent-heavy sessions" }]);
+  assert.deepEqual(u.periods[0].top[0].items[1], { name: "general-purpose", percent: 9 });
+  assert.equal(u.periods[0].title, "Letzte 24h");
+  assert.equal(parseUsage("Hallo"), null);
 });

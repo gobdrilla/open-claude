@@ -16,7 +16,8 @@
   import McpDialog from "./McpDialog.svelte";
   import PlugIcon from "@lucide/svelte/icons/plug";
   import { confirm } from "$lib/confirm.svelte";
-  import { CONTROL, LOCAL, MODES, answers, fmt, nextMode, resultText, route, suggestionLabel, type Cmd, type Question, type Suggestion } from "$lib/chat.logic";
+  import { CONTROL, LOCAL, MODES, answers, fmt, nextMode, parseUsage, resultText, route, suggestionLabel, type Cmd, type Question, type Suggestion, type Usage } from "$lib/chat.logic";
+  import UsageDialog from "./UsageDialog.svelte";
 
   let {
     id,
@@ -75,6 +76,9 @@
   let bypassed = false;
   let restarting = false;
   let mcpOpen = $state(false);
+  let usage = $state<Usage | null>(null);
+  // Naechste lokale Antwort ist die von /usage
+  let wantUsage = false;
   let modeKey = $state(0);
   // Zusatz zur "arbeitet"-Zeile, z. B. beim Komprimieren.
   let phase = $state("");
@@ -156,6 +160,12 @@
     else if (m.type === "assistant") {
       // Gestreamt: Text und Gedanken stehen schon da (Verlauf aus der jsonl kommt ohne Stream).
       const seen = streamed.has(m.message?.id);
+      // Antwort auf /usage (lokal, ohne Modell): als Dialog statt Textwand
+      if (wantUsage && m.message?.model === "<synthetic>") {
+        wantUsage = false;
+        const u = parseUsage((m.message.content ?? []).map((b: any) => b.text ?? "").join("\n"));
+        if (u) return void (usage = u);
+      }
       for (const b of m.message?.content ?? []) {
         if (b.type === "text" && b.text.trim() && !seen) items.push({ kind: "text", text: b.text });
         else if (b.type === "thinking" && b.thinking?.trim() && !seen) items.push({ kind: "think", text: b.thinking });
@@ -236,6 +246,7 @@
     } else if (r?.kind === "local") local(r.name, r.args);
     else if (r?.kind === "unknown") note(`/${r.name} gibt es hier nicht, /help zeigt alle`);
     else {
+      wantUsage = r?.name === "usage" || r?.name === "cost";
       sent.uuid = crypto.randomUUID();
       prompt(text, pics, sent.uuid);
     }
@@ -865,4 +876,5 @@
     {/if}
   </div>
 </div>
+<UsageDialog bind:usage />
 <McpDialog bind:open={mcpOpen} {cwd} {control} onrestart={() => relaunch()} />
