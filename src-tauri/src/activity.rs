@@ -23,6 +23,8 @@ pub struct Activity {
     images: Vec<Img>,
     /// Session-Daten der eingebauten Mod (siehe panel_file), unveraendert durchgereicht.
     panel: Option<Value>,
+    /// Neueste Rate-Limits aller Sessions, siehe newest_limits()
+    limits: Option<Value>,
     /// Aktive Plugin-Modi (caveman, ponytail, ...), siehe modes()
     modes: Vec<Mode>,
 }
@@ -54,6 +56,17 @@ fn modes(c: &Path) -> Vec<Mode> {
 /// Datei, in die die Mod im Terminal `id` ihr Panel-Atom schreibt (Env OPEN_CLAUDE_PANEL).
 pub fn panel_file(id: &str) -> PathBuf {
     std::env::temp_dir().join("open-claude-panel").join(format!("{id}.json"))
+}
+
+/// Limits gelten fuers ganze Konto, kommen aber erst mit einer API-Antwort: neueste Panel-Datei mit Limits nehmen,
+/// damit sie vor der ersten Nachricht da sind und Antworten anderer Sessions sie auffrischen.
+fn newest_limits(dir: &Path) -> Option<Value> {
+    let mut files: Vec<_> = fs::read_dir(dir).ok()?.flatten().filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path()))).collect();
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
+    files.into_iter().find_map(|(_, p)| {
+        let v: Value = serde_json::from_str(&fs::read_to_string(p).ok()?).ok()?;
+        v.get("limits").filter(|l| l.as_array().is_some_and(|a| !a.is_empty())).cloned()
+    })
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -678,7 +691,7 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>)> {
 fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     let p = c.join("projects").join(slug(cwd));
     let Some((sid, alive)) = session(c, cwd, &p) else {
-        return Activity { session: None, runs: vec![], agents: vec![], images: vec![], panel: None, modes: vec![] };
+        return Activity { session: None, runs: vec![], agents: vec![], images: vec![], panel: None, limits: None, modes: vec![] };
     };
     // ponytail: max. 4 Sessions im Cache, dann alles verwerfen; LRU erst wenn das stoert
     if cache.len() >= 4 && !cache.contains_key(&sid) {
@@ -733,7 +746,7 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     }
     agents.sort_by_key(|a| (rank(&a.state), std::cmp::Reverse(a.started)));
     agents.truncate(50);
-    Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), panel: None, modes: vec![] }
+    Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), panel: None, limits: None, modes: vec![] }
 }
 
 #[tauri::command]
@@ -745,6 +758,7 @@ pub async fn claude_activity(cwd: String, id: String) -> Result<Activity, String
         if crate::pty::valid_id(&id) {
             a.panel = fs::read_to_string(panel_file(&id)).ok().and_then(|t| serde_json::from_str(&t).ok());
         }
+        a.limits = newest_limits(&std::env::temp_dir().join("open-claude-panel"));
         Ok(a)
     })
     .await
@@ -1026,6 +1040,19 @@ mod tests {
         append(&base.join("subagents/agent-a1.jsonl"), &t(9));
         let a = activity_in(&mut cache, &c, "/w/p", 0);
         assert!(a.agents.iter().all(|a| a.state == "running"));
+    }
+
+    #[test]
+    fn neueste_limits() {
+        let d = tmp("limits");
+        put(&d.join("a.json"), r#"{"limits":[{"kind":"five_hour","percentUsed":5}]}"#);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        put(&d.join("b.json"), r#"{"limits":[]}"#);
+        put(&d.join("c.json"), "{halb");
+        assert_eq!(newest_limits(&d).unwrap()[0]["percentUsed"], 5);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        put(&d.join("b.json"), r#"{"limits":[{"kind":"five_hour","percentUsed":9}]}"#);
+        assert_eq!(newest_limits(&d).unwrap()[0]["percentUsed"], 9);
     }
 
     #[test]

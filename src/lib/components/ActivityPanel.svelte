@@ -67,7 +67,7 @@
     todos: { content: string; status: string }[];
   };
   type Mode = { name: string; level: string };
-  type Activity = { session: string | null; runs: Run[]; agents: Agent[]; images: Img[]; panel: Panel | null; modes: Mode[] };
+  type Activity = { session: string | null; runs: Run[]; agents: Agent[]; images: Img[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
 
   let { cwd, id }: { cwd: string; id: string } = $props();
 
@@ -289,13 +289,13 @@
   const hm = (d: Date) => d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
   const mins = (ms: number) => {
     const m = Math.max(0, Math.floor(ms / 60_000));
-    return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+    return ms < 60_000 ? `${Math.max(0, Math.floor(ms / 1000))}s` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
   };
   const reset = (iso?: string) => {
     const at = new Date(iso ?? "");
     if (Number.isNaN(at.getTime())) return "";
     const left = at.getTime() - now;
-    if (left <= 0) return "Reset erfolgt – aktualisiert mit nächster Antwort";
+    if (left <= 0) return `Reset erfolgt ${hm(at)}`;
     return left < 24 * HOUR ? `Reset ${hm(at)} · noch ${mins(left)}` : `Reset ${DAYS[at.getDay()]} ${hm(at)}`;
   };
   function details(s: Panel): [string, string][] {
@@ -426,6 +426,8 @@
     {:else if !data}
       <p class="text-muted-foreground p-2">Lade …</p>
     {:else if tab === "session"}
+      <!-- Limits gelten kontoweit: auch vor der ersten Antwort dieser Session, siehe newest_limits() -->
+      {@const lims = (["five_hour", "seven_day"] as const).flatMap((k) => (data!.limits ?? panel?.limits ?? []).filter((l) => l.kind === k).slice(0, 1).map((l) => [k, l] as const))}
       {#if !panel}
         <p class="text-muted-foreground p-2">Noch keine Session-Daten – wartet auf Claude …</p>
       {:else}
@@ -442,14 +444,16 @@
             {@render gauge("Kontext", p, sub)}
           </section>
         {/if}
-        {@const lims = (["five_hour", "seven_day"] as const).flatMap((k) => panel!.limits.filter((l) => l.kind === k).slice(0, 1).map((l) => [k, l] as const))}
+      {/if}
         {#if lims.length}
           <section class="border-border/60 mb-2 divide-y divide-foreground/5 rounded-lg border">
             {#each lims as [k, l] (k)}
               {@const [label, ms] = WIN[k]}
               {@const f = k === "five_hour" ? pace(l.percentUsed, l.resetsAt, ms) : undefined}
+              <!-- Nach dem Reset ist das Fenster leer, auch wenn noch keine neue Antwort kam -->
+              {@const used = Date.parse(l.resetsAt ?? "") <= now ? 0 : l.percentUsed}
               <div class="p-2">
-                {@render gauge(label, l.percentUsed, reset(l.resetsAt))}
+                {@render gauge(label, used, reset(l.resetsAt))}
                 {#if f !== undefined}
                   <div class="mt-0.5 {f > 100 ? 'text-warning' : 'text-muted-foreground'}">
                     {f > 100 ? "◆ zu schnell → 100% vor Reset" : `◇ im Plan → ~${Math.round(f)}% bei Reset`}
@@ -459,6 +463,7 @@
             {/each}
           </section>
         {/if}
+      {#if panel}
         {@const rows = details(panel)}
         {#if rows.length}
           <section class="border-border/60 mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-lg border p-2">
