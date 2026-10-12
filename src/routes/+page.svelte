@@ -980,15 +980,12 @@
         </Badge>
       {/each}
     </div>
+    <!-- Feste Reihenfolge in jeder Ansicht, damit beim Wechseln nichts springt; nur die Extras rechts wechseln. -->
+    {@render viewButton("term", "Claude im Projekt öffnen", () => launch(viewRepo), TerminalIcon, "Claude")}
+    {#if !isFree(viewRepo)}{@render viewButton("edit", "Editor (Strg+Umschalt+E)", () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
+    {@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}
+    <div class="bg-border mx-1 h-4 w-px"></div>
     {#if view === "git" && gitRepo}
-      <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground h-6 gap-1.5 text-[11px]"
-        onclick={() => launch(gitRepo!)}
-        title="Claude im Projekt öffnen"><TerminalIcon class="size-3.5" /> Claude</Button
-      >
-      {@render editButton(gitRepo)}
       <Button
         variant="ghost"
         size="sm"
@@ -1004,30 +1001,7 @@
         title="Aktualisieren (F5)"
         aria-label="Aktualisieren"><RefreshIcon class="size-3.5" /></Button
       >
-    {:else if view === "edit" && editRepo}
-      <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground h-6 gap-1.5 text-[11px]"
-        onclick={() => launch(editRepo!)}
-        title="Claude im Projekt öffnen"><TerminalIcon class="size-3.5" /> Claude</Button
-      >
-      <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground mr-1 h-6 gap-1.5 text-[11px]"
-        onclick={() => openGit(editRepo!)}
-        title="Git-Ansicht (Alt+G)"><GitBranchIcon class="size-3.5" /> Git</Button
-      >
-    {:else if activeSession}
-      {#if !isFree(activeSession.repo)}{@render editButton(activeSession.repo)}{/if}
-      <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground h-6 gap-1.5 text-[11px]"
-        onclick={() => openGit(activeSession.repo)}
-        title="Git-Ansicht (Alt+G)"><GitBranchIcon class="size-3.5" /> Git</Button
-      >
+    {:else if view === "term" && activeSession}
       <Button
         variant="ghost"
         size="sm"
@@ -1544,13 +1518,14 @@
   </footer>
 </div>
 
-{#snippet editButton(repo: Repo)}
+{#snippet viewButton(target: string, title: string, onclick: () => void, Icon: typeof TerminalIcon, label: string)}
   <Button
     variant="ghost"
     size="sm"
-    class="text-muted-foreground h-6 gap-1.5 text-[11px]"
-    onclick={() => openEdit(repo)}
-    title="Editor (Strg+Umschalt+E)"><FileCodeIcon class="size-3.5" /> Editor</Button
+    class="h-6 gap-1.5 text-[11px] {view === target ? 'text-foreground' : 'text-muted-foreground'}"
+    aria-pressed={view === target}
+    onclick={() => view !== target && onclick()}
+    {title}><Icon class="size-3.5" /> {label}</Button
   >
 {/snippet}
 
