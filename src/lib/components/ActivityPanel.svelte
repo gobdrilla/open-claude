@@ -677,7 +677,7 @@
         <li>
           <div class="flex items-start">
             <button
-              class="hover:bg-accent/40 group/agent min-w-0 flex-1 px-2 py-1 text-left disabled:cursor-default {dlg && a.id && a.id === focus?.agent ? 'bg-accent/60' : ''}"
+              class="hover:bg-accent/40 group/agent min-w-0 flex-1 py-1 pr-2 text-left {r.phases.length ? 'pl-6' : 'pl-2'} disabled:cursor-default {dlg && a.id && a.id === focus?.agent ? 'bg-accent/60' : ''}"
               disabled={!a.id}
               title={a.id ? "Verlauf anzeigen" : undefined}
               onclick={() => openAgent(r, a)}
