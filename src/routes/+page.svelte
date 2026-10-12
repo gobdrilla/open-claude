@@ -597,6 +597,15 @@
     gitRepo = repo;
   }
 
+  /** Tab-Klick: gleiche Ansicht fuer das Projekt; ohne Repo (freie Session) zu Claude. */
+  async function openTab(repo: Repo) {
+    if (view === "term" || isFree(repo)) return launch(repo);
+    if (view === "edit") return openEdit(repo);
+    if (gitView && !(await gitView.canLeave())) return;
+    leaveGit();
+    openGit(repo);
+  }
+
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
   async function openEdit(repo?: Repo) {
     if (!repo || isFree(repo)) return;
@@ -1396,20 +1405,20 @@
   </Command.Root>
 
   <!-- Alle Terminals bleiben gemountet, sonst stirbt claude beim Zurueckgehen. -->
-  {#if view === "term" && sessions.length > 1}
+  {#if view !== "list" && sessions.length > 1}
     <div class="bg-chrome border-border flex shrink-0 gap-px overflow-x-auto border-b px-1 text-[11px]" role="tablist">
       {#each sessions as s (s.id)}
         <div
-          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {s.id === active
+          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {s.repo.path === viewRepo?.path
             ? 'bg-background text-foreground'
             : 'text-muted-foreground hover:text-foreground'}"
         >
-          <button role="tab" aria-selected={s.id === active} onclick={() => launch(s.repo)}>
+          <button role="tab" aria-selected={s.repo.path === viewRepo?.path} onclick={() => openTab(s.repo)}>
             {split(s.repo.rel)[1]}
           </button>
           <button
-            class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {s.id ===
-            active
+            class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {s.repo
+              .path === viewRepo?.path
               ? 'opacity-100'
               : ''}"
             onclick={() => endSession(s.id)}
