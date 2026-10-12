@@ -217,7 +217,7 @@ fn parse_account(id: &str) -> Option<(&'static str, String, String)> {
 }
 
 /// Vom Frontend gepflegte Kontenliste (settings.json, "accounts") als (kind, host, user).
-fn known(app: &AppHandle) -> Vec<(String, String, String)> {
+fn known<R: tauri::Runtime>(app: &AppHandle<R>) -> Vec<(String, String, String)> {
     let Ok(store) = app.store("settings.json") else {
         return Vec::new();
     };
@@ -270,7 +270,34 @@ async fn api(
     query: &[(&str, String)],
     body: Option<&Value>,
 ) -> Result<Value, String> {
-    let client = reqwest::Client::builder()
+    let req = client()?.request(method, format!("{}{path}", api_base(kind, host))).query(query);
+    let req = match body {
+        Some(b) => req.json(b),
+        None => req,
+    };
+    let req = authed(req, kind, tok);
+    let req = if kind == "github" { req.header("Accept", "application/vnd.github+json") } else { req };
+    // reqwest-Fehler nennen nur die URL; der Token steckt im Header.
+    let res = req.send().await.map_err(|e| format!("{host} nicht erreichbar: {e}"))?;
+    let status = res.status();
+    // DELETE antwortet mit 204 ohne Body -> Null.
+    let body: Value = res.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        return Err(api_error(host, status, &body));
+    }
+    Ok(body)
+}
+
+fn authed(req: reqwest::RequestBuilder, kind: &str, tok: &str) -> reqwest::RequestBuilder {
+    if kind == "github" {
+        req.bearer_auth(tok)
+    } else {
+        req.header("PRIVATE-TOKEN", tok)
+    }
+}
+
+fn client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
         .user_agent("ocui")
         .timeout(Duration::from_secs(30))
         // Umbenannte Repos antworten mit 301 auf denselben Host. Fremde Hosts nie:
@@ -283,26 +310,7 @@ async fn api(
             if same && a.previous().len() < 5 { a.follow() } else { a.stop() }
         }))
         .build()
-        .map_err(|e| e.to_string())?;
-    let req = client.request(method, format!("{}{path}", api_base(kind, host))).query(query);
-    let req = match body {
-        Some(b) => req.json(b),
-        None => req,
-    };
-    let req = if kind == "github" {
-        req.bearer_auth(tok).header("Accept", "application/vnd.github+json")
-    } else {
-        req.header("PRIVATE-TOKEN", tok)
-    };
-    // reqwest-Fehler nennen nur die URL; der Token steckt im Header.
-    let res = req.send().await.map_err(|e| format!("{host} nicht erreichbar: {e}"))?;
-    let status = res.status();
-    // DELETE antwortet mit 204 ohne Body -> Null.
-    let body: Value = res.json().await.unwrap_or(Value::Null);
-    if !status.is_success() {
-        return Err(api_error(host, status, &body));
-    }
-    Ok(body)
+        .map_err(|e| e.to_string())
 }
 
 fn api_error(host: &str, status: reqwest::StatusCode, body: &Value) -> String {
@@ -542,7 +550,7 @@ impl Repo {
 }
 
 /// None = Remote nicht parsebar oder kein Konto fuer den Host. Konto: ocui.account des Repos, sonst pick.
-fn resolve(app: &AppHandle, repo: &str, remote_url: &str) -> Result<Option<Repo>, String> {
+fn resolve<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str, remote_url: &str) -> Result<Option<Repo>, String> {
     let Some((host, path)) = parse_remote(remote_url) else {
         return Ok(None);
     };
@@ -558,8 +566,59 @@ fn resolve(app: &AppHandle, repo: &str, remote_url: &str) -> Result<Option<Repo>
 }
 
 /// Fuer Schreibzugriffe: ohne Konto ist das ein Fehler, kein leeres Ergebnis.
-fn require(app: &AppHandle, repo: &str, remote_url: &str) -> Result<Repo, String> {
+fn require<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str, remote_url: &str) -> Result<Repo, String> {
     resolve(app, repo, remote_url)?.ok_or_else(|| "Kein Konto für dieses Remote-Repository hinterlegt".to_string())
+}
+
+/// Repo hinter "origin" mit Konto; fuer den MCP-Server der Claude-Session.
+fn origin<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str) -> Result<Repo, String> {
+    let url = crate::git::config(repo, "remote.origin.url").ok_or("Repository hat kein Remote „origin“")?;
+    require(app, repo, &url)
+}
+
+/// (kind, host, API-Basis des Repos), z. B. ("github", "github.com", "/repos/o/r").
+pub(crate) fn mcp_target<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str) -> Result<(&'static str, String, String), String> {
+    origin(app, repo).map(|r| (r.kind, r.host, r.base))
+}
+
+/// Beliebiger API-Aufruf fuer Claude mit dem Token des Kontos; Antwort roh als Text (JSON, Diff, Log).
+pub(crate) async fn mcp_call<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    repo: &str,
+    method: &str,
+    path: &str,
+    query: &[(String, String)],
+    body: Option<&Value>,
+    accept: Option<&str>,
+) -> Result<String, String> {
+    let r = origin(app, repo)?;
+    // Nur Pfade unter der API-Wurzel, damit der Token nie an einen anderen Host geht.
+    if !path.starts_with('/') || path.starts_with("//") {
+        return Err(format!("path muss mit / beginnen: {path}"));
+    }
+    let method = reqwest::Method::from_bytes(method.to_ascii_uppercase().as_bytes()).map_err(|_| format!("Ungültige Methode: {method}"))?;
+    let default = if r.github() { "application/vnd.github+json" } else { "application/json" };
+    let req = client()?.request(method, format!("{}{path}", api_base(r.kind, &r.host))).query(query);
+    let req = authed(req, r.kind, &r.tok).header("Accept", accept.unwrap_or(default));
+    let req = match body {
+        Some(b) => req.json(b),
+        None => req,
+    };
+    let res = req.send().await.map_err(|e| format!("{} nicht erreichbar: {e}", r.host))?;
+    // Logs/Archive leitet GitHub auf einen Blob-Host um; client() folgt fremden Hosts nicht, darum hier ohne Token.
+    let res = match res.headers().get(reqwest::header::LOCATION).and_then(|l| l.to_str().ok()) {
+        Some(loc) if res.status().is_redirection() => {
+            let plain = reqwest::Client::builder().user_agent("ocui").timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+            plain.get(loc).send().await.map_err(|e| format!("Weiterleitung nicht erreichbar: {e}"))?
+        }
+        _ => res,
+    };
+    let status = res.status();
+    let text = res.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(api_error(&r.host, status, &serde_json::from_str(&text).unwrap_or(Value::Null)));
+    }
+    Ok(text)
 }
 
 #[tauri::command]

@@ -119,7 +119,7 @@ pub(crate) fn git(repo: &str) -> Command {
 }
 
 /// Fetch/Pull/Push: mit fest gewaehltem Konto (ocui.account) dessen Token, sonst System-Credential-Helper.
-fn net(repo: &str) -> Command {
+pub(crate) fn net(repo: &str) -> Command {
     let mut cmd = git(repo);
     cmd.envs(crate::forge::repo_auth(repo).into_iter().flatten());
     cmd

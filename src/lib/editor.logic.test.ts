@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ancestors, devUrl, huge, moved, packageManager, plain, serverUrl, span, under, verdict } from "./editor.logic.ts";
+import { abs, rel, ancestors, devUrl, huge, moved, packageManager, plain, serverUrl, span, under, verdict } from "./editor.logic.ts";
 
 test("unveraenderte Platte: nichts tun, egal ob lokal geaendert", () => {
   assert.equal(verdict(false, 5, 5), "none");
@@ -101,4 +101,14 @@ test("huge: Groesse und minifizierte Zeilen", () => {
   assert.equal(huge("x".repeat(1_000_001)), true);
   assert.equal(huge("a\n" + "x".repeat(10_000) + "\n"), true);
   assert.equal(huge(("x".repeat(9_999) + "\n").repeat(50)), false);
+});
+
+test("Pfade zwischen claude (absolut) und Editor (relativ)", () => {
+  assert.equal(rel("/home/a/repo", "/home/a/repo/src/x.ts"), "src/x.ts");
+  assert.equal(rel("/home/a/repo/", "/home/a/repo/x"), "x");
+  assert.equal(rel("/home/a/repo", "./src/x.ts"), "src/x.ts");
+  assert.equal(rel("/home/a/repo", "/home/a/repo2/x"), "/home/a/repo2/x");
+  assert.equal(rel("C:\\Dev\\repo", "c:\\dev\\repo\\src\\x.ts"), "src/x.ts");
+  assert.equal(abs("/home/a/repo", "src/x.ts"), "/home/a/repo/src/x.ts");
+  assert.equal(abs("C:\\Dev\\repo\\", "src/x.ts"), "C:\\Dev\\repo\\src\\x.ts");
 });

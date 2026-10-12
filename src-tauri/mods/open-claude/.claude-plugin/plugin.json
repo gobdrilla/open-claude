@@ -1,1 +1,1 @@
-{"name":"open-claude","version":"0.1.0","description":"Session-Daten fürs Open-Claude-App-Panel; /panel öffnet das TUI-Pane","types":"./types/index.d.ts"}
+{"name":"open-claude","version":"0.1.0","description":"Session-Daten fürs Open-Claude-App-Panel; /panel öffnet das TUI-Pane","types":"./types/index.d.ts","mcpServers":{"open-claude":{"type":"http","url":"${OPEN_CLAUDE_MCP_URL}","headers":{"Authorization":"Bearer ${OPEN_CLAUDE_MCP_TOKEN}"}}}}

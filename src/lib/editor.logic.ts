@@ -99,3 +99,20 @@ export function ancestors(path: string): string[] {
 
 /** Zu gross fuer Highlighting: ueber 1 MB oder eine Zeile ab 10 000 Zeichen (minifiziert); beides macht den Parser zaeh. */
 export const huge = (text: string) => text.length > 1_000_000 || /[^\n]{10000}/.test(text);
+
+const win = (repo: string) => repo.includes("\\");
+const slash = (p: string) => p.replace(/\\/g, "/");
+
+/** Absoluter Pfad (von claude) -> relativ zum Repo mit "/"; relative bleiben, wie sie sind. */
+export function rel(repo: string, path: string): string {
+  const r = slash(repo).replace(/\/$/, "") + "/";
+  const p = slash(path);
+  const same = win(repo) ? p.toLowerCase().startsWith(r.toLowerCase()) : p.startsWith(r);
+  return same ? p.slice(r.length) : p.replace(/^\.\//, "");
+}
+
+/** Repo-relativer Pfad -> absolut mit dem Trenner des Repos (fuer claude). */
+export function abs(repo: string, path: string): string {
+  const p = repo.replace(/[\\/]$/, "") + "/" + path;
+  return win(repo) ? p.replace(/\//g, "\\") : p;
+}

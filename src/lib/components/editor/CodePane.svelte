@@ -13,6 +13,7 @@
   import { lang, language, setTestMarks, testGutter, theme, wrap } from "./cm";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
+  import { mention, selectionChanged } from "$lib/ide.svelte";
 
   // path bleibt fuer die Lebensdauer der Instanz gleich (Dock mountet je Panel-ID neu).
   let { repo, path }: { repo: string; path: string } = $props();
@@ -32,6 +33,8 @@
         keymap.of([
           { key: "Mod-s", run: () => (void save(repo, path), true) },
           { key: "Alt-z", run: () => (toggleWrap(), true) },
+          // Wie in VS Code: Datei/Auswahl als @-Erwaehnung an Claude.
+          { key: "Mod-Alt-k", run: (v) => (mention(repo, path, v), true) },
           indentWithTab,
         ]),
         basicSetup,
@@ -40,6 +43,7 @@
         wrap.of(prefs.wrap ? EditorView.lineWrapping : []),
         testGutter((id) => void testRun(repo, id)),
         EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
+        EditorView.updateListener.of((u) => (u.selectionSet || (u.focusChanged && u.view.hasFocus)) && selectionChanged(repo, path, u.view)),
       ],
     });
 

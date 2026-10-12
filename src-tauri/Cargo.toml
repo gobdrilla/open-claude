@@ -32,6 +32,11 @@ ctrlc = "3"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "native-tls", "charset", "http2", "system-proxy"] }
 base64 = "0.23.1"
 trash = "5.2.9"
+tokio = { version = "1.53.2", features = ["net", "io-util", "sync", "macros", "rt"] }
+# IDE-Protokoll von Claude Code (WebSocket-MCP) und MCP-Server der Session, src/ide.rs
+tokio-tungstenite = "0.30"
+getrandom = { version = "0.3", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 
 # keyring ohne Plattform-Feature haelt den Token nur im RAM, darum je Ziel ein echter Speicher
 [target.'cfg(windows)'.dependencies]
@@ -51,3 +56,7 @@ lto = "thin"
 opt-level = 3
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+# mock_app fuer die Server-Tests in src/ide.rs
+tauri = { version = "2", features = ["test"] }

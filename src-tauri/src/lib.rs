@@ -21,6 +21,8 @@ mod unity;
 // Skill-Manager: SKILL.md lesen, settings.local.json schreiben.
 mod skills;
 mod files;
+// Claude-Sessions: IDE-Protokoll (Diffs, Auswahl) und MCP-Server mit Git/GitHub/GitLab-Tools.
+mod ide;
 // Vorschau des Editors: preview-Schema, WPF-Helfer, Rueckfrage vor dem Beenden.
 mod preview;
 mod deps;
@@ -540,6 +542,7 @@ pub fn run() {
         .manage(pty::Ptys::default())
         .manage(preview::PreviewRoots::default())
         .manage(runner::Runs::default())
+        .manage(ide::Ides::<tauri::Wry>::default())
         .register_asynchronous_uri_scheme_protocol("preview", |ctx, req, responder| {
             preview::serve(ctx.app_handle(), req, responder)
         })
@@ -648,7 +651,9 @@ pub fn run() {
             workflows::workflows_save,
             workflows::workflows_delete,
             runner::test_run,
-            runner::test_cancel
+            runner::test_cancel,
+            ide::ide_notify,
+            ide::ide_reply
         ])
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("nav-guard")
@@ -678,6 +683,7 @@ pub fn run() {
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {
                 app.state::<pty::Ptys>().close_all();
+                app.state::<ide::Ides>().close_all();
                 unity::kill_all();
                 app.state::<runner::Runs>().kill_all();
             }

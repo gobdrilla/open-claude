@@ -162,9 +162,11 @@ fn shell(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn pty_open(
     app: AppHandle,
     ptys: State<'_, Ptys>,
+    ides: State<'_, crate::ide::Ides>,
     id: String,
     cwd: String,
     cols: u16,
@@ -188,6 +190,15 @@ pub fn pty_open(
     if let Some(s) = &settings {
         env.push(("OPEN_CLAUDE_SETTINGS", s));
     }
+    // IDE-Anbindung und MCP-Server; ohne laeuft claude trotzdem.
+    let ide = crate::ide::start(&app, &ides, &id, &cwd).unwrap_or_default();
+    env.extend(ide.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    // claude geht auch zu 127.0.0.1 ueber HTTP(S)_PROXY, wenn no_proxy es nicht ausnimmt.
+    let no_proxy = no_proxy(std::env::var("NO_PROXY").or_else(|_| std::env::var("no_proxy")).ok());
+    if !ide.is_empty() {
+        env.push(("NO_PROXY", &no_proxy));
+        env.push(("no_proxy", &no_proxy));
+    }
     // Fullscreen-Layout: nur dort dockt das /panel-Pane.
     env.push(("CLAUDE_CODE_NO_FLICKER", "1"));
     // ConPTY laesst im Alt-Screen sonst Zeichenreste stehen.
@@ -195,6 +206,13 @@ pub fn pty_open(
         env.push(("CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT", "1"));
     }
     spawn(app, &ptys, id, &cwd, &program, args, cols, rows, &env, false)
+}
+
+fn no_proxy(prev: Option<String>) -> String {
+    match prev.filter(|p| !p.trim().is_empty()) {
+        Some(p) => format!("{p},127.0.0.1,localhost"),
+        None => "127.0.0.1,localhost".into(),
+    }
 }
 
 /// subagentStatusLine: je Agent-Task eine Zeile mit leerem content; claude blendet solche Zeilen unter dem
@@ -545,7 +563,8 @@ pub fn pty_resize(ptys: State<'_, Ptys>, id: String, cols: u16, rows: u16) -> Re
 
 /// Async: kill() wartet bis zu 1 s, ein Sync-Command liefe auf dem Main-Thread und froere die UI ein.
 #[tauri::command]
-pub async fn pty_close(ptys: State<'_, Ptys>, id: String) -> Result<(), String> {
+pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>, id: String) -> Result<(), String> {
+    ides.stop(&id);
     // Auch wenn der Prozess schon selbst endete (dann fehlt der Eintrag).
     if valid_id(&id) {
         let _ = std::fs::remove_file(crate::activity::panel_file(&id));

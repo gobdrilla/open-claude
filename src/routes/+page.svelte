@@ -53,6 +53,8 @@
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
   import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
+  import { listenIde } from "$lib/ide.svelte";
+  import IdeDiff from "$lib/components/IdeDiff.svelte";
   import { runStop } from "$lib/run.svelte";
   import { editorDirty } from "$lib/files";
   import FileCodeIcon from "@lucide/svelte/icons/file-code";
@@ -577,6 +579,17 @@
     active = null;
     editRepo = repo;
   }
+
+  // Claude (Tool open_file) zeigt eine Datei: Editor des Projekts oeffnen.
+  onMount(() => {
+    const off = listenIde(async (path, file, line) => {
+      const repo = sessions.find((s) => s.repo.path === path)?.repo ?? repos.find((r) => r.path === path);
+      if (!repo) return;
+      await openEdit(repo);
+      if (editRepo === repo) await openFile(repo.path, file, line);
+    });
+    return () => void off.then((f) => f());
+  });
 
   /** Nach dem Klonen neu einlesen und das neue Projekt markieren. */
   async function cloned(path: string) {
@@ -1639,6 +1652,8 @@
     accountsOpen = true;
   }}
 />
+
+<IdeDiff />
 
 <!-- Ein Dialog fuer alle Rueckfragen aus confirm() (window.confirm geht in der Webview nicht). Zuletzt im Markup,
      damit er ueber anderen offenen Dialogen liegt. -->
