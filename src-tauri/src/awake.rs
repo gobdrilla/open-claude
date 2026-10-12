@@ -288,8 +288,8 @@ while kill -0 "$p" 2>/dev/null; do
   if [ -e "$m" ]; then w=1; else w=0; fi
   if [ "$w" != "$s" ]; then
     /usr/bin/pmset -a disablesleep "$w"
-    # CausesSleep statt ClamshellState: zugeklappt am externen Monitor soll nichts einschlafen.
-    if [ "$w" = 0 ] && [ "$s" = 1 ] && /usr/sbin/ioreg -r -k AppleClamshellCausesSleep -d 1 | /usr/bin/grep -q '"AppleClamshellCausesSleep" = Yes'; then /usr/bin/pmset sleepnow; fi
+    # Nur zugeklappt (State) und ohne externen Monitor (CausesSleep); CausesSleep allein ist auch bei offenem Deckel Yes.
+    if [ "$w" = 0 ] && [ "$s" = 1 ] && [ "$(/usr/sbin/ioreg -r -k AppleClamshellState -d 1 | /usr/bin/grep -cE '"AppleClamshell(State|CausesSleep)" = Yes')" = 2 ]; then /usr/bin/pmset sleepnow; fi
     s=$w
   fi
   sleep 2
