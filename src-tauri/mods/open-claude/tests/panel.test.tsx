@@ -95,3 +95,46 @@ test('busy fuer den wach-halt', async ($, on) => {
   await $.turn.complete(done)
   expect(busy()).toBe(false)
 })
+
+test('befehle aus der app', async ($, on) => {
+  mock.env(on, { OPEN_CLAUDE_PANEL: '/tmp/x/p.json' })
+  const clock = mock.clock(on)
+  const runs: string[] = []
+  let cmd: string | undefined
+  const w: { path: string; text: string }[] = []
+  on('fs.write', (_$, e) => (w.push(e), { value: undefined }))
+  let draft = 'halb'
+  const fills: string[] = []
+  on('prompt.read', () => ({ value: { text: draft, cursor: 0 } }) as never)
+  on('prompt.fill', (_$, e) => (fills.push(e.text), { isFilled: true }) as never)
+  on('ui.toast', () => ({ value: undefined }) as never)
+  on('fs.read', (_$, e) => {
+    if (e.path !== '/tmp/x/p.cmd' || !cmd) throw new Error('fehlt')
+    return { value: cmd }
+  })
+  on('command.run', (_$, e) => (runs.push(`${e.command} ${e.args}`), { text: '' }))
+  on('command.register', () => ({ value: undefined }) as never)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+  on('env.set', () => ({ value: undefined }) as never)
+  on('session.usage', () => ({ value: { startedAt: 0, context: {}, rateLimits: [] } }) as never)
+  on('session.model', () => ({ value: 'claude-opus-5-5' }) as never)
+  on('store.get', () => ({ value: true }) as never)
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never)
+  // Erster Blick ohne Datei, dann zwei Befehle; derselbe nicht doppelt
+  await clock.advance(500)
+  cmd = JSON.stringify({ at: 1, command: 'model', args: 'opus' })
+  await clock.advance(1000)
+  cmd = JSON.stringify({ at: 2, command: 'fast', args: '' })
+  await clock.advance(500)
+  expect(runs).toEqual(['model opus', 'fast '])
+  // /mcp nur ins leere Eingabefeld, dann filled fuer die App
+  cmd = JSON.stringify({ at: 3, command: 'mcp', args: '' })
+  await clock.advance(500)
+  expect(fills).toEqual([])
+  draft = ''
+  cmd = JSON.stringify({ at: 4, command: 'mcp', args: '' })
+  await clock.advance(500)
+  expect(fills).toEqual(['/mcp'])
+  expect(JSON.parse(w.at(-1)!.text).filled).toBe(4)
+  expect(runs).toHaveLength(2)
+})

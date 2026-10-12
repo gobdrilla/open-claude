@@ -48,6 +48,7 @@
   import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
   import IdleAmongUs from "$lib/components/IdleAmongUs.svelte";
   import Terminal from "$lib/components/Terminal.svelte";
+  import ClaudeBar from "$lib/components/ClaudeBar.svelte";
   import ActivityPanel from "$lib/components/ActivityPanel.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
@@ -139,6 +140,8 @@
   // Eine Session pro Projekt; die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
   let sessions = $state<{ id: string; repo: Repo }[]>([]);
   let active = $state<string | null>(null);
+  // Berechtigungsmodus je Session, gelesen aus der Terminal-Fusszeile (Kopfleiste)
+  let modes = $state<Record<string, string>>({});
   const activeSession = $derived(sessions.find((s) => s.id === active));
   // Aktivitaets-Panel rechts neben dem Terminal: Breite und offen/zu ueberleben den Neustart.
   let sideW = $state(stored("term.side", 360));
@@ -1430,15 +1433,19 @@
     </div>
   {/if}
   <div class="flex min-h-0 flex-1 {view === 'term' ? '' : 'hidden'}">
-    <div class="min-w-0 flex-1">
+    <div class="flex min-w-0 flex-1 flex-col">
+      {#if activeSession}<ClaudeBar id={activeSession.id} mode={modes[activeSession.id]} onsettings={() => (claudeOpen = true)} />{/if}
+      <div class="min-h-0 flex-1">
       {#each sessions as s (s.id)}
         <Terminal
           id={s.id}
           cwd={s.repo.path}
           visible={s.id === active}
           onexit={() => closeSession(s.id)}
+          onmode={(m) => (modes[s.id] = m)}
         />
       {/each}
+      </div>
     </div>
     {#if side && activeSession && view === "term"}
       <Splitter bind:size={sideW} invert min={260} max={720} key="term.side" />

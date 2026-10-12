@@ -11,13 +11,15 @@
   import { evenCell } from "$lib/termcell";
   import { theme } from "$lib/theme.svelte";
   import { DARK, LIGHT, LINKS } from "$lib/termtheme";
+  import { modeOf } from "$lib/claudemode";
 
   let {
     id,
     cwd,
     visible,
     onexit,
-  }: { id: string; cwd: string; visible: boolean; onexit: () => void } = $props();
+    onmode,
+  }: { id: string; cwd: string; visible: boolean; onexit: () => void; onmode?: (mode: string) => void } = $props();
 
   let el: HTMLDivElement;
   let term: Terminal | undefined;
@@ -180,6 +182,15 @@
           return;
         }
       }
+    });
+    // Berechtigungsmodus aus der Fusszeile von claude (untere Bildschirmzeilen); unbekannt (Dialog offen) behaelt den letzten.
+    t.onWriteParsed(() => {
+      const b = t.buffer.active;
+      const end = b.baseY + t.rows;
+      const lines = [];
+      for (let y = Math.max(0, end - 10); y < end; y++) lines.push(b.getLine(y)?.translateToString(true) ?? "");
+      const m = modeOf(lines);
+      if (m) onmode?.(m);
     });
     t.onData((data) => invoke("pty_write", { id, data }).catch(() => {}));
     t.focus();

@@ -768,6 +768,25 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), panel: None, limits: None, modes: vec![] }
 }
 
+/// Nur das Session-Panel der Mod (Kopfleiste ueber dem Terminal), ohne den Rest von claude_activity.
+#[tauri::command]
+pub fn claude_panel(id: String) -> Option<Value> {
+    crate::pty::valid_id(&id).then(|| fs::read_to_string(panel_file(&id)).ok().and_then(|t| serde_json::from_str(&t).ok())).flatten()
+}
+
+/// Slash-Command fuer die Mod: sie pollt <panel>.cmd und fuehrt ihn per $.command.run aus, sobald claude frei ist.
+#[tauri::command]
+pub fn claude_command(id: String, command: String, args: String) -> Result<u64, String> {
+    if !crate::pty::valid_id(&id) {
+        return Err(format!("Ungueltige Sitzung: {id}"));
+    }
+    let f = panel_file(&id).with_extension("cmd");
+    fs::create_dir_all(f.parent().unwrap()).map_err(|e| e.to_string())?;
+    let at = now_ms();
+    fs::write(f, serde_json::json!({ "at": at, "command": command, "args": args }).to_string()).map_err(|e| e.to_string())?;
+    Ok(at)
+}
+
 #[tauri::command]
 pub async fn claude_activity(cwd: String, id: String) -> Result<Activity, String> {
     blocking(move || {

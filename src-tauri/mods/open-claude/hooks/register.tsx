@@ -24,6 +24,7 @@ const fresh = (startedAt: number): Panel => ({
   active: [],
   todos: [],
   busy: false,
+  filled: 0,
 })
 const panel = atom({ plugin: 'open-claude', key: 'panel' } as const, fresh(0))
 
@@ -103,6 +104,30 @@ const put = ($: EngineInterface, f: (s: Panel) => Panel) =>
     })
     .catch(() => {})
 
+// Kopfleiste der App (Modell, Effort, Fast, MCP) legt <panel>.cmd ab; ausfuehren wie getippt, $.command.run wartet bis claude frei ist.
+// shortcut: Polling alle 500 ms, $.fs kennt kein Watch; bei spuerbarer Last auf Event umstellen.
+// undefined bis zum ersten Blick: ein beim Start schon liegender Befehl wird nicht nachgeholt.
+let lastCmd: number | undefined
+const pollCmd = async ($: EngineInterface) => {
+  if (!file) return
+  const c = await $.fs
+    .read(file.replace(/\.json$/, '.cmd'))
+    .then(t => JSON.parse(t) as { at: number; command: string; args: string })
+    .catch(() => undefined)
+  const first = lastCmd === undefined
+  if (!first && (!c || c.at === lastCmd)) return
+  lastCmd = c?.at ?? 0
+  if (first || !c) return
+  // Dialog-Befehle wie /mcp oeffnen per command.run nichts: ins leere Eingabefeld setzen, Enter drueckt die App.
+  if (c.command === 'mcp') {
+    if ((await $.prompt.read()).text.trim()) return $.ui.toast('Erst die Eingabe leeren, dann MCP')
+    const { isFilled } = await $.prompt.fill({ text: `/${c.command}` })
+    if (isFilled) await put($, s => ({ ...s, filled: c.at }))
+    return
+  }
+  await $.command.run({ command: c.command, args: c.args }).catch(() => {})
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     file ??= await $.env.get('OPEN_CLAUDE_PANEL')
@@ -118,6 +143,7 @@ export const register: Register = on => {
       model,
     }))
     // Countdowns und Dauer laufen ohne neue Daten weiter. Heartbeat: busy gilt in der App nur bei frischer Datei.
+    $.clock.every(500, () => pollCmd($))
     $.clock.every(30_000, async () => {
       $.ui.invalidate('ui.render')
       if (!(await read($, panel)).busy) return

@@ -574,6 +574,7 @@ pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>,
     // Auch wenn der Prozess schon selbst endete (dann fehlt der Eintrag).
     if valid_id(&id) {
         let _ = std::fs::remove_file(crate::activity::panel_file(&id));
+        let _ = std::fs::remove_file(crate::activity::panel_file(&id).with_extension("cmd"));
     }
     let Some(mut s) = ptys.lock().remove(&id) else { return Ok(()) };
     crate::git::blocking(move || {

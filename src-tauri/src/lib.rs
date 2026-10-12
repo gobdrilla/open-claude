@@ -652,6 +652,8 @@ pub fn run() {
             skills::plugins_list,
             skills::plugins_run,
             activity::claude_activity,
+            activity::claude_panel,
+            activity::claude_command,
             activity::claude_image,
             activity::claude_agent_log,
             workflows::workflows_list,
