@@ -47,6 +47,7 @@
     duration_ms: number;
     tokens: number;
     phases: string[];
+    planned: number[];
     agents: Agent[];
   };
   type Img = { id: number; at: number; kind: string; label: string };
@@ -196,7 +197,7 @@
     ptyWrite(id, `Fuehre den Workflow mit dem Workflow-Tool aus, scriptPath: ${JSON.stringify(f.path)}. Args: `).catch((e) => (tplError = String(e)));
 
   // Agent-Tool-Agents als Pseudo-Run mit id "": gleiche Liste und Zeitleiste wie Workflow-Agents
-  const solo = $derived<Run>({ id: "", name: "Agents", status: "", started: 0, duration_ms: 0, tokens: 0, phases: [], agents: data?.agents ?? [] });
+  const solo = $derived<Run>({ id: "", name: "Agents", status: "", started: 0, duration_ms: 0, tokens: 0, phases: [], planned: [], agents: data?.agents ?? [] });
   // Fokus gehoert zum Tab, aus dem er geoeffnet wurde
   const inFocus = $derived(!!focus && (tab === "agents" ? focus.run === "" : tab === "wf" && focus.run !== ""));
   const focused = $derived.by(() => {
@@ -662,7 +663,7 @@
         <span class={pc} title={pt}>{pi}</span>
         <span class="min-w-0 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}">{g.p || "Ohne Phase"}</span>
         <span class="text-muted-foreground shrink-0 tabular-nums"
-          >{pt} · {n}/{g.agents.length}{#if err}<span class="text-destructive"> · {err} ✕</span>{/if}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
+          >{pt} · {n}/{Math.max(g.agents.length, r.planned[r.phases.indexOf(g.p)] ?? 0)}{#if err}<span class="text-destructive"> · {err} ✕</span>{/if}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
               g.agents.reduce((t, a) => t + a.tokens, 0),
             )}{/if}</span
         >

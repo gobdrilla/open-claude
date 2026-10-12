@@ -79,6 +79,8 @@ pub struct Run {
     duration_ms: u64,
     tokens: u64,
     phases: Vec<String>,
+    /// Geplante Agents je Phase (gleicher Index, 0 = unbekannt); nur laufende Runs
+    planned: Vec<u32>,
     agents: Vec<Agent>,
 }
 
@@ -515,7 +517,7 @@ fn sum_agent(st: &mut State, path: &Path) -> Sum {
 }
 
 /// Name aus <name>-<runId>.js, Phasen aus den title:-Zeilen des meta-Blocks.
-fn script_meta(dir: &Path, run: &str) -> (Option<String>, Vec<String>) {
+fn script_meta(dir: &Path, run: &str) -> (Option<String>, Vec<(String, u32)>) {
     let suffix = format!("-{run}.js");
     let Some(file) = fs::read_dir(dir).ok().and_then(|rd| {
         rd.flatten().map(|e| e.path()).find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(&suffix)))
@@ -526,7 +528,8 @@ fn script_meta(dir: &Path, run: &str) -> (Option<String>, Vec<String>) {
     (name, phases_of(&fs::read_to_string(&file).unwrap_or_default()))
 }
 
-fn phases_of(script: &str) -> Vec<String> {
+/// (Titel, geplante Agents): Zahl am Anfang von detail ('3 parallel readers'), sonst 0.
+fn phases_of(script: &str) -> Vec<(String, u32)> {
     let mut out = Vec::new();
     let mut inside = false;
     for line in script.lines() {
@@ -541,7 +544,11 @@ fn phases_of(script: &str) -> Vec<String> {
         let Some(rest) = line.split_once("title:").map(|x| x.1.trim_start()) else { continue };
         let Some(q) = rest.chars().next().filter(|c| matches!(c, '\'' | '"' | '`')) else { continue };
         if let Some(t) = rest[1..].split(q).next() {
-            out.push(t.to_string());
+            let n = line
+                .split_once("detail:")
+                .and_then(|x| x.1.trim_start().get(1..))
+                .map_or(0, |d| d.chars().take_while(char::is_ascii_digit).collect::<String>().parse().unwrap_or(0));
+            out.push((t.to_string(), n));
         }
     }
     out
@@ -597,6 +604,7 @@ fn finished(v: &Value, id: &str, dir: &Path) -> Run {
         duration_ms: u64_of(v, "durationMs"),
         tokens: u64_of(v, "totalTokens"),
         phases: arr("phases").iter().map(|p| str_of(p, "title").to_string()).collect(),
+        planned: vec![],
         agents,
     }
 }
@@ -637,7 +645,8 @@ fn live(st: &mut State, dir: &Path, scripts: &Path, id: &str, alive: Option<u64>
             a.result = r.map(|r| trunc(&r.as_str().map_or_else(|| r.to_string(), Into::into), 2000));
         }
     }
-    let (name, mut phases) = script_meta(scripts, id);
+    let (name, meta) = script_meta(scripts, id);
+    let (mut phases, planned): (Vec<_>, Vec<_>) = meta.into_iter().unzip();
     let mut agents: Vec<Agent> = agents.into_iter().map(|x| x.1).collect();
     for a in &mut agents {
         if !a.id.is_empty() && a.id.bytes().all(|b| b.is_ascii_alphanumeric()) {
@@ -661,6 +670,7 @@ fn live(st: &mut State, dir: &Path, scripts: &Path, id: &str, alive: Option<u64>
         duration_ms: end.saturating_sub(started),
         tokens: agents.iter().map(|a| a.tokens).sum(),
         phases,
+        planned,
         agents,
     }
 }
@@ -981,8 +991,10 @@ mod tests {
 
     #[test]
     fn phasen_aus_meta() {
-        let script = "export const meta = {\n  name: 'x',\n  phases: [\n    { title: 'Research', detail: 'a' },\n    { title: \"Design\", detail: 'b' },\n    { title: `Implement` },\n    { title: 'Review' },\n    { title: 'Fix' },\n  ],\n}\n\nphase({ title: 'Nope' })\n";
-        assert_eq!(phases_of(script), ["Research", "Design", "Implement", "Review", "Fix"]);
+        let script = "export const meta = {\n  name: 'x',\n  phases: [\n    { title: 'Research', detail: '3 parallel' },\n    { title: \"Design\", detail: 'b 2' },\n    { title: `Implement` },\n    { title: 'Review' },\n    { title: 'Fix' },\n  ],\n}\n\nphase({ title: 'Nope' })\n";
+        let p: Vec<_> = phases_of(script);
+        assert_eq!(p.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["Research", "Design", "Implement", "Review", "Fix"]);
+        assert_eq!(p.iter().map(|x| x.1).collect::<Vec<_>>(), [3, 0, 0, 0, 0]);
     }
 
     fn img(data: &str) -> String {
