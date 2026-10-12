@@ -109,6 +109,29 @@ const put = ($: EngineInterface, f: (s: Panel) => Panel) =>
 // Kopfleiste der App (Modell, Effort, Fast, MCP) legt <panel>.cmd ab; ausfuehren wie getippt, $.command.run wartet bis claude frei ist.
 // shortcut: Polling alle 500 ms, $.fs kennt kein Watch; bei spuerbarer Last auf Event umstellen.
 // undefined bis zum ersten Blick: ein beim Start schon liegender Befehl wird nicht nachgeholt.
+// Brain (MCP-Server "brain", eigene Mod): Regel im Systemprompt, dazu je Turn höchstens ein Hinweis je Art am Tool-Ergebnis.
+// Nur aktiv, wenn das Brain in der Sitzung verbunden ist; die Brain-Mod selbst bleibt unberührt.
+const BRAIN_RULE =
+  'Brain (mcp__brain__*): Vor jeder Code-Suche (Grep, Glob, Explore) erst mcp__brain__recall fragen; Code nur durchsuchen, wenn kein Treffer antwortet. ' +
+  'Nach einer Entscheidung, einem Fix mit nicht offensichtlicher Ursache oder einem Fallstrick: mit mcp__brain__remember festhalten (kurz, mit Warum), ' +
+  'nichts, was schon im Code oder in der Git-Historie steht. Ist ein Brain-Eintrag veraltet, mit remember korrigieren.'
+const BRAIN_HINT = {
+  search: 'Brain-Hinweis: In diesem Turn noch kein mcp__brain__recall. Erst das Brain fragen, Code nur durchsuchen, wenn kein Treffer antwortet.',
+  commit:
+    'Brain-Hinweis: Commit ohne mcp__brain__remember. Steckt darin eine Entscheidung, Regel oder ein Fallstrick, der nicht aus Code oder Git hervorgeht? Dann jetzt mit remember festhalten (kurz, mit Warum). Sonst ignorieren.',
+}
+type BrainTurn = { recall: boolean; remember: boolean; hinted: Set<string> }
+const brainTurn = (): BrainTurn => ({ recall: false, remember: false, hinted: new Set() })
+let brainOn = false
+let brain = brainTurn()
+
+// Welcher Brain-Hinweis zu diesem Tool-Aufruf passt, oder null.
+export const brainHint = (t: BrainTurn, tool: string, input: Record<string, unknown>): keyof typeof BRAIN_HINT | null => {
+  if (tool === 'Grep' || tool === 'Glob' || ((tool === 'Agent' || tool === 'Task') && input.subagent_type === 'Explore')) return t.recall ? null : 'search'
+  if (tool === 'Bash' && /\bgit\b.*\bcommit\b/.test(String(input.command ?? ''))) return t.remember ? null : 'commit'
+  return null
+}
+
 let lastCmd: number | undefined
 const pollCmd = async ($: EngineInterface) => {
   if (!file) return
@@ -191,6 +214,7 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     mainTurn = true
+    brain = brainTurn()
     await setBusy($, true)
     return next(e)
   })
@@ -261,6 +285,29 @@ export const register: Register = on => {
     const state = ran.isError || 'deny' in ran ? ('err' as const) : ('ok' as const)
     await put($, s => ({ ...s, active: s.active.map(a => (a.id === id ? { ...a, state } : a)) }))
     return ran
+  })
+
+  on('prompt.compose', async ($, e, next) => {
+    const r = await next(e)
+    brainOn = e.tools.includes('mcp__brain__recall')
+    return brainOn ? { sections: [...r.sections, { id: 'open-claude:brain', text: BRAIN_RULE, scope: 'session' as const }] } : r
+  })
+
+  on('tool.call', { tool: /^mcp__brain__/ }, async ($, e, next) => {
+    const ran = await next(e)
+    if (!ran.isError && !('deny' in ran && ran.deny)) {
+      if (e.tool === 'mcp__brain__remember') brain.remember = true
+      else brain.recall = true
+    }
+    return ran
+  })
+
+  on('tool.call', { tool: /^(Grep|Glob|Agent|Task|Bash)$/ }, async ($, e, next) => {
+    const ran = await next(e)
+    const hint = brainOn ? brainHint(brain, String(e.tool), e as unknown as Record<string, unknown>) : null
+    if (!hint || brain.hinted.has(hint) || ran.isError || 'deny' in ran) return ran
+    brain.hinted.add(hint)
+    return { ...ran, context: [...(ran.context ?? []), BRAIN_HINT[hint]] }
   })
 
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {

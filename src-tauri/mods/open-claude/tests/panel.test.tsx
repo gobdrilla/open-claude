@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { bar, level, pace } from '../hooks/register'
+import { bar, brainHint, level, pace } from '../hooks/register'
 
 const HOUR = 3_600_000
 
@@ -144,4 +144,15 @@ test('befehle aus der app', async ($, on) => {
   expect(fills).toEqual(['/mcp'])
   expect(JSON.parse(w.at(-1)!.text).filled).toBe(4)
   expect(runs).toHaveLength(2)
+})
+
+test('brainHint', () => {
+  const t = { recall: false, remember: false, hinted: new Set<string>() }
+  expect(brainHint(t, 'Grep', { pattern: 'x' })).toBe('search')
+  expect(brainHint(t, 'Agent', { subagent_type: 'Explore' })).toBe('search')
+  expect(brainHint(t, 'Agent', { subagent_type: 'Plan' })).toBe(null)
+  expect(brainHint(t, 'Bash', { command: 'git add -A && git commit -m x' })).toBe('commit')
+  expect(brainHint(t, 'Bash', { command: 'git status' })).toBe(null)
+  expect(brainHint({ ...t, recall: true, remember: true }, 'Grep', {})).toBe(null)
+  expect(brainHint({ ...t, recall: true, remember: true }, 'Bash', { command: 'git commit' })).toBe(null)
 })
