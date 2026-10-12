@@ -74,3 +74,24 @@ test('datei fuers app-panel', async ($, on) => {
   expect(w.at(-1)?.path).toBe('/tmp/x/p.json')
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ context: { percent: 25 }, limits: [{ percentUsed: 10 }] })
 })
+
+test('busy fuer den wach-halt', async ($, on) => {
+  mock.env(on, { OPEN_CLAUDE_PANEL: '/tmp/x/p.json' })
+  const w: { path: string; text: string }[] = []
+  on('fs.write', (_$, e) => (w.push(e), { value: undefined }))
+  const busy = () => JSON.parse(w.at(-1)!.text).busy
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('session.usage', () => ({ value: { context: {} } }) as never)
+  let agents = [{ status: 'running' }]
+  on('agent.list', () => ({ value: agents }) as never)
+  const done = { turnId: 't1', reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false } as const
+  await $.turn.start({ text: 'los', turnId: 't1' })
+  expect(busy()).toBe(true)
+  // Haupt-Turn fertig, Subagent laeuft noch: weiter busy.
+  await $.turn.complete(done)
+  expect(busy()).toBe(true)
+  agents = [{ status: 'completed' }]
+  await $.turn.complete(done)
+  expect(busy()).toBe(false)
+})

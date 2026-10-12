@@ -68,6 +68,11 @@ impl<R: Runtime> Ides<R> {
     pub fn stop(&self, session: &str) {
         self.lock().remove(session);
     }
+
+    /// Projekte der laufenden Claude-Sessions (fuer den Wach-Halt, src/awake.rs).
+    pub fn repos(&self) -> Vec<String> {
+        self.lock().values().map(|i| i.ctx.repo.clone()).collect()
+    }
 }
 
 /// Offene Diffs: Antwort kommt per ide_reply aus dem Frontend.

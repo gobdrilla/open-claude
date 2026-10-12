@@ -18,6 +18,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import SunMoonIcon from "@lucide/svelte/icons/sun-moon";
+  import LaptopIcon from "@lucide/svelte/icons/laptop";
   import { theme, setMode } from "$lib/theme.svelte";
   import { ConfirmDialog, Segmented, menuContent, menuItem, menuSeparator } from "$lib/components/kit";
   import { answer, confirm, confirming } from "$lib/confirm.svelte";
@@ -55,6 +56,7 @@
   import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
   import { listenIde } from "$lib/ide.svelte";
+  import { listen } from "@tauri-apps/api/event";
   import IdeDiff from "$lib/components/IdeDiff.svelte";
   import { runStop } from "$lib/run.svelte";
   import { editorDirty } from "$lib/files";
@@ -128,6 +130,8 @@
   let pins = $state<string[]>([]);
   let autostart = $state(false);
   let tray = $state(true);
+  // Zugeklappt wach, nur solange Claude arbeitet (src-tauri/src/awake.rs); Standard aus.
+  let lidAwake = $state(false);
   // Among-Us-Easteregg: rate ist der Faktor auf die Wartezeiten (groesser = seltener).
   let amongUs = $state({ on: true, rate: 1, volume: 1 });
   const RATES: [string, number][] = [["Selten", 3], ["Normal", 1], ["Oft", 0.4]];
@@ -174,6 +178,23 @@
     } catch (e) {
       error = String(e);
     }
+  }
+
+  const lidNote = () =>
+    mac
+    ? "macOS fragt dafür einmal pro App-Start nach dem Admin-Passwort."
+    : navigator.userAgent.includes("Windows")
+      ? "Ändert solange die Deckel-Aktion des Energieplans. Auf Geräten mit Modern Standby unzuverlässig; danach schläft er erst nach der normalen Leerlaufzeit."
+      : "Braucht systemd-logind; ob GNOME/KDE die Sperre beachten, ist nicht geprüft.";
+  async function toggleLidAwake() {
+    const msg =
+      "Der Laptop bleibt zugeklappt wach, solange eine Claude-Session gerade arbeitet (Display aus). Wartet Claude auf dich oder ist fertig, schläft er normal ein. " +
+      "In der Tasche kann er dabei heiß werden; unter 20 % Akku wird nicht wach gehalten.\n\n" +
+      lidNote();
+    if (!lidAwake && !(await confirm(msg, "Einschalten", "Wach bei zugeklapptem Laptop?"))) return;
+    lidAwake = !lidAwake;
+    await invoke("set_awake", { on: lidAwake });
+    await store.set("lidAwake", lidAwake);
   }
 
   async function toggleTray() {
@@ -416,6 +437,10 @@
     accounts = (await store.get<Account[]>("accounts")) ?? [];
     autostart = await isEnabled().catch(() => false);
     tray = (await store.get<boolean>("tray")) ?? true;
+    lidAwake = (await store.get<boolean>("lidAwake")) ?? false;
+    // Meldung vom Aufraeumen nach einem Absturz kam vor diesem Listener: hier abholen.
+    const awakeErr = await invoke<string | null>("set_awake", { on: lidAwake });
+    if (awakeErr) error = awakeErr;
     amongUs = { ...amongUs, ...(await store.get<typeof amongUs>("amongUs")) };
     skillStore = {
       profiles: (await store.get<SkillStore["profiles"]>("skillProfiles")) ?? {},
@@ -580,6 +605,16 @@
     active = null;
     editRepo = repo;
   }
+
+  // Wach-Halt nicht moeglich (Passwort abgebrochen, Richtlinie, kein logind): Rust hat ihn schon abgeschaltet.
+  onMount(() => {
+    const off = listen<string>("awake-error", (e) => {
+      lidAwake = false;
+      store?.set("lidAwake", false);
+      error = e.payload;
+    });
+    return () => void off.then((f) => f());
+  });
 
   // Claude (Tool open_file) zeigt eine Datei: Editor des Projekts oeffnen.
   onMount(() => {
@@ -1108,8 +1143,9 @@
               {#if !mac}
                 {@render setting("Autostart", autostart, toggleAutostart, PowerIcon)}
                 {@render setting("Schließen legt ins Tray", tray, toggleTray, InboxIcon)}
-                <DropdownMenu.Separator class={menuSeparator} />
               {/if}
+              {@render setting("Zugeklappt wach, solange Claude arbeitet", lidAwake, toggleLidAwake, LaptopIcon)}
+              <DropdownMenu.Separator class={menuSeparator} />
               <div class="flex items-center gap-2 px-2 py-1.5">
                 <ZoomInIcon class="text-muted-foreground size-3.5" />
                 <span class="flex-1">Zoom</span>

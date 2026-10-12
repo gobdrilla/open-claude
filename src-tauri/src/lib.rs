@@ -25,6 +25,8 @@ mod files;
 mod ide;
 // Language-Server fuer den Editor (stdio), Diagnostics auch fuer Claude.
 mod lsp;
+// Wach-Halt bei zugeklapptem Laptop, nur solange Claude arbeitet.
+mod awake;
 // Vorschau des Editors: preview-Schema, WPF-Helfer, Rueckfrage vor dem Beenden.
 mod preview;
 mod deps;
@@ -661,7 +663,8 @@ pub fn run() {
             ide::ide_reply,
             lsp::lsp_start,
             lsp::lsp_send,
-            lsp::lsp_stop
+            lsp::lsp_stop,
+            awake::set_awake
         ])
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("nav-guard")
@@ -673,7 +676,10 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(|app| tray(app.handle()).map_err(Into::into))
+        .setup(|app| {
+            awake::start(app.handle());
+            tray(app.handle()).map_err(Into::into)
+        })
         // Mit Tray (macOS: immer) versteckt Schliessen nur — raus kommt man dann ueber das Tray-Menue.
         // Ohne Tray beendet Schliessen die App: bei ungespeicherten Aenderungen im Editor erst fragen.
         .on_window_event(|window, event| {
@@ -693,6 +699,7 @@ pub fn run() {
                 app.state::<pty::Ptys>().close_all();
                 app.state::<ide::Ides>().close_all();
                 app.state::<lsp::Lsps>().kill_all();
+                awake::stop(app);
                 unity::kill_all();
                 app.state::<runner::Runs>().kill_all();
             }

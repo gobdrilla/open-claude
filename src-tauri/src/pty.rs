@@ -510,6 +510,8 @@ fn spawn(
 
     let out = app.clone();
     let data = format!("pty:{id}");
+    // Nur Claude-Terminals (nicht die Run-Leiste): laufendes Zeichnen zaehlt fuer den Wach-Halt als "arbeitet".
+    let claude = (!tree).then(|| id.clone());
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         loop {
@@ -517,6 +519,9 @@ fn spawn(
                 Ok(0) | Err(_) => break,
                 // Roh als Bytes: read() kann mitten in einer UTF-8-Sequenz enden.
                 Ok(n) => {
+                    if let Some(c) = &claude {
+                        crate::awake::output(c);
+                    }
                     let _ = out.emit(&data, buf[..n].to_vec());
                 }
             }
@@ -565,6 +570,7 @@ pub fn pty_resize(ptys: State<'_, Ptys>, id: String, cols: u16, rows: u16) -> Re
 #[tauri::command]
 pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>, id: String) -> Result<(), String> {
     ides.stop(&id);
+    crate::awake::forget(&id);
     // Auch wenn der Prozess schon selbst endete (dann fehlt der Eintrag).
     if valid_id(&id) {
         let _ = std::fs::remove_file(crate::activity::panel_file(&id));

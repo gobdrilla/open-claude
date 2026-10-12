@@ -23,6 +23,7 @@ const fresh = (startedAt: number): Panel => ({
   turns: 0,
   active: [],
   todos: [],
+  busy: false,
 })
 const panel = atom({ plugin: 'open-claude', key: 'panel' } as const, fresh(0))
 
@@ -76,6 +77,16 @@ export const line = (s: Panel) => {
 
 const limitsOf = (limits: readonly Limit[]): Limit[] => limits.map(l => ({ ...l }))
 
+// Arbeitet Claude gerade? Nur bei Aenderung schreiben (turn.step kommt oft).
+const setBusy = async ($: EngineInterface, busy: boolean) => {
+  if ((await read($, panel)).busy !== busy) await put($, s => ({ ...s, busy }))
+}
+// Laeuft gerade ein Haupt-Turn? Sonst haengt busy nur an laufenden Agents (Heartbeat rechnet nach).
+let mainTurn = false
+// Haupt-Turn fertig: weiter busy, solange Subagents/Teammates laufen.
+const agentsRunning = async ($: EngineInterface) =>
+  (await $.agent.list()).some(a => a.status === 'running' || a.status === 'pending')
+
 // App-Panel liest die Datei; ohne Env (claude ausserhalb der App) nur Atom. Pfad wird in session.start
 // gemerkt und aus der Env genommen, damit verschachtelte `claude -p` nicht dieselbe Datei ueberschreiben.
 // ponytail: Hot-Reload der Mod verliert den Pfad (Env schon leer) – bis zum naechsten claude-Start keine Writes.
@@ -106,8 +117,14 @@ export const register: Register = on => {
       cost: usage.cost?.usd ?? null,
       model,
     }))
-    // Countdowns und Dauer laufen ohne neue Daten weiter.
-    $.clock.every(30_000, () => $.ui.invalidate('ui.render'))
+    // Countdowns und Dauer laufen ohne neue Daten weiter. Heartbeat: busy gilt in der App nur bei frischer Datei.
+    $.clock.every(30_000, async () => {
+      $.ui.invalidate('ui.render')
+      if (!(await read($, panel)).busy) return
+      // Ohne Haupt-Turn nur so lange busy, wie noch Agents laufen; sonst bliebe es bis zum naechsten Turn haengen.
+      const busy = mainTurn || (await agentsRunning($).catch(() => false))
+      await put($, s => ({ ...s, busy }))
+    })
     if (!(await $.store.get('themeHint'))) {
       $.ui.toast('Tipp: /theme → Open Claude (Hell/Dunkel, folgt der App)')
       await $.store.set('themeHint', true)
@@ -135,6 +152,8 @@ export const register: Register = on => {
   })
 
   on('session.end', async ($, e, next) => {
+    mainTurn = false
+    await setBusy($, false)
     if (e.reason === 'clear') {
       const now = await $.clock.now()
       await put($, s => ({ ...fresh(now), limits: s.limits, model: s.model, effort: s.effort }))
@@ -142,8 +161,29 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('turn.start', async ($, e, next) => {
+    mainTurn = true
+    await setBusy($, true)
+    return next(e)
+  })
+
+  // Rechte-Dialog: Claude wartet auf den User.
+  on('tool.check', async ($, e, next) => {
+    const v = await next(e)
+    if (v.decision === 'ask') await setBusy($, false)
+    return v
+  })
+
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    await setBusy($, false)
+    const ran = await next(e)
+    await setBusy($, true)
+    return ran
+  })
+
   on('turn.step', async function* ($, e, next) {
     const effort = e.effort === undefined ? null : String(e.effort)
+    if (!e.agentId) await setBusy($, true)
     if (!e.agentId) {
       const s = await read($, panel)
       if (s.model !== e.model || s.effort !== effort) await put($, s => ({ ...s, model: e.model, effort }))
@@ -155,8 +195,11 @@ export const register: Register = on => {
     const u = e.usage
     const summary = e.agentId ? undefined : (await $.session.usage({ breakdown: 'summary' })).context.breakdown
     const end = e.reason === 'answer' ? ('ok' as const) : ('err' as const)
+    if (!e.agentId) mainTurn = false
+    const busy = mainTurn ? undefined : await agentsRunning($).catch(() => false)
     await put($, s => ({
       ...s,
+      busy: busy ?? s.busy,
       turns: s.turns + (e.agentId ? 0 : 1),
       // Abgebrochene Tool-Calls kommen nie aus 'run' zurueck; Turn-Ende raeumt sie auf.
       active: e.agentId ? s.active : s.active.map(a => (a.state === 'run' ? { ...a, state: end } : a)),

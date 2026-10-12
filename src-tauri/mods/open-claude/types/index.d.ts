@@ -15,6 +15,8 @@ export type Panel = {
   turns: number
   active: Activity[]
   todos: Todo[]
+  // Turn laeuft (fuer den Wach-Halt der App, src-tauri/src/awake.rs); waehrend busy alle 30 s neu geschrieben.
+  busy: boolean
 }
 
 declare module 'claude-code' {
