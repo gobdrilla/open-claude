@@ -2,7 +2,7 @@
   import { age, cn } from "$lib/utils";
   import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { homeDir } from "@tauri-apps/api/path";
   import { open } from "@tauri-apps/plugin-dialog";
@@ -49,6 +49,7 @@
   import IdleAmongUs from "$lib/components/IdleAmongUs.svelte";
   import Terminal from "$lib/components/Terminal.svelte";
   import ClaudeBar from "$lib/components/ClaudeBar.svelte";
+  import { tabState, type TabState } from "$lib/claudemode";
   import ActivityPanel from "$lib/components/ActivityPanel.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
@@ -142,6 +143,13 @@
   let active = $state<string | null>(null);
   // Berechtigungsmodus je Session, gelesen aus der Terminal-Fusszeile (Kopfleiste)
   let modes = $state<Record<string, string>>({});
+  // Tab-Status je Session aus dem Panel der Mod: laeuft, Rueckfrage, fertig (bis angesehen)
+  let tabs = $state<Record<string, TabState>>({});
+  const TAB: Record<string, [string, string, string]> = {
+    run: ["◐", "text-primary animate-pulse", "Claude arbeitet"],
+    ask: ["?", "text-warning font-bold", "Claude wartet auf dich"],
+    done: ["✓", "text-success", "Claude ist fertig"],
+  };
   const activeSession = $derived(sessions.find((s) => s.id === active));
   // Aktivitaets-Panel rechts neben dem Terminal: Breite und offen/zu ueberleben den Neustart.
   let sideW = $state(stored("term.side", 360));
@@ -565,6 +573,29 @@
   }
 
   const profileName = (repo: Repo) => profileFor(skillStore.projects[pkey(repo.path)], repo.kind, skillStore.kindProfiles);
+
+  // Tab-Status nachziehen; Rueckfrage oder fertig bei Fenster im Hintergrund: Dock-Icon huepft, Badge zaehlt Hinweise.
+  onMount(() => {
+    const win = getCurrentWindow();
+    let badge = 0;
+    const tick = async () => {
+      const focused = document.hasFocus();
+      let alert = false;
+      for (const s of sessions) {
+        const p = await invoke<{ busy?: boolean; waiting?: boolean } | null>("claude_panel", { id: s.id }).catch(() => null);
+        const prev = tabs[s.id];
+        const next = tabState(prev, p, focused && view === "term" && s.id === active);
+        if (next === prev) continue;
+        tabs[s.id] = next;
+        alert ||= next === "ask" || next === "done";
+      }
+      if (alert && !focused) win.requestUserAttention(UserAttentionType.Informational).catch(() => {});
+      const n = sessions.filter((s) => tabs[s.id] === "ask" || tabs[s.id] === "done").length;
+      if (n !== badge) win.setBadgeCount((badge = n) || undefined).catch(() => {});
+    };
+    const t = setInterval(tick, 1500);
+    return () => clearInterval(t);
+  });
 
   /** Offene Session des Projekts zeigen, sonst eine neue starten. */
   async function launch(repo?: Repo) {
@@ -1417,7 +1448,7 @@
             : 'text-muted-foreground hover:text-foreground'}"
         >
           <button role="tab" aria-selected={s.repo.path === viewRepo?.path} onclick={() => openTab(s.repo)}>
-            {split(s.repo.rel)[1]}
+            {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{split(s.repo.rel)[1]}
           </button>
           <button
             class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {s.repo

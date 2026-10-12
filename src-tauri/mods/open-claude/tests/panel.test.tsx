@@ -85,6 +85,7 @@ test('busy fuer den wach-halt', async ($, on) => {
   on('session.usage', () => ({ value: { context: {} } }) as never)
   let agents = [{ status: 'running' }]
   on('agent.list', () => ({ value: agents }) as never)
+  on('tool.check', () => ({ decision: 'ask' }) as never)
   const done = { turnId: 't1', reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false } as const
   await $.turn.start({ text: 'los', turnId: 't1' })
   expect(busy()).toBe(true)
@@ -94,6 +95,12 @@ test('busy fuer den wach-halt', async ($, on) => {
   agents = [{ status: 'completed' }]
   await $.turn.complete(done)
   expect(busy()).toBe(false)
+  // Rechte-Dialog: wartet auf den User, Turn-Ende loest das
+  await $.turn.start({ text: 'los', turnId: 't1' })
+  await $.tool.check({ tool: 'Bash', input: { command: 'ls' } } as never)
+  expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: false, waiting: true })
+  await $.turn.complete(done)
+  expect(JSON.parse(w.at(-1)!.text).waiting).toBe(false)
 })
 
 test('befehle aus der app', async ($, on) => {

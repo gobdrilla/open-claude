@@ -17,6 +17,8 @@ export type Panel = {
   todos: Todo[]
   // Turn laeuft (fuer den Wach-Halt der App, src-tauri/src/awake.rs); waehrend busy alle 30 s neu geschrieben.
   busy: boolean
+  // Claude wartet auf den User (Rueckfrage, Rechte-Dialog); Tab-Icon und Dock-Hinweis der App.
+  waiting: boolean
   // Zeitstempel (at) des App-Befehls, den die Mod zuletzt ins Eingabefeld gesetzt hat; die App drueckt dann Enter.
   filled: number
 }

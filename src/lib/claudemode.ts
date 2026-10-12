@@ -22,3 +22,12 @@ export function modeOf(lines: string[]): string | undefined {
   for (const l of lines) for (const [re, m] of FOOTER) if (re.test(l)) return m;
   return lines.some((l) => l.trimStart().startsWith("❯")) ? "default" : undefined;
 }
+
+export type TabState = "run" | "ask" | "done" | undefined;
+
+/** Tab-Status aus dem Session-Panel der Mod; "done" bleibt, bis der Tab angesehen wurde (seen). */
+export function tabState(prev: TabState, p: { busy?: boolean; waiting?: boolean } | null, seen: boolean): TabState {
+  if (p?.waiting) return "ask";
+  if (p?.busy) return "run";
+  return !seen && (prev === "run" || prev === "done") ? "done" : undefined;
+}

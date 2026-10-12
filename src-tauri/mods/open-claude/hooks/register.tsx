@@ -24,6 +24,7 @@ const fresh = (startedAt: number): Panel => ({
   active: [],
   todos: [],
   busy: false,
+  waiting: false,
   filled: 0,
 })
 const panel = atom({ plugin: 'open-claude', key: 'panel' } as const, fresh(0))
@@ -78,9 +79,10 @@ export const line = (s: Panel) => {
 
 const limitsOf = (limits: readonly Limit[]): Limit[] => limits.map(l => ({ ...l }))
 
-// Arbeitet Claude gerade? Nur bei Aenderung schreiben (turn.step kommt oft).
-const setBusy = async ($: EngineInterface, busy: boolean) => {
-  if ((await read($, panel)).busy !== busy) await put($, s => ({ ...s, busy }))
+// Arbeitet Claude gerade bzw. wartet auf den User? Nur bei Aenderung schreiben (turn.step kommt oft).
+const setBusy = async ($: EngineInterface, busy: boolean, waiting = false) => {
+  const s = await read($, panel)
+  if (s.busy !== busy || s.waiting !== waiting) await put($, s => ({ ...s, busy, waiting }))
 }
 // Laeuft gerade ein Haupt-Turn? Sonst haengt busy nur an laufenden Agents (Heartbeat rechnet nach).
 let mainTurn = false
@@ -196,12 +198,12 @@ export const register: Register = on => {
   // Rechte-Dialog: Claude wartet auf den User.
   on('tool.check', async ($, e, next) => {
     const v = await next(e)
-    if (v.decision === 'ask') await setBusy($, false)
+    if (v.decision === 'ask') await setBusy($, false, true)
     return v
   })
 
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
-    await setBusy($, false)
+    await setBusy($, false, true)
     const ran = await next(e)
     await setBusy($, true)
     return ran
@@ -226,6 +228,7 @@ export const register: Register = on => {
     await put($, s => ({
       ...s,
       busy: busy ?? s.busy,
+      waiting: e.agentId ? s.waiting : false,
       turns: s.turns + (e.agentId ? 0 : 1),
       // Abgebrochene Tool-Calls kommen nie aus 'run' zurueck; Turn-Ende raeumt sie auf.
       active: e.agentId ? s.active : s.active.map(a => (a.state === 'run' ? { ...a, state: end } : a)),
@@ -251,6 +254,8 @@ export const register: Register = on => {
     const target = [input.file_path, input.pattern, input.command, input.description].find(v => typeof v === 'string')
     const id = e.tool_use_id ?? String(await $.clock.now())
     const entry = { id, tool: String(e.tool), target: typeof target === 'string' ? target : '', state: 'run' as const }
+    // Tool laeuft = Rechte-Dialog beantwortet; AskUserQuestion wartet selbst.
+    if (e.tool !== 'AskUserQuestion' && (await read($, panel)).waiting) await setBusy($, true)
     await put($, s => ({ ...s, active: [...s.active, entry].slice(-4) }))
     const ran = await next(e)
     const state = ran.isError || 'deny' in ran ? ('err' as const) : ('ok' as const)
