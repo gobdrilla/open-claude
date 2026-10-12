@@ -6,6 +6,7 @@
 
 <script lang="ts">
   import { confirm } from "$lib/confirm.svelte";
+  import { pasted } from "$lib/pasteimg.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
@@ -338,6 +339,15 @@
     const s = as.filter((a) => a.started);
     return s.length ? Math.max(...s.map((a) => (a.state === "running" ? Date.now() : a.last_at))) - Math.min(...s.map((a) => a.started)) : 0;
   };
+
+  // Klick auf "[Image #n]" im Terminal: neuestes passendes Bild; wartet, bis die Aktivitaet geladen ist.
+  $effect(() => {
+    const r = pasted.req;
+    if (r?.id !== id || !data) return;
+    const m = imgs.find((m) => m.kind === "paste" && m.label === `Eingefügt #${r.n}`);
+    if (m) (shown = m.id), load(m.id);
+    pasted.req = null;
+  });
 
   const index = $derived(imgs.findIndex((m) => m.id === shown));
   const current = $derived(index < 0 ? null : imgs[index]);

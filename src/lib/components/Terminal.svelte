@@ -12,6 +12,7 @@
   import { theme } from "$lib/theme.svelte";
   import { DARK, LIGHT, LINKS } from "$lib/termtheme";
   import { modeOf } from "$lib/claudemode";
+  import { pasted } from "$lib/pasteimg.svelte";
 
   let {
     id,
@@ -117,6 +118,18 @@
     });
     term = t;
     t.loadAddon(fit);
+    // "[Image #n]" aus claudes Eingabe-Echo: Klick zeigt das eingefuegte Bild im Aktivitaets-Panel.
+    t.registerLinkProvider({
+      provideLinks: (y, cb) => {
+        const line = t.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
+        const links = [...line.matchAll(/\[Image #(\d+)\]/g)].map((m) => ({
+          text: m[0],
+          range: { start: { x: m.index + 1, y }, end: { x: m.index + m[0].length, y } },
+          activate: () => (pasted.req = { id, n: Number(m[1]) }),
+        }));
+        cb(links.length ? links : undefined);
+      },
+    });
     t.open(el);
     // Der DOM-Renderer nimmt Block- und Linienzeichen aus der Schrift: Logo mit Luecken,
     // Trennlinien mit Zacken (Windows). WebGL zeichnet sie selbst, zellfuellend.

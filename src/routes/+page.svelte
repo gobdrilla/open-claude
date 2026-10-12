@@ -1,6 +1,6 @@
 <script lang="ts">
   import { age, cn } from "$lib/utils";
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -22,6 +22,7 @@
   import { theme, setMode } from "$lib/theme.svelte";
   import { ConfirmDialog, Segmented, menuContent, menuItem, menuSeparator } from "$lib/components/kit";
   import { answer, confirm, confirming } from "$lib/confirm.svelte";
+  import { pasted } from "$lib/pasteimg.svelte";
   import RefreshIcon from "@lucide/svelte/icons/refresh-cw";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import KeyboardIcon from "@lucide/svelte/icons/keyboard";
@@ -160,6 +161,10 @@
       localStorage.setItem("term.side.open", side ? "1" : "0");
     } catch {}
   }
+  // Bild aus dem Terminal zeigt das Panel; dafuer muss es offen sein.
+  $effect(() => {
+    if (pasted.req && !side) untrack(toggleSide);
+  });
   const running = $derived(new Set(sessions.map((s) => s.repo.path)));
   // Git-Ansicht ueberdeckt Liste und Terminal; Terminals laufen darunter weiter.
   let gitRepo = $state<Repo | null>(null);
