@@ -1,10 +1,12 @@
 //! Je Claude-Session zwei lokale Server, beide nur auf 127.0.0.1 und mit Zufallstoken:
 //! - IDE-Protokoll von Claude Code (WebSocket-MCP, Lockfile ~/.claude/ide/<port>.lock, CLAUDE_CODE_SSE_PORT):
-//!   Edits als Diff zum Annehmen/Ablehnen in der App, Auswahl im Editor als Kontext, @-Erwaehnung.
+//!   Edits als Diff zum Annehmen/Ablehnen in der App, Auswahl im Editor als Kontext, @-Erwaehnung,
+//!   Diagnostics der Language-Server (src/lsp.rs).
 //! - MCP ueber HTTP fuer das Modell (eingebaute Mod, .claude-plugin/plugin.json): git und GitHub/GitLab-API
 //!   mit dem Konto aus der App, Datei im Editor zeigen. Token bleiben im Schluesselbund.
 //!
-//! Protokoll nachgebaut nach der VS-Code-Extension; die CLI ruft dort nur openDiff/close_tab/closeAllDiffTabs.
+//! Protokoll nachgebaut nach der VS-Code-Extension; die CLI ruft openDiff/close_tab/closeAllDiffTabs
+//! selbst, getDiagnostics vor/nach Edits und als Tool mcp__ide__getDiagnostics fuers Modell.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -13,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Runtime, Wry};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Wry};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, oneshot};
@@ -335,6 +337,9 @@ fn ide_tools() -> Value {
         }), &["old_file_path", "new_file_path", "new_file_contents", "tab_name"]) },
         { "name": "close_tab", "description": "Diff schliessen", "inputSchema": s(json!({ "tab_name": st }), &["tab_name"]) },
         { "name": "closeAllDiffTabs", "description": "Alle Diffs schliessen", "inputSchema": s(json!({}), &[]) },
+        { "name": "getDiagnostics", "description": "Fehler und Warnungen der Language-Server im Editor von Open Claude \
+            (nur Projekte mit freigeschalteten Language-Servern; manche Server melden nur für im Editor geöffnete Dateien). \
+            Ohne uri alle Dateien.", "inputSchema": s(json!({ "uri": { "type": "string", "description": "file://-URI einer Datei" } }), &[]) },
     ])
 }
 
@@ -358,6 +363,11 @@ async fn ide_call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec
             let tab = arg("tab_name");
             close(ctx, |p| p.tab == tab);
             Ok(vec![text("TAB_CLOSED")])
+        }
+        "getDiagnostics" => {
+            let uri = a["uri"].as_str().filter(|u| !u.is_empty());
+            let d = ctx.app.try_state::<crate::lsp::Lsps>().map_or(json!([]), |l| l.diagnostics(&ctx.repo, uri));
+            Ok(vec![text(&d.to_string())])
         }
         "closeAllDiffTabs" => {
             let n = close(ctx, |_| true);
@@ -548,6 +558,9 @@ mod tests {
             };
             let tools = ask(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" })).await;
             assert_eq!(tools["result"]["tools"][0]["name"], "openDiff");
+            assert!(tools.to_string().contains("getDiagnostics"));
+            let d = ask(call(9, "getDiagnostics", json!({}))).await;
+            assert_eq!(d["result"]["content"], json!([text("[]")]));
             let diff = |id, content| call(id, "openDiff", json!({ "old_file_path": "/x", "new_file_path": "/x", "new_file_contents": content, "tab_name": "T" }));
             let r = ask(diff(2, "neu")).await;
             assert_eq!(r["result"]["content"], json!([text("FILE_SAVED"), text("neu")]));

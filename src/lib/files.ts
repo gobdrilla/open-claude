@@ -51,7 +51,15 @@ export const fs = {
   files: (repo: string) => call<string[]>("fs_files", { repo }),
   /** Unified Diff Platte -> content (LF) fuer DiffView; "" wenn gleich. Kopf: "diff --git a/<path> b/<path>". */
   diff: (repo: string, path: string, content: string) => call<string>("fs_diff", { repo, path, content }),
+  /** Diff HEAD -> content ohne Kontext (-U0) fuer den Git-Gutter, Kopf wie diff(); "" wenn gleich oder untracked. */
+  gutter: (repo: string, path: string, content: string) => call<string>("fs_gutter", { repo, path, content }),
+  /** Projektsuche wie files(), je Zeile der erste Treffer, hoechstens 2000. Fehler bei ungueltigem Regex. */
+  search: (repo: string, query: string, regex: boolean, caseSensitive: boolean) =>
+    call<Hit[]>("fs_search", { repo, query, regex, case: caseSensitive }),
 };
+
+/** line ab 1, col in UTF-16 (wie CodeMirror), text getrimmt und auf 200 Zeichen gekuerzt. */
+export type Hit = { path: string; line: number; col: number; text: string };
 
 /** Projekt fuer das preview-Schema freigeben (on false: wieder sperren); ohne das liefert previewUrl 403. Beliebig oft aufrufbar. */
 export const previewAllow = (repo: string, on = true) => call<void>("preview_allow", { repo, on });

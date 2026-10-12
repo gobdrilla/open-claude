@@ -240,7 +240,7 @@ fn test_command(fw: Fw, scope: &Scope, prog: &str, reporters: &Path, windows: bo
 }
 
 /// Lokales JS-Tool: node_modules/.bin/<tool> ab cwd aufwaerts bis zum Projektordner. Kein npx: kein Netz, kein Overhead.
-fn local_bin(repo: &Path, cwd: &Path, tool: &str, windows: bool, exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+pub(crate) fn local_bin(repo: &Path, cwd: &Path, tool: &str, windows: bool, exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     let exe = if windows { format!("{tool}.cmd") } else { tool.into() };
     cwd.ancestors()
         .take_while(|d| d.starts_with(repo))

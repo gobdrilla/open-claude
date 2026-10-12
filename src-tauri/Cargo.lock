@@ -3014,6 +3014,7 @@ dependencies = [
  "keyring",
  "portable-pty",
  "reedline",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

@@ -6,6 +6,7 @@ import { HighlightStyle, LanguageDescription, LanguageSupport, syntaxHighlightin
 import { languages } from "@codemirror/language-data";
 import { styleTags, tags as t } from "@lezer/highlight";
 import type { St } from "../../testing.logic.ts";
+import type { GitMark } from "../../editor.logic.ts";
 
 const chrome = EditorView.theme(
   {
@@ -96,6 +97,8 @@ const highlight = HighlightStyle.define([
 
 export const theme: Extension = [chrome, syntaxHighlighting(highlight)];
 
+/** Language-Server-Anbindung (lsp.svelte.ts attach); leer ohne Freigabe oder Server. */
+export const lspExt = new Compartment();
 /** Platz fuer den Zeilenumbruch (Alt+Z), umgeschaltet per reconfigure. */
 export const wrap = new Compartment();
 
@@ -209,3 +212,51 @@ export function testGutter(run: (id: string) => void): Extension {
     }),
   ];
 }
+
+// --- Git-Gutter: Aenderungen gegenueber HEAD ---
+
+class GitMarker extends GutterMarker {
+  readonly kind: GitMark["kind"];
+  constructor(kind: GitMark["kind"]) {
+    super();
+    this.kind = kind;
+  }
+  eq(o: GitMarker) {
+    return o.kind === this.kind;
+  }
+  toDOM() {
+    const s = document.createElement("span");
+    s.className = `cm-git-${this.kind}`;
+    return s;
+  }
+}
+const gitMarker = { add: new GitMarker("add"), mod: new GitMarker("mod"), del: new GitMarker("del") };
+
+/** Marken ersetzen (Zeilen 1-basiert); bis zum naechsten Ersetzen wandern sie mit den Aenderungen mit. */
+export const setGitMarks = StateEffect.define<GitMark[]>();
+
+const gitMarks = StateField.define<RangeSet<GutterMarker>>({
+  create: () => RangeSet.empty,
+  update(set, tr) {
+    set = set.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setGitMarks)) continue;
+      const doc = tr.state.doc;
+      set = RangeSet.of(e.value.filter((m) => m.line <= doc.lines).map((m) => gitMarker[m.kind].range(doc.line(m.line).from)), true);
+    }
+    return set;
+  },
+});
+
+/** Schmaler Balken neben dem Text: neu gruen, geaendert gelb, darunter geloescht rot. */
+export const gitGutter: Extension = [
+  gitMarks,
+  gutter({ class: "cm-git-gutter", markers: (v) => v.state.field(gitMarks) }),
+  EditorView.theme({
+    ".cm-git-gutter .cm-gutterElement": { width: "3px", padding: "0" },
+    ".cm-git-add, .cm-git-mod, .cm-git-del": { display: "block", height: "100%" },
+    ".cm-git-add": { backgroundColor: "var(--success)" },
+    ".cm-git-mod": { backgroundColor: "var(--warning)" },
+    ".cm-git-del": { boxShadow: "inset 0 -2px var(--destructive)" },
+  }),
+];

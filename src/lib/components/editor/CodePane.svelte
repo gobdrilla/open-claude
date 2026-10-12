@@ -4,16 +4,20 @@
   import { EditorState } from "@codemirror/state";
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";
-  import { setDiagnostics } from "@codemirror/lint";
+  import { lintGutter, setDiagnostics } from "@codemirror/lint";
   import { Button } from "$lib/components/ui/button/index.js";
   import { DiffDialog, Empty } from "$lib/components/kit";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
-  import { diff, edited, editor, flush, keep, peek, prefs, reload, save, snapKey, snapshots, toggleWrap } from "$lib/editor.svelte";
-  import { huge, span } from "$lib/editor.logic";
-  import { lang, language, setTestMarks, testGutter, theme, wrap } from "./cm";
+  import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
+  import { gutterMarks, huge, span } from "$lib/editor.logic";
+  import { gitGutter, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
+  import { attach, dismiss, lsp, lspDiagnostics, retry } from "$lib/lsp.svelte";
+  import { serverFor } from "$lib/lsp.logic";
+  import { fs } from "$lib/files";
+  import { parseDiff } from "$lib/diff";
 
   // path bleibt fuer die Lebensdauer der Instanz gleich (Dock mountet je Panel-ID neu).
   let { repo, path }: { repo: string; path: string } = $props();
@@ -35,15 +39,32 @@
           { key: "Alt-z", run: () => (toggleWrap(), true) },
           // Wie in VS Code: Datei/Auswahl als @-Erwaehnung an Claude.
           { key: "Mod-Alt-k", run: (v) => (mention(repo, path, v), true) },
+          // Statt des Lint-Panels von basicSetup: Problems-Panel des Projekts.
+          { key: "Mod-Shift-m", run: () => (togglePanel(repo, "problems"), true) },
+          // Zurueck/Vor wie in VS Code. Strg+- ist unter Windows/Linux Zoom (Capture in +page), dort zaehlt Alt+Pfeil
+          // (ersetzt cursorSyntaxLeft/Right); auf dem Mac ist Alt+Pfeil Wortsprung, darum Cmd+Alt+Pfeil.
+          { key: "Ctrl--", run: () => navigate(repo, false) },
+          { key: "Ctrl-Shift--", run: () => navigate(repo, true) },
+          { key: "Alt-ArrowLeft", mac: "Mod-Alt-ArrowLeft", run: () => navigate(repo, false) },
+          { key: "Alt-ArrowRight", mac: "Mod-Alt-ArrowRight", run: () => navigate(repo, true) },
           indentWithTab,
         ]),
         basicSetup,
         theme,
         lang.of([]),
+        lspExt.of([]),
+        lintGutter(),
         wrap.of(prefs.wrap ? EditorView.lineWrapping : []),
         testGutter((id) => void testRun(repo, id)),
+        gitGutter,
         EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
-        EditorView.updateListener.of((u) => (u.selectionSet || (u.focusChanged && u.view.hasFocus)) && selectionChanged(repo, path, u.view)),
+        EditorView.updateListener.of((u) => {
+          if (!u.selectionSet && !(u.focusChanged && u.view.hasFocus)) return;
+          selectionChanged(repo, path, u.view);
+          const head = u.state.selection.main.head;
+          const l = u.state.doc.lineAt(head);
+          cursorAt(repo, path, l.number, head - l.from);
+        }),
       ],
     });
 
@@ -98,23 +119,57 @@
     if (tr) view!.dispatch(tr);
   });
 
-  // Test-Explorer: Marken und Fehler dieser Datei, ein Dispatch je Batch. Nur wenn er fuer das Projekt gesucht hat.
+  // Language-Server anbinden, sobald erlaubt; gen steigt bei Absturz/Neustart: altes Plugin abwerfen, neu anbinden.
+  const sv = $derived(serverFor(path));
+  const lspKey = $derived(sv && `${repo}\n${sv.server}`);
+  $effect(() => {
+    const v = view;
+    if (!v || plain || !lspKey) return;
+    void lsp.gen[lspKey];
+    const on = s.lsp;
+    let live = true;
+    untrack(() => (on ? attach(repo, path) : Promise.resolve(null))).then((ext) => {
+      const next = ext ?? [];
+      // Ueberholt (Absturz/Neustart waehrend des Starts): nicht das Plugin des alten Clients einhaengen.
+      if (live && v.dom.isConnected && lspExt.get(v.state) !== next) v.dispatch({ effects: lspExt.reconfigure(next) });
+    });
+    return () => void (live = false);
+  });
+
+  // Test-Explorer (Marken, Fehler) und Language-Server zusammen: setDiagnostics ersetzt immer alles, darum eine Quelle.
   let marked = false;
   $effect(() => {
     const t = peekTests(repo);
     const v = view;
-    if (!t || !v) return;
-    const m = marks(t.nodes, t.states, path);
-    const d = fails(t.nodes, t.results, path);
-    if (!m.length && !d.length && !marked) return;
-    marked = m.length > 0 || d.length > 0;
+    if (!v) return;
+    const m = t ? marks(t.nodes, t.states, path) : [];
+    const d = t ? fails(t.nodes, t.results, path) : [];
+    const ld = lspDiagnostics(repo, path, v);
+    if (!m.length && !d.length && !ld.length && !marked) return;
+    marked = m.length > 0 || d.length > 0 || ld.length > 0;
     untrack(() => {
       const doc = v.state.doc;
       const diags = d
         .filter((x) => x.line <= doc.lines)
         .map((x) => ({ from: doc.line(x.line).from, to: doc.line(x.line).to, severity: "error" as const, message: x.msg }));
-      v.dispatch(setDiagnostics(v.state, diags), { effects: setTestMarks.of(m) });
+      v.dispatch(setDiagnostics(v.state, [...diags, ...ld]), { effects: setTestMarks.of(m) });
     });
+  });
+
+  // Git-Gutter: 800 ms nach der letzten Aenderung gegen HEAD vergleichen; nicht bei grossen Dateien.
+  $effect(() => {
+    const v = view;
+    const text = f?.text;
+    if (!v || plain || text === undefined) return;
+    const t = setTimeout(
+      () =>
+        fs.gutter(repo, path, text).then(
+          (d) => v.dom.isConnected && v.dispatch({ effects: setGitMarks.of(gutterMarks(parseDiff(d)[0]?.hunks ?? [])) }),
+          () => {}, // Kein Git oder Fehler: ohne Marken.
+        ),
+      800,
+    );
+    return () => clearTimeout(t);
   });
 
   // Zeilenumbruch ist global: offene Editoren ziehen mit, wiederhergestellte Zustaende auch.
@@ -130,7 +185,7 @@
     if (!r || r.path !== path || !v) return;
     untrack(() => {
       const l = v.state.doc.line(Math.min(Math.max(1, r.line), v.state.doc.lines));
-      v.dispatch({ selection: { anchor: l.from }, effects: EditorView.scrollIntoView(l.from, { y: "center" }) });
+      v.dispatch({ selection: { anchor: l.from + Math.min(r.col ?? 0, l.length) }, effects: EditorView.scrollIntoView(l.from, { y: "center" }) });
       v.focus();
       s.reveal = null;
     });
@@ -154,6 +209,19 @@
         <Button size="xs" variant="outline" onclick={() => reload(repo, path)}>Neu laden</Button>
         <Button size="xs" variant="outline" onclick={() => keep(repo, path)}>Meine behalten</Button>
         <Button size="xs" variant="outline" onclick={showDiff}>Vergleichen</Button>
+      </div>
+    {/if}
+    {#if sv && lspKey && !s.lsp}
+      <div class="text-muted-foreground border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1 text-xs">
+        <span class="mr-auto">Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.</span>
+        <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>
+      </div>
+    {:else if lspKey && lsp.status[lspKey]}
+      <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-xs">
+        <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
+        <span class="text-warning mr-auto line-clamp-3 break-words whitespace-pre-line">{lsp.status[lspKey]}</span>
+        <Button size="xs" variant="outline" onclick={() => retry(repo, sv!.server)}>Erneut versuchen</Button>
+        <Button size="xs" variant="ghost" onclick={() => dismiss(repo, sv!.server)}>Ausblenden</Button>
       </div>
     {/if}
     {#if plain}

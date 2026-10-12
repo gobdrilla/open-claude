@@ -53,6 +53,7 @@
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
   import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
+  import { stop as stopLsp } from "$lib/lsp.svelte";
   import { listenIde } from "$lib/ide.svelte";
   import IdeDiff from "$lib/components/IdeDiff.svelte";
   import { runStop } from "$lib/run.svelte";
@@ -711,10 +712,11 @@
     const { repo } = doomed;
     trashing = true;
     try {
-      // Laufende Sitzung und Run-Prozess zuerst beenden, unter Windows sperrt ihr cwd sonst den Ordner.
+      // Laufende Sitzung, Run-Prozess und Language-Server zuerst beenden, unter Windows sperrt ihr cwd sonst den Ordner.
       sessions = sessions.filter((s) => s.repo.path !== repo.path);
       await tick();
       await runStop(repo.path);
+      await stopLsp(repo.path);
       await invoke("trash_repo", { path: repo.path, root });
       // Der Dialog hat das Loeschen schon bestaetigt: Puffer des Projekts ohne zweite Frage verwerfen.
       drop(repo.path, true);

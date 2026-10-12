@@ -1,4 +1,5 @@
-// Reine Entscheidungen des Editor-Stores, ohne Runen und ohne Importe, damit `node --test` sie direkt laedt.
+// Reine Entscheidungen des Editor-Stores, ohne Runen und ohne Laufzeit-Importe, damit `node --test` sie direkt laedt.
+import type { Hunk } from "./diff.ts";
 
 /** Was das Polling mit einer offenen Datei tut. */
 export type Verdict = "none" | "reload" | "close" | "changed" | "deleted";
@@ -115,4 +116,32 @@ export function rel(repo: string, path: string): string {
 export function abs(repo: string, path: string): string {
   const p = repo.replace(/[\\/]$/, "") + "/" + path;
   return win(repo) ? p.replace(/\//g, "\\") : p;
+}
+
+// --- Zurueck/Vor ---
+
+/** Cursorstelle fuer Zurueck/Vor; line ab 1. */
+export type Spot = { path: string; line: number; col: number };
+
+/** at oben auf den Stapel, ausser er liegt schon dort (gleiche Zeile); hoechstens max Eintraege. */
+export function pushNav(stack: Spot[], at: Spot, max = 50): Spot[] {
+  const top = stack.at(-1);
+  if (top && top.path === at.path && top.line === at.line) return stack;
+  return [...stack, at].slice(-max);
+}
+
+// --- Git-Gutter ---
+
+export type GitMark = { line: number; kind: "add" | "mod" | "del" };
+
+/**
+ * Marken aus Hunks eines Diffs ohne Kontext (HEAD -> Puffer), Zeilen ab 1. Geloeschte Zeilen markieren die Zeile
+ * davor, ganz oben die erste.
+ */
+export function gutterMarks(hunks: Hunk[]): GitMark[] {
+  return hunks.flatMap((h): GitMark[] => {
+    if (!h.newLines) return [{ line: Math.max(1, h.newStart), kind: "del" }];
+    const kind = h.oldLines ? "mod" : "add";
+    return Array.from({ length: h.newLines }, (_, i) => ({ line: h.newStart + i, kind }));
+  });
 }

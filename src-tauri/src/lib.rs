@@ -23,6 +23,8 @@ mod skills;
 mod files;
 // Claude-Sessions: IDE-Protokoll (Diffs, Auswahl) und MCP-Server mit Git/GitHub/GitLab-Tools.
 mod ide;
+// Language-Server fuer den Editor (stdio), Diagnostics auch fuer Claude.
+mod lsp;
 // Vorschau des Editors: preview-Schema, WPF-Helfer, Rueckfrage vor dem Beenden.
 mod preview;
 mod deps;
@@ -543,6 +545,7 @@ pub fn run() {
         .manage(preview::PreviewRoots::default())
         .manage(runner::Runs::default())
         .manage(ide::Ides::<tauri::Wry>::default())
+        .manage(lsp::Lsps::default())
         .register_asynchronous_uri_scheme_protocol("preview", |ctx, req, responder| {
             preview::serve(ctx.app_handle(), req, responder)
         })
@@ -632,6 +635,8 @@ pub fn run() {
             files::fs_delete,
             files::fs_files,
             files::fs_diff,
+            files::fs_gutter,
+            files::fs_search,
             preview::preview_allow,
             preview::xaml_render,
             preview::editor_dirty,
@@ -653,7 +658,10 @@ pub fn run() {
             runner::test_run,
             runner::test_cancel,
             ide::ide_notify,
-            ide::ide_reply
+            ide::ide_reply,
+            lsp::lsp_start,
+            lsp::lsp_send,
+            lsp::lsp_stop
         ])
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("nav-guard")
@@ -684,6 +692,7 @@ pub fn run() {
             tauri::RunEvent::Exit => {
                 app.state::<pty::Ptys>().close_all();
                 app.state::<ide::Ides>().close_all();
+                app.state::<lsp::Lsps>().kill_all();
                 unity::kill_all();
                 app.state::<runner::Runs>().kill_all();
             }

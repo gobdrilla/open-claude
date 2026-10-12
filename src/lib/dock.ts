@@ -2,7 +2,7 @@
 // Reine Funktionen ohne DOM und ohne Importe, damit `node --test src/lib/dock.test.ts` sie direkt laedt.
 // Alle Funktionen liefern einen NEUEN Baum und veraendern die Eingabe nicht (Layout liegt in $state.raw).
 
-/** "files", "preview", "tests", "run" oder "file:<repo-relativer Pfad>". */
+/** "files", "preview", "tests", "run", "problems", "search" oder "file:<repo-relativer Pfad>". */
 export type PanelId = string;
 
 export type Group = {
@@ -34,6 +34,8 @@ export const FILES: PanelId = "files";
 export const PREVIEW: PanelId = "preview";
 export const TESTS: PanelId = "tests";
 export const RUN: PanelId = "run";
+export const PROBLEMS: PanelId = "problems";
+export const SEARCH: PanelId = "search";
 export const filePanel = (path: string): PanelId => `file:${path}`;
 /** Pfad eines Datei-Panels, sonst null. */
 export const panelPath = (panel: PanelId): string | null => (panel.startsWith("file:") ? panel.slice(5) : null);
@@ -280,7 +282,7 @@ export function parse(text: string | null): Layout {
         if (typeof n.id !== "string" || ids.has(n.id) || !Array.isArray(n.tabs)) bad();
         ids.add(n.id);
         for (const t of n.tabs) {
-          if (typeof t !== "string" || seen.has(t) || (![FILES, PREVIEW, TESTS, RUN].includes(t) && !panelPath(t))) bad();
+          if (typeof t !== "string" || seen.has(t) || (![FILES, PREVIEW, TESTS, RUN, PROBLEMS, SEARCH].includes(t) && !panelPath(t))) bad();
           seen.add(t);
         }
         if (n.tabs.length ? !n.tabs.includes(n.active) : n.active !== null) bad();

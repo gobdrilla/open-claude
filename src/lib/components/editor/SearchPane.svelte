@@ -1,0 +1,97 @@
+<script lang="ts" module>
+  // Eingabe je Projekt auf Modulebene: das Dock baut das Panel bei jedem Tabwechsel neu auf.
+  type Input = { q: string; regex: boolean; caseSensitive: boolean };
+  const inputs = new Map<string, Input>();
+  function input(repo: string): Input {
+    if (!inputs.has(repo)) {
+      const i = $state({ q: "", regex: false, caseSensitive: false });
+      inputs.set(repo, i);
+    }
+    return inputs.get(repo)!;
+  }
+</script>
+
+<script lang="ts">
+  // Suche ueber alle Projektdateien (fs_search). Klick springt zur Fundstelle.
+  import Notice from "$lib/components/Notice.svelte";
+  import { Empty, fileIcon, paneBar } from "$lib/components/kit";
+  import SearchIcon from "@lucide/svelte/icons/search";
+  import { fs, type Hit } from "$lib/files";
+  import { open } from "$lib/editor.svelte";
+
+  let { repo }: { repo: string } = $props();
+
+  const s = $derived(input(repo));
+  let hits = $state<Hit[]>([]);
+  let error = $state("");
+  let busy = $state(false);
+
+  $effect(() => {
+    const { q, regex, caseSensitive } = s;
+    if (!q) return void (hits = []);
+    let stale = false;
+    const t = setTimeout(() => {
+      busy = true;
+      fs.search(repo, q, regex, caseSensitive).then(
+        (h) => !stale && ((hits = h), (error = "")),
+        (e) => !stale && ((hits = []), (error = String(e))),
+      ).finally(() => !stale && (busy = false));
+    }, 300);
+    return () => ((stale = true), clearTimeout(t));
+  });
+
+  const groups = $derived(Object.entries(Object.groupBy(hits, (h) => h.path)) as [string, Hit[]][]);
+</script>
+
+{#snippet flag(label: string, title: string, on: boolean, set: (v: boolean) => void)}
+  <button
+    class="shrink-0 rounded px-1 font-mono text-[11px] {on ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent'}"
+    {title}
+    aria-pressed={on}
+    onclick={() => set(!on)}>{label}</button
+  >
+{/snippet}
+
+<div class="flex h-full min-h-0 flex-col text-xs">
+  <div class={paneBar}>
+    <input
+      class="border-input bg-background min-w-0 flex-1 rounded border px-1.5 py-0.5 text-[11px] outline-none"
+      placeholder="In Dateien suchen …"
+      aria-label="In Dateien suchen"
+      data-search
+      spellcheck={false}
+      bind:value={s.q}
+    />
+    {@render flag("Aa", "Groß-/Kleinschreibung beachten", s.caseSensitive, (v) => (s.caseSensitive = v))}
+    {@render flag(".*", "Regulärer Ausdruck", s.regex, (v) => (s.regex = v))}
+  </div>
+  <Notice bind:text={error} timeout={0} />
+  {#if !s.q || !hits.length}
+    <Empty icon={SearchIcon}>{busy ? "Suche …" : s.q ? "Keine Treffer." : "Suchbegriff eingeben (Strg+Umschalt+F)."}</Empty>
+  {:else}
+    <div class="text-muted-foreground px-2 py-0.5 text-[10px]" role="status">
+      {hits.length >= 2000 ? "Über 2000" : hits.length} Treffer in {groups.length} Dateien
+    </div>
+    <ul class="min-h-0 flex-1 overflow-y-auto pb-1" aria-label="Suchergebnisse">
+      {#each groups as [path, list] (path)}
+        {@const ic = fileIcon(path)}
+        <li>
+          <div class="flex items-center gap-1.5 px-2 py-0.5 font-medium" title={path}>
+            <ic.icon class="size-3.5 shrink-0 {ic.tint}" />
+            <span class="truncate">{path}</span>
+            <span class="text-muted-foreground ml-auto text-[10px]">{list.length}</span>
+          </div>
+          {#each list as h (h.line)}
+            <button
+              class="hover:bg-accent flex w-full items-baseline gap-2 py-0.5 pr-2 pl-7 text-left"
+              onclick={() => open(repo, path, h.line, h.col)}
+            >
+              <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-[10px]">{h.line}</span>
+              <span class="truncate font-mono text-[11px]">{h.text}</span>
+            </button>
+          {/each}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+</div>

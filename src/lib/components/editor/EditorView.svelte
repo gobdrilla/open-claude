@@ -16,8 +16,11 @@
   import FolderTreeIcon from "@lucide/svelte/icons/folder-tree";
   import SquareTerminalIcon from "@lucide/svelte/icons/square-terminal";
   import SlidersIcon from "@lucide/svelte/icons/sliders-horizontal";
+  import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
+  import SearchIcon from "@lucide/svelte/icons/search";
+  import { tick } from "svelte";
   import BuildProfilesDialog from "./BuildProfilesDialog.svelte";
-  import { FILES, PREVIEW, RUN, TESTS, groupOf, panelPath, type PanelId } from "$lib/dock";
+  import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, panelPath, type PanelId } from "$lib/dock";
   import { closeTab, editor, focus, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
   import { chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
@@ -28,12 +31,18 @@
   import PreviewPane from "./PreviewPane.svelte";
   import TestPane from "./TestPane.svelte";
   import RunPane from "./RunPane.svelte";
+  import ProblemsPane from "./ProblemsPane.svelte";
+  import SearchPane from "./SearchPane.svelte";
+  import { lsp } from "$lib/lsp.svelte";
+  import { problems } from "$lib/lsp.logic";
 
   let { repo }: { repo: string } = $props();
 
   const s = $derived(editor(repo));
   const dirty = $derived(Object.values(s.files).filter((f) => f.dirty).length);
+  const errors = $derived(problems(lsp.diags, repo).filter((p) => (p.d.severity ?? 1) === 1).length);
   let quick = $state(false);
+  let quickInit = $state("");
   let profilesOpen = $state(false);
 
   // Aenderungen von aussen (claude im Terminal) nur verfolgen, solange die Ansicht sichtbar ist.
@@ -55,12 +64,22 @@
     if (id === PREVIEW) return { title: "Vorschau", icon: PanelRightIcon };
     if (id === TESTS) return { title: "Tests", icon: FlaskConicalIcon };
     if (id === RUN) return { title: "Ausgabe", icon: SquareTerminalIcon };
+    if (id === PROBLEMS) return { title: "Probleme", icon: CircleAlertIcon };
+    if (id === SEARCH) return { title: "Suche", icon: SearchIcon };
     const path = panelPath(id) ?? "";
     const f = s.files[path];
     // Auf der Platte geloescht, Puffer hat noch Aenderungen: der Tab bleibt und sagt es.
     const gone = f?.conflict === "deleted" ? " (gelöscht)" : "";
     const { icon, tint } = fileIcon(path);
     return { title: path.slice(path.lastIndexOf("/") + 1) + gone, hint: path + gone, dirty: f?.dirty, icon, tint };
+  }
+
+  // Wie VS Code: Suche zeigen und ins Feld springen, nie ausblenden.
+  async function findInFiles() {
+    if (groupOf(s.layout, SEARCH)) setLayout(repo, activate(s.layout, SEARCH));
+    else togglePanel(repo, "search");
+    await tick();
+    document.querySelector<HTMLInputElement>("[data-search]")?.select();
   }
 
   function onKey(e: KeyboardEvent) {
@@ -72,12 +91,23 @@
       else if (!e.ctrlKey && !e.metaKey) void runStart(repo);
       return;
     }
-    // CodeMirror speichert die eigene Datei selbst (Mod-s) und setzt dann defaultPrevented.
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    // CodeMirror speichert die eigene Datei selbst (Mod-s) und setzt dann defaultPrevented; Mod-Shift-m ebenso.
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.shiftKey) {
+      const k = e.key.toLowerCase();
+      if (k === "f") void findInFiles();
+      else if (k === "o") [quickInit, quick] = ["@", true];
+      else if (k !== "m") return;
+      else if (!e.defaultPrevented) togglePanel(repo, "problems");
+      e.preventDefault();
+      return;
+    }
     const key = e.key.toLowerCase();
     if (key === "s") {
       if (!e.defaultPrevented) save(repo);
-    } else if (key === "p") quick = true;
+    } else if (key === "p") [quickInit, quick] = ["", true];
+    // Nicht, wenn CodeMirror die Taste schon nutzt (Ctrl-T vertauscht auf dem Mac Zeichen).
+    else if (key === "t" && !e.defaultPrevented) [quickInit, quick] = ["#", true];
     else return;
     // Auch Strg+P: sonst oeffnet die WebView den Druckdialog.
     e.preventDefault();
@@ -86,7 +116,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<QuickOpen {repo} bind:open={quick} />
+<QuickOpen {repo} bind:open={quick} initial={quickInit} />
 
 {#snippet panel(id: PanelId)}
   {#if id === FILES}
@@ -97,6 +127,10 @@
     <TestPane {repo} />
   {:else if id === RUN}
     <RunPane {repo} />
+  {:else if id === PROBLEMS}
+    <ProblemsPane {repo} />
+  {:else if id === SEARCH}
+    <SearchPane {repo} />
   {:else}
     <CodePane {repo} path={panelPath(id) ?? ""} />
   {/if}
@@ -108,14 +142,14 @@
   >
 {/snippet}
 
-{#snippet toggle(id: "files" | "preview" | "tests", label: string, Icon: typeof SaveIcon)}
+{#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems", label: string, Icon: typeof SaveIcon, title = label)}
   {@const on = !!groupOf(s.layout, id)}
   <Button
     variant="ghost"
     size="xs"
     class={on ? "bg-background text-foreground ring-foreground/10 ring-1 [&_svg]:text-primary" : "text-muted-foreground"}
     aria-pressed={on}
-    title="{label} {on ? 'ausblenden' : 'einblenden'}"
+    title="{title} {on ? 'ausblenden' : 'einblenden'}"
     onclick={() => togglePanel(repo, id)}><Icon /> {label}</Button
   >
 {/snippet}
@@ -194,8 +228,10 @@
     </span>
     <span class="flex-1"></span>
     {@render toggle("files", "Dateien", PanelLeftIcon)}
+    {@render toggle("search", "", SearchIcon, "Suche (Strg+Umschalt+F)")}
     {@render toggle("tests", "Tests", FlaskConicalIcon)}
     {@render toggle("preview", "Vorschau", PanelRightIcon)}
+    {@render toggle("problems", errors ? String(errors) : "", CircleAlertIcon, "Probleme (Strg+Umschalt+M)")}
     <Button
       variant="ghost"
       size="icon-xs"

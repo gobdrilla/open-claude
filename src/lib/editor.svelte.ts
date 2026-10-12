@@ -1,6 +1,6 @@
 // Zustand des eingebauten Editors je Projekt. Lebt auf Modulebene, nicht in Komponenten: Panels werden beim
 // Andocken neu gemountet und die Editor-Ansicht beim Wechsel zu Terminal/Git abgebaut, Puffer bleiben trotzdem.
-// Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, run.
+// Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, lsp, run.
 // Ungespeicherte Inhalte ueberleben keinen Neustart der App.
 import { confirm } from "./confirm.svelte";
 import { untrack } from "svelte";
@@ -8,7 +8,9 @@ import type { EditorState, StateEffect } from "@codemirror/state";
 import {
   FILES,
   PREVIEW,
+  PROBLEMS,
   RUN,
+  SEARCH,
   TESTS,
   activate,
   closePanel,
@@ -16,6 +18,7 @@ import {
   filePanel,
   groupOf,
   groups,
+  mainGroup,
   openPanel,
   panelPath,
   panels,
@@ -26,10 +29,12 @@ import {
   type PanelId,
 } from "./dock.ts";
 import { KONFLIKT, fs, isBinaryImage, previewAllow } from "./files.ts";
-import { moved, under, verdict } from "./editor.logic.ts";
+import { moved, pushNav, under, verdict, type Spot } from "./editor.logic.ts";
 import { runStop } from "./run.svelte.ts";
 import { BUILTIN, type Profile } from "./run.logic.ts";
 import { rescan } from "./testing.svelte.ts";
+// Zirkulaer (lsp.svelte.ts nutzt open/peek/setText): beide Seiten greifen erst zur Laufzeit zu, nie auf Modulebene.
+import { closed, disk, stop as stopLsp } from "./lsp.svelte.ts";
 
 /** Platte weicht vom Puffer ab, waehrend lokale Aenderungen offen sind. */
 export type Conflict = "changed" | "deleted";
@@ -66,6 +71,8 @@ export type RepoEditor = {
   url: string;
   /** WPF-Vorschau fuer dieses Projekt erlaubt: XAML laden kann Code ausfuehren, darum erst nach Rueckfrage. */
   wpf: boolean;
+  /** Language-Server fuer dieses Projekt erlaubt: sie fuehren Projektcode aus (build.rs, Proc-Macros, Plugins), darum erst nach Klick. */
+  lsp: boolean;
   /** Zuletzt gewaehltes Startziel der Run-Leiste (RunConfig.label); null = Vorauswahl. */
   run: string | null;
   /** Gewaehltes Build-Profil (Profile.name) und die eigenen Profile dieses Projekts. */
@@ -78,7 +85,11 @@ export type RepoEditor = {
   /** Letzter Fehler (Oeffnen, Speichern) fuer die Anzeige in EditorView; "" = keiner. */
   error: string;
   /** Zeile, die CodePane anspringen soll (Stack-Link, Testdetails); setzt es danach zurueck. */
-  reveal: { path: string; line: number } | null;
+  reveal: { path: string; line: number; col?: number } | null;
+  /** Zurueck/Vor (nicht gespeichert) und die letzte Cursorstelle, die CodePane meldet. */
+  back: Spot[];
+  fwd: Spot[];
+  at: Spot | null;
 };
 
 // Bewusst eine Map mit je einem eigenen $state-Objekt statt eines $state-Records: editor() wird auch aus
@@ -103,8 +114,8 @@ const NEVER = "\0";
 
 function persist(s: RepoEditor) {
   try {
-    const { layout, active, expanded, pin, url, wpf, run, profile, profiles } = s;
-    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, run, profile, profiles }));
+    const { layout, active, expanded, pin, url, wpf, lsp, run, profile, profiles } = s;
+    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, lsp, run, profile, profiles }));
   } catch {
     // Ohne localStorage gilt das Layout nur fuer diese Sitzung.
   }
@@ -133,6 +144,8 @@ async function load(s: RepoEditor, path: string, force = false) {
     conflict: null,
     rev: f ? f.rev + 1 : 0,
   };
+  // Nachgeladen (z. B. nach einem Edit von Claude): Language-Server auf den neuen Stand bringen.
+  if (f) void disk(s.repo, path);
 }
 
 /** Tab, Puffer und CodeMirror-Zustand einer Datei entfernen; active wandert zum Nachbarn. */
@@ -142,6 +155,7 @@ function forget(s: RepoEditor, path: string) {
   s.layout = closePanel(s.layout, panel);
   delete s.files[path];
   snapshots.delete(snapKey(s.repo, path));
+  closed(s.repo, path);
   if (s.pin === path) s.pin = null;
   if (s.active === path) {
     const next = [groups(s.layout).find((g) => g.id === group)?.active, ...panels(s.layout)].find(
@@ -185,6 +199,7 @@ export function editor(repo: string): RepoEditor {
     pin: str(p.pin),
     url: str(p.url) ?? "",
     wpf: p.wpf === true,
+    lsp: p.lsp === true,
     run: str(p.run),
     profile: str(p.profile) ?? "Debug",
     profiles: Array.isArray(p.profiles)
@@ -194,6 +209,9 @@ export function editor(repo: string): RepoEditor {
     dirs: {},
     error: "",
     reveal: null,
+    back: [],
+    fwd: [],
+    at: null,
   });
   store.set(repo, s);
   // Nicht synchron: editor() laeuft auch in $derived.
@@ -212,10 +230,40 @@ export function editor(repo: string): RepoEditor {
  * bekommen keinen Tab: sie werden an die Vorschau geheftet und die Vorschau geoeffnet. Fehler landen in error.
  * Neue Tabs kommen in die Gruppe der aktiven Datei, sonst in die main-Gruppe (nie zu Baum oder Vorschau).
  */
-export async function open(repo: string, path: string, line?: number): Promise<void> {
+export function open(repo: string, path: string, line?: number, col?: number): Promise<void> {
   const s = editor(repo);
+  // Datei- oder Zeilensprung: von hier geht Zurueck wieder hin.
+  if (s.at && (line !== undefined || path !== s.at.path)) {
+    s.back = pushNav(s.back, s.at);
+    s.fwd = [];
+  }
+  return go(s, path, line, col);
+}
+
+/** Zurueck (fwd = false) bzw. Vor (true) im Sprungverlauf; false = Stapel leer. */
+export function navigate(repo: string, fwd: boolean): boolean {
+  const s = editor(repo);
+  const spot = (fwd ? s.fwd : s.back).at(-1);
+  if (!spot) return false;
+  if (fwd) s.fwd = s.fwd.slice(0, -1);
+  else s.back = s.back.slice(0, -1);
+  if (s.at) {
+    if (fwd) s.back = pushNav(s.back, s.at);
+    else s.fwd = pushNav(s.fwd, s.at);
+  }
+  void go(s, spot.path, spot.line, spot.col);
+  return true;
+}
+
+/** Von CodePane bei Cursorbewegung und Fokus: Ausgangspunkt fuer den naechsten Sprung. */
+export function cursorAt(repo: string, path: string, line: number, col: number): void {
+  const s = peek(repo);
+  if (s) s.at = { path, line, col };
+}
+
+async function go(s: RepoEditor, path: string, line?: number, col?: number): Promise<void> {
   s.error = "";
-  if (line !== undefined) s.reveal = { path, line };
+  if (line !== undefined) s.reveal = { path, line, col };
   if (isBinaryImage(path)) {
     s.pin = path;
     // Eine Dev-Server-URL haette Vorrang und verdeckte das Bild.
@@ -281,6 +329,7 @@ export async function save(repo: string, path?: string, force = false): Promise<
     f.dirty = f.text !== text;
     f.conflict = null;
     s.error = "";
+    void disk(repo, p);
     // Test-Explorer: Tests der Datei neu einlesen (nur wenn er schon gesucht hat).
     void rescan(repo, [p]);
     return true;
@@ -399,17 +448,23 @@ export function focus(repo: string, panel: PanelId): void {
 }
 
 /**
- * "files", "preview" bzw. "tests" ein-/ausblenden. Neu: files an die linke, preview an die rechte Kante des Layouts,
- * tests als Tab neben files (wie die Seitenleiste in VS Code), ohne files an die linke Kante.
+ * "files", "preview", "tests", "search" bzw. "problems" ein-/ausblenden. Neu: files an die linke, preview an die rechte
+ * Kante des Layouts, tests und search als Tab neben files (wie die Seitenleiste in VS Code), ohne files an die linke Kante;
+ * problems als Tab neben der Ausgabe, ohne sie unter die main-Gruppe (wie das Panel unten in VS Code).
  */
-export function togglePanel(repo: string, panel: "files" | "preview" | "tests"): void {
+export function togglePanel(repo: string, panel: "files" | "preview" | "tests" | "search" | "problems"): void {
   const s = editor(repo);
   const files = groupOf(s.layout, FILES)?.id;
+  const run = groupOf(s.layout, RUN)?.id;
   s.layout = groupOf(s.layout, panel)
     ? closePanel(s.layout, panel)
-    : panel === TESTS && files
+    : (panel === TESTS || panel === SEARCH) && files
       ? openPanel(s.layout, panel, files)
-      : splitAt(s.layout, panel, null, panel === PREVIEW ? "right" : "left");
+      : panel === PROBLEMS
+        ? run
+          ? openPanel(s.layout, panel, run)
+          : splitAt(s.layout, panel, mainGroup(s.layout).id, "bottom")
+        : splitAt(s.layout, panel, null, panel === PREVIEW ? "right" : "left");
   persist(s);
 }
 
@@ -468,6 +523,13 @@ export function setProfiles(repo: string, list: Profile[]): void {
   persist(s);
 }
 
+/** Language-Server fuer das Projekt erlauben und speichern. */
+export function allowLsp(repo: string): void {
+  const s = editor(repo);
+  s.lsp = true;
+  persist(s);
+}
+
 /** WPF-Vorschau fuer das Projekt erlauben und speichern. */
 export function allowWpf(repo: string): void {
   const s = editor(repo);
@@ -489,10 +551,15 @@ export function renamed(repo: string, from: string, to: string): void {
     }
     // Der CodeMirror-Zustand haengt mit seinen Callbacks am alten Pfad: CodePane baut ihn aus dem Puffer neu auf.
     snapshots.delete(snapKey(repo, old));
+    closed(repo, old);
   }
   if (s.active !== null) s.active = moved(s.active, from, to) ?? s.active;
   if (s.pin !== null) s.pin = moved(s.pin, from, to) ?? s.pin;
   s.expanded = s.expanded.map((d) => moved(d, from, to) ?? d);
+  const move = (p: Spot) => ({ ...p, path: moved(p.path, from, to) ?? p.path });
+  s.back = s.back.map(move);
+  s.fwd = s.fwd.map(move);
+  if (s.at) s.at = move(s.at);
   persist(s);
 }
 
@@ -572,6 +639,7 @@ export async function drop(repo: string, force = false): Promise<boolean> {
   if (!store.has(repo)) return true;
   if (!force && isDirty(repo) && !(await confirm("Ungespeicherte Änderungen im Editor verwerfen?", "Verwerfen"))) return false;
   void runStop(repo);
+  stopLsp(repo);
   for (const key of [...snapshots.keys()]) if (key.startsWith(snapKey(repo, ""))) snapshots.delete(key);
   store.delete(repo);
   previewAllow(repo, false).catch(() => {});

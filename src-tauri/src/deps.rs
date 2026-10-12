@@ -5,9 +5,14 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 pub(crate) fn on_path(name: &str) -> bool {
+    which(name).is_some()
+}
+
+/// Voller Pfad eines Programms aus PATH (Windows auch .exe/.cmd).
+pub(crate) fn which(name: &str) -> Option<PathBuf> {
     let exts: &[&str] = if cfg!(windows) { &[".exe", ".cmd"] } else { &[""] };
     let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::split_paths(&path).any(|d| exts.iter().any(|e| d.join(format!("{name}{e}")).is_file()))
+    std::env::split_paths(&path).find_map(|d| exts.iter().map(|e| d.join(format!("{name}{e}"))).find(|p| p.is_file()))
 }
 
 /// Ziel des nativen Installers, auch bevor PATH es kennt.

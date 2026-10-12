@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abs, rel, ancestors, devUrl, huge, moved, packageManager, plain, serverUrl, span, under, verdict } from "./editor.logic.ts";
+import { abs, rel, ancestors, devUrl, gutterMarks, huge, moved, packageManager, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
+import { parseDiff } from "./diff.ts";
 
 test("unveraenderte Platte: nichts tun, egal ob lokal geaendert", () => {
   assert.equal(verdict(false, 5, 5), "none");
@@ -111,4 +112,32 @@ test("Pfade zwischen claude (absolut) und Editor (relativ)", () => {
   assert.equal(rel("C:\\Dev\\repo", "c:\\dev\\repo\\src\\x.ts"), "src/x.ts");
   assert.equal(abs("/home/a/repo", "src/x.ts"), "/home/a/repo/src/x.ts");
   assert.equal(abs("C:\\Dev\\repo\\", "src/x.ts"), "C:\\Dev\\repo\\src\\x.ts");
+});
+
+test("pushNav: keine direkten Duplikate, hoechstens max", () => {
+  const a = { path: "a.ts", line: 3, col: 0 };
+  let st = pushNav([], a);
+  assert.deepEqual(pushNav(st, { ...a, col: 5 }), st);
+  st = pushNav(st, { path: "b.ts", line: 3, col: 0 });
+  assert.equal(pushNav(st, a).length, 3);
+  for (let i = 0; i < 60; i++) st = pushNav(st, { path: "c.ts", line: i, col: 0 });
+  assert.equal(st.length, 50);
+  assert.equal(st.at(-1)!.line, 59);
+  assert.equal(pushNav(st, a, 5).length, 5);
+});
+
+test("gutterMarks: neu, geaendert, geloescht am Anfang und am Ende", () => {
+  const marks = (...hunks: string[]) =>
+    gutterMarks(parseDiff(`diff --git a/x b/x\n--- a/x\n+++ b/x\n${hunks.join("\n")}\n`)[0].hunks);
+  assert.deepEqual(marks("@@ -0,0 +1,2 @@\n+a\n+b"), [
+    { line: 1, kind: "add" },
+    { line: 2, kind: "add" },
+  ]);
+  assert.deepEqual(marks("@@ -2 +2 @@\n-a\n+b", "@@ -9,0 +10 @@\n+z"), [
+    { line: 2, kind: "mod" },
+    { line: 10, kind: "add" },
+  ]);
+  // Geloescht ganz oben: erste Zeile; am Ende: letzte verbliebene.
+  assert.deepEqual(marks("@@ -1 +0,0 @@\n-a"), [{ line: 1, kind: "del" }]);
+  assert.deepEqual(marks("@@ -5,2 +4,0 @@\n-a\n-b"), [{ line: 4, kind: "del" }]);
 });

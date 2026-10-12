@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { EditorView } from "codemirror";
 import { abs, rel } from "./editor.logic.ts";
+import { fileUri } from "./lsp.logic.ts";
 
 export { rel };
 
@@ -53,7 +54,7 @@ export function selectionChanged(repo: string, path: string, view: EditorView) {
     notify(repo, "selection_changed", {
       text: view.state.sliceDoc(r.from, r.to),
       filePath,
-      fileUrl: "file://" + (repo.includes("\\") ? "/" : "") + filePath.replace(/\\/g, "/"),
+      fileUrl: fileUri(repo, path),
       selection: { start: r.start, end: r.end, isEmpty: r.from === r.to },
     });
   }, 300);
@@ -62,6 +63,11 @@ export function selectionChanged(repo: string, path: string, view: EditorView) {
 /** Datei (mit Zeilen der Auswahl) als @-Erwaehnung in den Prompt von claude. */
 export function mention(repo: string, path: string, view: EditorView) {
   const r = range(view);
-  const lines = r.from === r.to ? {} : { lineStart: r.start.line, lineEnd: r.end.line };
-  notify(repo, "at_mentioned", { filePath: abs(repo, path), ...lines });
+  if (r.from === r.to) notify(repo, "at_mentioned", { filePath: abs(repo, path) });
+  else mentionLines(repo, path, r.start.line, r.end.line);
+}
+
+/** Zeilen start..end (0-basiert) einer Datei als @-Erwaehnung in den Prompt von claude. */
+export function mentionLines(repo: string, path: string, start: number, end: number) {
+  notify(repo, "at_mentioned", { filePath: abs(repo, path), lineStart: start, lineEnd: end });
 }

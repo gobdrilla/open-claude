@@ -86,6 +86,11 @@ fn list(repo: &str, dir: &str) -> Result<Vec<Entry>, String> {
     Ok(entries)
 }
 
+/// Ohne BOM, nur LF. Auch einzelne CR: CodeMirror macht daraus LF, der Puffer gaelte sonst sofort als geaendert.
+fn lf(raw: &str) -> String {
+    raw.strip_prefix(BOM).unwrap_or(raw).replace("\r\n", "\n").replace('\r', "\n")
+}
+
 fn read(repo: &str, path: &str) -> Result<FileText, String> {
     let file = within(repo, path)?;
     let meta = std::fs::metadata(&file).map_err(|e| format!("{path} nicht lesbar: {e}"))?;
@@ -98,11 +103,9 @@ fn read(repo: &str, path: &str) -> Result<FileText, String> {
         _ => return Err(format!("{path} ist binär oder kein UTF-8.")),
     };
     let bom = raw.starts_with(BOM);
-    let body = raw.strip_prefix(BOM).unwrap_or(&raw);
     // ponytail: gemischte Zeilenenden werden beim Speichern zu CRLF vereinheitlicht.
-    let crlf = body.contains("\r\n");
-    // Auch einzelne CR: CodeMirror macht daraus LF, der Puffer gaelte sonst sofort als geaendert.
-    let content = body.replace("\r\n", "\n").replace('\r', "\n");
+    let crlf = raw.contains("\r\n");
+    let content = lf(&raw);
     // mtime von VOR dem Lesen: schreibt jemand dazwischen, passt sie nicht zur Platte und es wird neu geladen.
     Ok(FileText { content, crlf, bom, mtime: millis(&meta) })
 }
@@ -202,12 +205,61 @@ fn files(repo: &str) -> Result<Vec<String>, String> {
     Ok(list)
 }
 
+/// Treffer der Projektsuche: Zeile ab 1, Spalte in UTF-16 (wie CodeMirror), Zeile gekuerzt.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Hit {
+    path: String,
+    line: usize,
+    col: usize,
+    text: String,
+}
+
+/// Suche ueber `files()`; je Zeile nur der erste Treffer. Grosse und binaere Dateien zaehlen nicht mit.
+fn search(repo: &str, query: &str, regex: bool, case: bool) -> Result<Vec<Hit>, String> {
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pat = if regex { query.to_string() } else { regex::escape(query) };
+    let re = regex::RegexBuilder::new(&pat)
+        .case_insensitive(!case)
+        .size_limit(1 << 20)
+        .build()
+        .map_err(|e| format!("Ungültiger Ausdruck: {e}"))?;
+    let mut hits = Vec::new();
+    for path in files(repo)? {
+        let Ok(file) = within(repo, &path) else { continue };
+        if std::fs::metadata(&file).map_or(true, |m| m.len() > 1 << 20) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&file) else { continue };
+        if bytes[..bytes.len().min(8192)].contains(&0) {
+            continue;
+        }
+        let raw = String::from_utf8_lossy(&bytes);
+        for (i, line) in raw.strip_prefix(BOM).unwrap_or(&raw).lines().enumerate() {
+            let Some(m) = re.find(line) else { continue };
+            let col = line[..m.start()].encode_utf16().count();
+            hits.push(Hit { path: path.clone(), line: i + 1, col, text: line.trim().chars().take(200).collect() });
+            // shortcut: harte Grenze, bei Bedarf paginieren
+            if hits.len() >= 2000 {
+                return Ok(hits);
+            }
+        }
+    }
+    Ok(hits)
+}
+
 /// Unified Diff Platte -> `content` im Format von `git diff`, damit der Frontend-Parser ihn liest.
 fn diff(repo: &str, path: &str, content: &str) -> Result<String, String> {
-    static N: AtomicU32 = AtomicU32::new(0);
     // Geloescht auf der Platte: gegen leer vergleichen.
     let disk = if within(repo, path)?.exists() { read(repo, path)?.content } else { String::new() };
-    if disk == content {
+    diff_texts(repo, path, &disk, content, false)
+}
+
+/// Unified Diff `old` -> `new` mit Kopf fuer `path`; "" wenn gleich. `zero`: ohne Kontextzeilen (Git-Gutter).
+fn diff_texts(repo: &str, path: &str, old: &str, new: &str, zero: bool) -> Result<String, String> {
+    static N: AtomicU32 = AtomicU32::new(0);
+    if old == new {
         return Ok(String::new());
     }
     let tmp = |side: &str| {
@@ -215,10 +267,17 @@ fn diff(repo: &str, path: &str, content: &str) -> Result<String, String> {
         std::env::temp_dir().join(format!("ocui-diff-{}-{n}-{side}", std::process::id()))
     };
     let (a, b) = (tmp("a"), tmp("b"));
-    let res = std::fs::write(&a, disk)
-        .and_then(|()| std::fs::write(&b, content))
+    let res = std::fs::write(&a, old)
+        .and_then(|()| std::fs::write(&b, new))
         .map_err(|e| format!("Vergleich fehlgeschlagen: {e}"))
-        .and_then(|()| exec(git(repo).args(["-c", "core.autocrlf=false", "diff", "--no-index", "--no-color", "--no-ext-diff", "--"]).arg(&a).arg(&b), None));
+        .and_then(|()| {
+            let mut cmd = git(repo);
+            cmd.args(["-c", "core.autocrlf=false", "diff", "--no-index", "--no-color", "--no-ext-diff"]);
+            if zero {
+                cmd.arg("-U0");
+            }
+            exec(cmd.arg("--").arg(&a).arg(&b), None)
+        });
     let _ = std::fs::remove_file(&a);
     let _ = std::fs::remove_file(&b);
     let o = res?;
@@ -230,6 +289,17 @@ fn diff(repo: &str, path: &str, content: &str) -> Result<String, String> {
     let out = String::from_utf8_lossy(&o.stdout);
     let hunks = out.find("\n@@").map_or("", |i| &out[i + 1..]);
     Ok(format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n{hunks}"))
+}
+
+/// Diff HEAD -> `content` ohne Kontext fuer den Git-Gutter; normalisiert wie `read`.
+fn gutter(repo: &str, path: &str, content: &str) -> Result<String, String> {
+    within(repo, path)?;
+    let o = exec(git(repo).arg("show").arg(format!("HEAD:./{path}")), None)?;
+    if !o.status.success() {
+        // shortcut: untracked (oder kein Git, kein Commit) ohne Marken; sonst waere alles "neu".
+        return Ok(String::new());
+    }
+    diff_texts(repo, path, &lf(&String::from_utf8_lossy(&o.stdout)), content, true)
 }
 
 /// Bildtyp nach Endung; nur was Browser und API sicher anzeigen.
@@ -299,8 +369,18 @@ pub async fn fs_files(repo: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+pub async fn fs_search(repo: String, query: String, regex: bool, case: bool) -> Result<Vec<Hit>, String> {
+    blocking(move || search(&repo, &query, regex, case)).await
+}
+
+#[tauri::command]
 pub async fn fs_diff(repo: String, path: String, content: String) -> Result<String, String> {
     blocking(move || diff(&repo, &path, &content)).await
+}
+
+#[tauri::command]
+pub async fn fs_gutter(repo: String, path: String, content: String) -> Result<String, String> {
+    blocking(move || gutter(&repo, &path, &content)).await
 }
 
 #[tauri::command]
@@ -464,6 +544,24 @@ mod tests {
     }
 
     #[test]
+    fn gutter_gegen_head() {
+        let repo = tmp("gutter");
+        let git_ok = |args: &[&str]| assert!(exec(git(&repo).args(args), None).unwrap().status.success(), "{args:?}");
+        git_ok(&["init"]);
+        std::fs::write(Path::new(&repo).join("a.txt"), "eins\r\nzwei\r\ndrei\r\n").unwrap();
+        git_ok(&["-c", "core.autocrlf=false", "add", "a.txt"]);
+        git_ok(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"]);
+        // CRLF in HEAD gegen LF im Puffer: keine Aenderung.
+        assert_eq!(gutter(&repo, "a.txt", "eins\nzwei\ndrei\n").unwrap(), "");
+        let d = gutter(&repo, "a.txt", "eins\nZWEI\ndrei\n").unwrap();
+        assert_eq!(d.matches("\n@@").count(), 1, "{d}");
+        assert!(d.contains("\n@@ -2 +2 @@"), "{d}");
+        // Untracked: keine Marken.
+        assert_eq!(gutter(&repo, "neu.txt", "x\n").unwrap(), "");
+        assert!(gutter(&repo, "../a.txt", "x").is_err());
+    }
+
+    #[test]
     fn dateiliste_ohne_ignorierte() {
         let repo = tmp("dateien");
         assert!(exec(git(&repo).arg("init"), None).unwrap().status.success());
@@ -473,5 +571,27 @@ mod tests {
         std::fs::create_dir_all(Path::new(&repo).join("weg")).unwrap();
         std::fs::write(Path::new(&repo).join("weg/x.txt"), "").unwrap();
         assert_eq!(files(&repo).unwrap(), [".gitignore", "a.txt", "src/b.rs"]);
+    }
+
+    #[test]
+    fn suche_im_projekt() {
+        let repo = tmp("suche");
+        let at = |p: &str| Path::new(&repo).join(p);
+        std::fs::write(at("a.rs"), "let x = a.b(1);\nAB ab\n").unwrap();
+        std::fs::write(at("src/u.txt"), "äöü 😀 ziel\r\n").unwrap();
+        std::fs::write(at("bin.dat"), b"ziel\0ziel").unwrap();
+        let pos = |q: &str, regex: bool, case: bool| -> Vec<_> {
+            search(&repo, q, regex, case).unwrap().into_iter().map(|h| (h.path, h.line, h.col)).collect()
+        };
+        // Ohne Regex ist `a.b(` woertlich, kein ungueltiger Ausdruck.
+        assert_eq!(pos("a.b(", false, false), [("a.rs".to_string(), 1, 8)]);
+        assert_eq!(pos("ab", false, true), [("a.rs".to_string(), 2, 3)]);
+        assert_eq!(pos("ab", false, false), [("a.rs".to_string(), 2, 0)]);
+        assert_eq!(pos(r"x\s=", true, false), [("a.rs".to_string(), 1, 4)]);
+        // Binaerdatei uebersprungen; Spalte in UTF-16: "äöü " = 4, Emoji = 2.
+        let h = search(&repo, "ziel", false, true).unwrap();
+        assert_eq!(h, [Hit { path: "src/u.txt".into(), line: 1, col: 7, text: "äöü 😀 ziel".into() }]);
+        assert!(search(&repo, "a(", true, false).is_err());
+        assert!(search(&repo, "", false, false).unwrap().is_empty());
     }
 }

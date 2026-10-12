@@ -293,6 +293,12 @@ test("parse: gueltiges kommt normalisiert und ohne fremde Felder zurueck", () =>
   // Ausgabe der Run-Leiste unter dem Editor.
   const r = splitAt(defaultLayout(), "run", "g2", "bottom");
   assert.deepEqual(tabs(parse(JSON.stringify(r))), ["g1 files", "g2", "g3 run"]);
+  // Problems-Panel als Tab neben der Ausgabe.
+  const pr = openPanel(r, "problems", "g3");
+  assert.deepEqual(tabs(parse(JSON.stringify(pr))), ["g1 files", "g2", "g3 run problems"]);
+  // Suche als Tab neben den Dateien.
+  const se = openPanel(pr, "search", "g1");
+  assert.deepEqual(tabs(parse(JSON.stringify(se))), ["g1 files search", "g2", "g3 run problems"]);
 });
 
 test("keine Funktion veraendert ihre Eingabe", () => {
