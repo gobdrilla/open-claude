@@ -980,11 +980,6 @@
         </Badge>
       {/each}
     </div>
-    <!-- Feste Reihenfolge in jeder Ansicht, damit beim Wechseln nichts springt; nur die Extras rechts wechseln. -->
-    {@render viewButton("term", "Claude im Projekt öffnen", () => launch(viewRepo), TerminalIcon, "Claude")}
-    {#if !isFree(viewRepo)}{@render viewButton("edit", "Editor (Strg+Umschalt+E)", () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
-    {@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}
-    <div class="bg-border mx-1 h-4 w-px"></div>
     {#if view === "git" && gitRepo}
       <Button
         variant="ghost"
@@ -996,7 +991,7 @@
       <Button
         variant="ghost"
         size="sm"
-        class="text-muted-foreground mr-1 h-6 text-[11px]"
+        class="text-muted-foreground h-6 text-[11px]"
         onclick={() => gitView?.reload()}
         title="Aktualisieren (F5)"
         aria-label="Aktualisieren"><RefreshIcon class="size-3.5" /></Button
@@ -1013,10 +1008,15 @@
       <Button
         variant="ghost"
         size="sm"
-        class="text-muted-foreground mr-1 h-6 text-[11px]"
+        class="text-muted-foreground h-6 text-[11px]"
         onclick={() => endSession(activeSession.id)}>Sitzung beenden</Button
       >
     {/if}
+    <div class="bg-border mx-1 h-4 w-px"></div>
+    <!-- Feste Reihenfolge in jeder Ansicht, damit beim Wechseln nichts springt; die wechselnden Extras stehen links davon. -->
+    {@render viewButton("term", "Claude im Projekt öffnen", () => launch(viewRepo), TerminalIcon, "Claude")}
+    {#if !isFree(viewRepo)}{@render viewButton("edit", "Editor (Strg+Umschalt+E)", () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
+    {@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}
   {:else}
     <img
       src="/logo.png"
