@@ -78,13 +78,11 @@
 
 <!-- Logo kommt aus static/logo.svg; eigenes Logo: Datei ersetzen. -->
 <!-- Schmal: Knoepfe nur mit Icon, Logo kleiner; Name steht im title -->
-<header class="@container flex shrink-0 items-center gap-3 px-3 py-2">
-  <div class="bg-card ring-foreground/5 shrink-0 rounded-xl px-3 py-1.5 shadow-lg ring-1 shadow-black/10">
-    <img src="/logo.svg" alt="Logo" class="h-8 select-none @3xl:h-10" draggable="false" />
-  </div>
-  <div
-    class="text-muted-foreground bg-card ring-foreground/5 ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 rounded-xl px-2 py-1.5 text-xs shadow-lg ring-1 shadow-black/10"
-  >
+<!-- Aussen p-2 wie Terminal, damit die Karte genauso breit ist -->
+<header class="@container shrink-0 px-2 pt-2">
+  <div class="bg-card ring-foreground/5 flex items-center gap-3 rounded-xl px-3 py-1.5 shadow-lg ring-1 shadow-black/10">
+  <img src="/logo.svg" alt="Logo" class="h-8 shrink-0 select-none @3xl:h-10" draggable="false" />
+  <div class="text-muted-foreground ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs">
     <Select
       value={mode ?? ""}
       options={MODES}
@@ -129,5 +127,6 @@
       onclick={onsettings}><SettingsIcon class="size-3" /><span class="hidden @3xl:inline">Einstellungen</span></button
     >
     {#if error}<span class="text-destructive truncate" title={error}>{error}</span>{/if}
+  </div>
   </div>
 </header>
