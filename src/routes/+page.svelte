@@ -396,7 +396,7 @@
     checking = true;
     try {
       update = (await check()) ?? update;
-      if (manual && !update) notice = "Open Claude ist aktuell.";
+      if (manual && !update) okNotice = "Open Claude ist aktuell.";
     } catch (e) {
       if (manual) notice = `Update-Prüfung fehlgeschlagen: ${e}`;
     } finally {
@@ -420,7 +420,7 @@
     installingDeps = true;
     for (const name of missing) {
       try {
-        notice = (await invoke<string>("deps_install", { name })) || `${DEPS[name]} installiert.`;
+        okNotice = (await invoke<string>("deps_install", { name })) || `${DEPS[name]} installiert.`;
       } catch (e) {
         notice = String(e);
         break;
@@ -699,6 +699,7 @@
 
   // Fehler aus dem Kontextmenue als Leiste, error wuerde die ganze Liste ersetzen.
   let notice = $state("");
+  let okNotice = $state("");
 
   // ---------- Unity ----------
 
@@ -744,7 +745,7 @@
   async function setupUnity(repo: Repo) {
     try {
       const log = await unity.setup(repo.path);
-      notice = log.trim().split("\n").slice(-2).join(" · ") || "Unity-Support eingerichtet.";
+      okNotice = log.trim().split("\n").slice(-2).join(" · ") || "Unity-Support eingerichtet.";
     } catch (e) {
       notice = String(e);
     }
@@ -1267,6 +1268,7 @@
     </div>
 
     <Notice bind:text={notice} />
+    {#if !notice}<Notice bind:text={okNotice} kind="ok" />{/if}
     <Command.List class="max-h-none flex-1 overflow-y-auto">
       {#if error}
         <p class="text-destructive px-4 py-6 text-sm">{error}</p>

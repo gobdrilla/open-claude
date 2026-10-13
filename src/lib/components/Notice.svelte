@@ -8,7 +8,7 @@
     text = $bindable(""),
     kind = "error",
     timeout = kind === "error" ? 8000 : 5000,
-  }: { text: string; kind?: "error" | "note"; timeout?: number } = $props();
+  }: { text: string; kind?: "error" | "note" | "ok"; timeout?: number } = $props();
 
   let expanded = $state(false);
   let hover = $state(false);
@@ -32,7 +32,9 @@
     role="status"
     class="flex items-start gap-2 border-b px-3 py-1 text-[11px] {kind === 'error'
       ? 'bg-destructive/10 text-destructive border-destructive/20'
-      : 'text-muted-foreground border-border font-mono'}"
+      : kind === 'ok'
+        ? 'bg-success/10 text-success border-success/20'
+        : 'text-muted-foreground border-border font-mono'}"
     onmouseenter={() => (hover = true)}
     onmouseleave={() => (hover = false)}
   >
