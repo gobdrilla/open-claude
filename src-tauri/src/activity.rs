@@ -394,17 +394,20 @@ fn task(s: &str) -> String {
     body.lines().map(|l| l.strip_prefix("  ").unwrap_or(l)).collect::<Vec<_>>().join("\n").trim().into()
 }
 
-/// Auftrag aus der ersten Transkript-Zeile {type:user, message:{content:"..."}}.
+/// Workflow-Agenten bekommen vor dem Auftrag die Anfrage weitergereicht, die den Run ausgeloest hat.
+fn relayed(t: &str) -> bool {
+    t.starts_with("[Workflow harness — user request]")
+}
+
+/// Auftrag aus einer Transkript-Zeile {type:user, message:{content:"..."}}; None fuer die weitergereichte Anfrage.
 fn prompt_of(v: &Value) -> Option<String> {
-    let t = v.pointer("/message/content").and_then(Value::as_str).filter(|_| str_of(v, "type") == "user")?;
+    let t = v.pointer("/message/content").and_then(Value::as_str).filter(|t| str_of(v, "type") == "user" && !relayed(t))?;
     Some(trunc(&task(t), PROMPT_CHARS))
 }
 
-/// Nur die erste Zeile lesen: fertige Runs brauchen vom Transkript nur den Auftrag.
+/// Nur die ersten zwei Zeilen lesen: fertige Runs brauchen vom Transkript nur den Auftrag.
 fn first_prompt(path: &Path) -> Option<String> {
-    let mut line = String::new();
-    BufReader::new(File::open(path).ok()?).read_line(&mut line).ok()?;
-    prompt_of(&serde_json::from_str(&line).ok()?)
+    BufReader::new(File::open(path).ok()?).lines().take(2).map_while(Result::ok).find_map(|l| prompt_of(&serde_json::from_str(&l).ok()?))
 }
 
 /// Ganzes Agent-Transkript als Zeitleiste: Auftrag, Texte, Tool-Calls samt Ergebnis.
@@ -419,7 +422,7 @@ fn agent_log(path: &Path) -> Vec<Entry> {
             "user" => {
                 // Erste Nutzer-Nachricht als Text ist der Auftrag; spaetere Strings sind Harness-Rauschen.
                 if let Some(t) = v.pointer("/message/content").and_then(Value::as_str) {
-                    if out.is_empty() {
+                    if out.is_empty() && !relayed(t) {
                         out.push(Entry { at, kind: "prompt", body: trunc(&task(t), LOG_CHARS), ..Default::default() });
                     }
                     continue;
@@ -480,7 +483,7 @@ fn sum_agent(st: &mut State, path: &Path) -> Sum {
     let lines = new_lines(path, &mut st.sum_offsets);
     let s = st.sums.entry(path.to_path_buf()).or_default();
     for (off, line) in lines {
-        if off == 0 {
+        if off == 0 || s.prompt.is_none() && line.contains("[Workflow harness") {
             s.prompt = serde_json::from_str(&line).ok().as_ref().and_then(prompt_of);
         }
         if !line.contains("\"type\":\"assistant\"") {
@@ -964,6 +967,13 @@ mod tests {
         assert_eq!(task("  normaler Prompt\n  zwei\n"), "normaler Prompt\n  zwei");
         let v = serde_json::json!({"type":"user","message":{"content":t}});
         assert_eq!(prompt_of(&v).unwrap(), "Projekt: x\n  - eingerueckt\n\nEnde");
+        let anfrage = serde_json::json!({"type":"user","message":{"content":"[Workflow harness — user request] Relay:\n  mach was"}});
+        assert_eq!(prompt_of(&anfrage), None);
+        let f = tmp("relay").join("agent-a1.jsonl");
+        put(&f, &format!("{anfrage}\n{v}\n"));
+        assert_eq!(first_prompt(&f).as_deref(), Some("Projekt: x\n  - eingerueckt\n\nEnde"));
+        assert_eq!(sum_agent(&mut State::default(), &f).prompt.as_deref(), Some("Projekt: x\n  - eingerueckt\n\nEnde"));
+        assert_eq!(agent_log(&f)[0].body, "Projekt: x\n  - eingerueckt\n\nEnde");
     }
 
     #[test]
