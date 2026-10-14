@@ -1,7 +1,11 @@
 <script lang="ts" module>
-  // Bilddaten sind gross und unveraenderlich: einmal laden, fuer alle Panels behalten.
   // Schluessel `${session}:${id}` — ids sind nur innerhalb einer Session eindeutig.
-  const images = new Map<string, string>();
+  // Kacheln zeigen Vorschauen aus Rust (claude_thumb, wenige KB), die bleiben fuer alle Panels gemerkt. Volle
+  // Bilder nur fuer die Grossansicht und nur die letzten CACHE_MAX: Vollbilder als Kacheln liessen Sessions mit
+  // hunderten Bildern ruckeln und belegten GB.
+  const thumbCache = new Map<string, string>();
+  const cache = new Map<string, string>();
+  const CACHE_MAX = 8;
 </script>
 
 <script lang="ts">
@@ -96,7 +100,10 @@
   let focus = $state<{ run: string; agent: string } | null>(null);
   let log = $state<Entry[] | null>(null);
   let scroller = $state<HTMLElement>();
-  let urls = $state<Record<string, string>>({});
+  // Bild-URL je sichtbarer Kachel
+  let thumbs = $state<Record<string, string>>({});
+  // Volles Bild der Lightbox
+  let fullUrl = $state<string>();
   // Bild-id in der Lightbox (nicht Index: neue Bilder verschieben die Liste)
   let shown = $state<number | null>(null);
   // Workflow-Vorlagen (global + Projekt); Claude kann neue schreiben, darum mitpollen
@@ -157,7 +164,7 @@
     void id;
     data = null;
     panel = null;
-    urls = {};
+    thumbs = {};
     shown = null;
     focus = null;
     log = null;
@@ -277,27 +284,50 @@
   }
 
   const key = (id: number) => `${data?.session}:${id}`;
-  async function load(id: number) {
-    if (id < 0) return void (urls[key(id)] = local[-id]?.url);
+  async function full(id: number): Promise<string | undefined> {
+    if (id < 0) return local[-id]?.url;
     const sid = data?.session;
     if (!sid) return;
     const k = `${sid}:${id}`;
-    if (images.has(k)) return void (urls[k] = images.get(k)!);
-    try {
-      const url = await invoke<string>("claude_image", { sid, id });
-      images.set(k, url);
-      if (sid === data?.session) urls[k] = url;
-    } catch {}
+    let url = cache.get(k);
+    if (url) cache.delete(k);
+    else url = await invoke<string>("claude_image", { sid, id }).catch(() => undefined);
+    if (!url) return;
+    // Zuletzt benutzt ans Ende, aelteste fallen raus
+    cache.set(k, url);
+    if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
+    return url;
   }
 
-  // Thumbnail erst laden, wenn es in Sicht kommt.
+  async function show(id: number) {
+    const k = key(id);
+    if (thumbs[k]) return;
+    const sid = data?.session;
+    let url = id < 0 ? local[-id]?.url : thumbCache.get(k);
+    if (!url && sid) {
+      url = await invoke<string>("claude_thumb", { sid, id }).catch(() => undefined);
+      if (url) thumbCache.set(k, url);
+    }
+    if (url && k === key(id)) thumbs[k] = url;
+  }
+
+  $effect(() => {
+    const c = current;
+    fullUrl = undefined;
+    if (c) full(c.id).then((u) => current?.id === c.id && (fullUrl = u));
+  });
+
+  // Vorschau erst laden, wenn die Kachel in die Naehe der Sicht kommt.
   function lazy(node: HTMLElement, id: number) {
-    const io = new IntersectionObserver((es) => {
-      if (es.some((e) => e.isIntersecting)) {
-        load(id);
-        io.disconnect();
-      }
-    });
+    const io = new IntersectionObserver(
+      (es) => {
+        if (es.some((e) => e.isIntersecting)) {
+          show(id);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "300px" },
+    );
     io.observe(node);
     return { destroy: () => io.disconnect() };
   }
@@ -379,7 +409,7 @@
     const r = pasted.req;
     if (r?.id !== id || !data) return;
     const m = imgs.find((m) => m.kind === "paste" && m.label === `Eingefügt #${r.n}`);
-    if (m) (shown = m.id), load(m.id);
+    if (m) shown = m.id;
     pasted.req = null;
   });
 
@@ -388,7 +418,6 @@
   function step(d: number) {
     if (index < 0) return;
     shown = imgs[(index + d + imgs.length) % imgs.length].id;
-    load(shown);
   }
   function onkeydown(e: KeyboardEvent) {
     if (e.key === "ArrowLeft") step(-1);
@@ -609,9 +638,9 @@
     {:else if imgs.length}
       <div class="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
         {#each imgs as m (key(m.id))}
-          <button class="group min-w-0 text-left" onclick={() => ((shown = m.id), load(m.id))} title={m.label}>
+          <button class="group min-w-0 text-left" onclick={() => (shown = m.id)} title={m.label}>
             <div use:lazy={m.id} class="bg-background/40 group-hover:ring-primary/40 aspect-video overflow-hidden rounded-md ring-1 ring-foreground/5">
-              {#if urls[key(m.id)]}<img src={urls[key(m.id)]} alt={m.label} class="aspect-video w-full rounded-md object-cover" />{/if}
+              {#if thumbs[key(m.id)]}<img src={thumbs[key(m.id)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />{/if}
             </div>
             <div class="mt-1 truncate text-xs">{m.label}</div>
             <div class="text-muted-foreground truncate text-[10px]">{ago(m.at)}</div>
@@ -829,8 +858,8 @@
           ><ChevronLeftIcon class="size-5" /></button
         >
         <div class="flex min-h-0 min-w-0 flex-1 justify-center">
-          {#if urls[key(current.id)]}
-            <ZoomImage src={urls[key(current.id)]} alt={current.label} onswipe={step} />
+          {#if fullUrl}
+            <ZoomImage src={fullUrl} alt={current.label} onswipe={step} />
           {:else}
             <p class="text-muted-foreground p-8">Lade …</p>
           {/if}

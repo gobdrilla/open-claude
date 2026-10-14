@@ -672,6 +672,7 @@ pub fn run() {
             runner::test_run,
             runner::test_cancel,
             ide::ide_notify,
+            activity::claude_thumb,
             ide::ide_reply,
             lsp::lsp_start,
             lsp::lsp_send,

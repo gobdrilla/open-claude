@@ -840,15 +840,31 @@ fn image_at(r: &ImgRef) -> Result<String, String> {
     Ok(format!("data:{mt};base64,{}", str_of(src, "data")))
 }
 
+/// Vorschau (hoechstens 320x180, JPEG) fuer die Kacheln im Panel: wenige KB statt des Vollbilds, das der
+/// Browser sonst fuer jede Kachel dekodieren muesste (ruckelt bei hunderten Bildern, belegt GB).
+fn thumb_of(data_url: &str) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let b64 = data_url.split_once(',').ok_or("Kein data-URL")?.1;
+    let bytes = STANDARD.decode(b64).map_err(|e| e.to_string())?;
+    let small = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.thumbnail(320, 180).into_rgb8();
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 75).encode_image(&small).map_err(|e| e.to_string())?;
+    Ok(format!("data:image/jpeg;base64,{}", STANDARD.encode(out)))
+}
+
+fn img_ref(sid: &str, id: usize) -> Result<ImgRef, String> {
+    let cache = CACHE.lock().map_err(|e| e.to_string())?;
+    cache.get(sid).and_then(|st| st.imgs.get(id)).map(|x| x.0.clone()).ok_or("Unbekanntes Bild".into())
+}
+
 #[tauri::command]
 pub async fn claude_image(sid: String, id: usize) -> Result<String, String> {
-    blocking(move || {
-        let cache = CACHE.lock().map_err(|e| e.to_string())?;
-        let r = cache.get(&sid).and_then(|st| st.imgs.get(id)).map(|x| x.0.clone()).ok_or("Unbekanntes Bild")?;
-        drop(cache);
-        image_at(&r)
-    })
-    .await
+    blocking(move || image_at(&img_ref(&sid, id)?)).await
+}
+
+#[tauri::command]
+pub async fn claude_thumb(sid: String, id: usize) -> Result<String, String> {
+    blocking(move || thumb_of(&image_at(&img_ref(&sid, id)?)?)).await
 }
 
 #[cfg(test)]
@@ -1085,6 +1101,20 @@ mod tests {
         let st = &cache[SID];
         assert_eq!(image_at(&st.imgs[1].0).unwrap(), "data:image/png;base64,REVG");
         assert_eq!(image_at(&st.imgs[0].0).unwrap(), "data:image/png;base64,QUJD");
+    }
+
+    #[test]
+    fn vorschau_klein_als_jpeg() {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        let mut png = Vec::new();
+        image::RgbImage::from_pixel(1920, 1080, image::Rgb([30, 40, 50]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let t = thumb_of(&format!("data:image/png;base64,{}", STANDARD.encode(&png))).unwrap();
+        let jpg = STANDARD.decode(t.strip_prefix("data:image/jpeg;base64,").unwrap()).unwrap();
+        let img = image::load_from_memory(&jpg).unwrap();
+        assert_eq!((img.width(), img.height()), (320, 180));
+        assert!(thumb_of("data:image/png;base64,QUJD").is_err());
     }
 
     #[test]
