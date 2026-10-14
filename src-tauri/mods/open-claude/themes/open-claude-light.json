@@ -1,5 +1,5 @@
 {
-  "name": "Open Claude Hell",
+  "name": "Atelier Hell",
   "base": "light",
   "overrides": {
     "claude": "#7046cf", "claudeShimmer": "#957ee5",

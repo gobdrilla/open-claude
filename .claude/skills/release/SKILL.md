@@ -1,6 +1,6 @@
 ---
 name: release
-description: Neues Open-Claude-Release erstellen (Version bumpen, testen, taggen, Draft anlegen, Release-Run überwachen). Nutzen, wenn der User "release", "neues Release", "Version raus" o. ä. sagt.
+description: Neues Atelier-Release erstellen (Version bumpen, testen, taggen, Draft anlegen, Release-Run überwachen). Nutzen, wenn der User "release", "neues Release", "Version raus" o. ä. sagt.
 ---
 
 # Release erstellen
@@ -79,7 +79,7 @@ git tag v1.0.7 && git push origin master v1.0.7
 
 ```sh
 gh api repos/marlon-schmitz-289/open-claude/releases \
-  -f tag_name=v1.0.7 -f name="Open Claude 1.0.7" -F draft=true \
+  -f tag_name=v1.0.7 -f name="L'Atelier de Claude 1.0.7" -F draft=true \
   -f body="- Stichpunkt 1
 - Stichpunkt 2"
 ```

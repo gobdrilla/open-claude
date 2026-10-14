@@ -243,7 +243,7 @@ pub fn quit(app: &tauri::AppHandle) {
     let mut dialog = app
         .dialog()
         .message("Ungespeicherte Änderungen im Editor verwerfen?")
-        .title("Open Claude")
+        .title("L'Atelier de Claude")
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom("Verwerfen".into(), "Abbrechen".into()));
     if let Some(w) = app.get_webview_window("main") {

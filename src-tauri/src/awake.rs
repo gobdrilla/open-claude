@@ -240,7 +240,7 @@ fn keep_idle_awake(_: bool) {}
 #[cfg(target_os = "linux")]
 fn hold(_: &Path) -> Result<Hold, String> {
     let mut c = std::process::Command::new("systemd-inhibit")
-        .args(["--what=handle-lid-switch:sleep:idle", "--mode=block", "--who=Open Claude", "--why=Claude arbeitet", "cat"])
+        .args(["--what=handle-lid-switch:sleep:idle", "--mode=block", "--who=L'Atelier de Claude", "--why=Claude arbeitet", "cat"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

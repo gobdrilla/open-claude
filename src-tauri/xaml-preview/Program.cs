@@ -1,4 +1,4 @@
-// Helfer der WPF-Vorschau von Open Claude.
+// Helfer der WPF-Vorschau von L'Atelier de Claude.
 // stdin: XAML (UTF-8). Argument 1: Projektordner. Argument 2 (optional): absoluter Pfad der App.xaml des Projekts.
 // stdout: PNG. Bei Fehlern: lesbare Meldung auf stderr (UTF-8) und Exit-Code 1.
 // Relative Verweise im XAML (Bilder) gelten ab dem Arbeitsverzeichnis.

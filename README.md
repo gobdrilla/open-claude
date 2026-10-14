@@ -1,6 +1,6 @@
-# Open Claude
+# L'Atelier de Claude
 
-Desktop-Launcher für Claude Code. Findet alle Git-Repos unter einem Dev-Ordner und startet
+Die Werkstatt für Claude Code: Repo-Liste, eigenes Terminal, Mini-IDE und Git-Client in einer App. Findet alle Git-Repos unter einem Dev-Ordner und startet
 `claude` im gewählten Projekt in einem eingebauten Terminal, daneben ein Aktivitäts-Panel mit
 Session, Workflows und Agents. Dazu kommen ein Git-Client (Änderungen stagen und committen, Verlauf
 mit Graph, Branches, Stashes, Tags, Merge-Editor, Klonen von GitHub und GitLab) und ein Editor mit
@@ -29,7 +29,7 @@ nicht signiert, macOS blockiert den ersten Start daher: im Finder mit Rechtsklic
 → *Öffnen* wählen, oder per Terminal die Quarantäne-Markierung entfernen:
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Open Claude.app"
+xattr -dr com.apple.quarantine "/Applications/Atelier.app"
 ```
 
 Voraussetzung: `claude` auf dem PATH, sonst öffnet sich das Terminal ohne startende CLI. Fehlt es, bietet
@@ -38,7 +38,7 @@ die Titelleiste beim Start die Installation an.
 ### Linux
 
 AppImage oder `.deb` aus den [Releases](../../releases) laden. Das AppImage braucht
-Ausführrechte (`chmod +x`), das `.deb` lässt sich mit `apt install ./open-claude_*.deb`
+Ausführrechte (`chmod +x`), das `.deb` lässt sich mit `apt install ./atelier_*.deb`
 einrichten.
 
 Voraussetzungen auf dem Rechner (fehlt `claude`, bietet die Titelleiste beim Start die Installation an):

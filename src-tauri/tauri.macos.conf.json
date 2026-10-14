@@ -3,7 +3,7 @@
   "app": {
     "windows": [
       {
-        "title": "Open Claude",
+        "title": "L'Atelier de Claude",
         "width": 820,
         "height": 580,
         "minWidth": 520,

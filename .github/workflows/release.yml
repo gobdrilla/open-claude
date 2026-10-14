@@ -107,7 +107,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Open Claude __VERSION__"
+          releaseName: "L'Atelier de Claude __VERSION__"
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false

@@ -1,11 +1,11 @@
 ---
 name: workflow-templates
-description: Create a reusable Claude Code workflow and save it as an Open Claude template. Use when the user says "erstell einen Workflow … als Vorlage", "save as workflow template", "Workflow-Vorlage". Does not run it.
+description: Create a reusable Claude Code workflow and save it as a template in L'Atelier de Claude. Use when the user says "erstell einen Workflow … als Vorlage", "save as workflow template", "Workflow-Vorlage". Does not run it.
 ---
 
 # Workflow templates
 
-A template is a Workflow-tool script saved where Claude Code loads named workflows. Open Claude lists these files in its "Workflows" tab, where they can be edited (builder templates), started and deleted.
+A template is a Workflow-tool script saved where Claude Code loads named workflows. L'Atelier de Claude lists these files in its "Workflows" tab, where they can be edited (builder templates), started and deleted.
 
 ## 1. Where
 
@@ -80,4 +80,4 @@ If the flow needs loops, votes, `pipeline()`, worktree isolation, custom agent t
 
 ## 5. Afterwards
 
-Do **not** run it. Tell the user the file path and that the template appears in Open Claude's "Workflows" tab (start with ▶, edit with ✎ if builder-compatible), or can be started in a new session with `/<name>`.
+Do **not** run it. Tell the user the file path and that the template appears in the "Workflows" tab of L'Atelier de Claude (start with ▶, edit with ✎ if builder-compatible), or can be started in a new session with `/<name>`.

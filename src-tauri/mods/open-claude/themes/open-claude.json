@@ -1,5 +1,5 @@
 {
-  "name": "Open Claude Dunkel",
+  "name": "Atelier Dunkel",
   "base": "dark",
   "overrides": {
     "claude": "#a793f4", "claudeShimmer": "#bfb1ff",

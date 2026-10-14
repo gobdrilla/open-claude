@@ -142,7 +142,7 @@ fn write_lock<R: Runtime>(port: u16, ctx: &Ctx<R>) -> Result<PathBuf, String> {
     let body = json!({
         "pid": std::process::id(),
         "workspaceFolders": [ctx.repo],
-        "ideName": "Open Claude",
+        "ideName": "L'Atelier de Claude",
         "transport": "ws",
         "runningInWindows": cfg!(windows),
         "authToken": ctx.token,
@@ -342,7 +342,7 @@ fn ide_tools() -> Value {
         }), &["old_file_path", "new_file_path", "new_file_contents", "tab_name"]) },
         { "name": "close_tab", "description": "Diff schliessen", "inputSchema": s(json!({ "tab_name": st }), &["tab_name"]) },
         { "name": "closeAllDiffTabs", "description": "Alle Diffs schliessen", "inputSchema": s(json!({}), &[]) },
-        { "name": "getDiagnostics", "description": "Fehler und Warnungen der Language-Server im Editor von Open Claude \
+        { "name": "getDiagnostics", "description": "Fehler und Warnungen der Language-Server im Editor von L'Atelier de Claude \
             (nur Projekte mit freigeschalteten Language-Servern; manche Server melden nur für im Editor geöffnete Dateien). \
             Ohne uri alle Dateien.", "inputSchema": s(json!({ "uri": { "type": "string", "description": "file://-URI einer Datei" } }), &[]) },
     ])
@@ -393,9 +393,9 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
     let target = match crate::forge::mcp_target(&ctx.app, &ctx.repo) {
         Ok((kind, host, base)) => {
             let name = if kind == "github" { "GitHub REST API" } else { "GitLab REST API v4" };
-            format!("{name} auf {host}, angemeldet über Open Claude. Dieses Repository: {base}")
+            format!("{name} auf {host}, angemeldet über L'Atelier de Claude. Dieses Repository: {base}")
         }
-        Err(e) => format!("Derzeit nicht nutzbar: {e}. Konto in Open Claude unter „Konten“ anmelden"),
+        Err(e) => format!("Derzeit nicht nutzbar: {e}. Konto in L'Atelier de Claude unter „Konten“ anmelden"),
     };
     let obj = |props: Value, req: &[&str]| json!({ "type": "object", "properties": props, "required": req });
     let path = json!({ "type": "string", "description": "API-Pfad ab der API-Wurzel, z. B. /repos/o/r/pulls bzw. /projects/<id>/merge_requests" });
@@ -403,7 +403,7 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
     json!([
         {
             "name": "git",
-            "description": "git im Repository der Session ausführen, mit dem in Open Claude gebundenen Konto authentifiziert \
+            "description": "git im Repository der Session ausführen, mit dem in L'Atelier de Claude gebundenen Konto authentifiziert \
                 (push/pull/fetch ohne gh-Login oder Credential-Helper). Lokale Befehle gehen auch über Bash.",
             "inputSchema": obj(json!({ "args": { "type": "array", "items": { "type": "string" }, "description": "Argumente ohne \"git\", z. B. [\"push\", \"-u\", \"origin\", \"feature\"]" } }), &["args"]),
         },
@@ -427,7 +427,7 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
         },
         {
             "name": "open_file",
-            "description": "Datei im Editor von Open Claude öffnen und dem Nutzer zeigen, optional an einer Zeile.",
+            "description": "Datei im Editor von L'Atelier de Claude öffnen und dem Nutzer zeigen, optional an einer Zeile.",
             "inputSchema": obj(json!({ "path": { "type": "string", "description": "absolut oder relativ zum Repository" }, "line": { "type": "integer", "description": "1-basiert" } }), &["path"]),
         },
         {
