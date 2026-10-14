@@ -101,6 +101,9 @@ export function ancestors(path: string): string[] {
 /** Zu gross fuer Highlighting: ueber 1 MB oder eine Zeile ab 10 000 Zeichen (minifiziert); beides macht den Parser zaeh. */
 export const huge = (text: string) => text.length > 1_000_000 || /[^\n]{10000}/.test(text);
 
+/** Modifier-Taste fuer Tastenkuerzel in Texten, wie in +page.svelte. */
+export const MOD = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") ? "⌘" : "Strg";
+
 const win = (repo: string) => repo.includes("\\");
 const slash = (p: string) => p.replace(/\\/g, "/");
 

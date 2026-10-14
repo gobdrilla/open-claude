@@ -1,10 +1,25 @@
+<script lang="ts" module>
+  import type { TestReport, UnityTestMode } from "$lib/unity";
+
+  // Lauf und Bericht je Projekt auf Modulebene: die Ansicht wird beim Wechsel abgebaut, der Lauf geht weiter.
+  type Tests = { running: UnityTestMode | null; report: TestReport | null; error: string };
+  const runs = new Map<string, Tests>();
+  function tests(repo: string): Tests {
+    if (!runs.has(repo)) {
+      const t = $state<Tests>({ running: null, report: null, error: "" });
+      runs.set(repo, t);
+    }
+    return runs.get(repo)!;
+  }
+</script>
+
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { RefreshButton } from "$lib/components/kit";
+  import { Empty, RefreshButton } from "$lib/components/kit";
   import { untrack } from "svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import UnityCloseDialog from "./UnityCloseDialog.svelte";
-  import { unity, verdict, formatDuration, type UnityInfo, type UnityTestMode, type TestReport } from "$lib/unity";
+  import { unity, verdict, formatDuration, type UnityInfo } from "$lib/unity";
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
   import CircleXIcon from "@lucide/svelte/icons/circle-x";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
@@ -15,14 +30,17 @@
   let info = $state<UnityInfo | null>(null);
   let loading = $state(true);
   let error = $state("");
+  /** Fehler von unity.info: bleibt im leeren Panel stehen, auch wenn die Notice error leert. */
+  let failed = $state("");
 
   async function reload() {
     loading = true;
     error = "";
     try {
       info = await unity.info(repo);
+      failed = "";
     } catch (e) {
-      error = String(e);
+      error = failed = String(e);
     }
     loading = false;
   }
@@ -64,26 +82,25 @@
 
   let closePath = $state<string | null>(null);
 
-  let testRunning = $state<UnityTestMode | null>(null);
-  let report = $state<TestReport | null>(null);
-  let testError = $state("");
+  const t = $derived(tests(repo));
 
   async function runTest(mode: UnityTestMode) {
-    if (testRunning) return;
-    testRunning = mode;
-    testError = "";
+    const run = t;
+    if (run.running) return;
+    run.running = mode;
+    run.error = "";
     try {
-      report = await unity.test(repo, mode);
+      run.report = await unity.test(repo, mode);
     } catch (e) {
-      testError = String(e);
+      run.error = String(e);
     }
-    testRunning = null;
+    run.running = null;
     reload(); // Test kann den Editor geoeffnet/verbunden haben lassen bzw. hat ihn ggf. gestartet.
   }
 
   // Das Backend sperrt Test/Oeffnen/Einrichten je Projekt ohnehin; hier nur, damit man es gar nicht erst anklickt.
   // Schliessen bleibt frei: Notausgang fuer einen haengenden Testlauf im Editor.
-  const busy = $derived(!!testRunning || opening || settingUp);
+  const busy = $derived(!!t.running || opening || settingUp);
 
   const VERDICT_CLASS = { green: "text-success", yellow: "text-warning", red: "text-destructive" } as const;
 </script>
@@ -113,15 +130,15 @@
       {@render stat("Verbunden", info.connected)}
       {@render stat("Skill installiert", info.skill)}
       <span class="flex-1"></span>
-      <Button size="sm" variant="outline" class="h-6 text-[11px]" disabled={busy} onclick={setup}>
+      <Button size="xs" variant="outline" disabled={busy} onclick={setup}>
         {settingUp ? "Richte ein …" : "Unity-Support einrichten"}
       </Button>
       {#if info.editorOpen}
-        <Button size="sm" variant="outline" class="h-6 text-[11px]" onclick={() => (closePath = repo)}>
+        <Button size="xs" variant="outline" onclick={() => (closePath = repo)}>
           Editor schließen
         </Button>
       {:else}
-        <Button size="sm" variant="outline" class="h-6 text-[11px]" disabled={busy} onclick={openEditor}>
+        <Button size="xs" variant="outline" disabled={busy} onclick={openEditor}>
           {opening ? "Öffnet …" : "Editor öffnen"}
         </Button>
       {/if}
@@ -136,18 +153,19 @@
 
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2">
       <div class="flex items-center gap-2">
-        <Button size="sm" class="h-7 text-[11px]" disabled={busy} onclick={() => runTest("EditMode")}>
-          {testRunning === "EditMode" ? "Läuft …" : "EditMode-Tests"}
+        <Button size="xs" variant="outline" disabled={busy} onclick={() => runTest("EditMode")}>
+          {t.running === "EditMode" ? "Läuft …" : "EditMode-Tests"}
         </Button>
-        <Button size="sm" class="h-7 text-[11px]" disabled={busy} onclick={() => runTest("PlayMode")}>
-          {testRunning === "PlayMode" ? "Läuft …" : "PlayMode-Tests"}
+        <Button size="xs" variant="outline" disabled={busy} onclick={() => runTest("PlayMode")}>
+          {t.running === "PlayMode" ? "Läuft …" : "PlayMode-Tests"}
         </Button>
-        {#if testRunning}<LoaderCircleIcon class="text-muted-foreground size-3.5 animate-spin" />{/if}
+        {#if t.running}<LoaderCircleIcon class="text-muted-foreground size-3.5 animate-spin" />{/if}
       </div>
 
-      {#if testError}<p class="text-destructive text-[11px]">{testError}</p>{/if}
+      {#if t.error}<p class="text-destructive text-[11px]">{t.error}</p>{/if}
 
-      {#if report}
+      {#if t.report}
+        {@const report = t.report}
         {@const v = verdict(report)}
         <div class="border-border rounded border p-2">
           <div class="flex flex-wrap items-center gap-3">
@@ -182,6 +200,13 @@
         </div>
       {/if}
     </div>
+  {:else}
+    <Empty>
+      <div class="space-y-2">
+        <p class="whitespace-pre-wrap select-text">{failed || "Unity-Status nicht lesbar."}</p>
+        <RefreshButton {loading} onclick={reload} />
+      </div>
+    </Empty>
   {/if}
 </div>
 

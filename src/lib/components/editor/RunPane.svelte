@@ -10,9 +10,10 @@
   import { paneBar } from "$lib/components/kit";
   import EraserIcon from "@lucide/svelte/icons/eraser";
   import PlayIcon from "@lucide/svelte/icons/play";
-  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
+  import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { ptyResize } from "$lib/files";
+  import { MOD } from "$lib/editor.logic";
   import { DARK, LIGHT, LINKS } from "$lib/termtheme";
   import { theme } from "$lib/theme.svelte";
   import { attach, clearOutput, run, runRestart, runStart, runStop, runWrite } from "$lib/run.svelte";
@@ -134,8 +135,8 @@
         onclick={() => runStart(repo, cur?.cfg)}><PlayIcon /></Button
       >
     {/if}
-    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten (Strg+Umschalt+F5)" onclick={() => runRestart(repo)}>
-      <RotateCwIcon />
+    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten ({MOD}+Umschalt+F5)" onclick={() => runRestart(repo)}>
+      <RotateCcwIcon />
     </Button>
     <Button variant="ghost" size="icon-xs" title="Ausgabe leeren" onclick={() => clearOutput(repo)}><EraserIcon /></Button>
   </div>

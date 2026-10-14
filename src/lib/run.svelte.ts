@@ -72,6 +72,16 @@ export function detect(repo: string): Promise<void> {
   return p;
 }
 
+/**
+ * Erkannte Startziele verwerfen (Projekt geschlossen). Mit path nur, wenn er eine Marker-Datei ist (gespeichert):
+ * dann gleich neu erkennen, sonst tauchen neue Scripts/Projekte erst nach einem Neustart auf.
+ */
+export function redetect(repo: string, path?: string): void {
+  if (path !== undefined && !markers([path]).length) return;
+  detected.delete(repo);
+  if (path !== undefined) void detect(repo);
+}
+
 async function scanConfigs(repo: string) {
   const files = await fs.files(repo);
   const ms = markers(files);

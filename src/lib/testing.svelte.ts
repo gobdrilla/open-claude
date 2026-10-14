@@ -9,7 +9,7 @@ import {
   discover,
   dirOf,
   flush,
-  joinPath,
+  toRepo,
   jsEvent,
   jsFw,
   keyOf,
@@ -266,17 +266,6 @@ function mark(t: RepoTests, ids: string[], state: St) {
     if (t.nodes[id]?.kind === "test") r[id] = { state };
     else delete r[id];
   t.results = r;
-}
-
-/** Pfad aus dem Output relativ zum Repo: absolut -> ohne Repo-Praefix, sonst relativ zur cwd. "" = unbekannt. */
-function toRepo(repo: string, dir: string, p: string): string | null {
-  if (!p) return null;
-  const f = p.replaceAll("\\", "/");
-  const root = repo.replaceAll("\\", "/").replace(/\/$/, "");
-  if (f.startsWith(`${root}/`)) return f.slice(root.length + 1);
-  // Ausserhalb des Repos (oder anderes Laufwerk): so lassen, Oeffnen meldet dann einen Fehler.
-  if (f.startsWith("/") || /^[A-Za-z]:/.test(f)) return f;
-  return joinPath(dir, f);
 }
 
 const appendLog = (t: RepoTests, lines: string[]) => {

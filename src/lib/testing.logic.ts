@@ -1,6 +1,7 @@
 // Reine Logik des Test-Explorers: Projekte erkennen, Tests statisch finden, Ergebnisse zuordnen, Text-Output parsen,
 // Baumzeilen bauen. Ohne Runen und Tauri, damit `node --test` sie direkt laedt. Pfade relativ zum Repo mit "/".
 import { fuzzy } from "./fuzzy.ts";
+import { rel } from "./editor.logic.ts";
 
 export type Fw = "vitest" | "jest" | "node" | "cargo" | "dotnet" | "pytest";
 /** Projekt: Testdateien unter dir (cwd des Laufs). JS: fw ist die Vorgabe des Pakets, "node" = nur per Import. */
@@ -61,6 +62,17 @@ const under = (p: string, dir: string) => !dir || p.startsWith(`${dir}/`);
 /** p relativ zu dir (p liegt darunter). */
 export const relTo = (dir: string, p: string) => (dir ? p.slice(dir.length + 1) : p);
 export const joinPath = (dir: string, p: string) => (dir ? `${dir}/${p}` : p);
+
+/** Pfad aus dem Output relativ zum Repo: absolut -> ohne Repo-Praefix, sonst relativ zur cwd. "" = unbekannt. */
+export function toRepo(repo: string, dir: string, p: string): string | null {
+  if (!p) return null;
+  // "/C:/x" (aus file:///C:/x) ist ein Windows-Pfad.
+  const f = p.replaceAll("\\", "/").replace(/^\/([A-Za-z]:)/, "$1");
+  // rel: unter Windows case-insensitiv. Ausserhalb des Repos (oder anderes Laufwerk) bleibt der Pfad absolut,
+  // Oeffnen meldet dann einen Fehler.
+  if (f.startsWith("/") || /^[A-Za-z]:/.test(f)) return rel(repo, f);
+  return joinPath(dir, f);
+}
 
 // --- Erkennung ---
 

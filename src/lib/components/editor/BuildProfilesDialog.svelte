@@ -21,6 +21,9 @@
   const describe = (p: Profile) =>
     [p.release ? "Release (--release / -c Release)" : "Debug", ...(p.args.length ? [p.args.join(" ")] : [])].join(" · ");
 
+  // Kein <form>: der Switch (kit) ist ein Button ohne type und schickte das Formular beim Umschalten ab.
+  const enter = (e: KeyboardEvent) => e.key === "Enter" && add();
+
   function add() {
     if (!name.trim() || error || !parsed) return;
     setProfiles(repo, [...s.profiles, { name: name.trim(), release, args: parsed }]);
@@ -50,6 +53,7 @@
               variant="ghost"
               size="icon"
               class="text-muted-foreground hover:text-destructive size-6"
+              title="Profil {p.name} löschen"
               aria-label="Profil {p.name} löschen"
               onclick={() => setProfiles(repo, s.profiles.filter((x) => x.name !== p.name))}><TrashIcon class="size-3.5" /></Button
             >
@@ -59,12 +63,12 @@
     </ul>
 
     <div class="flex flex-col gap-2">
-      <Input bind:value={name} placeholder="Name, z. B. Profiling" class="text-xs" />
+      <Input bind:value={name} placeholder="Name, z. B. Profiling" class="text-xs" onkeydown={enter} />
       <label class="flex items-center gap-2 text-xs">
         <Switch on={release} label="Release" onclick={() => (release = !release)} />
         Release
       </label>
-      <Input bind:value={args} placeholder="Zusatzargumente (optional)" class="font-mono text-xs" />
+      <Input bind:value={args} placeholder="Zusatzargumente (optional)" class="font-mono text-xs" onkeydown={enter} />
       {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
       <Button size="sm" class="text-xs" disabled={!name.trim() || !!error} onclick={add}>Profil anlegen</Button>
     </div>

@@ -1,6 +1,6 @@
 // Zustand des eingebauten Editors je Projekt. Lebt auf Modulebene, nicht in Komponenten: Panels werden beim
 // Andocken neu gemountet und die Editor-Ansicht beim Wechsel zu Terminal/Git abgebaut, Puffer bleiben trotzdem.
-// Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, lsp, run.
+// Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, lsp, noLsp, run.
 // Ungespeicherte Inhalte ueberleben keinen Neustart der App.
 import { confirm } from "./confirm.svelte";
 import { untrack } from "svelte";
@@ -30,9 +30,9 @@ import {
 } from "./dock.ts";
 import { KONFLIKT, fs, isBinaryImage, previewAllow } from "./files.ts";
 import { moved, pushNav, under, verdict, type Spot } from "./editor.logic.ts";
-import { runStop } from "./run.svelte.ts";
+import { redetect, run as runOf, runStop } from "./run.svelte.ts";
 import { BUILTIN, type Profile } from "./run.logic.ts";
-import { rescan } from "./testing.svelte.ts";
+import { rescan, testCancel } from "./testing.svelte.ts";
 // Zirkulaer (lsp.svelte.ts nutzt open/peek/setText): beide Seiten greifen erst zur Laufzeit zu, nie auf Modulebene.
 import { closed, disk, stop as stopLsp } from "./lsp.svelte.ts";
 
@@ -73,6 +73,8 @@ export type RepoEditor = {
   wpf: boolean;
   /** Language-Server fuer dieses Projekt erlaubt: sie fuehren Projektcode aus (build.rs, Proc-Macros, Plugins), darum erst nach Klick. */
   lsp: boolean;
+  /** "Nicht fuer dieses Projekt": Rueckfrage zum Language-Server nicht mehr zeigen. */
+  noLsp: boolean;
   /** Zuletzt gewaehltes Startziel der Run-Leiste (RunConfig.label); null = Vorauswahl. */
   run: string | null;
   /** Gewaehltes Build-Profil (Profile.name) und die eigenen Profile dieses Projekts. */
@@ -114,8 +116,8 @@ const NEVER = "\0";
 
 function persist(s: RepoEditor) {
   try {
-    const { layout, active, expanded, pin, url, wpf, lsp, run, profile, profiles } = s;
-    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, lsp, run, profile, profiles }));
+    const { layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles } = s;
+    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles }));
   } catch {
     // Ohne localStorage gilt das Layout nur fuer diese Sitzung.
   }
@@ -127,7 +129,8 @@ function persist(s: RepoEditor) {
  */
 async function load(s: RepoEditor, path: string, force = false) {
   const t = await fs.read(s.repo, path);
-  if (store.get(s.repo) !== s) return;
+  // Waehrend des Lesens geschlossen: sonst bliebe ein Puffer ohne Tab in files.
+  if (store.get(s.repo) !== s || !openPaths(s).includes(path)) return;
   const f = s.files[path];
   if (f && f.dirty && !force) {
     f.conflict = "changed";
@@ -200,6 +203,7 @@ export function editor(repo: string): RepoEditor {
     url: str(p.url) ?? "",
     wpf: p.wpf === true,
     lsp: p.lsp === true,
+    noLsp: p.noLsp === true,
     run: str(p.run),
     profile: str(p.profile) ?? "Debug",
     profiles: Array.isArray(p.profiles)
@@ -299,6 +303,8 @@ export async function close(repo: string, path: string, force = false): Promise<
 export async function closeTab(repo: string, panel: PanelId): Promise<boolean> {
   const path = panelPath(panel);
   if (path !== null) return close(repo, path);
+  // Schliessen stoppt den Prozess (s. u.): nicht ohne Rueckfrage.
+  if (panel === RUN && runOf(repo).current?.state === "running" && !(await confirm("Prozess stoppen?", "Stoppen"))) return false;
   const s = editor(repo);
   s.layout = closePanel(s.layout, panel);
   persist(s);
@@ -332,6 +338,7 @@ export async function save(repo: string, path?: string, force = false): Promise<
     void disk(repo, p);
     // Test-Explorer: Tests der Datei neu einlesen (nur wenn er schon gesucht hat).
     void rescan(repo, [p]);
+    redetect(repo, p);
     return true;
   } catch (e) {
     if (String(e) === KONFLIKT) {
@@ -523,10 +530,11 @@ export function setProfiles(repo: string, list: Profile[]): void {
   persist(s);
 }
 
-/** Language-Server fuer das Projekt erlauben und speichern. */
-export function allowLsp(repo: string): void {
+/** Language-Server fuer das Projekt erlauben (oder ablehnen) und speichern. */
+export function allowLsp(repo: string, yes = true): void {
   const s = editor(repo);
-  s.lsp = true;
+  s.lsp = yes;
+  s.noLsp = !yes;
   persist(s);
 }
 
@@ -639,6 +647,8 @@ export async function drop(repo: string, force = false): Promise<boolean> {
   if (!store.has(repo)) return true;
   if (!force && isDirty(repo) && !(await confirm("Ungespeicherte Änderungen im Editor verwerfen?", "Verwerfen"))) return false;
   void runStop(repo);
+  void testCancel(repo);
+  redetect(repo);
   stopLsp(repo);
   for (const key of [...snapshots.keys()]) if (key.startsWith(snapKey(repo, ""))) snapshots.delete(key);
   store.delete(repo);

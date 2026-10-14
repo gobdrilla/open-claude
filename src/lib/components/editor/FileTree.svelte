@@ -3,7 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, PromptDialog, fileIcon, menuContent, paneBar } from "$lib/components/kit";
+  import { ContextItem, Empty, PromptDialog, RefreshButton, fileIcon, menuContent, paneBar } from "$lib/components/kit";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import FilePlusIcon from "@lucide/svelte/icons/file-plus";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
@@ -17,6 +17,8 @@
   const s = $derived(editor(repo));
   const mac = navigator.userAgent.includes("Mac");
   let error = $state("");
+  /** Projektordner nicht lesbar: steht statt des Baums da, bis "Neu laden" klappt. */
+  let rootError = $state("");
 
   // Listing je Ordner, eine Ebene. Nur Projektordner und aufgeklappte Ordner werden gelesen.
   let lists = $state<Record<string, Entry[]>>({});
@@ -38,10 +40,13 @@
   async function load(dir: string) {
     try {
       lists[dir] = await fs.list(repo, dir);
+      if (!dir) rootError = "";
     } catch (e) {
       // Aufgeklappter Ordner ist weg (geloescht, Branch gewechselt): still zuklappen.
       if (dir) setExpanded(repo, dir, false);
-      else error = String(e);
+      // Schon geladener Baum bleibt stehen, der Fehler kommt dann als Notice.
+      else if (lists[""]) error = String(e);
+      else rootError = String(e);
     }
   }
 
@@ -133,6 +138,20 @@
   </div>
   <Notice bind:text={error} />
 
+  {#if !lists[""]}
+    <Empty>
+      {#if rootError}
+        <div class="space-y-2">
+          <p class="whitespace-pre-wrap select-text">{rootError}</p>
+          <RefreshButton loading={false} onclick={() => ((rootError = ""), load(""))} />
+        </div>
+      {:else}
+        Lädt …
+      {/if}
+    </Empty>
+  {:else if !lists[""].length}
+    <Empty>Ordner leer</Empty>
+  {:else}
   <div class="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
     {#each visible as r (r.path)}
       <!-- Neues landet im Ordner selbst bzw. neben der Datei. -->
@@ -169,6 +188,7 @@
       </ContextMenu.Root>
     {/each}
   </div>
+  {/if}
 </div>
 
 <PromptDialog

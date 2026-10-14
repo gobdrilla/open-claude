@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { Switch } from "$lib/components/kit";
   import { unity } from "$lib/unity";
 
   /** Projektpfad; null = Dialog zu. */
@@ -40,7 +41,7 @@
       <Dialog.Description>Schließt ohne zu speichern. Ungesicherte Änderungen im Editor gehen verloren.</Dialog.Description>
     </Dialog.Header>
     <label class="flex items-center gap-2 text-xs">
-      <input type="checkbox" bind:checked={force} class="accent-primary" />
+      <Switch on={force} label="Erzwingen" onclick={() => (force = !force)} />
       Erzwingen (Prozess hart beenden, falls nötig)
     </label>
     {#if error}<p class="text-destructive text-xs">{error}</p>{/if}

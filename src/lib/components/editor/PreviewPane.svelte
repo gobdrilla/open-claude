@@ -8,7 +8,7 @@
   import PinIcon from "@lucide/svelte/icons/pin";
   import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import PlayIcon from "@lucide/svelte/icons/play";
-  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
+  import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { forge } from "$lib/git";
   import { DOTNET_FEHLT, DOTNET_URL, NUR_WINDOWS, previewKind, previewUrl, xamlRender } from "$lib/files";
@@ -134,7 +134,7 @@
       {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if}
     </Button>
     <Button variant="ghost" size="icon-xs" class="text-muted-foreground" title="Neu laden" onclick={() => n++}>
-      <RotateCwIcon />
+      <RefreshCwIcon />
     </Button>
   </div>
   {#if bad}

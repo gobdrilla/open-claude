@@ -8,9 +8,9 @@
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
+  import LayoutDashboardIcon from "@lucide/svelte/icons/layout-dashboard";
   import FlaskConicalIcon from "@lucide/svelte/icons/flask-conical";
   import PlayIcon from "@lucide/svelte/icons/play";
-  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import FileCodeIcon from "@lucide/svelte/icons/file-code";
   import FolderTreeIcon from "@lucide/svelte/icons/folder-tree";
@@ -24,6 +24,7 @@
   import { closeTab, editor, focus, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
   import { chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
+  import { MOD } from "$lib/editor.logic";
   import Dock, { type TabInfo } from "./Dock.svelte";
   import FileTree from "./FileTree.svelte";
   import CodePane from "./CodePane.svelte";
@@ -138,7 +139,7 @@
 
 {#snippet empty()}
   <Empty icon={FileCodeIcon}
-    >Datei im Baum wählen oder <kbd class="border-border/60 bg-secondary rounded border px-1 font-mono text-[10px]">Strg+P</kbd></Empty
+    >Datei im Baum wählen oder <kbd class="border-border/60 bg-secondary rounded border px-1 font-mono text-[10px]">{MOD}+P</kbd></Empty
   >
 {/snippet}
 
@@ -161,7 +162,7 @@
       size="xs"
       class="text-muted-foreground"
       disabled={!s.active || !s.files[s.active]?.dirty}
-      title="Speichern (Strg+S)"
+      title="Speichern ({MOD}+S)"
       onclick={() => save(repo)}><SaveIcon /> Speichern</Button
     >
     {#if dirty}
@@ -222,23 +223,23 @@
         size="icon-xs"
         class="text-muted-foreground"
         disabled={!r.current}
-        title="Neu starten (Strg+Umschalt+F5)"
-        onclick={() => runRestart(repo)}><RotateCwIcon /></Button
+        title="Neu starten ({MOD}+Umschalt+F5)"
+        onclick={() => runRestart(repo)}><RotateCcwIcon /></Button
       >
     </span>
     <span class="flex-1"></span>
     {@render toggle("files", "Dateien", PanelLeftIcon)}
-    {@render toggle("search", "", SearchIcon, "Suche (Strg+Umschalt+F)")}
+    {@render toggle("search", "", SearchIcon, `Suche (${MOD}+Umschalt+F)`)}
     {@render toggle("tests", "Tests", FlaskConicalIcon)}
     {@render toggle("preview", "Vorschau", PanelRightIcon)}
-    {@render toggle("problems", errors ? String(errors) : "", CircleAlertIcon, "Probleme (Strg+Umschalt+M)")}
+    {@render toggle("problems", errors ? String(errors) : "", CircleAlertIcon, `Probleme (${MOD}+Umschalt+M)`)}
     <Button
       variant="ghost"
       size="icon-xs"
       class="text-muted-foreground"
       aria-label="Layout zurücksetzen"
       title="Layout zurücksetzen: Dateien links, Editor in der Mitte; offene Dateien bleiben, ein laufender Prozess stoppt"
-      onclick={() => resetLayout(repo)}><RotateCcwIcon /></Button
+      onclick={() => resetLayout(repo)}><LayoutDashboardIcon /></Button
     >
   </div>
   <Notice bind:text={() => s.error, (v) => (s.error = v)} />

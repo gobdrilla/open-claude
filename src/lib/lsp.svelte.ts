@@ -169,6 +169,8 @@ class StoreWorkspace extends Workspace {
 
 type Conn = { client: LSPClient; ws: StoreWorkspace; exts: Map<string, Extension> };
 const clients = new Map<string, Promise<Conn | null>>();
+/** Von stop() verworfen, waehrend lsp_start noch lief. */
+const aborted = new WeakSet<Promise<Conn | null>>();
 
 // lsp-client meldet Pull-Diagnostics an (textDocument.diagnostic), fragt aber nie: rust-analyzer & Co. schicken
 // dann keine Diagnostics beim Tippen. Gilt fuer @codemirror/lsp-client 6.3.0, bei Updates pruefen.
@@ -194,6 +196,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
   let conn: Conn | null = null;
   const ch = new Channel<Out>();
   const mine = () => clients.get(key) === p;
+  const dropped = () => aborted.has(p);
   const p: Promise<Conn | null> = (async () => {
     ch.onmessage = (o) => {
       if (o.t === "msg") {
@@ -215,7 +218,11 @@ function connect(repo: string, server: string): Promise<Conn | null> {
       return null;
     }
     // Schon beendet (Exit vor der Antwort) oder Projekt geschlossen: keinen Client an einen toten Prozess haengen.
-    if (!mine()) return null;
+    if (!mine()) {
+      // stop() kam vor dem Start an: der Prozess liefe verwaist weiter. Ein neuerer Client hat ihn schon ersetzt.
+      if (dropped() && !clients.has(key)) void invoke("lsp_stop", { repo, server }).catch(() => {});
+      return null;
+    }
     const client: LSPClient = new LSPClient({
       rootUri: fileUri(repo, ""),
       workspace: (c) => new StoreWorkspace(c, repo),
@@ -345,6 +352,7 @@ export function stop(repo: string): Promise<unknown> {
     const [r, server] = key.split("\n");
     if (r !== repo) continue;
     clients.delete(key);
+    aborted.add(p);
     void p.then((c) => c?.client.disconnect());
     done.push(invoke("lsp_stop", { repo, server }).catch(() => {}));
   }

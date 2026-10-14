@@ -161,15 +161,17 @@
     const v = view;
     const text = f?.text;
     if (!v || plain || text === undefined) return;
+    // Eine aeltere Antwort, die nach einer neueren ankommt, ueberschriebe sonst die aktuellen Marken.
+    let stale = false;
     const t = setTimeout(
       () =>
         fs.gutter(repo, path, text).then(
-          (d) => v.dom.isConnected && v.dispatch({ effects: setGitMarks.of(gutterMarks(parseDiff(d)[0]?.hunks ?? [])) }),
+          (d) => !stale && v.dom.isConnected && v.dispatch({ effects: setGitMarks.of(gutterMarks(parseDiff(d)[0]?.hunks ?? [])) }),
           () => {}, // Kein Git oder Fehler: ohne Marken.
         ),
       800,
     );
-    return () => clearTimeout(t);
+    return () => ((stale = true), clearTimeout(t));
   });
 
   // Zeilenumbruch ist global: offene Editoren ziehen mit, wiederhergestellte Zustaende auch.
@@ -211,10 +213,11 @@
         <Button size="xs" variant="outline" onclick={showDiff}>Vergleichen</Button>
       </div>
     {/if}
-    {#if sv && lspKey && !s.lsp}
+    {#if sv && lspKey && !s.lsp && !s.noLsp}
       <div class="text-muted-foreground border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1 text-xs">
         <span class="mr-auto">Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.</span>
         <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>
+        <Button size="xs" variant="ghost" onclick={() => allowLsp(repo, false)}>Nicht für dieses Projekt</Button>
       </div>
     {:else if lspKey && lsp.status[lspKey]}
       <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-xs">

@@ -12,6 +12,7 @@ import {
   replaceFiles,
   rows,
   stackLinks,
+  toRepo,
   type Result,
   type TestNode,
   type Tree,
@@ -247,4 +248,15 @@ test("Stack-Links: Pfade mit Zeile, file:// entfernt", () => {
     { file: "/abs/T.cs", line: 4 },
   ]);
   assert.equal(parts.map((p) => p.text).join(""), "at f (file:///r/src/a.test.ts:5:26)\n at /abs/T.cs:line 4");
+});
+
+test("toRepo: Windows-Pfade aus file:/// und andere Schreibweise des Laufwerks", () => {
+  const repo = "C:\\Dev\\App";
+  assert.equal(toRepo(repo, "", "/c:/dev/app/src/a.test.ts"), "src/a.test.ts");
+  assert.equal(toRepo(repo, "", "c:\\DEV\\app\\T.cs"), "T.cs");
+  assert.equal(toRepo(repo, "", "/D:/x/T.cs"), "D:/x/T.cs");
+  assert.equal(toRepo(repo, "web", "src/a.ts"), "web/src/a.ts");
+  assert.equal(toRepo("/r", "", "/r/src/a.ts"), "src/a.ts");
+  assert.equal(toRepo("/r", "", "/R/src/a.ts"), "/R/src/a.ts");
+  assert.equal(toRepo("/r", "", ""), null);
 });

@@ -18,6 +18,7 @@
   import SearchIcon from "@lucide/svelte/icons/search";
   import { fs, type Hit } from "$lib/files";
   import { open } from "$lib/editor.svelte";
+  import { MOD } from "$lib/editor.logic";
 
   let { repo }: { repo: string } = $props();
 
@@ -28,10 +29,11 @@
 
   $effect(() => {
     const { q, regex, caseSensitive } = s;
-    if (!q) return void (hits = []);
+    if (!q) return void ((hits = []), (busy = false));
+    // Schon beim Tippen: sonst blitzt im Debounce "Keine Treffer." auf.
+    busy = true;
     let stale = false;
     const t = setTimeout(() => {
-      busy = true;
       fs.search(repo, q, regex, caseSensitive).then(
         (h) => !stale && ((hits = h), (error = "")),
         (e) => !stale && ((hits = []), (error = String(e))),
@@ -67,7 +69,7 @@
   </div>
   <Notice bind:text={error} timeout={0} />
   {#if !s.q || !hits.length}
-    <Empty icon={SearchIcon}>{busy ? "Suche …" : s.q ? "Keine Treffer." : "Suchbegriff eingeben (Strg+Umschalt+F)."}</Empty>
+    <Empty icon={SearchIcon}>{busy ? "Suche …" : s.q ? "Keine Treffer." : `Suchbegriff eingeben (${MOD}+Umschalt+F).`}</Empty>
   {:else}
     <div class="text-muted-foreground px-2 py-0.5 text-[10px]" role="status">
       {hits.length >= 2000 ? "Über 2000" : hits.length} Treffer in {groups.length} Dateien
