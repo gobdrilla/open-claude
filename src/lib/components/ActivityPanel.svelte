@@ -115,8 +115,15 @@
   const status = (s: string) => STATUS[s] ?? ["○", "text-muted-foreground", s];
 
   const live = $derived((data?.runs.some((r) => r.status === "running") || data?.agents.some((a) => a.state === "running") || panel?.active.some((a) => a.state === "run")) ?? false);
+  // Eingefuegt, aber noch nicht im Transkript (Prompt nicht abgeschickt): id = -n, Bild aus pasted.local.
+  const local = $derived(pasted.local[id] ?? {});
+  const pending = $derived(
+    Object.entries(local)
+      .map(([n, m]): Img => ({ id: -Number(n), at: m.at, kind: "paste", label: `Eingefügt #${n}` }))
+      .filter((p) => !data?.images.some((m) => m.kind === "paste" && m.label === p.label)),
+  );
   // Neueste Bilder zuerst
-  const imgs = $derived([...(data?.images ?? [])].reverse());
+  const imgs = $derived([...(data?.images ?? []), ...pending].reverse());
 
   let busy = false;
   async function poll() {
@@ -245,6 +252,7 @@
 
   const key = (id: number) => `${data?.session}:${id}`;
   async function load(id: number) {
+    if (id < 0) return void (urls[key(id)] = local[-id]?.url);
     const sid = data?.session;
     if (!sid) return;
     const k = `${sid}:${id}`;

@@ -62,6 +62,30 @@
   const win = navigator.userAgent.includes("Windows");
   const quote = (p: string) => (win ? `"${p}"` : `'${p.replaceAll("'", "'\\''")}'`);
 
+  // Eingefuegtes Bild selbst merken: claude legt es erst beim Absenden ins Transkript.
+  // Das hoechste "[Image #n]" im Output kurz danach ist das neue (claude zaehlt nur hoch).
+  let pend: { url: string; at: number } | null = null;
+  const dec = new TextDecoder();
+  function grab(img: Blob | null | undefined) {
+    if (img?.type.startsWith("image/")) pend = { url: URL.createObjectURL(img), at: Date.now() };
+  }
+  function claim(bytes: Uint8Array) {
+    if (!pend) return;
+    if (Date.now() - pend.at > 5000) return void (URL.revokeObjectURL(pend.url), (pend = null));
+    const ns = [...dec.decode(bytes, { stream: true }).matchAll(/\[Image #(\d+)\]/g)].map((m) => Number(m[1]));
+    if (!ns.length) return;
+    (pasted.local[id] ??= {})[Math.max(...ns)] = pend;
+    pend = null;
+  }
+  async function grabClipboard() {
+    try {
+      for (const it of await navigator.clipboard.read()) {
+        const type = it.types.find((t) => t.startsWith("image/"));
+        if (type) return grab(await it.getType(type));
+      }
+    } catch {}
+  }
+
   function onKeyEvent(e: KeyboardEvent) {
     if (e.type !== "keydown") return true;
     // Alt+E (Explorer) und Alt+G (Git-Ansicht) macht der App-Handler.
@@ -77,7 +101,10 @@
       if (!text) return true;
       navigator.clipboard.writeText(text);
     } else if (key === "v") {
-      navigator.clipboard.readText().then((t) => term?.paste(t));
+      navigator.clipboard.readText().then(async (t) => {
+        if (!t) await grabClipboard();
+        term?.paste(t);
+      });
     } else {
       return true;
     }
@@ -89,7 +116,11 @@
   onMount(() => {
     // Listener vor pty_open, damit kein frueher Output verloren geht.
     unlisten = [
-      listen<number[]>(`pty:${id}`, (e) => term?.write(new Uint8Array(e.payload))),
+      listen<number[]>(`pty:${id}`, (e) => {
+        const b = new Uint8Array(e.payload);
+        term?.write(b);
+        claim(b);
+      }),
       listen(`pty-exit:${id}`, () => onexit()),
       getCurrentWebview().onDragDropEvent((e) => {
         if (e.payload.type !== "drop" || !visible || !e.payload.paths.length) return;
@@ -131,6 +162,8 @@
       },
     });
     t.open(el);
+    // Cmd+V: Bilddaten liegen nur im paste-Event, claude holt sich das Bild selbst aus der Zwischenablage.
+    el.addEventListener("paste", (e) => grab([...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"))?.getAsFile()), true);
     // Der DOM-Renderer nimmt Block- und Linienzeichen aus der Schrift: Logo mit Luecken,
     // Trennlinien mit Zacken (Windows). WebGL zeichnet sie selbst, zellfuellend.
     try {
@@ -235,6 +268,8 @@
     for (const u of unlisten) u.then((f) => f());
     invoke("pty_close", { id }).catch(() => {});
     term?.dispose();
+    for (const m of Object.values(pasted.local[id] ?? {})) URL.revokeObjectURL(m.url);
+    delete pasted.local[id];
   });
 </script>
 
