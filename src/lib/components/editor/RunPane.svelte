@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
+  import { Unicode11Addon } from "@xterm/addon-unicode11";
   import "@xterm/xterm/css/xterm.css";
   import { Button } from "$lib/components/ui/button/index.js";
   import { paneBar } from "$lib/components/kit";
@@ -57,6 +58,7 @@
     const css = getComputedStyle(document.documentElement);
     const t = new Terminal({
       allowTransparency: true,
+      allowProposedApi: true,
       cursorStyle: "bar",
       cursorInactiveStyle: "none",
       linkHandler: LINKS,
@@ -71,6 +73,9 @@
     });
     term = t;
     t.loadAddon(fit);
+    // Emoji-Breiten wie moderne Tools (sonst verrutschen Neuzeichnungen, siehe Terminal.svelte)
+    t.loadAddon(new Unicode11Addon());
+    t.unicode.activeVersion = "11";
     t.open(el);
     // F5 & Co. gehoeren der Run-Leiste (EditorView), nicht dem Prozess.
     t.attachCustomKeyEventHandler((e) => e.key !== "F5");

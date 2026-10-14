@@ -10,6 +10,7 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { Terminal } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
+  import { Unicode11Addon } from "@xterm/addon-unicode11";
   import { WebglAddon } from "@xterm/addon-webgl";
   import "@xterm/xterm/css/xterm.css";
   import ClaudeLoader from "./ClaudeLoader.svelte";
@@ -140,6 +141,8 @@
     const t = new Terminal({
       allowTransparency: true,
       cursorBlink: true,
+      // fuer das Unicode11-Addon
+      allowProposedApi: true,
       cursorStyle: "bar",
       // Unfokussiert sonst ein Umriss-Kasten ueber dem Zeichen (v. a. auf dem Mac auffaellig).
       cursorInactiveStyle: "none",
@@ -161,6 +164,10 @@
     });
     t.loadAddon(fit);
     // "[Image #n]" aus claudes Eingabe-Echo: Klick zeigt das eingefuegte Bild im Aktivitaets-Panel.
+    // Zeichenbreiten wie claude (Emoji = 2 Zellen); mit dem Standard (Unicode 6) verrutschen Teil-Neuzeichnungen
+    // nach einem Emoji um eine Spalte und lassen alte Zeichen stehen ("💡nAAktivitaet").
+    t.loadAddon(new Unicode11Addon());
+    t.unicode.activeVersion = "11";
     t.registerLinkProvider({
       provideLinks: (y, cb) => {
         const line = t.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
