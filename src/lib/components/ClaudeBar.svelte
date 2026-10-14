@@ -2,7 +2,6 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import PlugIcon from "@lucide/svelte/icons/plug";
-  import ZapIcon from "@lucide/svelte/icons/zap";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import { Select } from "$lib/components/kit";
   import { MODES } from "$lib/claudemode";
@@ -114,12 +113,6 @@
       title="Wie gründlich Claude nachdenkt (/effort)"
       aria-label="Effort"
     />
-    <button
-      type="button"
-      class="border-border hover:text-foreground flex h-6 items-center gap-1 rounded border px-1.5"
-      title="Fast-Modus an/aus (/fast): schnellere Antworten, kostet mehr"
-      onclick={() => run("fast")}><ZapIcon class="size-3" /><span class="hidden @3xl:inline">Fast</span></button
-    >
     <button
       type="button"
       class="border-border hover:text-foreground flex h-6 items-center gap-1 rounded border px-1.5"
