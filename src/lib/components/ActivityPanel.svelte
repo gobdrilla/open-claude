@@ -124,8 +124,8 @@
       .map(([n, m]): Img => ({ id: -Number(n), at: m.at, kind: "paste", label: `Eingefügt #${n}` }))
       .filter((p) => !data?.images.some((m) => m.kind === "paste" && m.label === p.label)),
   );
-  // Neueste Bilder zuerst
-  const imgs = $derived([...(data?.images ?? []), ...pending].reverse());
+  // Neueste zuerst ueber alle Transkripte (Session und Agents); gleiche Zeit: spaeter gefunden zuerst.
+  const imgs = $derived([...(data?.images ?? []), ...pending].reverse().sort((a, b) => b.at - a.at));
 
   let busy = false;
   async function poll() {
