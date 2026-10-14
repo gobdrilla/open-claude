@@ -1,6 +1,7 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
   import { ConfirmDialog, RefreshButton } from "$lib/components/kit";
+  import { confirm } from "$lib/confirm.svelte";
   import Markdown from "$lib/components/Markdown.svelte";
   import { untrack } from "svelte";
   import { age } from "$lib/utils";
@@ -86,7 +87,7 @@
     untrack(() => reload());
   });
 
-  async function run(action: () => Promise<Release | null>) {
+  async function run(action: () => Promise<Release | null>, fail = (e: string) => (error = e)) {
     busy = true;
     error = "";
     try {
@@ -94,7 +95,7 @@
       await reload(r);
       return true;
     } catch (e) {
-      error = String(e);
+      fail(String(e));
       return false;
     } finally {
       busy = false;
@@ -106,12 +107,18 @@
   let form = $state<(ReleaseInput & { id: string | null }) | null>(null);
   let branch = $state("");
   let preview = $state(false);
+  // Fehler beim Speichern im Dialog zeigen, sonst landen sie unsichtbar hinter ihm.
+  let formError = $state("");
+  // Ausgangsstand des Formulars: Escape/Klick daneben fragt nur nach, wenn etwas geaendert wurde.
+  let formStart = "";
 
   function openForm(r: Release | null) {
     preview = false;
+    formError = "";
     form = r
       ? { id: r.id, tag: r.tag, name: r.name, body: r.body, draft: r.draft, prerelease: r.prerelease, target: null }
       : { id: null, tag: "", name: "", body: "", draft: false, prerelease: false, target: null };
+    formStart = JSON.stringify(form);
     git.status(repo).then((s) => (branch = s.branch ?? "")).catch(() => (branch = ""));
   }
 
@@ -126,8 +133,14 @@
         name: input.name.trim() || input.tag.trim(),
         target: input.target?.trim() || null,
       }),
+      (e) => (formError = e),
     );
     if (ok) form = null;
+  }
+
+  async function dismissForm() {
+    if (busy) return;
+    if (JSON.stringify(form) === formStart || (await confirm("Änderungen am Release verwerfen?", "Verwerfen"))) form = null;
   }
 
   function publish(r: Release) {
@@ -160,11 +173,10 @@
 <div class="flex h-full min-h-0 flex-col text-xs">
   <Notice bind:text={error} />
 
-  {#if !originUrl && !loading}
-    <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Kein Remote origin.</p>
-  {:else if noAccount}
-    <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">
-      Kein GitHub-/GitLab-Konto für {host} — unter Konten anmelden.
+  {#if (!originUrl && !loading) || noAccount}
+    <p class="text-muted-foreground flex items-center justify-center gap-2 px-2 py-4 text-[11px]">
+      {#if !originUrl}Kein Remote origin.{:else}Kein GitHub-/GitLab-Konto für {host} — unter Git-Konten anmelden.{/if}
+      <RefreshButton {loading} onclick={() => reload()} />
     </p>
   {:else}
     <div class="flex min-h-0 flex-1">
@@ -185,7 +197,7 @@
               onclick={() => (selected = r)}
             >
               <span class="min-w-0 flex-1">
-                <span class="block truncate text-[11px]">{r.name || r.tag}</span>
+                <span class="block truncate text-[11px]" title={r.name || r.tag}>{r.name || r.tag}</span>
                 <span class="text-muted-foreground block truncate font-mono text-[10px]">{r.tag}</span>
               </span>
               {#if r.draft}<Badge variant="outline" class="shrink-0 text-[10px]">Draft</Badge>{/if}
@@ -259,7 +271,8 @@
   {/if}
 </div>
 
-<Dialog.Root open={form !== null} onOpenChange={(o) => !o && !busy && (form = null)}>
+<!-- Funktions-Binding: Schliessen laesst sich so per Rueckfrage noch abbrechen -->
+<Dialog.Root bind:open={() => form !== null, (v) => !v && dismissForm()}>
   <Dialog.Content class="sm:max-w-lg">
     {#if form}
       {@const lockTag = form.id !== null && kind === "gitlab"}
@@ -311,6 +324,7 @@
           </div>
         {/if}
       </div>
+      {#if formError}<p class="text-destructive text-xs whitespace-pre-wrap">{formError}</p>{/if}
       <div class="flex justify-end gap-2">
         <Button variant="ghost" size="sm" disabled={busy} onclick={() => (form = null)}>Abbrechen</Button>
         <Button size="sm" disabled={busy || !form.tag.trim()} onclick={save}>{busy ? "Speichert …" : "Speichern"}</Button>

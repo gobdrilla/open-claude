@@ -119,7 +119,8 @@
   async function whole(text: string | null) {
     if (text === null || !(await discardOk())) return;
     editing = false;
-    modified = false;
+    // Abbrechen soll eine uebernommene Seite nicht stillschweigend verwerfen.
+    modified = text !== conflict?.merged;
     load(text);
   }
 
@@ -130,7 +131,8 @@
 
   // Manuelle Aenderungen neu einlesen; verbliebene Marker werden wieder zu Konflikten.
   function applyEdit() {
-    load(draft);
+    // textarea liefert nur \n; CRLF-Dateien sollen CRLF bleiben.
+    load(conflict?.merged.includes("\r\n") ? draft.replace(/\r?\n/g, "\r\n") : draft);
     editing = false;
     modified = true;
   }
@@ -141,7 +143,11 @@
     busy = true;
     error = "";
     try {
-      await git.resolve(repo, path, render(segments, choices));
+      const text = render(segments, choices);
+      // Unveraenderte Seite per checkout: Index-Blob hat LF, checkout wendet autocrlf an.
+      if (text === conflict?.ours) await git.resolveSide(repo, path, false);
+      else if (text === conflict?.theirs) await git.resolveSide(repo, path, true);
+      else await git.resolve(repo, path, text);
       modified = false;
       onclose(true);
     } catch (e) {
@@ -169,7 +175,7 @@
     if (e.key === "F7") {
       e.preventDefault();
       jump(e.shiftKey ? -1 : 1);
-    } else if (e.ctrlKey && e.key.toLowerCase() === "s") {
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
       save();
     }
@@ -305,7 +311,7 @@
             class="my-1 grid grid-cols-1 border-l-4 @3xl:grid-cols-3 {c ? 'border-primary/60' : 'border-destructive'} {n === current ? 'ring-primary/50 ring-1' : ''}"
           >
             <div class="min-w-0">
-              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-emerald-500/10 pr-1 pl-3 font-sans text-[11px]">
+              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-success/10 pr-1 pl-3 font-sans text-[11px]">
                 <span class="min-w-0 flex-1 truncate" title={sides.ours}>{sides.ours}</span>
                 <Button
                   variant="ghost"
@@ -318,7 +324,7 @@
                   <ChevronsRightIcon class="size-3.5" />
                 </Button>
               </div>
-              {@render column(p.ours, p.oursMarks, !!c && !hasOurs, "bg-emerald-500/10", "bg-emerald-500/35")}
+              {@render column(p.ours, p.oursMarks, !!c && !hasOurs, "bg-success/10", "bg-success/35")}
             </div>
             <div class="border-border min-w-0 border-y @3xl:border-x @3xl:border-y-0">
               <div class="bg-secondary/60 flex h-6 items-center gap-1 px-2 font-sans">
@@ -349,7 +355,7 @@
               {/if}
             </div>
             <div class="min-w-0">
-              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-sky-500/10 pr-3 pl-1 font-sans text-[11px]">
+              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-info/10 pr-3 pl-1 font-sans text-[11px]">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -362,7 +368,7 @@
                 </Button>
                 <span class="min-w-0 flex-1 truncate" title={sides.theirs}>{sides.theirs}</span>
               </div>
-              {@render column(p.theirs, p.theirsMarks, !!c && !hasTheirs, "bg-sky-500/10", "bg-sky-500/35")}
+              {@render column(p.theirs, p.theirsMarks, !!c && !hasTheirs, "bg-info/10", "bg-info/35")}
             </div>
           </div>
         {/if}

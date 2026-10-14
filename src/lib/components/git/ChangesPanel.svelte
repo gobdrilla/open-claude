@@ -20,7 +20,8 @@
   }: {
     repo: string;
     status: Status;
-    onchange: () => void;
+    /** remote: Remote-Stand hat sich geaendert (Push), Seitenleiste und Verlauf neu laden. */
+    onchange: (remote?: boolean) => void;
     onconflict: (path: string) => void;
     onedit?: (path: string) => void;
   } = $props();
@@ -30,7 +31,8 @@
   const unstaged = $derived(status.files.filter((f) => !f.conflict && f.worktree !== "."));
 
   let sel = $state<{ path: string; staged: boolean } | null>(null);
-  let diff = $state("");
+  // null = Diff der gewaehlten Datei laedt noch
+  let diff = $state<string | null>("");
   let error = $state("");
 
   // Nach Statuswechsel: Datei auf der anderen Seite weiter zeigen, falls sie nur dort noch liegt.
@@ -84,13 +86,16 @@
     status; // bei jedem neuen Status neu laden
     const cur = sel;
     const key = cur ? `${cur.staged}:${cur.path}` : "";
-    if (key !== shownKey) diff = "";
+    if (key !== shownKey) diff = null;
     shownKey = key;
     if (!cur) return;
     git
       .diff(repo, cur.path, cur.staged)
       .then((d) => sel === cur && (diff = d))
-      .catch((e) => (error = String(e)));
+      .catch((e) => {
+        error = String(e);
+        if (sel === cur) diff = "";
+      });
   });
 
   // busy sperrt den Commit, solange eine Aktion laeuft (sonst zwei Commits per doppeltem Strg+Enter).
@@ -204,7 +209,9 @@
 
   function reveal(f: FileChange) {
     const dir = f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
-    run(() => invoke("reveal", { path: (dir ? `${repo}/${dir}` : repo).replaceAll("/", "\\") }));
+    const p = dir ? `${repo}/${dir}` : repo;
+    // Nur Windows-Pfade umschreiben, sonst waere der Pfad auf macOS/Linux kaputt.
+    run(() => invoke("reveal", { path: repo.includes("\\") ? p.replaceAll("/", "\\") : p }));
   }
 
   // ---------- Commit ----------
@@ -243,6 +250,7 @@
       await git.push(repo, false).catch((e) => {
         throw `Commit erstellt, Push fehlgeschlagen: ${e}`;
       });
+      onchange(true);
     });
   }
 
@@ -413,7 +421,7 @@
               onclick={() => onconflict(f.path)}
             >
               <span class="w-3 shrink-0 text-center font-mono font-bold">U</span>
-              <span class="min-w-0 flex-1 truncate font-mono">{f.path}</span>
+              <span class="min-w-0 flex-1 truncate font-mono" title={f.path}>{f.path}</span>
             </button>
           {/each}
         </div>
@@ -428,7 +436,7 @@
           placeholder="Commit-Nachricht (Strg+Enter, mit Umschalt: + Push)"
           bind:value={message}
           onkeydown={(e) => {
-            if (e.key === "Enter" && e.ctrlKey) {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               // Amend braeuchte nach einem Push Force: das bleibt dem Force-Push in der Toolbar.
               commit(e.shiftKey && !amend);
@@ -464,8 +472,10 @@
     </div>
 
     <div class="min-w-0 flex-1">
-      {#if sel}
-        <DiffView {diff} {actions} />
+      {#if sel && diff === null}
+        <p class="text-muted-foreground p-3">Lädt …</p>
+      {:else if sel}
+        <DiffView diff={diff ?? ""} {actions} {busy} />
       {:else}
         <p class="text-muted-foreground p-3">Datei links auswählen.</p>
       {/if}

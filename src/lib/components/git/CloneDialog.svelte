@@ -108,18 +108,22 @@
   }
 
   async function searchRemote() {
-    if (!account || !query.trim()) {
+    const [a, q] = [account, query.trim()];
+    if (!a || !q) {
       searched = null;
       return;
     }
+    // Wie loadOwn: Antwort zu altem Konto oder alter Suche verwerfen.
+    const stale = () => account !== a || query.trim() !== q;
     loading = true;
     error = "";
     try {
-      searched = await forge.repos(account.kind, account.host, account.user, query.trim(), 1);
+      const res = await forge.repos(a.kind, a.host, a.user, q, 1);
+      if (!stale()) searched = res;
     } catch (e) {
-      error = String(e);
+      if (!stale()) error = String(e);
     }
-    loading = false;
+    if (account === a) loading = false;
   }
 
   const localHits = $derived.by(() => {

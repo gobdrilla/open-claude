@@ -23,6 +23,7 @@
     repo,
     status,
     refreshKey,
+    forgeKey,
     busy,
     track,
     onchange,
@@ -32,6 +33,8 @@
     repo: string;
     status: Status;
     refreshKey: number;
+    /** Wie in GitView: Pull Requests kosten einen API-Call, nur bei HEAD-/Remote-/Kontowechsel neu laden. */
+    forgeKey: number;
     /** Laeuft gerade eine Git-Aktion (auch aus Toolbar/Verlauf): solange ist die Seitenleiste gesperrt. */
     busy: boolean;
     track: <T>(label: string, action: () => Promise<T>) => Promise<T>;
@@ -155,7 +158,6 @@
       tags = t;
       stashes = s;
       originUrl = remotes.find((r) => r.name === "origin")?.url ?? null;
-      pulls = originUrl ? await forge.pulls(repo, originUrl).catch(() => []) : [];
     } catch (e) {
       error = String(e);
     }
@@ -167,13 +169,22 @@
     load();
   });
 
+  $effect(() => {
+    forgeKey;
+    const [r, url] = [repo, originUrl];
+    if (!url) return void (pulls = []);
+    forge
+      .pulls(r, url)
+      .catch(() => [])
+      .then((p) => r === repo && url === originUrl && (pulls = p));
+  });
+
   async function run<T>(label: string, action: () => Promise<T>) {
     if (busy) return;
     error = "";
     try {
       await track(label, action);
-      onchange();
-      await load();
+      onchange(); // zieht ueber refreshKey auch load() nach
     } catch (e) {
       error = String(e);
     }
@@ -192,10 +203,10 @@
   }
 
   // Texteingabe fuer Umbenennen / Neuer Branch.
-  let prompt = $state<{ title: string; run: (v: string) => Promise<void> } | null>(null);
+  let prompt = $state<{ title: string; action: string; run: (v: string) => Promise<void> } | null>(null);
   let promptValue = $state("");
-  function askPrompt(title: string, value: string, action: (v: string) => Promise<void>) {
-    prompt = { title, run: action };
+  function askPrompt(title: string, label: string, value: string, action: (v: string) => Promise<void>) {
+    prompt = { title, action: label, run: action };
     promptValue = value;
   }
   async function doPrompt() {
@@ -355,7 +366,7 @@
                 onclick={() => onselectref(b.sha)}
                 title={merged(b) ? `In ${base} gemergt` : undefined}
               >
-                <span class="min-w-0 flex-1 truncate font-mono">{b.name}</span>
+                <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{b.name}</span>
                 {#if b.ahead}
                   <span class="text-primary flex items-center font-mono text-[10px]"
                     ><ArrowUpIcon class="size-2.5" />{b.ahead}</span
@@ -393,12 +404,12 @@
                 <ContextItem
                   label="Umbenennen"
                   onSelect={() =>
-                    askPrompt("Branch umbenennen", b.name, (v) => git.branchRename(repo, b.name, v))}
+                    askPrompt("Branch umbenennen", "Umbenennen", b.name, (v) => git.branchRename(repo, b.name, v))}
                 />
                 <ContextItem
                   label="Neuer Branch ab hier"
                   onSelect={() =>
-                    askPrompt("Neuer Branch ab " + b.name, "", async (v) => {
+                    askPrompt("Neuer Branch ab " + b.name, "Anlegen", "", async (v) => {
                       await git.checkout(repo, v, true, b.name);
                     })}
                 />
@@ -459,7 +470,7 @@
                   onclick={() => onselectref(b.sha)}
                   title={merged(b) ? `In ${base} gemergt` : undefined}
                 >
-                  <span class="min-w-0 flex-1 truncate font-mono">{b.name.slice(remote.length + 1)}</span>
+                  <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{b.name.slice(remote.length + 1)}</span>
                 </button>
               </ContextMenu.Trigger>
               <ContextMenu.Portal>
@@ -509,7 +520,7 @@
                 class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px]"
                 onclick={() => onselectref(t.sha)}
               >
-                <span class="min-w-0 flex-1 truncate font-mono">{t.name}</span>
+                <span class="min-w-0 flex-1 truncate font-mono" title={t.name}>{t.name}</span>
               </button>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
@@ -551,7 +562,7 @@
                 class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px]"
                 onclick={() => showStash(s)}
               >
-                <span class="min-w-0 flex-1 truncate">{s.message}</span>
+                <span class="min-w-0 flex-1 truncate" title={s.message}>{s.message}</span>
                 <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{s.branch}</span>
               </button>
             </ContextMenu.Trigger>
@@ -633,6 +644,9 @@
   open={prompt !== null}
   title={prompt?.title ?? ""}
   bind:value={promptValue}
+  placeholder="feature/…"
+  action={prompt?.action}
+  mono
   onsubmit={doPrompt}
   oncancel={() => (prompt = null)}
 />

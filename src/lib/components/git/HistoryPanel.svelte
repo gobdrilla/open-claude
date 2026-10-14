@@ -233,9 +233,10 @@
     }
   }
 
-  let confirm = $state<{ title: string; message: string; run: () => Promise<void> } | null>(null);
-  function askConfirm(title: string, message: string, action: () => Promise<void>) {
-    confirm = { title, message, run: action };
+  type Tone = "destructive" | "default";
+  let confirm = $state<{ title: string; message: string; label: string; tone: Tone; run: () => Promise<void> } | null>(null);
+  function askConfirm(title: string, message: string, label: string, tone: Tone, action: () => Promise<void>) {
+    confirm = { title, message, label, tone, run: action };
   }
   async function doConfirm() {
     if (!confirm) return;
@@ -244,10 +245,10 @@
     await run(title, action);
   }
 
-  let prompt = $state<{ title: string; run: (v: string) => Promise<void> } | null>(null);
+  let prompt = $state<{ title: string; placeholder: string; run: (v: string) => Promise<void> } | null>(null);
   let promptValue = $state("");
-  function askPrompt(title: string, value: string, action: (v: string) => Promise<void>) {
-    prompt = { title, run: action };
+  function askPrompt(title: string, placeholder: string, value: string, action: (v: string) => Promise<void>) {
+    prompt = { title, placeholder, run: action };
     promptValue = value;
   }
   async function doPrompt() {
@@ -264,11 +265,11 @@
 
   function reset(sha: string, mode: ResetMode) {
     // Auch soft/mixed schreibt den Branch um und liegt im Menue direkt neben Revert.
-    const [title, message] =
+    const [title, message, label, tone]: [string, string, string, Tone] =
       mode === "hard"
-        ? ["Hart zurücksetzen", `HEAD hart auf ${sha.slice(0, 8)} zurücksetzen? Nicht committete Änderungen gehen verloren.`]
-        : [`Zurücksetzen (${mode})`, `Branch auf ${sha.slice(0, 8)} zurücksetzen? Die Änderungen bleiben erhalten.`];
-    askConfirm(title, message, async () => {
+        ? ["Hart zurücksetzen", `HEAD hart auf ${sha.slice(0, 8)} zurücksetzen? Nicht committete Änderungen gehen verloren.`, "Hart zurücksetzen", "destructive"]
+        : [`Zurücksetzen (${mode})`, `Branch auf ${sha.slice(0, 8)} zurücksetzen? Die Änderungen bleiben erhalten.`, "Zurücksetzen", "default"];
+    askConfirm(title, message, label, tone, async () => {
       await git.reset(repo, sha, mode);
     });
   }
@@ -327,7 +328,7 @@
         {#each refBadges(c.refs) as b (b.label + b.kind)}
           {@render refBadge(b)}
         {/each}
-        <span class="min-w-0 flex-1 truncate text-[11px]">{c.subject}</span>
+        <span class="min-w-0 flex-1 truncate text-[11px]" title={c.subject}>{c.subject}</span>
         <span
           class="grid size-4 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white"
           style="background:{PALETTE[hash(c.author) % PALETTE.length]}"
@@ -343,21 +344,21 @@
         <ContextItem
           label="Branch hier erstellen"
           onSelect={() =>
-            askPrompt("Neuer Branch ab " + c.sha.slice(0, 8), "", async (v) => {
+            askPrompt("Neuer Branch ab " + c.sha.slice(0, 8), "feature/…", "", async (v) => {
               await git.checkout(repo, v, true, c.sha);
             })}
         />
         <ContextItem
           label="Tag erstellen"
           onSelect={() =>
-            askPrompt("Tag ab " + c.sha.slice(0, 8), "", async (v) => {
+            askPrompt("Tag ab " + c.sha.slice(0, 8), "v1.0.0", "", async (v) => {
               await git.tagCreate(repo, v, c.sha, null);
             })}
         />
         <ContextItem
           label="Auschecken (detached)"
           onSelect={() =>
-            askConfirm("Detached auschecken", `HEAD von ${c.sha.slice(0, 8)} lösen? Änderungen ohne Branch können verloren gehen.`, async () => {
+            askConfirm("Detached auschecken", `HEAD von ${c.sha.slice(0, 8)} lösen? Änderungen ohne Branch können verloren gehen.`, "Auschecken", "default", async () => {
               await git.checkout(repo, c.sha, false, null);
             })}
         />
@@ -426,6 +427,8 @@
         {/each}
         {#if loading}
           <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
+        {:else if done && !commits.length}
+          <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Noch keine Commits.</p>
         {/if}
       {/if}
     </div>
@@ -505,7 +508,8 @@
   open={confirm !== null}
   title={confirm?.title ?? ""}
   message={confirm?.message}
-  action="Bestätigen"
+  action={confirm?.label ?? ""}
+  tone={confirm?.tone}
   onconfirm={doConfirm}
   oncancel={() => (confirm = null)}
 />
@@ -514,6 +518,9 @@
   open={prompt !== null}
   title={prompt?.title ?? ""}
   bind:value={promptValue}
+  placeholder={prompt?.placeholder}
+  action="Anlegen"
+  mono
   onsubmit={doPrompt}
   oncancel={() => (prompt = null)}
 />

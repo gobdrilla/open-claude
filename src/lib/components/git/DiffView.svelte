@@ -21,7 +21,8 @@
     diff,
     actions = [],
     empty = "Keine Änderungen.",
-  }: { diff: string; actions?: HunkAction[]; empty?: string } = $props();
+    busy = false,
+  }: { diff: string; actions?: HunkAction[]; empty?: string; busy?: boolean } = $props();
 
   const files = $derived(parseDiff(diff));
 
@@ -104,6 +105,7 @@
               variant={a.destructive ? "destructive" : "ghost"}
               size="xs"
               class="h-5 font-sans text-[11px]"
+              disabled={busy}
               onclick={() => a.run(file, hunk, sel)}
             >
               {sel.size && a.lineLabel ? a.lineLabel : a.label}

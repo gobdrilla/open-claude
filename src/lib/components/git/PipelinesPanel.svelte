@@ -1,6 +1,6 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { RefreshButton } from "$lib/components/kit";
+  import { RefreshButton, Segmented } from "$lib/components/kit";
   import { age } from "$lib/utils";
   import { git, forge, type ForgeKind, type Job, type Run, type RunAction, type RunStatus } from "$lib/git";
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
@@ -11,7 +11,7 @@
   import CircleMinusIcon from "@lucide/svelte/icons/circle-minus";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
-  import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+  import ListRestartIcon from "@lucide/svelte/icons/list-restart";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
   import SquareIcon from "@lucide/svelte/icons/square";
 
@@ -201,7 +201,7 @@
 
 {#snippet action(title: string, onclick: () => void, Icon: typeof RotateCcwIcon, busyKey: string)}
   <button
-    class="text-muted-foreground hover:text-foreground shrink-0 disabled:opacity-50"
+    class="text-muted-foreground hover:text-foreground hover:bg-accent grid size-5 shrink-0 place-items-center rounded disabled:opacity-50"
     {title}
     aria-label={title}
     disabled={!!acting}
@@ -216,7 +216,7 @@
 
 {#snippet browser(url: string)}
   <button
-    class="text-muted-foreground hover:text-foreground shrink-0"
+    class="text-muted-foreground hover:text-foreground hover:bg-accent grid size-5 shrink-0 place-items-center rounded"
     title="Im Browser öffnen"
     onclick={(e) => {
       e.stopPropagation();
@@ -229,18 +229,15 @@
 
 <div class="flex h-full min-h-0 flex-col text-xs">
   <div class="border-border flex items-center gap-2 border-b px-2 py-1.5">
-    <div class="border-border flex overflow-hidden rounded border text-[11px]">
-      <button
-        class="px-2 py-0.5 {onlyBranch ? 'text-muted-foreground hover:text-foreground' : 'bg-accent'}"
-        onclick={() => (onlyBranch = false)}>Alle Branches</button
-      >
-      <button
-        class="px-2 py-0.5 disabled:opacity-50 {onlyBranch ? 'bg-accent' : 'text-muted-foreground hover:text-foreground'}"
-        disabled={!branch}
-        title={branch ?? "Kein Branch ausgecheckt"}
-        onclick={() => (onlyBranch = true)}>Aktueller Branch</button
-      >
-    </div>
+    <!-- Ohne ausgecheckten Branch filtert "Aktueller Branch" nichts (filter()), darum dann "Alle" markiert -->
+    <Segmented
+      value={onlyBranch && !!branch}
+      options={[
+        ["Alle Branches", false],
+        ["Aktueller Branch", true, branch ?? "Kein Branch ausgecheckt"],
+      ]}
+      onchange={(v) => (onlyBranch = v)}
+    />
     <span class="text-muted-foreground min-w-0 flex-1 truncate text-[11px]">
       {kind ? label : ""}{active && visible ? " · aktualisiert alle 10 s" : ""}
     </span>
@@ -254,7 +251,7 @@
       <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Kein Remote „origin“.</p>
     {:else if noAccount && originUrl}
       <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">
-        Kein GitHub-/GitLab-Konto für {hostOf(originUrl)} – unter Konten anmelden.
+        Kein GitHub-/GitLab-Konto für {hostOf(originUrl)} – unter Git-Konten anmelden.
       </p>
     {:else}
       {#each runs as r (r.id)}
@@ -270,10 +267,10 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="shrink-0 font-medium">{r.name}</span>
-              <span class="min-w-0 truncate text-[11px]">{r.title}</span>
+              <span class="min-w-0 truncate text-[11px]" title={r.title}>{r.title}</span>
             </div>
             <div class="text-muted-foreground flex gap-2 truncate text-[10px]">
-              <span class="truncate">{r.branch}</span>
+              <span class="truncate" title={r.branch}>{r.branch}</span>
               <span>{r.event}</span>
               <span class="font-mono">{r.sha.slice(0, 7)}</span>
             </div>
@@ -287,7 +284,7 @@
               {@render action("Alle Jobs neu starten", () => act(r.id, r.id, false, "rerun"), RotateCcwIcon, `false:${r.id}`)}
             {/if}
             {#if r.status === "failure" || r.status === "cancelled"}
-              {@render action("Fehlgeschlagene Jobs neu starten", () => act(r.id, r.id, false, "rerun_failed"), RefreshCwIcon, `false:${r.id}`)}
+              {@render action("Fehlgeschlagene Jobs neu starten", () => act(r.id, r.id, false, "rerun_failed"), ListRestartIcon, `false:${r.id}`)}
             {/if}
           {/if}
           {@render browser(r.web_url)}
@@ -302,7 +299,7 @@
                 <div class="flex items-center gap-2 px-2 py-0.5">
                   {@render statusIcon(j.status)}
                   {#if j.stage}<span class="text-muted-foreground shrink-0 text-[10px]">{j.stage}</span>{/if}
-                  <span class="min-w-0 flex-1 truncate text-[11px]">{j.name}</span>
+                  <span class="min-w-0 flex-1 truncate text-[11px]" title={j.name}>{j.name}</span>
                   <span class="text-muted-foreground shrink-0 font-mono text-[10px] tabular-nums">{duration(j.duration_s)}</span>
                   {#if pending(j.status)}
                     {#if kind === "gitlab"}

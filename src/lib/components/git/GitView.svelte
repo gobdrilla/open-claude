@@ -1,7 +1,7 @@
 <script lang="ts">
   import { confirm as ask } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { ConfirmDialog, DiffDialog, PromptDialog, Tabs, menuContent, menuItem, menuSeparator } from "$lib/components/kit";
+  import { ConfirmDialog, DiffDialog, PromptDialog, RefreshButton, Tabs, menuContent, menuItem, menuSeparator } from "$lib/components/kit";
   import { tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
   import { Button } from "$lib/components/ui/button/index.js";
@@ -67,6 +67,8 @@
   let jumpTo = $state<string | null>(null);
   let busy = $state("");
   let error = $state("");
+  // Notice blendet error aus; ohne eigenes Flag stuende danach ewig "Lese Status …".
+  let loadError = $state(false);
   let note = $state("");
   let shown = $state<{ title: string; diff: string } | null>(null);
   let confirm = $state<{ title: string; message: string; label: string; run: () => Promise<unknown> } | null>(null);
@@ -84,10 +86,12 @@
     const before = `${status?.head}|${status?.branch}`;
     try {
       status = await git.status(repo);
+      loadError = false;
       // Nach Abbrechen/Fortsetzen (auch extern) steht die Datei nicht mehr im Konflikt: Editor zu, sonst zeigt er Altes.
       if (conflictPath && !status.files.some((f) => f.conflict && f.path === conflictPath)) conflictPath = null;
     } catch (e) {
       error = `Status: ${e}`;
+      loadError = true;
     }
     const moved = before !== `${status?.head}|${status?.branch}`;
     if (force || moved) refreshKey++;
@@ -130,6 +134,17 @@
     repo;
     acct = null;
     loadAccount();
+  });
+
+  // Nach An-/Abmelden: Konto neu bestimmen, Forge-Panels laden mit dem neuen Token nach.
+  let lastAccounts = untrack(() => accounts);
+  $effect(() => {
+    if (accounts === lastAccounts) return;
+    lastAccounts = accounts;
+    untrack(() => {
+      loadAccount();
+      forgeKey++;
+    });
   });
 
   /** Neues Konto setzen; Forge-Panels laden danach mit dessen Token nach. */
@@ -381,7 +396,7 @@
           (confirm = {
             title: `${STATE_LABEL[status!.state as keyof typeof STATE_LABEL]} abbrechen`,
             message: "Zum Stand vor dem Vorgang zurückkehren? Bereits gelöste Konflikte gehen verloren.",
-            label: "Abbrechen",
+            label: `${STATE_LABEL[status!.state as keyof typeof STATE_LABEL]} abbrechen`,
             run: () => git.abort(repo),
           })}>Abbrechen</Button
       >
@@ -399,6 +414,7 @@
           {repo}
           {status}
           {refreshKey}
+          {forgeKey}
           busy={!!busy}
           {track}
           onchange={refresh}
@@ -434,7 +450,7 @@
           <div class="min-h-0 flex-1">
             <!-- Einmal geoeffnet bleiben alle gemountet: Auswahl und Scrollstand ueberleben den Tabwechsel. -->
             <div class="h-full {tab === 'changes' ? '' : 'hidden'}">
-              <ChangesPanel {repo} {status} {onedit} onchange={refresh} onconflict={(p) => (conflictPath = p)} />
+              <ChangesPanel {repo} {status} {onedit} onchange={(remote = false) => refresh(remote, remote)} onconflict={(p) => (conflictPath = p)} />
             </div>
             <div class="h-full {tab === 'history' ? '' : 'hidden'}">
               <HistoryPanel {repo} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} />
@@ -462,6 +478,11 @@
           </div>
         {/if}
       </div>
+    </div>
+  {:else if loadError}
+    <div class="text-muted-foreground flex items-center gap-2 px-4 py-6">
+      Status konnte nicht gelesen werden.
+      <RefreshButton loading={false} onclick={reload} />
     </div>
   {:else if !error}
     <p class="text-muted-foreground px-4 py-6">Lese Status …</p>
