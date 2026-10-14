@@ -430,6 +430,16 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
             "description": "Datei im Editor von Open Claude öffnen und dem Nutzer zeigen, optional an einer Zeile.",
             "inputSchema": obj(json!({ "path": { "type": "string", "description": "absolut oder relativ zum Repository" }, "line": { "type": "integer", "description": "1-basiert" } }), &["path"]),
         },
+        {
+            "name": "clean_images",
+            "description": "Eingefügte Bilder aus Claude-Transkripten entfernen (Platzhalter statt base64), um Speicherplatz freizugeben. \
+                Laufende Sitzungen bleiben unangetastet. Nur auf ausdrücklichen Wunsch des Nutzers (sonst /clean-images).",
+            "inputSchema": obj(json!({
+                "args": { "type": "string", "description": "alle (Standard), 1d oder 7d (nur älter als), optional plus hier" },
+                "session": { "type": "string", "description": "Sitzungs-ID für hier" },
+            }), &[]),
+            "annotations": { "destructiveHint": true },
+        },
     ])
 }
 
@@ -464,6 +474,12 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
             let ev = json!({ "repo": ctx.repo, "path": path, "line": a["line"].as_u64() });
             ctx.app.emit("ide-open", ev).map_err(|e| e.to_string())?;
             format!("Geöffnet: {path}")
+        }
+        "clean_images" => {
+            let (days, here) = crate::images::parse(a["args"].as_str().unwrap_or(""))?;
+            let sid = here.then(|| a["session"].as_str().unwrap_or("").to_string()).filter(|s| !s.is_empty());
+            let r = crate::git::blocking(move || Ok(crate::images::clean(&crate::activity::config_dir(), days, sid.as_deref()))).await?;
+            crate::images::summary(&r)
         }
         _ => return Err(format!("Tool unbekannt: {name}")),
     };

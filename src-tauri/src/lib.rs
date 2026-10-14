@@ -31,6 +31,7 @@ mod awake;
 mod preview;
 mod deps;
 mod activity;
+mod images;
 mod workflows;
 // Test-Explorer: Testlaeufe ohne PTY, Output zeilenweise ueber einen Channel.
 mod runner;

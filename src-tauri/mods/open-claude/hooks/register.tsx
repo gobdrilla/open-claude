@@ -158,6 +158,11 @@ export const register: Register = on => {
     file ??= await $.env.get('OPEN_CLAUDE_PANEL')
     await $.env.set('OPEN_CLAUDE_PANEL', undefined)
     await $.command.register({ name: 'panel', description: 'Session-Panel ein/aus' })
+    await $.command.register({
+      name: 'clean-images',
+      description: 'Eingefügte Bilder aus Transkripten entfernen (Platz frei)',
+      argumentHint: '[alle|1d|7d] [hier]',
+    })
     const done = await next(e)
     const [usage, model] = await Promise.all([$.session.usage(), $.session.model()])
     await put($, s => ({
@@ -190,6 +195,16 @@ export const register: Register = on => {
     }
     await $.ui.open(PANE)
     return { text: 'Session-Panel geöffnet.' }
+  })
+
+  // Die App raeumt auf (MCP-Tool clean_images); "hier" braucht die eigene Sitzungs-ID.
+  on('command.run', { command: 'clean-images' }, async ($, e) => {
+    const r = await $.mcp
+      .call('plugin:open-claude:open-claude', 'clean_images', { args: e.args, session: await $.session.id() })
+      .catch((err: unknown) => ({ isError: true, content: [{ type: 'text' as const, text: `Open Claude nicht erreichbar: ${err}` }] }))
+    const text = r.content.map(c => (c.type === 'text' ? c.text : '')).join('')
+    $.ui.toast(text)
+    return { text }
   })
 
   on('session.measure', async ($, e, next) => {
