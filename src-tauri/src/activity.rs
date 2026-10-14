@@ -21,6 +21,8 @@ pub struct Activity {
     /// Agents aus dem Agent-Tool (ausserhalb von Workflows); label = description, phase = agentType
     agents: Vec<Agent>,
     images: Vec<Img>,
+    /// Eigene Prompts der Session (origin.kind = human), aelteste zuerst
+    prompts: Vec<Prompt>,
     /// Session-Daten der eingebauten Mod (siehe panel_file), unveraendert durchgereicht.
     panel: Option<Value>,
     /// Neueste Rate-Limits aller Sessions, siehe newest_limits()
@@ -132,6 +134,12 @@ pub struct Img {
     label: String,
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub struct Prompt {
+    at: u64,
+    text: String,
+}
+
 #[derive(Clone)]
 struct ImgRef {
     path: PathBuf,
@@ -159,6 +167,7 @@ struct State {
     reads: HashMap<PathBuf, HashMap<String, String>>,
     hashes: HashSet<u64>,
     imgs: Vec<(ImgRef, Img)>,
+    prompts: Vec<Prompt>,
     sums: HashMap<PathBuf, Sum>,
     done: HashMap<String, Run>,
     /// agentId -> (Zeitpunkt, Endstatus) aus dem Haupttranskript, siehe ended()
@@ -291,6 +300,16 @@ fn scan_images(st: &mut State, path: &Path) {
                     if let Some(p) = c.pointer("/input/file_path").and_then(Value::as_str) {
                         map.insert(str_of(c, "id").to_string(), p.to_string());
                     }
+                }
+            }
+        }
+        // Agent-Transkripte (isSidechain) koennen die weitergereichte Anfrage ebenfalls als human tragen.
+        if line.contains("\"origin\":{\"kind\":\"human\"") {
+            if let Some(v) = serde_json::from_str::<Value>(&line).ok().filter(|v| v.get("isSidechain") != Some(&Value::Bool(true))) {
+                let c = v.pointer("/message/content");
+                let text = c.and_then(Value::as_str).or_else(|| c?.as_array()?.iter().find(|x| str_of(x, "type") == "text")?.get("text")?.as_str());
+                if let Some(t) = text.map(str::trim).filter(|t| !t.is_empty()) {
+                    st.prompts.push(Prompt { at: iso_ms(str_of(&v, "timestamp")), text: trunc(t, 2000) });
                 }
             }
         }
@@ -706,7 +725,7 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>)> {
 fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     let p = c.join("projects").join(slug(cwd));
     let Some((sid, alive)) = session(c, cwd, &p) else {
-        return Activity { session: None, runs: vec![], agents: vec![], images: vec![], panel: None, limits: None, modes: vec![] };
+        return Activity { session: None, runs: vec![], agents: vec![], images: vec![], prompts: vec![], panel: None, limits: None, modes: vec![] };
     };
     // ponytail: max. 4 Sessions im Cache, dann alles verwerfen; LRU erst wenn das stoert
     if cache.len() >= 4 && !cache.contains_key(&sid) {
@@ -768,7 +787,7 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     }
     agents.sort_by_key(|a| (rank(&a.state), std::cmp::Reverse(a.started)));
     agents.truncate(50);
-    Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), panel: None, limits: None, modes: vec![] }
+    Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), prompts: st.prompts.clone(), panel: None, limits: None, modes: vec![] }
 }
 
 /// Nur das Session-Panel der Mod (Kopfleiste ueber dem Terminal), ohne den Rest von claude_activity.
@@ -1041,6 +1060,8 @@ mod tests {
                 // Dublette als queued_command
                 format!(r#"{{"type":"attachment","attachment":{{"type":"queued_command","imagePasteIds":[2],"prompt":[{}]}}}}"#, img("QUJD")),
                 r#"{"type":"user","message":{"content":[{"type":"text","text":"nur \"type\":\"image\" als Text"}]}}"#.into(),
+                r#"{"type":"user","timestamp":"1970-01-01T00:00:02Z","origin":{"kind":"human"},"message":{"content":"  hallo\n"}}"#.into(),
+                r#"{"type":"user","origin":{"kind":"task-notification"},"message":{"content":"<task-notification>"}}"#.into(),
                 String::new(),
             ]
             .join("\n"),
@@ -1056,6 +1077,7 @@ mod tests {
         let a = activity_in(&mut cache, &c, "/w/p", 0);
         assert_eq!(a.images.len(), 1, "halbe letzte Zeile noch nicht");
         assert_eq!((a.images[0].kind.as_str(), a.images[0].label.as_str(), a.images[0].at), ("paste", "Eingefügt #2", 1000));
+        assert_eq!(a.prompts.iter().map(|p| (p.at, p.text.as_str())).collect::<Vec<_>>(), [(2000, "hallo")]);
         append(&agent, "\n");
         let a = activity_in(&mut cache, &c, "/w/p", 0);
         assert_eq!(a.images.len(), 2);

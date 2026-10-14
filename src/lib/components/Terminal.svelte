@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  // Sichtbarer Text je Terminal-id, fuer Panels, die claudes Zustand am Bildschirm erkennen muessen.
+  export const screens = new Map<string, () => string>();
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
@@ -148,6 +153,10 @@
       theme: theme.dark ? DARK : LIGHT,
     });
     term = t;
+    screens.set(id, () => {
+      const b = t.buffer.active;
+      return Array.from({ length: t.rows }, (_, i) => b.getLine(b.viewportY + i)?.translateToString(true) ?? "").join("\n");
+    });
     t.loadAddon(fit);
     // "[Image #n]" aus claudes Eingabe-Echo: Klick zeigt das eingefuegte Bild im Aktivitaets-Panel.
     t.registerLinkProvider({
@@ -268,6 +277,7 @@
     for (const u of unlisten) u.then((f) => f());
     invoke("pty_close", { id }).catch(() => {});
     term?.dispose();
+    screens.delete(id);
     for (const m of Object.values(pasted.local[id] ?? {})) URL.revokeObjectURL(m.url);
     delete pasted.local[id];
   });

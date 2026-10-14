@@ -23,6 +23,7 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import WorkflowDialog from "$lib/components/WorkflowDialog.svelte";
   import { ptyWrite } from "$lib/files";
+  import { screens } from "$lib/components/Terminal.svelte";
   import { fromScript, metaOf, type WfFile } from "$lib/workflow.logic";
 
   type Step = { at: number; tool: string; summary: string };
@@ -52,6 +53,7 @@
     agents: Agent[];
   };
   type Img = { id: number; at: number; kind: string; label: string };
+  type Prompt = { at: number; text: string };
   type Entry = { at: number; kind: "prompt" | "text" | "tool"; tool: string; summary: string; body: string; output: string | null; error: boolean };
   // Kopie aus src-tauri/mods/open-claude/types/index.d.ts (Import scheitert an `declare module 'claude-code'`).
   type Limit = { kind: string; percentUsed: number; resetsAt?: string };
@@ -69,14 +71,14 @@
     todos: { content: string; status: string }[];
   };
   type Mode = { name: string; level: string };
-  type Activity = { session: string | null; runs: Run[]; agents: Agent[]; images: Img[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
+  type Activity = { session: string | null; runs: Run[]; agents: Agent[]; images: Img[]; prompts: Prompt[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
 
   let { cwd, id }: { cwd: string; id: string } = $props();
 
   let data = $state<Activity | null>(null);
   let error = $state("");
   let tplError = $state("");
-  let tab = $state<"session" | "wf" | "agents" | "img">("session");
+  let tab = $state<"session" | "wf" | "agents" | "img" | "prompts">("session");
   // Session-Daten der Mod im Terminal; Countdowns rechnen gegen now.
   let panel = $state<Panel | null>(null);
   let now = $state(Date.now());
@@ -250,6 +252,30 @@
     else (focus = null), (log = null);
   }
 
+  // Springen per claudes Transkript-Ansicht (Ctrl+O, dort "/" Suche): eigenes Scrollen gibt es im
+  // Vollbild-Layout nicht. Kurze Pausen, damit die Ansicht steht, bevor die naechste Taste kommt.
+  // Ist die Ansicht schon offen, wuerde Ctrl+O sie schliessen und "/…" als Slash-Command im Prompt landen;
+  // darum Zustand am Bildschirm pruefen und ohne offene Ansicht nichts tippen.
+  // shortcut: Suche nach dem Anfang der ersten Zeile, bei gleich beginnenden Prompts weiter mit n/N.
+  async function jump(p: Prompt) {
+    const q = p.text.split("\n")[0].slice(0, 30).trim();
+    const wait = () => new Promise((r) => setTimeout(r, 150));
+    const open = () => screens.get(id)?.().includes("Showing detailed transcript") ?? false;
+    try {
+      if (!open()) {
+        await invoke("pty_write", { id, data: "\x0f" });
+        // Bis 1,5 s auf den Bildschirmwechsel warten, die Ausgabe kommt asynchron ins xterm.
+        for (let i = 0; i < 10 && !open(); i++) await wait();
+        if (!open()) return void (error = "Transkript-Ansicht von claude ließ sich nicht öffnen.");
+      }
+      await invoke("pty_write", { id, data: "/" });
+      await wait();
+      await invoke("pty_write", { id, data: q + "\r" });
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   const key = (id: number) => `${data?.session}:${id}`;
   async function load(id: number) {
     if (id < 0) return void (urls[key(id)] = local[-id]?.url);
@@ -380,6 +406,7 @@
       { id: "wf", label: "Workflows" },
       { id: "agents", label: "Agents", count: data?.agents.length },
       { id: "img", label: "Bilder", count: imgs.length },
+      { id: "prompts", label: "Prompts", count: data?.prompts.length },
     ]}
   >
     {#if live}
@@ -540,6 +567,15 @@
       <p class="text-muted-foreground p-2">Keine laufende Claude-Session gefunden.</p>
     {:else if inFocus}
       {@render agentLog()}
+    {:else if tab === "prompts"}
+      {#each [...(data.prompts ?? [])].reverse() as p, i (i)}
+        <button class="hover:bg-accent/40 block w-full rounded-md px-2 py-1.5 text-left" title="In claudes Transkript springen" onclick={() => jump(p)}>
+          <div class="line-clamp-2 break-words">{p.text}</div>
+          <div class="text-muted-foreground text-[10px]">{ago(p.at)}</div>
+        </button>
+      {:else}
+        <p class="text-muted-foreground p-2">Noch keine Prompts in dieser Session.</p>
+      {/each}
     {:else if tab === "agents"}
       {#if solo.agents.length}
         <section class="border-border/60 rounded-lg border [&>ul]:border-t-0">{@render phases(solo)}</section>
