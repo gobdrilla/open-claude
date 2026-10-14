@@ -398,7 +398,7 @@
   }
 </script>
 
-<div class="bg-card flex h-full flex-col overflow-hidden rounded-xl text-xs ring-1 ring-foreground/5">
+<div class="bg-card glow flex h-full flex-col overflow-hidden rounded-xl text-xs ring-1 ring-foreground/5">
   <Tabs
     bind:value={tab}
     tabs={[

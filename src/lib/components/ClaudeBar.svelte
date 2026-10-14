@@ -80,7 +80,7 @@
 <!-- Schmal: Knoepfe nur mit Icon, Logo kleiner; Name steht im title -->
 <!-- Aussen p-2 wie Terminal, damit die Karte genauso breit ist -->
 <header class="@container shrink-0 px-2 pt-2">
-  <div class="bg-card ring-foreground/5 flex items-center gap-3 rounded-xl px-3 py-1.5 shadow-lg ring-1 shadow-black/10">
+  <div class="bg-card glow ring-foreground/5 flex items-center gap-3 rounded-xl px-3 py-1.5 shadow-lg ring-1 shadow-black/10">
   <img src="/logo.svg" alt="Logo" class="h-8 shrink-0 select-none @3xl:h-10" draggable="false" />
   <div class="text-muted-foreground ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs">
     <Select

@@ -116,6 +116,11 @@
   --font-mono: "Cascadia Code", Consolas, ui-monospace, monospace;
 }
 
+/* Dezenter Primary-Schimmer oben rechts (wie die Terminal-Karte); Grundfarbe kommt per bg-card/bg-popover. */
+@utility glow {
+  background-image: radial-gradient(ellipse at top right, color-mix(in oklch, var(--primary) 8%, transparent), transparent 60%);
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -178,7 +178,7 @@
     <!-- Aeusseres div bleibt Split-Kind (pair() misst es samt Abstand), die Karte liegt darin. -->
     <div class="flex min-h-0 min-w-0 flex-col p-1" style="flex:{grow} 1 0">
       <div
-        class="bg-card ring-foreground/5 focus-within:ring-primary/30 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg shadow-sm ring-1 shadow-black/5 transition-shadow dark:shadow-black/20"
+        class="bg-card glow ring-foreground/5 focus-within:ring-primary/30 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg shadow-sm ring-1 shadow-black/5 transition-shadow dark:shadow-black/20"
       >
         <div
           data-bar={n.id}

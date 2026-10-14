@@ -287,8 +287,7 @@
 <div class="h-full p-2 {visible ? '' : 'hidden'}">
   <!-- Dezenter Primary-Schimmer, scheint durchs transparente Terminal. -->
   <div
-    class="h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 ring-foreground/5 transition-shadow duration-300 focus-within:ring-primary/40 focus-within:shadow-primary/10"
-    style="background: radial-gradient(ellipse at top right, color-mix(in oklch, var(--primary) 8%, transparent), transparent 60%), var(--card);"
+    class="bg-card glow h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 ring-foreground/5 transition-shadow duration-300 focus-within:ring-primary/40 focus-within:shadow-primary/10"
   >
     <div class="relative h-full">
       <div bind:this={el} class="h-full"></div>
