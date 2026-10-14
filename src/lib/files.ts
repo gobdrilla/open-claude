@@ -76,8 +76,11 @@ export const xamlRender = (repo: string, path: string, content: string) =>
  * gepruefte Namen zu. Output kommt als Event "pty:<id>" (Bytes), das Ende als "pty-exit:<id>" (Exit-Code oder null);
  * ptyClose stoppt. Fuehrt Code aus dem Projekt aus: NUR auf Klick oder Taste.
  */
-export const runStart = (id: string, repo: string, dir: string, target: Target, profile?: Profile) =>
-  call<void>("run_start", { id, repo, dir, target, profile });
+export const runStart = (id: string, repo: string, dir: string, target: Target, profile?: Profile, install = false) =>
+  call<void>("run_start", { id, repo, dir, target, profile, install });
+/** Was vor dem Start fehlt (name; detail = woher und wohin); leer = nichts. install=true bei runStart installiert es. */
+export const runMissing = (repo: string, dir: string, target: Target) =>
+  call<{ name: string; detail: string }[]>("run_missing", { repo, dir, target });
 export const ptyClose = (id: string) => call<void>("pty_close", { id });
 export const ptyWrite = (id: string, data: string) => call<void>("pty_write", { id, data });
 export const ptyResize = (id: string, cols: number, rows: number) => call<void>("pty_resize", { id, cols, rows });

@@ -573,6 +573,7 @@ pub fn run() {
             pty::pty_resize,
             pty::pty_close,
             pty::run_start,
+            pty::run_missing,
             forge::forge_login,
             forge::forge_logout,
             forge::forge_import_cli,

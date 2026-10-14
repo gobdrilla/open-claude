@@ -79,6 +79,7 @@
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import UsersIcon from "@lucide/svelte/icons/users";
   import PaletteIcon from "@lucide/svelte/icons/palette";
+  import PackageIcon from "@lucide/svelte/icons/package";
   import BrainIcon from "@lucide/svelte/icons/brain";
   import GaugeIcon from "@lucide/svelte/icons/gauge";
   import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
@@ -1777,9 +1778,26 @@
   open={!!confirming.q}
   title={confirming.q?.title ?? ""}
   action={confirming.q?.action ?? ""}
+  tone={confirming.q?.tone}
+  wide={!!confirming.q?.items}
   onconfirm={() => answer(true)}
   oncancel={() => answer(false)}
 >
-  <p class="text-muted-foreground text-sm break-words whitespace-pre-line">{confirming.q?.message}</p>
+  {#if confirming.q?.message}
+    <p class="text-muted-foreground text-sm break-words whitespace-pre-line">{confirming.q.message}</p>
+  {/if}
+  {#if confirming.q?.items}
+    <ul class="border-border/60 divide-border/60 divide-y rounded-lg border">
+      {#each confirming.q.items as it (it.name)}
+        <li class="flex items-start gap-2.5 px-3 py-2">
+          <PackageIcon class="text-primary mt-0.5 size-4 shrink-0" />
+          <div class="min-w-0">
+            <div class="text-sm font-medium">{it.name}</div>
+            <div class="text-muted-foreground text-xs break-words">{it.detail}</div>
+          </div>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 </ConfirmDialog>
 

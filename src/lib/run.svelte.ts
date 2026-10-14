@@ -3,7 +3,8 @@
 // Invariante: laeuft etwas, ist das Panel RUN im Layout (runStart dockt es an, Schliessen/Zuruecksetzen stoppt).
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { RUN, activate, groupOf, mainGroup, splitAt } from "./dock.ts";
-import { fs, ptyClose, ptyWrite, runStart as startCmd } from "./files.ts";
+import { fs, ptyClose, ptyWrite, runMissing, runStart as startCmd } from "./files.ts";
+import { confirm } from "./confirm.svelte.ts";
 import { serverUrl } from "./editor.logic.ts";
 import { configs, markers, pickDefault, profileOf, scan, type RunConfig } from "./run.logic.ts";
 import { editor, setLayout } from "./editor.svelte.ts";
@@ -115,6 +116,12 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
     return;
   }
   if (r.current?.state === "running") return;
+  // Fehlt etwas (SDK, Pakete)? Erst fragen und genau sagen, was woher wohin kaeme; Abbrechen startet nicht.
+  const items = await runMissing(repo, c.dir, c.target).catch(() => []);
+  const install = items.length > 0;
+  if (install && !(await confirm("", "Installieren", "Vor dem Start fehlt:", { items, tone: "default" }))) return;
+  // Waehrend der Rueckfrage doppelt gestartet (neu lesen, TS haelt den Zustand sonst fuer unveraendert)
+  if (run(repo).current?.state === "running") return;
   setLayout(repo, groupOf(s.layout, RUN) ? activate(s.layout, RUN) : splitAt(s.layout, RUN, mainGroup(s.layout).id, "bottom"));
 
   const b = buf(repo);
@@ -152,7 +159,7 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
     await Promise.all(b.off);
     // Inzwischen gestoppt: gar nicht erst starten.
     if (!mine()) return;
-    await startCmd(id, repo, c.dir, c.target, $state.snapshot(profileOf(s.profiles, s.profile)));
+    await startCmd(id, repo, c.dir, c.target, $state.snapshot(profileOf(s.profiles, s.profile)), install);
   } catch (e) {
     if (!mine()) return;
     push(b, new TextEncoder().encode(`\x1b[31m${e}\x1b[0m\r\n`));
