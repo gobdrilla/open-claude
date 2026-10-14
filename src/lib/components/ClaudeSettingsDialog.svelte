@@ -40,10 +40,10 @@
         {
           k: "theme",
           label: "Theme",
-          hint: "Eigene Themes über /theme",
+          hint: "Auto wechselt live mit der App, Open Claude erst in neuen Sitzungen",
           type: "enum",
           def: "dark",
-          opts: [["Dunkel", "dark"], ["Hell", "light"], ["Dunkel (farbenblind)", "dark-daltonized"], ["Hell (farbenblind)", "light-daltonized"], ["Dunkel (ANSI)", "dark-ansi"], ["Hell (ANSI)", "light-ansi"]],
+          opts: [["Auto (live mit der App)", "auto"], ["Open Claude (lila)", "custom:open-claude:open-claude"], ["Dunkel", "dark"], ["Hell", "light"], ["Dunkel (farbenblind)", "dark-daltonized"], ["Hell (farbenblind)", "light-daltonized"], ["Dunkel (ANSI)", "dark-ansi"], ["Hell (ANSI)", "light-ansi"]],
         },
         { k: "editorMode", label: "Editor-Modus", type: "enum", def: "normal", opts: [["Normal", "normal"], ["Vim", "vim"]] },
         { k: "timeFormat", label: "Zeitformat", type: "enum", def: "auto", opts: [["Auto", "auto"], ["12 h", "12h"], ["24 h", "24h"]] },
@@ -317,7 +317,8 @@
   {#if f.type === "bool"}
     <Switch on={!!shown(f)} label={f.label} disabled={off} onclick={() => set(f, !shown(f))} />
   {:else if f.type === "enum"}
-    {@const v = String(shown(f))}
+    <!-- Hell/Dunkel des Open-Claude-Themes setzt die App je Sitzung selbst (pty::theme_for), darum eine Option -->
+    {@const v = String(shown(f)).replace(/^(custom:open-claude:open-claude)-light$/, "$1")}
     <!-- Unbekannter Wert (z. B. eigenes Theme) bleibt waehlbar statt still ueberschrieben -->
     <Select value={v} options={f.opts.some(([, o]) => o === v) ? f.opts : [...f.opts, [v, v] as const]} onchange={(x) => set(f, x)} disabled={off} aria-label={f.label} />
   {:else if f.type === "number"}

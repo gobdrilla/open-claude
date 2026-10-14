@@ -37,6 +37,8 @@
   let dead = false;
   // claude braucht ~2 s bis zur ersten Ausgabe; solange laufen die Clawds.
   let booting = $state(true);
+  // claude mit theme "auto" meldet sich per DECSET 2031 fuer Farbschema-Meldungen an (xterm.js kennt den Modus nicht).
+  let notify = false;
 
   // Zeilenhoehe und Zeichenabstand fuer den DOM-Renderer; WebGL rundet den Abstand auf ganze Geraetepixel.
   const base = { lineHeight: 1.2, letterSpacing: 0.3 };
@@ -149,7 +151,7 @@
       scrollback: 10000,
       smoothScrollDuration: 90,
       drawBoldTextInBrightColors: false,
-      // Nur beim Start: claude laeuft mit festem Hell/Dunkel-Theme, ein Live-Wechsel machte den Text unlesbar.
+      // Live-Wechsel nur, wenn claude mitzieht (notify), sonst bliebe sein Text in den alten Farben unlesbar.
       theme: theme.dark ? DARK : LIGHT,
     });
     term = t;
@@ -248,6 +250,12 @@
       if (m) onmode?.(m);
     });
     t.onData((data) => invoke("pty_write", { id, data }).catch(() => {}));
+    const mode2031 = (on: boolean) => (p: (number | number[])[]) => {
+      if (p.includes(2031)) notify = on;
+      return false;
+    };
+    t.parser.registerCsiHandler({ prefix: "?", final: "h" }, mode2031(true));
+    t.parser.registerCsiHandler({ prefix: "?", final: "l" }, mode2031(false));
     t.focus();
 
     const { cols, rows } = t;
@@ -270,6 +278,15 @@
       refit();
       term.focus();
     }
+  });
+
+  // App-Theme gewechselt: Farben tauschen und claude den Wechsel melden (CSI ?997;1|2n), es fragt dann per
+  // OSC 11 den neuen Hintergrund ab und faerbt um. Ohne notify (eigenes Theme) bleibt die Sitzung wie gestartet.
+  $effect(() => {
+    const dark = theme.dark;
+    if (!term || !notify) return;
+    term.options.theme = dark ? DARK : LIGHT;
+    invoke("pty_write", { id, data: `\x1b[?997;${dark ? 1 : 2}n` }).catch(() => {});
   });
 
   onDestroy(() => {

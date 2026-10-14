@@ -78,6 +78,10 @@
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import UsersIcon from "@lucide/svelte/icons/users";
+  import PaletteIcon from "@lucide/svelte/icons/palette";
+  import BrainIcon from "@lucide/svelte/icons/brain";
+  import GaugeIcon from "@lucide/svelte/icons/gauge";
+  import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
 
   type Repo = {
     path: string;
@@ -189,6 +193,16 @@
   let skillStore = $state<SkillStore>({ profiles: {}, kindProfiles: {}, projects: {} });
   let profilesOpen = $state(false);
   let claudeOpen = $state(false);
+  // Haeufige Claude-Einstellungen direkt im Menue; der volle Dialog bleibt fuer den Rest.
+  let claudeCfg = $state<ClaudeCfg | null>(null);
+  const loadClaudeCfg = () => readClaude().then((c) => (claudeCfg = c), () => (claudeCfg = null));
+  async function setClaudeCfg(key: string, value: unknown) {
+    try {
+      claudeCfg = await setClaude(key, value);
+    } catch {
+      loadClaudeCfg();
+    }
+  }
   // Sync-Fehler sichtbar in jeder Ansicht (Liste, Terminal, Git), notice gehoert nur zur Liste.
   let skillNotice = $state("");
 
@@ -1174,7 +1188,7 @@
             <span class="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full"></span>
           {/if}
         </Button>
-        <DropdownMenu.Root>
+        <DropdownMenu.Root onOpenChange={(o) => o && loadClaudeCfg()}>
           <DropdownMenu.Trigger
             class="hover:bg-accent hover:text-foreground grid size-9 place-items-center rounded-md"
             title="Einstellungen"
@@ -1227,6 +1241,37 @@
                   onchange={setMode}
                 />
               </div>
+              {#if claudeCfg}
+                <DropdownMenu.Separator class={menuSeparator} />
+                <p class="text-muted-foreground px-2 py-1 text-[10px]">Claude (neue Sitzungen)</p>
+                <div class="flex items-center gap-2 px-2 py-1.5" title="Auto wechselt Hell/Dunkel live mit der App, Lila erst in neuen Sitzungen">
+                  <PaletteIcon class="text-muted-foreground size-3.5" />
+                  <span class="flex-1">Terminal-Theme</span>
+                  <Segmented
+                    value={String(claudeCfg.theme ?? "dark").startsWith("custom:open-claude:open-claude")
+                      ? "custom:open-claude:open-claude"
+                      : claudeCfg.theme}
+                    options={[["Auto", "auto"], ["Lila", "custom:open-claude:open-claude"]] as const}
+                    onchange={(v) => setClaudeCfg("theme", v)}
+                  />
+                </div>
+                <div class="flex items-center gap-2 px-2 py-1.5">
+                  <GaugeIcon class="text-muted-foreground size-3.5" />
+                  <span class="flex-1">Effort</span>
+                  <!-- Segmented statt Select: dessen Popup ausserhalb wuerde das Menue schliessen -->
+                  <Segmented
+                    value={claudeCfg.effortLevel ?? ""}
+                    options={[["Std", "", "Standard"], ["Low", "low"], ["Mid", "medium"], ["High", "high"], ["XH", "xhigh", "Sehr hoch"], ["Max", "max"]] as const}
+                    onchange={(v) => setClaudeCfg("effortLevel", v || undefined)}
+                  />
+                </div>
+                {@render setting(
+                  "Thinking-Modus",
+                  claudeCfg.alwaysThinkingEnabled ?? true,
+                  () => setClaudeCfg("alwaysThinkingEnabled", claudeCfg?.alwaysThinkingEnabled === false ? undefined : false),
+                  BrainIcon,
+                )}
+              {/if}
               <DropdownMenu.Separator class={menuSeparator} />
               {@render setting("Among-Us-Easteregg", amongUs.on, () => ((amongUs.on = !amongUs.on), saveAmongUs()), GhostIcon)}
               {#if amongUs.on}
