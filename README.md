@@ -38,7 +38,7 @@ die Titelleiste beim Start die Installation an.
 ### Linux
 
 AppImage oder `.deb` aus den [Releases](../../releases) laden. Das AppImage braucht
-Ausführrechte (`chmod +x`), das `.deb` lässt sich mit `apt install ./atelier_*.deb`
+Ausführrechte (`chmod +x`), das `.deb` lässt sich mit `apt install ./Atelier_*.deb`
 einrichten.
 
 Voraussetzungen auf dem Rechner (fehlt `claude`, bietet die Titelleiste beim Start die Installation an):
