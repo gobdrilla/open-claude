@@ -23,10 +23,11 @@
   let {
     id,
     cwd,
+    dirs = [],
     visible,
     onexit,
     onmode,
-  }: { id: string; cwd: string; visible: boolean; onexit: () => void; onmode?: (mode: string) => void } = $props();
+  }: { id: string; cwd: string; dirs?: string[]; visible: boolean; onexit: () => void; onmode?: (mode: string) => void } = $props();
 
   let el: HTMLDivElement;
   let term: Terminal | undefined;
@@ -140,9 +141,9 @@
     const css = getComputedStyle(document.documentElement);
     const t = new Terminal({
       allowTransparency: true,
-      cursorBlink: true,
       // fuer das Unicode11-Addon
       allowProposedApi: true,
+      cursorBlink: true,
       cursorStyle: "bar",
       // Unfokussiert sonst ein Umriss-Kasten ueber dem Zeichen (v. a. auf dem Mac auffaellig).
       cursorInactiveStyle: "none",
@@ -163,11 +164,11 @@
       return Array.from({ length: t.rows }, (_, i) => b.getLine(b.viewportY + i)?.translateToString(true) ?? "").join("\n");
     });
     t.loadAddon(fit);
-    // "[Image #n]" aus claudes Eingabe-Echo: Klick zeigt das eingefuegte Bild im Aktivitaets-Panel.
     // Zeichenbreiten wie claude (Emoji = 2 Zellen); mit dem Standard (Unicode 6) verrutschen Teil-Neuzeichnungen
     // nach einem Emoji um eine Spalte und lassen alte Zeichen stehen ("💡nAAktivitaet").
     t.loadAddon(new Unicode11Addon());
     t.unicode.activeVersion = "11";
+    // "[Image #n]" aus claudes Eingabe-Echo: Klick zeigt das eingefuegte Bild im Aktivitaets-Panel.
     t.registerLinkProvider({
       provideLinks: (y, cb) => {
         const line = t.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
@@ -267,7 +268,7 @@
 
     const { cols, rows } = t;
     Promise.all(unlisten)
-      .then(() => (dead ? undefined : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light" })))
+      .then(() => (dead ? undefined : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs })))
       .then(() => {
         if (dead) return invoke("pty_close", { id });
         sent = `${cols}x${rows}`;

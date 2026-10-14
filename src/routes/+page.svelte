@@ -36,6 +36,8 @@
   import MinusIcon from "@lucide/svelte/icons/minus";
   import SquareIcon from "@lucide/svelte/icons/square";
   import XIcon from "@lucide/svelte/icons/x";
+  import LayersIcon from "@lucide/svelte/icons/layers";
+  import GroupDialog, { type RepoGroup } from "$lib/components/GroupDialog.svelte";
   import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import BotIcon from "@lucide/svelte/icons/bot";
@@ -150,7 +152,11 @@
   const RATES: [string, number][] = [["Selten", 3], ["Normal", 1], ["Oft", 0.4]];
   let input = $state<HTMLInputElement | null>(null);
   // Eine Session pro Projekt; die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
-  let sessions = $state<{ id: string; repo: Repo }[]>([]);
+  // group/dirs: Sitzung einer Repo-Gruppe, startet in repo und kennt dirs als weitere Arbeitsordner
+  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[] }[]>([]);
+  let repoGroups = $state<RepoGroup[]>([]);
+  // Gruppe im Dialog; orig = bisheriger Name (null = neu)
+  let groupEdit = $state<{ orig: string | null; g: RepoGroup } | null>(null);
   let active = $state<string | null>(null);
   // Berechtigungsmodus je Session, gelesen aus der Terminal-Fusszeile (Kopfleiste)
   let modes = $state<Record<string, string>>({});
@@ -162,6 +168,8 @@
     done: ["✓", "text-success", "Claude ist fertig"],
   };
   const activeSession = $derived(sessions.find((s) => s.id === active));
+  // Tab hervorheben: im Terminal die aktive Sitzung, sonst das Projekt der Ansicht (Gruppen nur im Terminal)
+  const tabOn = (s: (typeof sessions)[number]) => (view === "term" ? s.id === active : !s.group && s.repo.path === viewRepo?.path);
   // Aktivitaets-Panel rechts neben dem Terminal: Breite und offen/zu ueberleben den Neustart.
   let sideW = $state(stored("term.side", 360));
   let side = $state(stored("term.side.open", 1) === 1);
@@ -175,7 +183,7 @@
   $effect(() => {
     if (pasted.req && !side) untrack(toggleSide);
   });
-  const running = $derived(new Set(sessions.map((s) => s.repo.path)));
+  const running = $derived(new Set(sessions.filter((s) => !s.group).map((s) => s.repo.path)));
   // Git-Ansicht ueberdeckt Liste und Terminal; Terminals laufen darunter weiter.
   let gitRepo = $state<Repo | null>(null);
   let gitView = $state<GitView>();
@@ -472,6 +480,7 @@
     extra = (await store.get<string[]>("extra")) ?? [];
     home = await homeDir();
     pins = (await store.get<string[]>("pins")) ?? [];
+    repoGroups = (await store.get<RepoGroup[]>("repoGroups")) ?? [];
     accounts = (await store.get<Account[]>("accounts")) ?? [];
     autostart = await isEnabled().catch(() => false);
     tray = (await store.get<boolean>("tray")) ?? true;
@@ -627,10 +636,36 @@
     if (!isFree(repo) && !running.has(repo.path) && managed(skillStore, repo.path, repo.kind)) await syncSkills([repo.path]);
     leaveGit();
     editRepo = null;
-    let s = sessions.find((s) => s.repo.path === repo.path);
+    let s = sessions.find((s) => !s.group && s.repo.path === repo.path);
     // Eindeutig pro Seitenladung: nach einem Neuladen laufen alte PTYs evtl. noch unter "t1"
     if (!s) sessions.push((s = { id: crypto.randomUUID(), repo }));
     active = s.id;
+  }
+
+  /** Repo-Gruppe: eine Sitzung im Haupt-Repo, die anderen Repos als weitere Arbeitsordner. Offene zeigen. */
+  async function launchGroup(g: RepoGroup) {
+    const [main, ...rest] = g.paths.map((p) => repos.find((r) => r.path === p)).filter((r) => r !== undefined);
+    if (!main) return void (notice = `Gruppe „${g.name}“: Haupt-Repo nicht gefunden.`);
+    if (gitRepo && gitView && !(await gitView.canLeave())) return;
+    leaveGit();
+    editRepo = null;
+    let s = sessions.find((s) => s.group === g.name);
+    if (!s) sessions.push((s = { id: crypto.randomUUID(), repo: main, group: g.name, dirs: rest.map((r) => r.path) }));
+    active = s.id;
+  }
+
+  async function saveGroup(orig: string | null, g: RepoGroup) {
+    repoGroups = orig === null ? [...repoGroups, g] : repoGroups.map((x) => (x.name === orig ? g : x));
+    // Laufende Sitzung behaelt ihre Ordner bis zum Neustart, nur der Name zieht mit
+    for (const s of sessions) if (orig !== null && s.group === orig) s.group = g.name;
+    groupEdit = null;
+    await store.set("repoGroups", $state.snapshot(repoGroups));
+  }
+
+  async function deleteGroup(name: string) {
+    if (!(await confirm(`Gruppe „${name}“ löschen? Die Repos selbst bleiben unverändert.`, "Löschen"))) return;
+    repoGroups = repoGroups.filter((g) => g.name !== name);
+    await store.set("repoGroups", $state.snapshot(repoGroups));
   }
 
   /** Git-Ansicht schliessen; der Branch kann sich dort geaendert haben, Liste und Titel nachziehen. */
@@ -932,12 +967,12 @@
     if (e.key === "Escape" && (overlayOnEsc || e.defaultPrevented)) return;
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === "F1" || (ctrl && e.key === "/")) {
-      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !rootOpen && !profilesOpen) help = !help;
+      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !rootOpen && !profilesOpen && !groupEdit) help = !help;
       e.preventDefault();
       return;
     }
     // Offene Dialoge (Hilfe, Klonen, Anlegen, Konten) bekommen ihre Tasten selbst.
-    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || doomed || profilesOpen) return;
+    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || doomed || profilesOpen || groupEdit) return;
 
     if (ctrl && e.key >= "1" && e.key <= "9") {
       launch(flat[Number(e.key) - 1]?.repo);
@@ -1352,6 +1387,43 @@
               ? "Hier liegen keine Git-Repos."
               : "Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (Strg+O)."}
         </Command.Empty>
+        {#if repoGroups.length && !query.trim()}
+          <Command.Group heading="Gruppen">
+            {#each repoGroups as g (g.name)}
+              {@const live = sessions.some((s) => s.group === g.name)}
+              <ContextMenu.Root>
+                <ContextMenu.Trigger>
+                  {#snippet child({ props })}
+                    <Command.Item {...props} value={`group:${g.name}`} onSelect={() => launchGroup(g)} class="gap-3 px-3 py-2">
+                      <span class="bg-primary/15 text-primary grid size-6 place-items-center rounded-md"><LayersIcon class="size-3.5" /></span>
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-sm font-semibold">{g.name}</div>
+                        <div class="text-muted-foreground truncate text-[11px]">
+                          {g.paths.map((p) => split(repos.find((r) => r.path === p)?.rel ?? p)[1]).join(" · ")}
+                        </div>
+                      </div>
+                      {#if live}
+                        <Badge variant="outline" class="text-primary gap-1.5 text-[11px]">
+                          <span class="size-2 animate-pulse rounded-full bg-current"></span>
+                          läuft
+                        </Badge>
+                      {/if}
+                      <Badge variant="outline" class="text-muted-foreground text-[11px]">{g.paths.length} Repos</Badge>
+                    </Command.Item>
+                  {/snippet}
+                </ContextMenu.Trigger>
+                <ContextMenu.Portal>
+                  <ContextMenu.Content class={cn(menuContent, "min-w-52 rounded-lg shadow-lg")}>
+                    {@render repoItem(live ? "Zur Claude-Sitzung" : "Claude starten", "", () => launchGroup(g))}
+                    {@render repoItem("Bearbeiten …", "", () => (groupEdit = { orig: g.name, g }))}
+                    <ContextMenu.Separator class={menuSeparator} />
+                    {@render repoItem("Gruppe löschen …", "", () => deleteGroup(g.name), true)}
+                  </ContextMenu.Content>
+                </ContextMenu.Portal>
+              </ContextMenu.Root>
+            {/each}
+          </Command.Group>
+        {/if}
         {#each groups as group (group.heading)}
           <Command.Group heading={group.heading || undefined}>
             {#each group.items as item (item.repo.path)}
@@ -1404,7 +1476,7 @@
                             onpointerdown={(e) => e.stopPropagation()}
                             onclick={(e) => {
                               e.stopPropagation();
-                              const s = sessions.find((s) => s.repo.path === item.repo.path);
+                              const s = sessions.find((s) => !s.group && s.repo.path === item.repo.path);
                               if (s) endSession(s.id);
                             }}
                             aria-label="Sitzung beenden"
@@ -1475,6 +1547,7 @@
                     {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
                     {@render repoItem("Pfad kopieren", "", () => navigator.clipboard.writeText(item.repo.path))}
                     {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", "Strg+P", () => togglePin(item.repo.path))}
+                    {@render repoItem("Repo-Gruppe erstellen …", "", () => (groupEdit = { orig: null, g: { name: "", paths: [item.repo.path] } }))}
                     {#if isUnity(item.repo)}
                       <ContextMenu.Separator class={menuSeparator} />
                       {@render repoItem("Unity-Editor öffnen", "", () => openUnityEditor(item.repo))}
@@ -1502,16 +1575,21 @@
     <div class="bg-chrome border-border flex shrink-0 gap-px overflow-x-auto border-b px-1 text-[11px]" role="tablist">
       {#each sessions as s (s.id)}
         <div
-          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {s.repo.path === viewRepo?.path
+          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {tabOn(s)
             ? 'bg-background text-foreground'
             : 'text-muted-foreground hover:text-foreground'}"
         >
-          <button role="tab" aria-selected={s.repo.path === viewRepo?.path} onclick={() => openTab(s.repo)}>
-            {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{split(s.repo.rel)[1]}
+          <button
+            role="tab"
+            aria-selected={tabOn(s)}
+            onclick={() => (s.group ? (leaveGit(), (editRepo = null), (active = s.id)) : openTab(s.repo))}
+          >
+            {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
+                class="text-primary mr-1 inline size-3"
+              />{s.group}{:else}{split(s.repo.rel)[1]}{/if}
           </button>
           <button
-            class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {s.repo
-              .path === viewRepo?.path
+            class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {tabOn(s)
               ? 'opacity-100'
               : ''}"
             onclick={() => endSession(s.id)}
@@ -1530,6 +1608,7 @@
         <Terminal
           id={s.id}
           cwd={s.repo.path}
+          dirs={s.dirs}
           visible={s.id === active}
           onexit={() => closeSession(s.id)}
           onmode={(m) => (modes[s.id] = m)}
@@ -1741,6 +1820,14 @@
 </Dialog.Root>
 
 <ClaudeSettingsDialog bind:open={claudeOpen} />
+<GroupDialog
+  group={groupEdit?.g ?? null}
+  {repos}
+  taken={repoGroups.map((g) => g.name).filter((n) => n !== groupEdit?.orig)}
+  onsave={(g) => saveGroup(groupEdit?.orig ?? null, g)}
+  oncancel={() => (groupEdit = null)}
+/>
+
 <ProfilesDialog bind:open={profilesOpen} store={skillStore} {repos} repo={current?.repo.path} onsave={saveProfiles} />
 
 <UnityCloseDialog bind:path={unityClosePath} onclosed={(p) => loadUnityInfo(p, true)} />

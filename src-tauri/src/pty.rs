@@ -172,14 +172,21 @@ pub fn pty_open(
     cols: u16,
     rows: u16,
     theme: String,
+    dirs: Option<Vec<String>>,
 ) -> Result<(), String> {
+    // Repo-Gruppe: weitere Repos, die claude neben cwd kennt und bearbeiten darf. Nur vorhandene Ordner.
+    let extra: Vec<String> = dirs
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|d| Path::new(d).is_dir() && d != &cwd)
+        .collect();
     // ocui-sh liegt neben der Exe: dev target/debug, installiert packt tauri build alle Bins
     // des Pakets mit ein. Fehlt es, greift die Fallback-Shell.
     let own = std::env::current_exe()
         .map(|e| e.with_file_name(format!("ocui-sh{}", std::env::consts::EXE_SUFFIX)))
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let settings = session_settings(&app, &theme).map(|p| p.to_string_lossy().into_owned());
+    let settings = session_settings(&app, &theme, &extra).map(|p| p.to_string_lossy().into_owned());
     let (program, args) =
         shell(cfg!(windows), &own, settings.is_some(), |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
     let dirs = mod_dirs(&app);
@@ -189,6 +196,10 @@ pub fn pty_open(
     env.push(("OPEN_CLAUDE_PANEL", &panel));
     if let Some(s) = &settings {
         env.push(("OPEN_CLAUDE_SETTINGS", s));
+    }
+    // CLAUDE.md der weiteren Repos mitladen, damit claude deren Regeln und Aufbau kennt.
+    if !extra.is_empty() {
+        env.push(("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1"));
     }
     // IDE-Anbindung und MCP-Server; ohne laeuft claude trotzdem.
     let ide = crate::ide::start(&app, &ides, &id, &cwd).unwrap_or_default();
@@ -222,20 +233,37 @@ const HIDE_AGENTS: &str = r#"grep -o '"id":"[^"]*"' | sed 's/^/{/; s/$/,"content
 
 /// Settings-Datei fuer diese Session per `--settings`: Agent-Zeilen aus (HIDE_AGENTS) und, hat der User ein
 /// Open-Claude-Theme gewaehlt, das nicht zum App-Modus passt, das passende (/config nimmt keine Custom-Themes).
-fn session_settings(app: &AppHandle, mode: &str) -> Option<PathBuf> {
-    let mut settings = serde_json::json!({ "subagentStatusLine": { "type": "command", "command": HIDE_AGENTS } });
+/// `dirs` (Repo-Gruppe) werden zusaetzliche Arbeitsordner wie bei --add-dir; claude nennt sie im Systemprompt.
+fn session_settings(app: &AppHandle, mode: &str, dirs: &[String]) -> Option<PathBuf> {
     let user = std::fs::read_to_string(crate::activity::config_dir().join("settings.json")).ok();
     let user: Option<serde_json::Value> = user.and_then(|u| serde_json::from_str(&u).ok());
-    if let Some(want) = user.as_ref().and_then(|u| u.get("theme")?.as_str()).and_then(|t| theme_for(t, mode)) {
-        settings["theme"] = want.into();
-    }
-    let p = app.path().app_data_dir().ok()?.join(format!("session-{mode}.json"));
-    let text = settings.to_string();
+    let text = settings_json(mode, user.as_ref(), dirs);
+    // Je Gruppe eine eigene Datei, sonst teilen sich alle Sitzungen eines Modus eine.
+    let name = if dirs.is_empty() {
+        format!("session-{mode}.json")
+    } else {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        dirs.hash(&mut h);
+        format!("session-{mode}-{:016x}.json", h.finish())
+    };
+    let p = app.path().app_data_dir().ok()?.join(name);
     if std::fs::read_to_string(&p).ok().as_deref() != Some(&text) {
         std::fs::create_dir_all(p.parent()?).ok()?;
         std::fs::write(&p, text).ok()?;
     }
     Some(p)
+}
+
+fn settings_json(mode: &str, user: Option<&serde_json::Value>, dirs: &[String]) -> String {
+    let mut settings = serde_json::json!({ "subagentStatusLine": { "type": "command", "command": HIDE_AGENTS } });
+    if let Some(want) = user.and_then(|u| u.get("theme")?.as_str()).and_then(|t| theme_for(t, mode)) {
+        settings["theme"] = want.into();
+    }
+    if !dirs.is_empty() {
+        settings["permissions"] = serde_json::json!({ "additionalDirectories": dirs });
+    }
+    settings.to_string()
 }
 
 /// Nur zwischen den eigenen Themes wechseln; wer etwas anderes gewaehlt hat (auch auto), bleibt dabei.
@@ -1054,6 +1082,14 @@ mod tests {
         assert_eq!(theme_for("dark", "light"), None);
         assert_eq!(theme_for("custom:open-claude:open-claude", "system"), None);
     }
+    #[test]
+    fn gruppe_als_zusatzordner() {
+        let v: serde_json::Value = serde_json::from_str(&super::settings_json("dark", None, &["/w/api".into()])).unwrap();
+        assert_eq!(v["permissions"]["additionalDirectories"], serde_json::json!(["/w/api"]));
+        let v: serde_json::Value = serde_json::from_str(&super::settings_json("dark", None, &[])).unwrap();
+        assert!(v.get("permissions").is_none());
+    }
+
 
     #[test]
     fn id_nur_sichere_zeichen() {
