@@ -517,7 +517,7 @@
       kindProfiles: (await store.get<SkillStore["kindProfiles"]>("kindProfiles")) ?? {},
       projects: (await store.get<SkillStore["projects"]>("projectSkills")) ?? {},
     };
-    if (!mac) await invoke("set_tray", { on: tray });
+    await invoke("set_tray", { on: tray });
 
     // Erster Start: Dev-Ordner erst bestaetigen lassen, dann einlesen.
     if (saved == null) {
@@ -1295,11 +1295,11 @@
               sideOffset={4}
               class={cn(menuContent, "min-w-56 rounded-lg shadow-lg")}
             >
-              <!-- macOS: Dock statt Tray, Autostart ueber die Systemeinstellungen. -->
+              <!-- macOS: Autostart ueber die Systemeinstellungen. -->
               {#if !mac}
                 {@render setting("Autostart", autostart, toggleAutostart, PowerIcon)}
-                {@render setting("Schließen legt ins Tray", tray, toggleTray, InboxIcon)}
               {/if}
+              {@render setting(mac ? "Schließen legt in die Menüleiste" : "Schließen legt ins Tray", tray, toggleTray, InboxIcon)}
               {@render setting("Zugeklappt wach, solange Claude arbeitet", lidAwake, toggleLidAwake, LaptopIcon)}
               <DropdownMenu.Separator class={menuSeparator} />
               <div class="flex items-center gap-2 px-2 py-1.5">
