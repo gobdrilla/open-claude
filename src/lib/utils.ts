@@ -21,6 +21,12 @@ const AGE_STEPS: [number, string][] = [
 ];
 
 /** Kurzes Alter eines ISO-Zeitpunkts: "3 T", "2 Mo"; leer ohne Datum. */
+/** Alt+<k> als App-Kuerzel. "Dead" ist die Tottaste (US-Mac Option+E); druckbare Zeichen wie € (de-Mac Option+E)
+ *  bleiben Eingabe, sonst liesse sich € nirgends mehr tippen. AltGr setzt ctrlKey und faellt raus. */
+export function altKey(e: KeyboardEvent, k: "e" | "g"): boolean {
+  return e.altKey && !e.ctrlKey && !e.metaKey && (e.key.toLowerCase() === k || (e.key === "Dead" && e.code === `Key${k.toUpperCase()}`));
+}
+
 export function age(iso: string) {
   if (!iso) return "";
   const diff = Date.now() - Date.parse(iso);

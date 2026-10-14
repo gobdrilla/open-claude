@@ -17,6 +17,8 @@ use crate::git::blocking;
 #[derive(Serialize, Clone, Debug)]
 pub struct Activity {
     session: Option<String>,
+    /// claude laeuft in diesem cwd (sessions/*.json); sonst ist session nur das neueste Transkript
+    alive: bool,
     runs: Vec<Run>,
     /// Agents aus dem Agent-Tool (ausserhalb von Workflows); label = description, phase = agentType
     agents: Vec<Agent>,
@@ -172,6 +174,8 @@ struct State {
     done: HashMap<String, Run>,
     /// agentId -> (Zeitpunkt, Endstatus) aus dem Haupttranskript, siehe ended()
     ended: HashMap<String, (u64, String)>,
+    /// Letzter Zugriff, fuer die Verdraengung im Cache
+    used: u64,
 }
 
 /// Cache pro Session-ID: Tab-Wechsel liest nichts neu, Bild-ids bleiben je Session stabil.
@@ -238,30 +242,30 @@ fn u64_of(v: &Value, k: &str) -> u64 {
     v.get(k).and_then(Value::as_u64).unwrap_or(0)
 }
 
-/// Neue vollstaendige Zeilen ab dem gemerkten Offset; eine halbe letzte Zeile bleibt fuer den naechsten Scan.
-fn new_lines(path: &Path, offsets: &mut HashMap<PathBuf, u64>) -> Vec<(u64, String)> {
-    let Ok(mut f) = File::open(path) else { return vec![] };
-    let len = f.metadata().map_or(0, |m| m.len());
+/// Neue vollstaendige Zeilen ab dem gemerkten Offset an f; eine halbe letzte Zeile bleibt fuer den naechsten Scan.
+/// Zeilenweise gestreamt: Transkripte mit Bildern haben oft 100+ MB, ganz eingelesen lag das doppelt im Speicher.
+fn new_lines(path: &Path, offsets: &mut HashMap<PathBuf, u64>, mut f: impl FnMut(u64, &str)) {
+    let Ok(mut file) = File::open(path) else { return };
+    let len = file.metadata().map_or(0, |m| m.len());
     let off = offsets.entry(path.to_path_buf()).or_insert(0);
     if len < *off {
         *off = 0; // Datei neu geschrieben
     }
-    if len == *off || f.seek(SeekFrom::Start(*off)).is_err() {
-        return vec![];
+    if len == *off || file.seek(SeekFrom::Start(*off)).is_err() {
+        return;
     }
+    let mut r = BufReader::new(file);
     let mut buf = Vec::new();
-    if f.read_to_end(&mut buf).is_err() {
-        return vec![];
+    loop {
+        buf.clear();
+        match r.read_until(b'\n', &mut buf) {
+            Ok(n) if n > 0 && buf.ends_with(b"\n") => {
+                f(*off, &String::from_utf8_lossy(&buf[..n - 1]));
+                *off += n as u64;
+            }
+            _ => return,
+        }
     }
-    let Some(end) = buf.iter().rposition(|&b| b == b'\n') else { return vec![] };
-    let mut out = Vec::new();
-    let mut pos = 0;
-    for line in buf[..end].split(|&b| b == b'\n') {
-        out.push((*off + pos as u64, String::from_utf8_lossy(line).into_owned()));
-        pos += line.len() + 1;
-    }
-    *off += end as u64 + 1;
-    out
 }
 
 /// Bild-Quellen {type:image, source:{type:base64,...}} in Dokumentreihenfolge, mit umgebender tool_use_id.
@@ -289,12 +293,12 @@ fn content(v: &Value) -> &[Value] {
 }
 
 fn scan_images(st: &mut State, path: &Path) {
-    for (offset, line) in new_lines(path, &mut st.offsets) {
-        if let Some((id, at, status)) = ended(&line) {
+    new_lines(path, &mut st.offsets, |offset, line| {
+        if let Some((id, at, status)) = ended(line) {
             st.ended.insert(id, (at, status));
         }
         if line.contains("\"name\":\"Read\"") {
-            if let Ok(v) = serde_json::from_str::<Value>(&line) {
+            if let Ok(v) = serde_json::from_str::<Value>(line) {
                 let map = st.reads.entry(path.to_path_buf()).or_default();
                 for c in content(&v).iter().filter(|c| str_of(c, "type") == "tool_use" && str_of(c, "name") == "Read") {
                     if let Some(p) = c.pointer("/input/file_path").and_then(Value::as_str) {
@@ -305,7 +309,7 @@ fn scan_images(st: &mut State, path: &Path) {
         }
         // Agent-Transkripte (isSidechain) koennen die weitergereichte Anfrage ebenfalls als human tragen.
         if line.contains("\"origin\":{\"kind\":\"human\"") {
-            if let Some(v) = serde_json::from_str::<Value>(&line).ok().filter(|v| v.get("isSidechain") != Some(&Value::Bool(true))) {
+            if let Some(v) = serde_json::from_str::<Value>(line).ok().filter(|v| v.get("isSidechain") != Some(&Value::Bool(true))) {
                 let c = v.pointer("/message/content");
                 let text = c.and_then(Value::as_str).or_else(|| c?.as_array()?.iter().find(|x| str_of(x, "type") == "text")?.get("text")?.as_str());
                 if let Some(t) = text.map(str::trim).filter(|t| !t.is_empty()) {
@@ -314,9 +318,9 @@ fn scan_images(st: &mut State, path: &Path) {
             }
         }
         if !line.contains("\"type\":\"image\"") {
-            continue;
+            return;
         }
-        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(line) else { return };
         let mut found = Vec::new();
         images(&v, None, &mut found);
         let paste = v.get("imagePasteIds").or(v.pointer("/attachment/imagePasteIds")).and_then(Value::as_array);
@@ -339,7 +343,7 @@ fn scan_images(st: &mut State, path: &Path) {
                 Img { id, at, kind: kind.into(), label },
             ));
         }
-    }
+    });
 }
 
 /// Ende eines Agent-Tool-Agents: <task-notification> (Hintergrund) oder toolUseResult mit agentId (Vordergrund).
@@ -499,18 +503,17 @@ pub async fn claude_agent_log(cwd: String, sid: String, run: String, agent: Stri
 }
 
 fn sum_agent(st: &mut State, path: &Path) -> Sum {
-    let lines = new_lines(path, &mut st.sum_offsets);
     let s = st.sums.entry(path.to_path_buf()).or_default();
-    for (off, line) in lines {
+    new_lines(path, &mut st.sum_offsets, |off, line| {
         if off == 0 || s.prompt.is_none() && line.contains("[Workflow harness") {
-            s.prompt = serde_json::from_str(&line).ok().as_ref().and_then(prompt_of);
+            s.prompt = serde_json::from_str(line).ok().as_ref().and_then(prompt_of);
         }
         if !line.contains("\"type\":\"assistant\"") {
-            continue;
+            return;
         }
-        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(line) else { return };
         if str_of(&v, "type") != "assistant" {
-            continue;
+            return;
         }
         let at = iso_ms(str_of(&v, "timestamp"));
         if s.started == 0 {
@@ -534,7 +537,7 @@ fn sum_agent(st: &mut State, path: &Path) -> Sum {
                 _ => {}
             }
         }
-    }
+    });
     s.clone()
 }
 
@@ -725,13 +728,16 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>)> {
 fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     let p = c.join("projects").join(slug(cwd));
     let Some((sid, alive)) = session(c, cwd, &p) else {
-        return Activity { session: None, runs: vec![], agents: vec![], images: vec![], prompts: vec![], panel: None, limits: None, modes: vec![] };
+        return Activity { session: None, alive: false, runs: vec![], agents: vec![], images: vec![], prompts: vec![], panel: None, limits: None, modes: vec![] };
     };
-    // ponytail: max. 4 Sessions im Cache, dann alles verwerfen; LRU erst wenn das stoert
+    // Max. 4 Sessions im Cache; nur die am laengsten unbenutzte faellt raus, die anderen muessten sonst alles neu lesen.
     if cache.len() >= 4 && !cache.contains_key(&sid) {
-        cache.clear();
+        if let Some(old) = cache.iter().min_by_key(|(_, s)| s.used).map(|(k, _)| k.clone()) {
+            cache.remove(&old);
+        }
     }
     let st = cache.entry(sid.clone()).or_default();
+    st.used = now;
     let base = p.join(&sid);
 
     // Bilder
@@ -787,7 +793,7 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     }
     agents.sort_by_key(|a| (rank(&a.state), std::cmp::Reverse(a.started)));
     agents.truncate(50);
-    Activity { session: Some(sid), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), prompts: st.prompts.clone(), panel: None, limits: None, modes: vec![] }
+    Activity { session: Some(sid), alive: alive.is_some(), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), prompts: st.prompts.clone(), panel: None, limits: None, modes: vec![] }
 }
 
 /// Nur das Session-Panel der Mod (Kopfleiste ueber dem Terminal), ohne den Rest von claude_activity.
@@ -1171,6 +1177,60 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         put(&d.join("b.json"), r#"{"limits":[{"kind":"five_hour","percentUsed":9}]}"#);
         assert_eq!(newest_limits(&d).unwrap()[0]["percentUsed"], 9);
+    }
+
+    #[test]
+    fn neue_zeilen_halbe_bleibt() {
+        let d = tmp("lines");
+        let f = d.join("t.jsonl");
+        put(&f, "a\nbb\nhal");
+        let mut offs = HashMap::new();
+        let mut got = Vec::new();
+        new_lines(&f, &mut offs, |o, l| got.push((o, l.to_string())));
+        assert_eq!(got, [(0, "a".to_string()), (2, "bb".to_string())]);
+        append(&f, "b\n");
+        got.clear();
+        new_lines(&f, &mut offs, |o, l| got.push((o, l.to_string())));
+        assert_eq!(got, [(5, "halb".to_string())]);
+    }
+
+    #[test]
+    fn cache_verdraengt_nur_aelteste() {
+        let (c, _) = setup("lru", true);
+        let mut cache = Cache::new();
+        for (i, k) in ["s1", "s2", "s3", "s4"].iter().enumerate() {
+            cache.insert(k.to_string(), State { used: [5, 1, 7, 3][i], ..Default::default() });
+        }
+        assert!(activity_in(&mut cache, &c, "/w/p", 10).alive);
+        let mut keys: Vec<_> = cache.keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, [SID, "s1", "s3", "s4"]);
+    }
+
+    /// Lasttest: ~200 MB Transkript mit grossen Base64-Bildern. Spitzen-Speicher per `/usr/bin/time -l`:
+    /// cargo test --release --lib -- --ignored --nocapture transkript_200mb
+    #[test]
+    #[ignore]
+    fn transkript_200mb() {
+        let d = tmp("bench200");
+        let path = d.join("big.jsonl");
+        let mut f = std::io::BufWriter::new(File::create(&path).unwrap());
+        let img = "A".repeat(2 << 20);
+        for i in 0..100 {
+            writeln!(f, r#"{{"type":"user","timestamp":"2026-10-08T19:03:10.208Z","message":{{"content":[{{"type":"image","source":{{"type":"base64","media_type":"image/png","data":"{i}{img}"}}}}]}}}}"#).unwrap();
+            for _ in 0..50 {
+                writeln!(f, r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{}"}}]}}}}"#, "x".repeat(400)).unwrap();
+            }
+        }
+        drop(f);
+        drop(img);
+        let mb = fs::metadata(&path).unwrap().len() >> 20;
+        let mut st = State::default();
+        let t = std::time::Instant::now();
+        scan_images(&mut st, &path);
+        eprintln!("transkript_200mb: {mb} MB, {} Bilder, {:?}", st.imgs.len(), t.elapsed());
+        assert_eq!(st.imgs.len(), 100);
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]

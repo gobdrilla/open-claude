@@ -5,6 +5,7 @@
 
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { altKey } from "$lib/utils";
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -41,6 +42,10 @@
   let booting = $state(true);
   // claude mit theme "auto" meldet sich per DECSET 2031 fuer Farbschema-Meldungen an (xterm.js kennt den Modus nicht).
   let notify = false;
+  // Ohne notify bleiben xterm und claude in den Startfarben; die Karte wuerde aber mit dem App-Theme umfaerben
+  // (heller Text auf hell). Dann deckend in der Start-Hintergrundfarbe.
+  const startDark = theme.dark;
+  const fixedBg = $derived(!notify && theme.dark !== startDark ? (startDark ? DARK : LIGHT).background.slice(0, 7) : undefined);
 
   // Zeilenhoehe und Zeichenabstand fuer den DOM-Renderer; WebGL rundet den Abstand auf ganze Geraetepixel.
   const base = { lineHeight: 1.2, letterSpacing: 0.3 };
@@ -83,7 +88,11 @@
     if (Date.now() - pend.at > 5000) return void (URL.revokeObjectURL(pend.url), (pend = null));
     const ns = [...dec.decode(bytes, { stream: true }).matchAll(/\[Image #(\d+)\]/g)].map((m) => Number(m[1]));
     if (!ns.length) return;
-    (pasted.local[id] ??= {})[Math.max(...ns)] = pend;
+    const n = Math.max(...ns);
+    // Nach /clear zaehlt claude neu: alte Blob-URL zu gleichem n sonst nie freigegeben.
+    const old = pasted.local[id]?.[n];
+    if (old) URL.revokeObjectURL(old.url);
+    (pasted.local[id] ??= {})[n] = pend;
     pend = null;
   }
   async function grabClipboard() {
@@ -98,7 +107,7 @@
   function onKeyEvent(e: KeyboardEvent) {
     if (e.type !== "keydown") return true;
     // Alt+E (Explorer) und Alt+G (Git-Ansicht) macht der App-Handler.
-    if (e.altKey && !e.ctrlKey && ["e", "g"].includes(e.key.toLowerCase())) return false;
+    if (altKey(e, "e") || altKey(e, "g")) return false;
     // Umschalt+Esc fuehrt zur Liste zurueck; einfaches Esc bleibt bei claude (abbrechen, zurueckspringen).
     if (e.shiftKey && e.key === "Escape") return false;
     if (!e.ctrlKey) return true;
@@ -132,7 +141,8 @@
       }),
       listen(`pty-exit:${id}`, () => onexit()),
       getCurrentWebview().onDragDropEvent((e) => {
-        if (e.payload.type !== "drop" || !visible || !e.payload.paths.length) return;
+        // visible kennt nur den aktiven Tab; in Editor-/Git-Ansicht ist ein Elternteil hidden (offsetParent null).
+        if (e.payload.type !== "drop" || !visible || !el.offsetParent || !e.payload.paths.length) return;
         term?.paste(e.payload.paths.map(quote).join(" ") + " ");
         term?.focus();
       }),
@@ -312,6 +322,7 @@
 <div class="h-full p-2 {visible ? '' : 'hidden'}">
   <!-- Dezenter Primary-Schimmer, scheint durchs transparente Terminal. -->
   <div
+    style:background-color={fixedBg}
     class="bg-card glow h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 ring-foreground/5 transition-shadow duration-300 focus-within:ring-primary/40 focus-within:shadow-primary/10"
   >
     <div class="relative h-full">

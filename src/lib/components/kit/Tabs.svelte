@@ -9,7 +9,8 @@
     pill = false,
     children,
   }: {
-    tabs: { id: T; label: string; count?: number; title?: string }[];
+    /** live: davon laufen gerade so viele (pulsierender Punkt, "live/count"). */
+    tabs: { id: T; label: string; count?: number; live?: number; title?: string }[];
     value: T;
     dense?: boolean;
     pill?: boolean;
@@ -48,7 +49,10 @@
           ? 'border-primary text-foreground'
           : 'text-muted-foreground hover:text-foreground border-transparent'}"
         onclick={() => (value = t.id)}
-        >{t.label}{#if t.count}<span class="text-muted-foreground ml-1.5 tabular-nums">{t.count}</span>{/if}</button
+        >{#if t.live}<span class="bg-primary mr-1.5 inline-block size-1.5 animate-pulse rounded-full align-middle"></span>{/if}{t.label}{#if t.live}<span
+            class="text-primary ml-1.5 tabular-nums"
+            title="{t.live} laufen">{t.live}<span class="text-muted-foreground">/{t.count}</span></span
+          >{:else if t.count}<span class="text-muted-foreground ml-1.5 tabular-nums">{t.count}</span>{/if}</button
       >
     {/each}
     {@render children?.()}

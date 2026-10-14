@@ -12,11 +12,11 @@
   import { confirm } from "$lib/confirm.svelte";
   import { pasted } from "$lib/pasteimg.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import Markdown from "$lib/components/Markdown.svelte";
   import ZoomImage from "$lib/components/ZoomImage.svelte";
-  import { Tabs } from "$lib/components/kit";
+  import { Empty, Segmented, Tabs } from "$lib/components/kit";
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -29,6 +29,7 @@
   import { ptyWrite } from "$lib/files";
   import { screens } from "$lib/components/Terminal.svelte";
   import { fromScript, metaOf, type WfFile } from "$lib/workflow.logic";
+  import { chunks, tally } from "$lib/activity.logic";
 
   type Step = { at: number; tool: string; summary: string };
   type Agent = {
@@ -73,14 +74,18 @@
     turns: number;
     active: { id: string; tool: string; target: string; state: "run" | "ok" | "err" }[];
     todos: { content: string; status: string }[];
+    busy?: boolean;
+    waiting?: boolean;
   };
   type Mode = { name: string; level: string };
-  type Activity = { session: string | null; runs: Run[]; agents: Agent[]; images: Img[]; prompts: Prompt[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
+  type Activity = { session: string | null; alive: boolean; runs: Run[]; agents: Agent[]; images: Img[]; prompts: Prompt[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
 
   let { cwd, id }: { cwd: string; id: string } = $props();
 
   let data = $state<Activity | null>(null);
   let error = $state("");
+  // Fehler einer Aktion (Springen, Verlauf, Bild): eigene Zeile, error ersetzt den ganzen Inhalt und blitzt nur auf.
+  let actionError = $state("");
   let tplError = $state("");
   let tab = $state<"session" | "wf" | "agents" | "img" | "prompts">("session");
   // Session-Daten der Mod im Terminal; Countdowns rechnen gegen now.
@@ -98,10 +103,14 @@
   let bigScroller = $state<HTMLElement>();
   // Geoeffneter Agent: volle Zeitleiste statt Liste.
   let focus = $state<{ run: string; agent: string } | null>(null);
+  // Aufgeklappte Tool-Gruppen je Index; selbst gefuehrt, weil open={…} sonst bei jedem Poll zurueckspringt.
+  let openGroups = $state<Record<number, boolean>>({});
   let log = $state<Entry[] | null>(null);
   let scroller = $state<HTMLElement>();
   // Bild-URL je sichtbarer Kachel
   let thumbs = $state<Record<string, string>>({});
+  // Kacheln, deren Vorschau scheiterte (z. B. Format, das image nicht kennt): "Keine Vorschau" statt leer
+  let noThumb = $state<Record<string, boolean>>({});
   // Volles Bild der Lightbox
   let fullUrl = $state<string>();
   // Bild-id in der Lightbox (nicht Index: neue Bilder verschieben die Liste)
@@ -123,13 +132,28 @@
   };
   const status = (s: string) => STATUS[s] ?? ["○", "text-muted-foreground", s];
 
-  const live = $derived((data?.runs.some((r) => r.status === "running") || data?.agents.some((a) => a.state === "running") || panel?.active.some((a) => a.state === "run")) ?? false);
+  const runningRuns = $derived(data?.runs.filter((r) => r.status === "running").length ?? 0);
+  const runningAgents = $derived(data?.agents.filter((a) => a.state === "running").length ?? 0);
+  const live = $derived(!!runningRuns || !!runningAgents || !!panel?.active.some((a) => a.state === "run"));
+  // Status rechts in der Tab-Leiste; Glyphen und Farben wie an den Sitzungs-Tabs oben. Ohne laufendes claude
+  // kann busy in der Panel-Datei haengen geblieben sein.
+  const claudeState = $derived(
+    !data?.alive
+      ? null
+      : panel?.waiting
+        ? (["?", "text-warning font-bold", "wartet auf dich"] as const)
+        : panel?.busy
+          ? (["◐", "text-primary animate-pulse", "Claude arbeitet"] as const)
+          : null,
+  );
   // Eingefuegt, aber noch nicht im Transkript (Prompt nicht abgeschickt): id = -n, Bild aus pasted.local.
   const local = $derived(pasted.local[id] ?? {});
+  // Im Transkript angekommen: dasselbe n, nicht aelter als die Einfuegung (nach /clear zaehlt claude neu ab 1).
+  const arrived = (d: Activity | null, n: string, at: number) => !!d?.images.some((m) => m.kind === "paste" && m.label === `Eingefügt #${n}` && m.at >= at);
   const pending = $derived(
     Object.entries(local)
-      .map(([n, m]): Img => ({ id: -Number(n), at: m.at, kind: "paste", label: `Eingefügt #${n}` }))
-      .filter((p) => !data?.images.some((m) => m.kind === "paste" && m.label === p.label)),
+      .filter(([n, m]) => !arrived(data, n, m.at))
+      .map(([n, m]): Img => ({ id: -Number(n), at: m.at, kind: "paste", label: `Eingefügt #${n}` })),
   );
   // Neueste zuerst ueber alle Transkripte (Session und Agents); gleiche Zeit: spaeter gefunden zuerst.
   const imgs = $derived([...(data?.images ?? []), ...pending].reverse().sort((a, b) => b.at - a.at));
@@ -144,6 +168,10 @@
       const d = await invoke<Activity>("claude_activity", { cwd: c, id: i });
       // Halb geschriebene Datei liefert null: letzten Wert behalten.
       if (c === cwd && i === id) (data = d), (panel = d.panel ?? panel), (now = Date.now()), (error = "");
+      // Uebernommene Einfuegungen freigeben, sonst sammeln sich Blob-URLs bis zum Schliessen des Terminals.
+      if (c === cwd && i === id)
+        for (const [n, m] of Object.entries(pasted.local[i] ?? {}))
+          if (arrived(d, n, m.at)) URL.revokeObjectURL(m.url), delete pasted.local[i][Number(n)];
       // Laufender Agent: Zeitleiste mitziehen; fertiger wird nur einmal geladen.
       if (focus && (!log || focused?.a.state === "running")) loadLog();
       if (tab === "wf") loadTemplates();
@@ -165,6 +193,8 @@
     data = null;
     panel = null;
     thumbs = {};
+    noThumb = {};
+    actionError = "";
     shown = null;
     focus = null;
     log = null;
@@ -236,13 +266,15 @@
       log = l;
       if (stick) requestAnimationFrame(() => el!.scrollTo({ top: el!.scrollHeight }));
     } catch (e) {
-      if (f === focus) (log = []), (error = String(e));
+      if (f === focus) (log = []), (actionError = String(e));
     }
   }
 
   function openAgent(r: Run, a: Agent) {
     focus = { run: r.id, agent: a.id };
+    actionError = "";
     log = null;
+    openGroups = {};
     (big ? bigScroller : scroller)?.scrollTo({ top: 0 });
     loadLog();
   }
@@ -268,18 +300,19 @@
     const q = p.text.split("\n")[0].slice(0, 30).trim();
     const wait = () => new Promise((r) => setTimeout(r, 150));
     const open = () => screens.get(id)?.().includes("Showing detailed transcript") ?? false;
+    actionError = "";
     try {
       if (!open()) {
         await invoke("pty_write", { id, data: "\x0f" });
         // Bis 1,5 s auf den Bildschirmwechsel warten, die Ausgabe kommt asynchron ins xterm.
         for (let i = 0; i < 10 && !open(); i++) await wait();
-        if (!open()) return void (error = "Transkript-Ansicht von claude ließ sich nicht öffnen.");
+        if (!open()) return void (actionError = "Transkript-Ansicht von claude ließ sich nicht öffnen.");
       }
       await invoke("pty_write", { id, data: "/" });
       await wait();
       await invoke("pty_write", { id, data: q + "\r" });
     } catch (e) {
-      error = String(e);
+      actionError = String(e);
     }
   }
 
@@ -307,14 +340,18 @@
     if (!url && sid) {
       url = await invoke<string>("claude_thumb", { sid, id }).catch(() => undefined);
       if (url) thumbCache.set(k, url);
+      else if (k === key(id)) noThumb[k] = true;
     }
     if (url && k === key(id)) thumbs[k] = url;
   }
 
+  // Nur an id und Session haengen (shownId, sessionId unten): current ist nach jedem Poll ein neues Objekt,
+  // das setzte den Zoom der Lightbox zurueck.
   $effect(() => {
-    const c = current;
+    const i = shownId;
+    void sessionId;
     fullUrl = undefined;
-    if (c) full(c.id).then((u) => current?.id === c.id && (fullUrl = u));
+    if (i !== undefined) untrack(() => full(i)).then((u) => current?.id === i && (fullUrl = u));
   });
 
   // Vorschau erst laden, wenn die Kachel in die Naehe der Sicht kommt.
@@ -410,11 +447,14 @@
     if (r?.id !== id || !data) return;
     const m = imgs.find((m) => m.kind === "paste" && m.label === `Eingefügt #${r.n}`);
     if (m) shown = m.id;
+    else actionError = `Bild #${r.n} noch nicht im Transkript.`;
     pasted.req = null;
   });
 
   const index = $derived(imgs.findIndex((m) => m.id === shown));
   const current = $derived(index < 0 ? null : imgs[index]);
+  const shownId = $derived(current?.id);
+  const sessionId = $derived(data?.session);
   function step(d: number) {
     if (index < 0) return;
     shown = imgs[(index + d + imgs.length) % imgs.length].id;
@@ -432,15 +472,18 @@
     bind:value={tab}
     tabs={[
       { id: "session", label: "Session" },
-      { id: "wf", label: "Workflows" },
-      { id: "agents", label: "Agents", count: data?.agents.length },
+      { id: "wf", label: "Workflows", count: data?.runs.length, live: runningRuns },
+      { id: "agents", label: "Agents", count: data?.agents.length, live: runningAgents },
       { id: "img", label: "Bilder", count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
     ]}
   >
-    {#if live}
+    {#if claudeState}
+      {@const [i, c, t] = claudeState}
+      <span class="text-foreground ml-auto flex items-center gap-1.5 pr-1 text-[11px]"><span class={c}>{i}</span>{t}</span>
+    {:else if live}
       <span class="text-muted-foreground ml-auto flex items-center gap-1.5 pr-1 text-[11px]">
-        <span class="bg-primary size-1.5 animate-pulse rounded-full"></span>live
+        <span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{runningRuns ? "Workflow läuft" : runningAgents ? "Agents laufen" : "läuft"}
       </span>
     {/if}
   </Tabs>
@@ -449,7 +492,7 @@
     <!-- Ausserhalb des Scrollbereichs: sticky lag dort ueber breitem Inhalt. -->
     <div class="border-border shrink-0 border-b px-2 py-1.5 text-xs">
       <button class="text-muted-foreground hover:text-foreground flex max-w-full items-center gap-0.5" onclick={() => (focus = null)}>
-        <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate">{focused?.r.name ?? "Zurück"}</span>
+        <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate" title={focused?.r.name}>{focused?.r.name ?? "Zurück"}</span>
       </button>
       {@render agentHead()}
     </div>
@@ -472,20 +515,22 @@
             <span class="text-muted-foreground min-w-0 flex-1 truncate" title={x.description}>{x.description}</span>
             <button
               class="hover:text-foreground text-muted-foreground disabled:opacity-40"
-              disabled={!data?.session}
-              title={data?.session ? "In die Claude-Session schreiben (Enter selbst drücken)" : "Keine laufende Claude-Session"}
+              disabled={!data?.alive}
+              title={data?.alive ? "In die Claude-Session schreiben (Enter selbst drücken)" : "Kein laufendes claude in diesem Terminal-Ordner"}
               aria-label="Starten"
               onclick={() => startTemplate(x.f)}><PlayIcon class="size-3.5" /></button
             >
             <button
-              class="hover:text-foreground text-muted-foreground disabled:invisible"
+              class="hover:text-foreground text-muted-foreground disabled:opacity-40"
               disabled={!x.builder}
+              title={x.builder ? "Bearbeiten" : "Freies Skript: nur in einer Datei bearbeitbar"}
               aria-label="Bearbeiten"
               onclick={() => editTemplate(x.f)}><PencilIcon class="size-3.5" /></button
             >
             <button
               class="hover:text-destructive text-muted-foreground disabled:opacity-40"
               disabled={!/^[A-Za-z0-9_-]+$/.test(x.f.file)}
+              title={/^[A-Za-z0-9_-]+$/.test(x.f.file) ? "Löschen" : "Dateiname mit Sonderzeichen: nur von Hand löschbar"}
               aria-label="Löschen"
               onclick={() => deleteTemplate(x.f, x.name)}><Trash2Icon class="size-3.5" /></button
             >
@@ -496,10 +541,16 @@
         {#if tplError}<p class="text-destructive border-border/60 border-t px-2 py-1">{tplError}</p>{/if}
       </section>
     {/if}
+    {#if actionError && !error}
+      <p class="text-destructive bg-destructive/10 mb-2 flex items-start gap-2 rounded-md px-2 py-1">
+        <span class="min-w-0 flex-1 break-words">{actionError}</span>
+        <button class="hover:text-foreground shrink-0" aria-label="Meldung schließen" onclick={() => (actionError = "")}>✕</button>
+      </p>
+    {/if}
     {#if error}
       <p class="text-destructive p-2">{error}</p>
     {:else if !data}
-      <p class="text-muted-foreground p-2">Lade …</p>
+      <Empty>Lade …</Empty>
     {:else if tab === "session"}
       <!-- Limits gelten kontoweit: auch vor der ersten Antwort dieser Session, siehe newest_limits() -->
       {@const lims = (["five_hour", "seven_day"] as const).flatMap((k) => (data!.limits ?? panel?.limits ?? []).filter((l) => l.kind === k).slice(0, 1).map((l) => [k, l] as const))}
@@ -593,23 +644,23 @@
         {/if}
       {/if}
     {:else if !data.session}
-      <p class="text-muted-foreground p-2">Keine laufende Claude-Session gefunden.</p>
+      <Empty>Keine laufende Claude-Session gefunden.</Empty>
     {:else if inFocus}
       {@render agentLog()}
     {:else if tab === "prompts"}
       {#each [...(data.prompts ?? [])].reverse() as p, i (i)}
-        <button class="hover:bg-accent/40 block w-full rounded-md px-2 py-1.5 text-left" title="In claudes Transkript springen" onclick={() => jump(p)}>
+        <button class="hover:bg-accent/40 block w-full rounded-md px-2 py-1.5 text-left" title={p.text} aria-label="In claudes Transkript springen: {p.text.slice(0, 80)}" onclick={() => jump(p)}>
           <div class="line-clamp-2 break-words">{p.text}</div>
           <div class="text-muted-foreground text-[10px]">{ago(p.at)}</div>
         </button>
       {:else}
-        <p class="text-muted-foreground p-2">Noch keine Prompts in dieser Session.</p>
+        <Empty>Noch keine Prompts in dieser Session.</Empty>
       {/each}
     {:else if tab === "agents"}
       {#if solo.agents.length}
         <section class="border-border/60 rounded-lg border [&>ul]:border-t-0">{@render phases(solo)}</section>
       {:else}
-        <p class="text-muted-foreground p-2">Keine Agents in dieser Session.</p>
+        <Empty>Keine Agents in dieser Session.</Empty>
       {/if}
     {:else if tab === "wf"}
       {#each data.runs as r (r.id)}
@@ -623,7 +674,7 @@
               onclick={() => (openRuns[r.id] = !open)}
             >
               <span class={color} title={text}>{icon}</span>
-              <span class="min-w-0 flex-1 truncate font-medium">{r.name}</span>
+              <span class="min-w-0 flex-1 truncate font-medium" title={r.name}>{r.name}</span>
               <span class="text-muted-foreground shrink-0 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
             </button>
             <button class="text-muted-foreground hover:text-foreground shrink-0 p-1.5" title="Groß anzeigen" aria-label="Groß anzeigen" onclick={() => openBig(r)}
@@ -640,7 +691,8 @@
         {#each imgs as m (key(m.id))}
           <button class="group min-w-0 text-left" onclick={() => (shown = m.id)} title={m.label}>
             <div use:lazy={m.id} class="bg-background/40 group-hover:ring-primary/40 aspect-video overflow-hidden rounded-md ring-1 ring-foreground/5">
-              {#if thumbs[key(m.id)]}<img src={thumbs[key(m.id)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />{/if}
+              {#if thumbs[key(m.id)]}<img src={thumbs[key(m.id)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />
+              {:else if noThumb[key(m.id)]}<span class="text-muted-foreground grid h-full place-items-center text-[10px]">Keine Vorschau</span>{/if}
             </div>
             <div class="mt-1 truncate text-xs">{m.label}</div>
             <div class="text-muted-foreground truncate text-[10px]">{ago(m.at)}</div>
@@ -648,7 +700,7 @@
         {/each}
       </div>
     {:else}
-      <p class="text-muted-foreground p-2">Noch keine Bilder in dieser Session.</p>
+      <Empty>Noch keine Bilder in dieser Session.</Empty>
     {/if}
   </div>
 </div>
@@ -659,7 +711,7 @@
     {@const [ai, ac, at] = status(a.state)}
     <div class="mt-1 flex items-center gap-2">
       <span class={ac} title={at}>{ai}</span>
-      <span class="min-w-0 flex-1 truncate font-medium">{a.label || a.id}</span>
+      <span class="min-w-0 flex-1 truncate font-medium" title={a.label || a.id}>{a.label || a.id}</span>
     </div>
     <div class="text-muted-foreground mt-0.5 truncate pl-5 tabular-nums">
       {[at, a.phase, dur(agentDur(r, a)), `${a.tool_calls} Tools`, a.tokens ? tokens(a.tokens) : ""].filter(Boolean).join(" · ")}
@@ -669,47 +721,47 @@
 
 {#snippet agentLog()}
   {#if !focused}
-    <p class="text-muted-foreground p-2">Agent nicht mehr in der Liste.</p>
+    <Empty>Agent nicht mehr in der Liste.</Empty>
   {:else if !log}
-    <p class="text-muted-foreground p-2">Lade Verlauf …</p>
+    <Empty>Lade Verlauf …</Empty>
   {:else}
     {@const a = focused.a}
+    {@const cs = chunks(log)}
     <ol class="space-y-1">
-      {#each log as e, i (i)}
+      {#each cs as c, i (i)}
         <li>
-          {#if e.kind === "prompt"}
-            <details class="bg-secondary/50 rounded-md px-2 py-1">
-              <summary class="text-muted-foreground cursor-pointer">Auftrag</summary>
-              <pre class="mt-1 max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
-            </details>
-          {:else if e.kind === "text"}
-            <!-- Breite Tabellen/Code scrollen hier, nicht das ganze Panel unter die Kopfzeile. -->
-            <div class="border-primary/40 min-w-0 overflow-x-auto border-l-2 py-0.5 pl-2"><Markdown text={e.body} /></div>
+          {#if !c.tools}
+            {@const e = c.e}
+            {#if e.kind === "prompt"}
+              <details class="bg-secondary/50 rounded-md px-2 py-1">
+                <summary class="text-muted-foreground cursor-pointer">Auftrag</summary>
+                <pre class="mt-1 max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
+              </details>
+            {:else}
+              <!-- Breite Tabellen/Code scrollen hier, nicht das ganze Panel unter die Kopfzeile. -->
+              <div class="border-primary/40 min-w-0 overflow-x-auto border-l-2 py-0.5 pl-2"><Markdown text={e.body} /></div>
+            {/if}
+          {:else if c.tools.length === 1}
+            {@render toolRow(c.tools[0], a)}
           {:else}
-            {@const [si, sc, st] =
-              e.output !== null
-                ? e.error
-                  ? ["✕", "text-destructive", "Fehler"]
-                  : ["✓", "text-success", "fertig"]
-                : a.state === "running"
-                  ? ["◐", "text-primary animate-pulse", "läuft"]
-                  : ["⊘", "text-muted-foreground", "ohne Ergebnis"]}
-            <details class="hover:bg-accent/40 open:bg-accent/30 rounded-md">
-              <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-[11px]">
-                <span class="text-muted-foreground shrink-0 tabular-nums">{e.at ? clock(e.at) : ""}</span>
-                <span class="shrink-0 {sc}" title={st}>{si}</span>
-                <span class="text-foreground shrink-0">{e.tool}</span>
-                <span class="text-muted-foreground min-w-0 truncate">{e.summary}</span>
+            {@const err = c.tools.filter((e) => e.error).length}
+            <!-- Laufender Agent: letzte Gruppe offen, damit man sieht, was gerade passiert. -->
+            {@const op = openGroups[i] ?? (a.state === "running" && i === cs.length - 1)}
+            <details class="group/tools rounded-md" open={op}>
+              <summary
+                onclick={(ev) => {
+                  ev.preventDefault();
+                  openGroups[i] = !op;
+                }}
+                class="text-muted-foreground hover:bg-accent/40 flex cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]">
+                <ChevronRightIcon class="size-3 shrink-0 group-open/tools:rotate-90" />
+                <span class="text-foreground shrink-0 tabular-nums">{c.tools.length} Tools</span>
+                {#if err}<span class="text-destructive shrink-0">{err} ✕</span>{/if}
+                <span class="min-w-0 truncate font-mono" title={tally(c.tools)}>{tally(c.tools)}</span>
               </summary>
-              <div class="space-y-1 px-1 pb-1.5">
-                <pre class="bg-background/60 max-h-48 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
-                {#if e.output !== null}
-                  <pre
-                    class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap {e.error
-                      ? 'text-destructive'
-                      : ''}">{e.output || "(leer)"}</pre>
-                {/if}
-              </div>
+              <ol class="border-border/60 ml-2.5 border-l pl-1">
+                {#each c.tools as e, j (j)}<li>{@render toolRow(e, a)}</li>{/each}
+              </ol>
             </details>
           {/if}
         </li>
@@ -724,6 +776,34 @@
       </div>
     {/if}
   {/if}
+{/snippet}
+
+{#snippet toolRow(e: Entry, a: Agent)}
+  {@const [si, sc, st] =
+    e.output !== null
+      ? e.error
+        ? ["✕", "text-destructive", "Fehler"]
+        : ["✓", "text-success", "fertig"]
+      : a.state === "running"
+        ? ["◐", "text-primary animate-pulse", "läuft"]
+        : ["⊘", "text-muted-foreground", "ohne Ergebnis"]}
+  <details class="hover:bg-accent/40 open:bg-accent/30 rounded-md">
+    <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-[11px]">
+      <span class="text-muted-foreground shrink-0 tabular-nums">{e.at ? clock(e.at) : ""}</span>
+      <span class="shrink-0 {sc}" title={st}>{si}</span>
+      <span class="text-foreground shrink-0">{e.tool}</span>
+      <span class="text-muted-foreground min-w-0 truncate" title={e.summary}>{e.summary}</span>
+    </summary>
+    <div class="space-y-1 px-1 pb-1.5">
+      <pre class="bg-background/60 max-h-48 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
+      {#if e.output !== null}
+        <pre
+          class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap {e.error
+            ? 'text-destructive'
+            : ''}">{e.output || "(leer)"}</pre>
+      {/if}
+    </div>
+  </details>
 {/snippet}
 
 {#snippet phases(r: Run, dlg = false)}
@@ -768,22 +848,23 @@
             >
               <div class="flex items-center gap-2">
                 <span class={ac} title={at}>{ai}</span>
-                <span class="min-w-0 flex-1 truncate">{a.label || a.id}</span>
+                <span class="min-w-0 flex-1 truncate" title={a.label || a.id}>{a.label || a.id}</span>
                 <span class="text-muted-foreground shrink-0 tabular-nums"
                   >{dur(agentDur(r, a))}{#if a.tokens} · {tokens(a.tokens)}{/if}</span
                 >
                 {#if a.id}<ChevronRightIcon class="text-muted-foreground size-3.5 shrink-0 opacity-0 group-hover/agent:opacity-100" />{/if}
               </div>
               {#if last}
-                <div class="text-muted-foreground truncate pl-5 font-mono text-[11px]">{last.tool} {last.summary}</div>
+                <div class="text-muted-foreground truncate pl-5 font-mono text-[11px]" title="{last.tool} {last.summary}">{last.tool} {last.summary}</div>
               {/if}
             </button>
             {#if a.prompt}
               <!-- Eigener Button neben dem Agent-Button (nicht darin): klappt nur den Prompt -->
               <button
-                class="text-muted-foreground hover:text-foreground shrink-0 px-1.5 py-1 text-[10px]"
+                class="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1.5 py-1 text-[10px]"
                 aria-expanded={!!openPrompts[pk]}
-                onclick={() => (openPrompts[pk] = !openPrompts[pk])}>Prompt {openPrompts[pk] ? "▾" : "▸"}</button
+                onclick={() => (openPrompts[pk] = !openPrompts[pk])}
+                >Prompt <ChevronRightIcon class="size-3 transition-transform {openPrompts[pk] ? 'rotate-90' : ''}" /></button
               >
             {/if}
           </div>
@@ -815,7 +896,7 @@
       {@const cnt = (k: string) => r.agents.filter((a) => (k === "error" ? failed(a) : a.state === k)).length}
       <div class="pr-8">
         <Dialog.Title class="flex items-center gap-2 text-sm">
-          <span class={color} title={text}>{icon}</span><span class="min-w-0 truncate">{r.name}</span>
+          <span class={color} title={text}>{icon}</span><span class="min-w-0 truncate" title={r.name}>{r.name}</span>
         </Dialog.Title>
         <div class="text-muted-foreground mt-0.5 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)} · {cnt("done")}/{r.agents.length} Agents fertig</div>
         <!-- Segmentierter Fortschritt: fertig / Fehler / laeuft -->
@@ -824,24 +905,28 @@
             <div class={c} style:width="{(cnt(k) / Math.max(1, r.agents.length)) * 100}%"></div>
           {/each}
         </div>
-        <div class="mt-2 flex gap-1">
-          {#each [["all", "Alle", r.agents.length], ["running", "Laufend", cnt("running")], ["error", "Fehler", cnt("error")]] as const as [k, l, n] (k)}
-            <button
-              class="rounded-md px-2 py-0.5 {filter === k ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'}"
-              aria-pressed={filter === k}
-              onclick={() => (filter = k)}>{l} <span class="tabular-nums">{n}</span></button
-            >
-          {/each}
+        <div class="mt-2 flex">
+          <Segmented
+            value={filter}
+            options={[
+              [`Alle ${r.agents.length}`, "all"],
+              [`Laufend ${cnt("running")}`, "running"],
+              [`Fehler ${cnt("error")}`, "error"],
+            ] as const}
+            onchange={(v) => (filter = v)}
+          />
         </div>
       </div>
       <div class="border-border/60 grid min-h-0 flex-1 grid-cols-[minmax(260px,2fr)_3fr] overflow-hidden rounded-lg border">
-        <div class="border-border/60 min-h-0 overflow-y-auto border-r">{@render phases(r, true)}</div>
+        <div class="border-border/60 min-h-0 overflow-y-auto border-r">
+          {#if r.agents.some(shows)}{@render phases(r, true)}{:else}<Empty>Keine Agents mit diesem Status.</Empty>{/if}
+        </div>
         <div class="flex min-h-0 min-w-0 flex-col">
           {#if focus}
             <div class="border-border/60 shrink-0 border-b px-2 pb-1.5">{@render agentHead()}</div>
             <div bind:this={bigScroller} class="min-h-0 flex-1 overflow-y-auto p-2">{@render agentLog()}</div>
           {:else}
-            <p class="text-muted-foreground p-2">Agent links auswählen.</p>
+            <Empty>Agent links auswählen.</Empty>
           {/if}
         </div>
       </div>

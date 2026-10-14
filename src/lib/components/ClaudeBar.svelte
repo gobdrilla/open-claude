@@ -30,8 +30,10 @@
 
   // Aktueller Stand aus dem Session-Panel der Mod; Modell kommt als voller Name (claude-opus-5-5[1m]).
   async function poll() {
-    const p = await invoke<{ model: string; effort: string | null } | null>("claude_panel", { id }).catch(() => null);
-    if (!p) return;
+    const i = id;
+    const p = await invoke<{ model: string; effort: string | null } | null>("claude_panel", { id: i }).catch(() => null);
+    // Tab inzwischen gewechselt: Antwort gehoert zur alten Sitzung.
+    if (!p || i !== id) return;
     model = MODELS.find(([, v]) => p.model.includes(v))?.[1] ?? "";
     effort = p.effort ?? "";
   }
@@ -64,12 +66,21 @@
 
   // Ein Modus laesst sich nur per Umschalt+Tab weiterschalten: so oft, bis die Fusszeile ihn zeigt.
   let cycling = false;
-  async function pickMode(target: string) {
-    if (cycling) return;
-    cycling = true;
+  const cycleTo = async (target: string) => {
     for (let i = 0; mode !== target && i < MODES.length; i++) {
       await invoke("pty_write", { id, data: "\x1b[Z" }).catch((e) => (error = String(e)));
       await sleep(250);
+    }
+  };
+  async function pickMode(target: string) {
+    if (cycling) return;
+    cycling = true;
+    const start = mode;
+    await cycleTo(target);
+    // Nicht im Zyklus (z. B. Alles erlauben ohne --dangerously-skip-permissions): nicht still woanders stehen bleiben.
+    if (mode !== target) {
+      error = `Modus „${MODES.find(([, v]) => v === target)?.[0] ?? target}“ ist in dieser Sitzung nicht wählbar`;
+      if (start) await cycleTo(start);
     }
     cycling = false;
   }

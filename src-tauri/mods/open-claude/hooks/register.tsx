@@ -158,7 +158,13 @@ const pollCmd = async ($: EngineInterface) => {
     if (isFilled) await put($, s => ({ ...s, filled: c.at }))
     return
   }
-  await $.command.run({ command: c.command, args: c.args }).catch(() => {})
+  const ok = await $.command.run({ command: c.command, args: c.args }).then(() => true, () => false)
+  // Sonst zeigt die Kopfleiste bis zum naechsten turn.step den alten Stand und springt zurueck.
+  // Effort hat keinen Getter: die App bietet nur gueltige Stufen an, also das Argument uebernehmen.
+  if (ok && c.command === 'model') {
+    const model = await $.session.model()
+    await put($, s => ({ ...s, model }))
+  } else if (ok && c.command === 'effort') await put($, s => ({ ...s, effort: c.args }))
 }
 
 export const register: Register = on => {
@@ -190,7 +196,7 @@ export const register: Register = on => {
       await put($, s => ({ ...s, busy }))
     })
     if (!(await $.store.get('themeHint'))) {
-      $.ui.toast('Tipp: /theme → Open Claude (Hell/Dunkel, folgt der App)')
+      $.ui.toast('Tipp: /theme → Atelier (Hell/Dunkel, folgt der App)')
       await $.store.set('themeHint', true)
     }
     return done
@@ -209,7 +215,7 @@ export const register: Register = on => {
   on('command.run', { command: 'clean-images' }, async ($, e) => {
     const r = await $.mcp
       .call('plugin:open-claude:open-claude', 'clean_images', { args: e.args, session: await $.session.id() })
-      .catch((err: unknown) => ({ isError: true, content: [{ type: 'text' as const, text: `Open Claude nicht erreichbar: ${err}` }] }))
+      .catch((err: unknown) => ({ isError: true, content: [{ type: 'text' as const, text: `L'Atelier de Claude nicht erreichbar: ${err}` }] }))
     const text = r.content.map(c => (c.type === 'text' ? c.text : '')).join('')
     $.ui.toast(text)
     return { text }

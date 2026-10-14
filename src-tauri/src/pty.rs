@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
@@ -12,7 +13,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 struct Session {
     // Unterscheidet eine neue Session mit gleicher id von der alten, deren Waiter noch auslaeuft.
     gen: u64,
-    writer: Box<dyn Write + Send>,
+    // Eingaben gehen an einen eigenen Writer-Thread: liest das Kind nicht, blockiert sonst write_all
+    // samt Map-Lock und Main-Thread die ganze App. Der Channel haelt die Reihenfolge der Tasten.
+    input: Sender<Vec<u8>>,
     master: Box<dyn MasterPty + Send>,
     // Das Child selbst gehoert dem Waiter-Thread (wait() blockiert).
     killer: Box<dyn ChildKiller + Send + Sync>,
@@ -535,7 +538,7 @@ fn setup_unix(t: &Target, cwd: &Path, install: bool) -> String {
             let (k, v) = dotnet_sdk(cwd);
             let get = if install {
                 format!(
-                    "if ! dotnet --version >/dev/null 2>&1; then echo \"[Open Claude] Installiere .NET SDK nach ~/.dotnet\"; \
+                    "if ! dotnet --version >/dev/null 2>&1; then echo \"[Atelier] Installiere .NET SDK nach ~/.dotnet\"; \
                      curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --install-dir \"$HOME/.dotnet\" --{k} {v} || exit 1; fi; "
                 )
             } else {
@@ -547,7 +550,7 @@ fn setup_unix(t: &Target, cwd: &Path, install: bool) -> String {
         }
         Target::Cargo { .. } => {
             let get = if install {
-                "if ! command -v cargo >/dev/null 2>&1; then echo \"[Open Claude] Installiere Rust per rustup\"; \
+                "if ! command -v cargo >/dev/null 2>&1; then echo \"[Atelier] Installiere Rust per rustup\"; \
                  curl --proto =https --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y || exit 1; . \"$HOME/.cargo/env\"; fi; "
             } else {
                 ""
@@ -572,7 +575,7 @@ fn setup_windows(t: &Target, cwd: &Path, install: bool) -> String {
                 .to_string()
                 + &get(
                     "$LASTEXITCODE -eq 0",
-                    format!("Write-Host '[Open Claude] Installiere .NET SDK nach' $d; & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -InstallDir $d -{k} {v}"),
+                    format!("Write-Host '[Atelier] Installiere .NET SDK nach' $d; & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -InstallDir $d -{k} {v}"),
                 )
         }
         Target::Cargo { .. } => {
@@ -755,14 +758,14 @@ fn spawn(
     drop(pair.slave);
 
     let mut reader = pair.master.try_clone_reader().map_err(|e| format!("PTY-Fehler: {e}"))?;
-    let writer = pair.master.take_writer().map_err(|e| format!("PTY-Fehler: {e}"))?;
+    let input = spawn_writer(pair.master.take_writer().map_err(|e| format!("PTY-Fehler: {e}"))?);
 
     let gen = NEXT_GEN.fetch_add(1, Ordering::Relaxed);
     ptys.lock().insert(
         id.clone(),
         Session {
             gen,
-            writer,
+            input,
             master: pair.master,
             killer: child.clone_killer(),
             tree: child.process_id().filter(|_| tree),
@@ -808,14 +811,28 @@ fn spawn(
     Ok(())
 }
 
+/// Endet, wenn die Session (Sender) wegfaellt oder das Schreiben scheitert; dann meldet send den Fehler.
+fn spawn_writer(mut w: Box<dyn Write + Send>) -> Sender<Vec<u8>> {
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        for b in rx {
+            if w.write_all(&b).and_then(|_| w.flush()).is_err() {
+                break;
+            }
+        }
+    });
+    tx
+}
+
+fn write(ptys: &Ptys, id: &str, data: String) -> Result<(), String> {
+    let map = ptys.lock();
+    let s = map.get(id).ok_or_else(|| format!("Kein Terminal: {id}"))?;
+    s.input.send(data.into_bytes()).map_err(|_| "Schreiben fehlgeschlagen: Terminal nimmt keine Eingabe mehr an".into())
+}
+
 #[tauri::command]
 pub fn pty_write(ptys: State<'_, Ptys>, id: String, data: String) -> Result<(), String> {
-    let mut map = ptys.lock();
-    let s = map.get_mut(&id).ok_or_else(|| format!("Kein Terminal: {id}"))?;
-    s.writer
-        .write_all(data.as_bytes())
-        .and_then(|_| s.writer.flush())
-        .map_err(|e| format!("Schreiben fehlgeschlagen: {e}"))
+    write(&ptys, &id, data)
 }
 
 #[tauri::command]
@@ -848,6 +865,55 @@ pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>,
 #[cfg(test)]
 mod tests {
     use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, UNIX_SHELL};
+
+    /// Lasttest: 16 MB an ein Kind, das nie liest (sleep), duerfen weder den Aufrufer noch den Map-Lock
+    /// noch eine zweite Session aufhalten.
+    #[cfg(unix)]
+    #[test]
+    fn blockierender_writer_haelt_nichts_auf() {
+        use super::{spawn_writer, write, Ptys, Session};
+        use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+        use std::io::Read;
+        use std::time::{Duration, Instant};
+        let open = |prog: &str, args: &[&str]| {
+            let pair = native_pty_system().openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 }).unwrap();
+            let mut cmd = CommandBuilder::new(prog);
+            cmd.args(args);
+            let child = pair.slave.spawn_command(cmd).unwrap();
+            drop(pair.slave);
+            let reader = pair.master.try_clone_reader().unwrap();
+            let input = spawn_writer(pair.master.take_writer().unwrap());
+            (Session { gen: 0, input, master: pair.master, killer: child.clone_killer(), tree: None }, reader)
+        };
+        let ptys = Ptys::default();
+        // Roh wie claude: sonst verwirft die Zeilendisziplin ueberzaehlige Bytes, statt zu blockieren.
+        let (a, _ra) = open("sh", &["-c", "stty raw -echo; sleep 30"]);
+        let (b, mut rb) = open("cat", &[]);
+        ptys.lock().insert("a".into(), a);
+        ptys.lock().insert("b".into(), b);
+
+        let t = Instant::now();
+        write(&ptys, "a", "x".repeat(8 << 20)).unwrap();
+        write(&ptys, "a", "y".repeat(8 << 20)).unwrap();
+        let sent = t.elapsed();
+        let t = Instant::now();
+        drop(ptys.lock());
+        let locked = t.elapsed();
+        write(&ptys, "b", "hallo\n".into()).unwrap();
+        let mut got = Vec::new();
+        let mut buf = [0u8; 256];
+        let t = Instant::now();
+        while !String::from_utf8_lossy(&got).contains("hallo") && t.elapsed() < Duration::from_secs(5) {
+            let n = rb.read(&mut buf).unwrap();
+            got.extend_from_slice(&buf[..n]);
+        }
+        eprintln!("16 MB an blockiertes Kind: {sent:?}, Lock danach: {locked:?}, zweite Session: {:?}", t.elapsed());
+        assert!(String::from_utf8_lossy(&got).contains("hallo"));
+        assert!(sent < Duration::from_millis(500) && locked < Duration::from_millis(50));
+        for (_, mut s) in ptys.lock().drain() {
+            let _ = s.killer.kill();
+        }
+    }
 
     #[cfg(unix)]
     #[test]

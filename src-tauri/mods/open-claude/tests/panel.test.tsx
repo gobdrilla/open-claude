@@ -124,16 +124,23 @@ test('befehle aus der app', async ($, on) => {
   on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
   on('env.set', () => ({ value: undefined }) as never)
   on('session.usage', () => ({ value: { startedAt: 0, context: {}, rateLimits: [] } }) as never)
-  on('session.model', () => ({ value: 'claude-opus-5-5' }) as never)
+  let model = 'claude-sonnet-5'
+  on('session.model', () => ({ value: model }) as never)
   on('store.get', () => ({ value: true }) as never)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never)
   // Erster Blick ohne Datei, dann zwei Befehle; derselbe nicht doppelt
   await clock.advance(500)
+  model = 'claude-opus-5-5'
   cmd = JSON.stringify({ at: 1, command: 'model', args: 'opus' })
   await clock.advance(1000)
+  // Neues Modell sofort im Panel, nicht erst beim naechsten turn.step (sonst springt die Kopfleiste zurueck)
+  expect(JSON.parse(w.at(-1)!.text).model).toBe('claude-opus-5-5')
   cmd = JSON.stringify({ at: 2, command: 'fast', args: '' })
   await clock.advance(500)
-  expect(runs).toEqual(['model opus', 'fast '])
+  cmd = JSON.stringify({ at: 5, command: 'effort', args: 'high' })
+  await clock.advance(500)
+  expect(JSON.parse(w.at(-1)!.text).effort).toBe('high')
+  expect(runs).toEqual(['model opus', 'fast ', 'effort high'])
   // /mcp nur ins leere Eingabefeld, dann filled fuer die App
   cmd = JSON.stringify({ at: 3, command: 'mcp', args: '' })
   await clock.advance(500)
@@ -143,7 +150,7 @@ test('befehle aus der app', async ($, on) => {
   await clock.advance(500)
   expect(fills).toEqual(['/mcp'])
   expect(JSON.parse(w.at(-1)!.text).filled).toBe(4)
-  expect(runs).toHaveLength(2)
+  expect(runs).toHaveLength(3)
 })
 
 test('brainHint', () => {
