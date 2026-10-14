@@ -61,6 +61,27 @@
     if (cs?.width) Object.assign(term.options, evenCell(cs.width, cs.height, devicePixelRatio, base.lineHeight));
   }
 
+  // Der DOM-Renderer nimmt Block- und Linienzeichen aus der Schrift: Logo mit Luecken,
+  // Trennlinien mit Zacken (Windows). WebGL zeichnet sie selbst, zellfuellend.
+  // WebKit haelt nur 16 WebGL-Kontexte je Seite; bei vielen Sitzungen verliert die aelteste ihren,
+  // darum holt ein Terminal ihn beim Sichtbarwerden zurueck.
+  function loadGl() {
+    if (!term || webgl) return;
+    const t = term;
+    try {
+      const gl = new WebglAddon();
+      gl.onContextLoss(() => {
+        gl.dispose();
+        webgl = false;
+        Object.assign(t.options, base);
+      });
+      t.loadAddon(gl);
+      webgl = true;
+    } catch {
+      // Kein WebGL2: DOM-Renderer bleibt.
+    }
+  }
+
   function refit() {
     // Versteckt liefert der Container 0x0 und wuerde die PTY auf 0 Spalten setzen.
     if (!term || !visible || !el.clientWidth || !el.clientHeight) return;
@@ -74,6 +95,7 @@
 
   // Tauri faengt Datei-Drops ab (kein HTML-drop), darum der Webview-Event. Pfade fuer die Shell quoten.
   const win = navigator.userAgent.includes("Windows");
+  const mac = navigator.userAgent.includes("Mac");
   const quote = (p: string) => (win ? `"${p}"` : `'${p.replaceAll("'", "'\\''")}'`);
 
   // Eingefuegtes Bild selbst merken: claude legt es erst beim Absenden ins Transkript.
@@ -114,10 +136,11 @@
     const key = e.key.toLowerCase();
     // false = xterm ignoriert das Event, es blubbert zum App-Handler am window.
     if (e.shiftKey && key === "w") return false;
-    if (e.shiftKey && key === "c") {
+    // Ctrl+Umschalt+C nie als ^C durchlassen (bricht claude ab); Ctrl+C mit Auswahl kopiert wie im Windows-Terminal.
+    if (key === "c" && (e.shiftKey || (!mac && term!.hasSelection()))) {
       const text = term!.getSelection();
-      if (!text) return true;
-      navigator.clipboard.writeText(text);
+      if (text) navigator.clipboard.writeText(text);
+      term!.clearSelection();
     } else if (key === "v") {
       navigator.clipboard.readText().then(async (t) => {
         if (!t) await grabClipboard();
@@ -193,20 +216,7 @@
     t.open(el);
     // Cmd+V: Bilddaten liegen nur im paste-Event, claude holt sich das Bild selbst aus der Zwischenablage.
     el.addEventListener("paste", (e) => grab([...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"))?.getAsFile()), true);
-    // Der DOM-Renderer nimmt Block- und Linienzeichen aus der Schrift: Logo mit Luecken,
-    // Trennlinien mit Zacken (Windows). WebGL zeichnet sie selbst, zellfuellend.
-    try {
-      const gl = new WebglAddon();
-      gl.onContextLoss(() => {
-        gl.dispose();
-        webgl = false;
-        Object.assign(t.options, base);
-      });
-      t.loadAddon(gl);
-      webgl = true;
-    } catch {
-      // Kein WebGL2: DOM-Renderer bleibt.
-    }
+    loadGl();
     snap();
     fit.fit();
     // Anderer Monitor/andere Skalierung bei gleicher Fenstergroesse: kein ResizeObserver, aber neue DPR.
@@ -220,7 +230,7 @@
     // xterm meldet je Event genau einmal. 50 px Delta je Event umgehen xterms 30-%-Drossel.
     // Capture auf dem Container, sonst hat xterms Scrollable das Event schon.
     let wheelPx = 0;
-    if (navigator.userAgent.includes("Mac")) {
+    if (mac) {
       el.addEventListener(
         "wheel",
         (e) => {
@@ -293,6 +303,7 @@
 
   $effect(() => {
     if (visible && term) {
+      loadGl();
       refit();
       term.focus();
     }
