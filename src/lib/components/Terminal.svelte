@@ -6,7 +6,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { altKey } from "$lib/utils";
-  import { invoke } from "@tauri-apps/api/core";
+  import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { Terminal } from "@xterm/xterm";
@@ -48,6 +48,7 @@
   // Zuletzt an die PTY gemeldete Groesse; leer bis pty_open durch ist.
   let sent = "";
   let unlisten: Promise<UnlistenFn>[] = [];
+  const out = new Channel<ArrayBuffer>();
   // Unmount vor pty_open-Antwort: sonst bliebe eine PTY ohne UI zurueck.
   let dead = false;
   // claude braucht ~2 s bis zur ersten Ausgabe; solange laufen die Clawds.
@@ -167,13 +168,14 @@
   }
 
   onMount(() => {
-    // Listener vor pty_open, damit kein frueher Output verloren geht.
+    // Output roh ueber einen Kanal (Events kaemen als JSON-Zahlenliste per eval, viel langsamer).
+    out.onmessage = (buf) => {
+      const b = new Uint8Array(buf);
+      term?.write(b);
+      claim(b);
+    };
+    // Exit-Listener vor pty_open, damit ein sofortiges Ende nicht verloren geht.
     unlisten = [
-      listen<number[]>(`pty:${id}`, (e) => {
-        const b = new Uint8Array(e.payload);
-        term?.write(b);
-        claim(b);
-      }),
       listen(`pty-exit:${id}`, () => onexit()),
       getCurrentWebview().onDragDropEvent((e) => {
         // visible kennt nur den aktiven Tab; in Editor-/Git-Ansicht ist ein Elternteil hidden (offsetParent null).
@@ -326,7 +328,7 @@
 
     const { cols, rows } = t;
     Promise.all(unlisten)
-      .then(() => (dead ? undefined : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs })))
+      .then(() => (dead ? undefined : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, out })))
       .then(() => {
         if (dead) return invoke("pty_close", { id });
         sent = `${cols}x${rows}`;

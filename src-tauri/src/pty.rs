@@ -8,6 +8,7 @@ use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 struct Session {
@@ -176,6 +177,7 @@ pub fn pty_open(
     rows: u16,
     theme: String,
     dirs: Option<Vec<String>>,
+    out: Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
     // Repo-Gruppe: weitere Repos, die claude neben cwd kennt und bearbeiten darf. Nur vorhandene Ordner.
     let extra: Vec<String> = dirs
@@ -219,7 +221,7 @@ pub fn pty_open(
     if cfg!(windows) {
         env.push(("CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT", "1"));
     }
-    spawn(app, &ptys, id, &cwd, &program, args, cols, rows, &env, false)
+    spawn(app, &ptys, id, &cwd, &program, args, cols, rows, &env, false, out)
 }
 
 fn no_proxy(prev: Option<String>) -> String {
@@ -632,13 +634,13 @@ fn tool_ok(cwd: &Path, name: &str) -> bool {
     run(std::process::Command::new(sh).args(["-lic", &format!("sh -c '{probe}'")]))
 }
 
-/// `claude auth login` in einer PTY: oeffnet die Anmeldung im Browser, fragt evtl. nach einem Code. Ausgabe und
-/// Ende kommen wie beim Terminal als pty:<id> / pty-exit:<id>.
+/// `claude auth login` in einer PTY: oeffnet die Anmeldung im Browser, fragt evtl. nach einem Code. Ausgabe kommt
+/// wie beim Terminal ueber `out`, das Ende als pty-exit:<id>.
 #[tauri::command]
-pub fn claude_login(app: AppHandle, ptys: State<'_, Ptys>, id: String) -> Result<(), String> {
+pub fn claude_login(app: AppHandle, ptys: State<'_, Ptys>, id: String, out: Channel<InvokeResponseBody>) -> Result<(), String> {
     let claude = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
     let home = crate::skills::home();
-    spawn(app, &ptys, id, &home.to_string_lossy(), &claude.to_string_lossy(), vec!["auth".into(), "login".into()], 100, 30, &[], true)
+    spawn(app, &ptys, id, &home.to_string_lossy(), &claude.to_string_lossy(), vec!["auth".into(), "login".into()], 100, 30, &[], true, out)
 }
 
 /// Was vor dem Start von `target` installiert werden muesste; das Frontend fragt damit vor `run_start` nach.
@@ -654,8 +656,8 @@ pub async fn run_missing(repo: String, dir: String, target: Target) -> Result<Ve
     .await
 }
 
-/// Projekt starten (dir = Ordner des Ziels, "" = Projektordner) in einem PTY. Output und Ende kommen wie beim
-/// Terminal als pty:<id> / pty-exit:<id> (Exit-Code oder null), gestoppt wird mit pty_close.
+/// Projekt starten (dir = Ordner des Ziels, "" = Projektordner) in einem PTY. Output kommt wie beim Terminal ueber
+/// `out`, das Ende als pty-exit:<id> (Exit-Code oder null), gestoppt wird mit pty_close.
 /// Fuehrt Code aus dem Projekt aus: das Frontend ruft das nur auf Klick oder Taste.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -668,6 +670,7 @@ pub fn run_start(
     target: Target,
     profile: Option<Profile>,
     install: Option<bool>,
+    out: Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
     let cwd = if dir.is_empty() { PathBuf::from(&repo) } else { crate::files::within(&repo, &dir)? };
     let ready = !cfg!(windows) || toolchain_ready(&target, &cwd);
@@ -679,7 +682,7 @@ pub fn run_start(
         Target::Dotnet { .. } => &[("DOTNET_CLI_UI_LANGUAGE", "en")],
         Target::Cargo { .. } => &[],
     };
-    spawn(app, &ptys, id, &cwd.to_string_lossy(), &program, args, 120, 30, env, true)
+    spawn(app, &ptys, id, &cwd.to_string_lossy(), &program, args, 120, 30, env, true, out)
 }
 
 /// Env-Marker einer umgebenden Claude-Session, die ein gestartetes claude nicht erben darf (siehe spawn).
@@ -698,7 +701,7 @@ pub(crate) const MARKERS: [&str; 12] = [
     "CLAUDE_CODE_EXECPATH",
 ];
 
-/// Programm in einem neuen PTY starten, Output und Ende als Events melden. tree: siehe Session.
+/// Programm in einem neuen PTY starten: Output roh ueber `out`, Ende als Event pty-exit:<id>. tree: siehe Session.
 #[allow(clippy::too_many_arguments)]
 fn spawn(
     app: AppHandle,
@@ -711,6 +714,7 @@ fn spawn(
     rows: u16,
     env: &[(&str, &str)],
     tree: bool,
+    out: Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
     if !valid_id(&id) {
         return Err(format!("Ungueltige Terminal-id: {id}"));
@@ -772,10 +776,9 @@ fn spawn(
         },
     );
 
-    let out = app.clone();
-    let data = format!("pty:{id}");
     // Nur Claude-Terminals (nicht die Run-Leiste): laufendes Zeichnen zaehlt fuer den Wach-Halt als "arbeitet".
     let claude = (!tree).then(|| id.clone());
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         loop {
@@ -786,9 +789,18 @@ fn spawn(
                     if let Some(c) = &claude {
                         crate::awake::output(c);
                     }
-                    let _ = out.emit(&data, buf[..n].to_vec());
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
                 }
             }
+        }
+    });
+    std::thread::spawn(move || {
+        let mut last = std::time::Instant::now();
+        while let Some(chunk) = batch(&rx, last) {
+            let _ = out.send(InvokeResponseBody::Raw(chunk));
+            last = std::time::Instant::now();
         }
     });
 
@@ -809,6 +821,28 @@ fn spawn(
         let _ = app.emit(&format!("pty-exit:{id}"), code);
     });
     Ok(())
+}
+
+/// Naechstes Paket fuer das Frontend; None, wenn der Reader fertig ist. Ein PTY liefert unter macOS hoechstens
+/// ~1 KB je read(); einzeln kostet jede Nachricht im Webview mehr als ihr Inhalt. Darum: nach einer Pause
+/// (`last` = letztes Senden, Tastenecho) sofort, im laufenden Strom bis zu 4 ms bzw. 256 KB sammeln.
+fn batch(rx: &std::sync::mpsc::Receiver<Vec<u8>>, last: std::time::Instant) -> Option<Vec<u8>> {
+    use std::time::{Duration, Instant};
+    let mut chunk = rx.recv().ok()?;
+    let idle = last.elapsed() > Duration::from_millis(16);
+    let until = Instant::now() + Duration::from_millis(4);
+    while chunk.len() < 256 << 10 {
+        let next = match rx.try_recv() {
+            Ok(b) => b,
+            Err(_) if idle => break,
+            Err(_) => match rx.recv_timeout(until.saturating_duration_since(Instant::now())) {
+                Ok(b) => b,
+                Err(_) => break,
+            },
+        };
+        chunk.extend_from_slice(&next);
+    }
+    Some(chunk)
 }
 
 /// Endet, wenn die Session (Sender) wegfaellt oder das Schreiben scheitert; dann meldet send den Fehler.
@@ -913,6 +947,42 @@ mod tests {
         for (_, mut s) in ptys.lock().drain() {
             let _ = s.killer.kill();
         }
+    }
+
+    #[test]
+    fn batch_sammelt_nur_was_ansteht() {
+        use super::batch;
+        use std::time::{Duration, Instant};
+        let (tx, rx) = std::sync::mpsc::channel();
+        let idle = Instant::now() - Duration::from_secs(1);
+        // Tastenecho nach einer Pause: sofort, ohne die 4 ms abzuwarten
+        tx.send(b"a".to_vec()).unwrap();
+        let t = Instant::now();
+        assert_eq!(batch(&rx, idle).unwrap(), b"a");
+        assert!(t.elapsed() < Duration::from_millis(2));
+        // Was schon ansteht, geht als ein Paket raus
+        for c in [b"ab".to_vec(), vec![b'x'; 2000], b"cd".to_vec()] {
+            tx.send(c).unwrap();
+        }
+        assert_eq!(batch(&rx, idle).unwrap().len(), 2004);
+        // Im Strom (gerade gesendet): Nachzuegler innerhalb von 4 ms kommen mit
+        let late = tx.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(1));
+            late.send(b"b".to_vec()).unwrap();
+        });
+        tx.send(b"a".to_vec()).unwrap();
+        assert_eq!(batch(&rx, Instant::now()).unwrap(), b"ab");
+        t.join().unwrap();
+        // Obergrenze 256 KB, Rest im naechsten Paket
+        for _ in 0..60 {
+            tx.send(vec![0; 8192]).unwrap();
+        }
+        let first = batch(&rx, idle).unwrap().len();
+        assert!((256 << 10..(256 << 10) + 8192).contains(&first), "{first}");
+        assert_eq!(first + batch(&rx, idle).unwrap().len(), 60 * 8192);
+        drop(tx);
+        assert!(batch(&rx, idle).is_none());
     }
 
     #[cfg(unix)]

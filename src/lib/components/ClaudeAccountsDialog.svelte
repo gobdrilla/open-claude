@@ -2,7 +2,7 @@
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
-  import { invoke } from "@tauri-apps/api/core";
+  import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { confirm } from "$lib/confirm.svelte";
   import { forge } from "$lib/git";
@@ -83,10 +83,10 @@
     const dec = new TextDecoder();
     login = { id, out: "" };
     code = "";
+    const out = new Channel<ArrayBuffer>((buf) => {
+      if (login?.id === id) login.out = (login.out + plain(dec.decode(new Uint8Array(buf), { stream: true }))).slice(-4000);
+    });
     off = [
-      listen<number[]>(`pty:${id}`, (e) => {
-        if (login?.id === id) login.out = (login.out + plain(dec.decode(new Uint8Array(e.payload), { stream: true }))).slice(-4000);
-      }),
       listen<number | null>(`pty-exit:${id}`, async (e) => {
         if (login?.id !== id) return;
         const out = login.out;
@@ -97,7 +97,7 @@
     ];
     try {
       await Promise.all(off);
-      await invoke("claude_login", { id });
+      await invoke("claude_login", { id, out });
     } catch (e) {
       stopLogin();
       error = String(e);

@@ -73,11 +73,11 @@ export const xamlRender = (repo: string, path: string, content: string) =>
 
 /**
  * Startziel der Run-Leiste in dir ("" = Projektordner) in einem PTY starten. Rust laesst nur feste Kommandos und
- * gepruefte Namen zu. Output kommt als Event "pty:<id>" (Bytes), das Ende als "pty-exit:<id>" (Exit-Code oder null);
+ * gepruefte Namen zu. Output kommt roh ueber out, das Ende als Event "pty-exit:<id>" (Exit-Code oder null);
  * ptyClose stoppt. Fuehrt Code aus dem Projekt aus: NUR auf Klick oder Taste.
  */
-export const runStart = (id: string, repo: string, dir: string, target: Target, profile?: Profile, install = false) =>
-  call<void>("run_start", { id, repo, dir, target, profile, install });
+export const runStart = (id: string, repo: string, dir: string, target: Target, out: Channel<ArrayBuffer>, profile?: Profile, install = false) =>
+  call<void>("run_start", { id, repo, dir, target, profile, install, out });
 /** Was vor dem Start fehlt (name; detail = woher und wohin); leer = nichts. install=true bei runStart installiert es. */
 export const runMissing = (repo: string, dir: string, target: Target) =>
   call<{ name: string; detail: string }[]>("run_missing", { repo, dir, target });

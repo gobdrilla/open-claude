@@ -1,6 +1,7 @@
 // Run-Leiste je Projekt: erkannte Startziele und hoechstens ein Prozess (PTY). Lebt auf Modulebene wie editor():
 // RunPane wird beim Andocken neu gemountet, Prozess und Ausgabe bleiben. Die Auswahl steht im Editor-Store (run).
 // Invariante: laeuft etwas, ist das Panel RUN im Layout (runStart dockt es an, Schliessen/Zuruecksetzen stoppt).
+import { Channel } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { RUN, activate, groupOf, mainGroup, splitAt } from "./dock.ts";
 import { fs, ptyClose, ptyWrite, runMissing, runStart as startCmd } from "./files.ts";
@@ -143,24 +144,24 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
   const mine = () => b.id === id && r.current?.id === id;
   const dec = new TextDecoder();
   r.current = { cfg: c, id, state: "running", exit: null, started: Date.now(), url: "" };
-  // Listener vor dem Start, damit kein frueher Output verloren geht.
+  const out = new Channel<ArrayBuffer>((buf) => {
+    if (!mine()) return;
+    const bytes = new Uint8Array(buf);
+    push(b, bytes);
+    const chunk = dec.decode(bytes, { stream: true });
+    // Cursor-Abfrage (ConPTY beim Start): mit angehaengtem xterm antwortet es selbst.
+    if (!b.sink && chunk.includes("\x1b[6n")) ptyWrite(id, "\x1b[1;1R").catch(() => {});
+    if (c.target.kind !== "npm" || b.fixed) return;
+    b.tail = scan(b.tail, chunk);
+    const local = serverUrl(b.tail, true);
+    b.fixed = !!local;
+    const cur = r.current!;
+    // Ohne "Local"-Zeile bleibt die erste Adresse stehen.
+    const url = local ?? (cur.url || serverUrl(b.tail) || "");
+    if (url !== cur.url) r.current = { ...cur, url };
+  });
+  // Exit-Listener vor dem Start, damit ein sofortiges Ende nicht verloren geht.
   b.off = [
-    listen<number[]>(`pty:${id}`, (e) => {
-      if (!mine()) return;
-      const bytes = new Uint8Array(e.payload);
-      push(b, bytes);
-      const chunk = dec.decode(bytes, { stream: true });
-      // Cursor-Abfrage (ConPTY beim Start): mit angehaengtem xterm antwortet es selbst.
-      if (!b.sink && chunk.includes("\x1b[6n")) ptyWrite(id, "\x1b[1;1R").catch(() => {});
-      if (c.target.kind !== "npm" || b.fixed) return;
-      b.tail = scan(b.tail, chunk);
-      const local = serverUrl(b.tail, true);
-      b.fixed = !!local;
-      const cur = r.current!;
-      // Ohne "Local"-Zeile bleibt die erste Adresse stehen.
-      const url = local ?? (cur.url || serverUrl(b.tail) || "");
-      if (url !== cur.url) r.current = { ...cur, url };
-    }),
     listen<number | null>(`pty-exit:${id}`, (e) => {
       if (mine()) r.current = { ...r.current!, state: "exited", exit: e.payload ?? null, url: "" };
     }),
@@ -169,7 +170,7 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
     await Promise.all(b.off);
     // Inzwischen gestoppt: gar nicht erst starten.
     if (!mine()) return;
-    await startCmd(id, repo, c.dir, c.target, $state.snapshot(profileOf(s.profiles, s.profile)), install);
+    await startCmd(id, repo, c.dir, c.target, out, $state.snapshot(profileOf(s.profiles, s.profile)), install);
   } catch (e) {
     if (!mine()) return;
     push(b, new TextEncoder().encode(`\x1b[31m${e}\x1b[0m\r\n`));
