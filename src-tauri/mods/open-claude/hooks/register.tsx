@@ -120,6 +120,14 @@ const BRAIN_HINT = {
   commit:
     'Brain-Hinweis: Commit ohne mcp__brain__remember. Steckt darin eine Entscheidung, Regel oder ein Fallstrick, der nicht aus Code oder Git hervorgeht? Dann jetzt mit remember festhalten (kurz, mit Warum). Sonst ignorieren.',
 }
+// Bei laengerer Arbeit sieht der Nutzer sonst nur Tool-Aufrufe und Fenster: kurze Zwischenstaende im Chat.
+export const NARRATE =
+  'Transparenz für den Nutzer: Bei Arbeit mit mehreren Tool-Aufrufen vor jedem neuen Arbeitsschritt eine kurze Zeile in den Chat schreiben: was du als Nächstes tust und warum (z. B. „Prüfe X, weil Y“). Nach einem Ergebnis, das die Richtung ändert, eine Zeile, was herauskam. Höchstens eine Zeile je Schritt, nichts wiederholen. Gilt auch, wenn ein Antwortstil sonst Stille zwischen Tool-Aufrufen verlangt.'
+
+/** Hinweis an normale Eingaben haengen; Slash-Commands laufen ohne. */
+export const withNarrate = <T extends { command?: unknown; context?: readonly string[] }>(e: T): T =>
+  e.command ? e : { ...e, context: [...(e.context ?? []), NARRATE] }
+
 type BrainTurn = { recall: boolean; remember: boolean; hinted: Set<string> }
 const brainTurn = (): BrainTurn => ({ recall: false, remember: false, hinted: new Set() })
 let brainOn = false
@@ -316,6 +324,8 @@ export const register: Register = on => {
     }
     return ran
   })
+
+  on('prompt.submit', ($, e, next) => next(withNarrate(e)))
 
   on('tool.call', { tool: /^(Grep|Glob|Agent|Task|Bash)$/ }, async ($, e, next) => {
     const ran = await next(e)

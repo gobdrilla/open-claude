@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { bar, brainHint, level, pace } from '../hooks/register'
+import { NARRATE, bar, brainHint, level, pace, withNarrate } from '../hooks/register'
 
 const HOUR = 3_600_000
 
@@ -155,4 +155,13 @@ test('brainHint', () => {
   expect(brainHint(t, 'Bash', { command: 'git status' })).toBe(null)
   expect(brainHint({ ...t, recall: true, remember: true }, 'Grep', {})).toBe(null)
   expect(brainHint({ ...t, recall: true, remember: true }, 'Bash', { command: 'git commit' })).toBe(null)
+})
+
+test('withNarrate', () => {
+  type P = { text: string; command?: unknown; context?: readonly string[] }
+  const p = (x: P) => withNarrate(x).context
+  expect(p({ text: 'mach X' })).toEqual([NARRATE])
+  expect(p({ text: 'mach X', context: ['a'] })).toEqual(['a', NARRATE])
+  // Slash-Commands bleiben unberuehrt
+  expect(p({ text: '/panel', command: { name: 'panel' } })).toBe(undefined)
 })
