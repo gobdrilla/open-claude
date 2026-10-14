@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { age, cn } from "$lib/utils";
+  import { age, altKey, cn } from "$lib/utils";
   import { onMount, tick, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
@@ -39,7 +39,6 @@
   import LayersIcon from "@lucide/svelte/icons/layers";
   import GroupDialog, { type RepoGroup } from "$lib/components/GroupDialog.svelte";
   import ClaudeAccountsDialog from "$lib/components/ClaudeAccountsDialog.svelte";
-  import UserCogIcon from "@lucide/svelte/icons/user-cog";
   import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import BotIcon from "@lucide/svelte/icons/bot";
@@ -62,7 +61,8 @@
   import EditorView from "$lib/components/editor/EditorView.svelte";
   import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
-  import { listenIde } from "$lib/ide.svelte";
+  import { ide, listenIde } from "$lib/ide.svelte";
+  import { testCancel } from "$lib/testing.svelte";
   import { listen } from "@tauri-apps/api/event";
   import IdeDiff from "$lib/components/IdeDiff.svelte";
   import { runStop } from "$lib/run.svelte";
@@ -82,6 +82,8 @@
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import UsersIcon from "@lucide/svelte/icons/users";
+  import KeyRoundIcon from "@lucide/svelte/icons/key-round";
+  import FolderDownIcon from "@lucide/svelte/icons/folder-down";
   import PaletteIcon from "@lucide/svelte/icons/palette";
   import PackageIcon from "@lucide/svelte/icons/package";
   import BrainIcon from "@lucide/svelte/icons/brain";
@@ -215,7 +217,7 @@
       loadClaudeCfg();
     }
   }
-  // Sync-Fehler sichtbar in jeder Ansicht (Liste, Terminal, Git), notice gehoert nur zur Liste.
+  // Sync-Fehler sichtbar in jeder Ansicht (Liste, Terminal, Git).
   let skillNotice = $state("");
 
   async function toggleAutostart() {
@@ -223,7 +225,7 @@
       await (autostart ? disable() : enable());
       autostart = await isEnabled();
     } catch (e) {
-      error = String(e);
+      notice = String(e);
     }
   }
 
@@ -309,19 +311,22 @@
 
     const by = new Map<string, typeof hits>();
     for (const h of rest) {
-      const top = h.dir.split(/[\\/]/)[0] || "Direkt im Ordner";
+      // Einzelprojekte liegen ausserhalb des Dev-Ordners, ihr Pfad sagt dort nichts
+      const top = extra.includes(h.repo.path) ? "Einzeln hinzugefügt" : h.dir.split(/[\\/]/)[0] || "Direkt im Ordner";
       (by.get(top) ?? by.set(top, []).get(top)!).push(h);
     }
     return [...head, ...[...by].map(([heading, items]) => ({ heading, items }))];
   });
 
   const flat = $derived(groups.flatMap((g) => g.items));
-  const current = $derived(flat.find((h) => h.repo.path === selected) ?? flat[0]);
+  // Gruppe markiert: kein Projekt, sonst wirkten Strg+P/G/E aufs erste Repo
+  const current = $derived(selected.startsWith("group:") ? undefined : (flat.find((h) => h.repo.path === selected) ?? flat[0]));
 
   // Maximiert-Zustand fuers Icon; aendert sich auch per Doppelklick auf die Titelleiste oder Win+Pfeil.
   let maximized = $state(false);
   // macOS: native Ampeln im Overlay-Titelbalken (tauri.macos.conf.json) statt eigener Knoepfe.
   const mac = navigator.userAgent.includes("Mac");
+  const mod = mac ? "⌘" : "Strg";
   onMount(() => {
     const win = getCurrentWindow();
     const sync = async () => (maximized = await win.isMaximized());
@@ -427,7 +432,7 @@
     checking = true;
     try {
       update = (await check()) ?? update;
-      if (manual && !update) okNotice = "Open Claude ist aktuell.";
+      if (manual && !update) okNotice = "L'Atelier ist aktuell.";
     } catch (e) {
       if (manual) notice = `Update-Prüfung fehlgeschlagen: ${e}`;
     } finally {
@@ -461,15 +466,24 @@
     installingDeps = false;
   }
 
+  const sessionsLost = () => `${sessions.length} laufende Claude-Sitzung(en) werden dabei beendet.`;
+
+  /** Ohne Tray beendet Schliessen die App (lib.rs, on_window_event); Rust fragt nur nach ungespeicherten Dateien. */
+  async function closeWindow() {
+    if (!mac && !tray && sessions.length && !(await confirm(sessionsLost(), "Beenden", "L'Atelier de Claude beenden?"))) return;
+    getCurrentWindow().close();
+  }
+
   async function installUpdate() {
     // Der Neustart laeuft an der Rueckfrage in Rust vorbei.
     if (isDirty() && !(await confirm("Ungespeicherte Änderungen im Editor verwerfen und neu starten?", "Neu starten"))) return;
+    if (sessions.length && !(await confirm(sessionsLost(), "Neu starten"))) return;
     updating = true;
     try {
       await update!.downloadAndInstall();
       await relaunch();
     } catch (e) {
-      error = String(e);
+      notice = String(e);
       updating = false;
     }
   }
@@ -490,7 +504,7 @@
     lidAwake = (await store.get<boolean>("lidAwake")) ?? false;
     // Meldung vom Aufraeumen nach einem Absturz kam vor diesem Listener: hier abholen.
     const awakeErr = await invoke<string | null>("set_awake", { on: lidAwake });
-    if (awakeErr) error = awakeErr;
+    if (awakeErr) notice = awakeErr;
     amongUs = { ...amongUs, ...(await store.get<typeof amongUs>("amongUs")) };
     skillStore = {
       profiles: (await store.get<SkillStore["profiles"]>("skillProfiles")) ?? {},
@@ -611,11 +625,23 @@
   onMount(() => {
     const win = getCurrentWindow();
     let badge = 0;
+    // Ein langsamer Durchlauf (viele Sitzungen) darf sich nicht mit dem naechsten ueberlappen.
+    let busy = false;
     const tick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        await poll();
+      } finally {
+        busy = false;
+      }
+    };
+    const poll = async () => {
       const focused = document.hasFocus();
       let alert = false;
       for (const s of sessions) {
         const p = await invoke<{ busy?: boolean; waiting?: boolean } | null>("claude_panel", { id: s.id }).catch(() => null);
+        if (!sessions.includes(s)) continue;
         const prev = tabs[s.id];
         const next = tabState(prev, p, focused && view === "term" && s.id === active);
         if (next === prev) continue;
@@ -648,7 +674,8 @@
   /** Repo-Gruppe: eine Sitzung im Haupt-Repo, die anderen Repos als weitere Arbeitsordner. Offene zeigen. */
   async function launchGroup(g: RepoGroup) {
     const [main, ...rest] = g.paths.map((p) => repos.find((r) => r.path === p)).filter((r) => r !== undefined);
-    if (!main) return void (notice = `Gruppe „${g.name}“: Haupt-Repo nicht gefunden.`);
+    // Nicht still ein anderes Repo zum Haupt-Repo machen: claude startete sonst im falschen Ordner
+    if (main?.path !== g.paths[0]) return void (notice = `Gruppe „${g.name}“: Haupt-Repo nicht gefunden (${g.paths[0]}).`);
     if (gitRepo && gitView && !(await gitView.canLeave())) return;
     leaveGit();
     editRepo = null;
@@ -699,6 +726,14 @@
     openGit(repo);
   }
 
+  /** Tab einer Gruppen-Sitzung: wie launchGroup, ohne die Gruppe neu aufzuloesen. */
+  async function openGroupTab(id: string) {
+    if (gitRepo && gitView && !(await gitView.canLeave())) return;
+    leaveGit();
+    editRepo = null;
+    active = id;
+  }
+
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
   async function openEdit(repo?: Repo) {
     if (!repo || isFree(repo)) return;
@@ -713,7 +748,7 @@
     const off = listen<string>("awake-error", (e) => {
       lidAwake = false;
       store?.set("lidAwake", false);
-      error = e.payload;
+      notice = e.payload;
     });
     return () => void off.then((f) => f());
   });
@@ -767,11 +802,11 @@
     try {
       await invoke("reveal", { path: repo.path });
     } catch (e) {
-      error = String(e);
+      notice = String(e);
     }
   }
 
-  // Fehler aus dem Kontextmenue als Leiste, error wuerde die ganze Liste ersetzen.
+  // Fehler ausserhalb des Scans als Leiste, error wuerde die ganze Liste ersetzen.
   let notice = $state("");
   let okNotice = $state("");
 
@@ -870,10 +905,14 @@
     const { repo } = doomed;
     trashing = true;
     try {
-      // Laufende Sitzung, Run-Prozess und Language-Server zuerst beenden, unter Windows sperrt ihr cwd sonst den Ordner.
+      // Erst pruefen, ob geloescht werden darf: sonst stuerben die Prozesse unten umsonst.
+      await invoke("trash_check", { path: repo.path, root });
+      // Laufende Sitzung, Run-Prozess, Testlauf und Language-Server zuerst beenden, unter Windows sperrt ihr cwd sonst den Ordner.
+      for (const s of sessions) if (s.repo.path === repo.path) forget(s.id);
       sessions = sessions.filter((s) => s.repo.path !== repo.path);
       await tick();
       await runStop(repo.path);
+      await testCancel(repo.path);
       await stopLsp(repo.path);
       await invoke("trash_repo", { path: repo.path, root });
       // Der Dialog hat das Loeschen schon bestaetigt: Puffer des Projekts ohne zweite Frage verwerfen.
@@ -907,8 +946,11 @@
     if (await confirm("Sitzung beenden? Ein laufender claude-Prozess wird abgebrochen.", "Beenden")) closeSession(id);
   }
 
+  const forget = (id: string) => (delete tabs[id], delete modes[id]);
+
   /** Aus der Liste nehmen; der Terminal-Unmount schliesst die PTY. */
   function closeSession(id: string) {
+    forget(id);
     sessions = sessions.filter((s) => s.id !== id);
     // Wie bei Tabs ueblich zur letzten verbliebenen Session, erst ohne Session zurueck zur Liste.
     if (active === id) sessions.length ? (active = sessions.at(-1)!.id) : back();
@@ -937,17 +979,22 @@
     if (reload && !(e.target instanceof Element && e.target.closest(".xterm"))) e.preventDefault();
   };
 
+  // Alle Dialoge ausser der Hilfe (F1 schaltet sie um)
+  const anyDialog = $derived(
+    cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || !!doomed || profilesOpen || !!groupEdit ||
+      claudeAccountsOpen || !!confirming.q || !!unityClosePath || ide.diffs.length > 0,
+  );
+
   function onKey(e: KeyboardEvent) {
     // Im Terminal gehoeren fast alle Kuerzel der Shell (Readline: Strg+R/K/E/P/O/G ...).
     // Die Git-Ansicht hat ihre eigenen Kuerzel in GitView.svelte.
     // Der Editor hat Strg+S/Esc selbst (EditorView, CodeMirror); Esc verlaesst ihn nicht.
     if (view !== "list") {
-      const alt = e.altKey && !e.ctrlKey;
       // Mit Umschalt: Strg+E gehoert im Terminal der Shell.
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "e") {
         e.preventDefault();
         openEdit(viewRepo);
-      } else if ((e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "w") || (e.shiftKey && e.key === "Escape")) {
+      } else if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "w") || (e.shiftKey && e.key === "Escape")) {
         e.preventDefault();
         back();
       } else if (e.key === "Escape" && view === "git") {
@@ -957,10 +1004,10 @@
         e.preventDefault();
         if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.blur();
         else back();
-      } else if (alt && e.key.toLowerCase() === "e") {
+      } else if (altKey(e, "e")) {
         e.preventDefault();
         reveal(viewRepo);
-      } else if (alt && e.key.toLowerCase() === "g" && view !== "git" && !isFree(viewRepo)) {
+      } else if (altKey(e, "g") && view !== "git" && !isFree(viewRepo)) {
         e.preventDefault();
         openGit(viewRepo);
       }
@@ -970,12 +1017,12 @@
     if (e.key === "Escape" && (overlayOnEsc || e.defaultPrevented)) return;
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === "F1" || (ctrl && e.key === "/")) {
-      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !rootOpen && !profilesOpen && !groupEdit && !claudeAccountsOpen) help = !help;
+      if (!anyDialog) help = !help;
       e.preventDefault();
       return;
     }
-    // Offene Dialoge (Hilfe, Klonen, Anlegen, Konten) bekommen ihre Tasten selbst.
-    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || doomed || profilesOpen || groupEdit || claudeAccountsOpen) return;
+    // Offene Dialoge bekommen ihre Tasten selbst.
+    if (help || anyDialog) return;
 
     if (ctrl && e.key >= "1" && e.key <= "9") {
       launch(flat[Number(e.key) - 1]?.repo);
@@ -1001,7 +1048,7 @@
       launchFree();
     } else if (e.key === "Escape") {
       if (query) query = "";
-      else getCurrentWindow().close();
+      else closeWindow();
     } else {
       return;
     }
@@ -1024,10 +1071,10 @@
     <button
       class="text-muted-foreground hover:bg-secondary hover:text-foreground {mac ? '' : '-ml-3.5'} mr-1 grid h-9 w-10 place-items-center"
       onclick={back}
-      aria-label="Zurück zur Liste (Strg+Umschalt+W)"
-      title="Zurück zur Liste (Strg+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /></button
+      aria-label="Zurück zur Liste ({mod}+Umschalt+W)"
+      title="Zurück zur Liste ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /></button
     >
-    <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" data-tauri-drag-region>
+    <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
       <span class="truncate text-xs font-semibold" data-tauri-drag-region>
         {split(viewRepo.rel)[1]}
       </span>
@@ -1090,7 +1137,7 @@
     <div class="bg-border mx-1 h-4 w-px"></div>
     <!-- Feste Reihenfolge in jeder Ansicht, damit beim Wechseln nichts springt; die wechselnden Extras stehen links davon. -->
     {@render viewButton("term", "Claude im Projekt öffnen", () => launch(viewRepo), TerminalIcon, "Claude")}
-    {#if !isFree(viewRepo)}{@render viewButton("edit", "Editor (Strg+Umschalt+E)", () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
+    {#if !isFree(viewRepo)}{@render viewButton("edit", `Editor (${mod}+Umschalt+E)`, () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
     {@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}
   {:else}
     <img
@@ -1100,7 +1147,7 @@
       data-tauri-drag-region
     />
     <span class="text-muted-foreground flex-1 text-xs font-semibold" data-tauri-drag-region>
-      Open Claude
+      L'Atelier de Claude
     </span>
   {/if}
   {#if update}
@@ -1156,7 +1203,7 @@
       tabindex="-1"
       onmousedown={(e) => e.preventDefault()}
       class="text-muted-foreground grid h-9 w-11 shrink-0 place-items-center outline-none hover:bg-[#b4404a] hover:text-white"
-      onclick={() => getCurrentWindow().close()}
+      onclick={closeWindow}
       aria-label="Schließen"><XIcon class="size-3.5" /></button
     >
   {/if}
@@ -1164,6 +1211,9 @@
 
 <div class="flex h-[calc(100vh-2.25rem)] flex-col">
   <Notice bind:text={skillNotice} />
+  <!-- Ueber allen Ansichten: Fehler aus Update, Wach-Halt oder Alt+E kommen auch aus Terminal und Git -->
+  <Notice bind:text={notice} />
+  {#if !notice}<Notice bind:text={okNotice} kind="ok" />{/if}
   <Command.Root
     shouldFilter={false}
     bind:value={selected}
@@ -1212,17 +1262,17 @@
           <FolderPlusIcon class="size-4" />
         </Button>
         <Button variant="ghost" size="icon" onclick={() => (cloneOpen = true)} title="Repo klonen (Strg+N)" aria-label="Repo klonen">
-          <DownloadIcon class="size-4" />
+          <FolderDownIcon class="size-4" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
           class="relative"
           onclick={() => (accountsOpen = true)}
-          title="GitHub- und GitLab-Konten"
-          aria-label="Konten"
+          title="Git-Konten (GitHub, GitLab)"
+          aria-label="Git-Konten"
         >
-          <UsersIcon class="size-4" />
+          <KeyRoundIcon class="size-4" />
           {#if accounts.length}
             <span class="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full"></span>
           {/if}
@@ -1289,9 +1339,11 @@
                   <Segmented
                     value={String(claudeCfg.theme ?? "dark").startsWith("custom:open-claude:open-claude")
                       ? "custom:open-claude:open-claude"
-                      : claudeCfg.theme}
-                    options={[["Auto", "auto"], ["Lila", "custom:open-claude:open-claude"]] as const}
-                    onchange={(v) => setClaudeCfg("theme", v)}
+                      : claudeCfg.theme === "auto"
+                        ? "auto"
+                        : ""}
+                    options={[["Std", "", "Standard von Claude Code oder ein anderes Theme aus den Claude-Einstellungen"], ["Auto", "auto"], ["Lila", "custom:open-claude:open-claude"]] as const}
+                    onchange={(v) => setClaudeCfg("theme", v || undefined)}
                   />
                 </div>
                 <div class="flex items-center gap-2 px-2 py-1.5">
@@ -1355,14 +1407,14 @@
                 <span class="flex-1">Claude-Einstellungen</span>
               </DropdownMenu.Item>
               <DropdownMenu.Item class={cn(menuItem, "py-1.5")} onSelect={() => (claudeAccountsOpen = true)}>
-                <UserCogIcon class="text-muted-foreground size-3.5" />
+                <UsersIcon class="text-muted-foreground size-3.5" />
                 <span class="flex-1">Claude-Konten</span>
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 class={cn(menuItem, "py-1.5")}
                 onSelect={() => checkUpdate(true)}
               >
-                <RefreshIcon class="text-muted-foreground size-3.5 {checking ? 'animate-spin' : ''}" />
+                <DownloadIcon class="text-muted-foreground size-3.5 {checking ? 'animate-pulse' : ''}" />
                 <span class="flex-1">Nach Updates suchen</span>
               </DropdownMenu.Item>
               <DropdownMenu.Item
@@ -1379,8 +1431,6 @@
       </div>
     </div>
 
-    <Notice bind:text={notice} />
-    {#if !notice}<Notice bind:text={okNotice} kind="ok" />{/if}
     <Command.List class="max-h-none flex-1 overflow-y-auto">
       {#if error}
         <p class="text-destructive px-4 py-6 text-sm">{error}</p>
@@ -1398,16 +1448,15 @@
           <Command.Group heading="Gruppen">
             {#each repoGroups as g (g.name)}
               {@const live = sessions.some((s) => s.group === g.name)}
+              {@const members = g.paths.map((p) => split(repos.find((r) => r.path === p)?.rel ?? p)[1]).join(" · ")}
               <ContextMenu.Root>
                 <ContextMenu.Trigger>
                   {#snippet child({ props })}
                     <Command.Item {...props} value={`group:${g.name}`} onSelect={() => launchGroup(g)} class="gap-3 px-3 py-2">
                       <span class="bg-primary/15 text-primary grid size-6 place-items-center rounded-md"><LayersIcon class="size-3.5" /></span>
                       <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm font-semibold">{g.name}</div>
-                        <div class="text-muted-foreground truncate text-[11px]">
-                          {g.paths.map((p) => split(repos.find((r) => r.path === p)?.rel ?? p)[1]).join(" · ")}
-                        </div>
+                        <div class="truncate text-sm font-semibold" title={g.name}>{g.name}</div>
+                        <div class="text-muted-foreground truncate text-[11px]" title={members}>{members}</div>
                       </div>
                       {#if live}
                         <Badge variant="outline" class="text-primary gap-1.5 text-[11px]">
@@ -1462,13 +1511,13 @@
                       </button>
 
                       <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm font-semibold">
+                        <div class="truncate text-sm font-semibold" title={item.name}>
                           {#each item.name.split("") as ch, i}<span
                               class={item.marks.includes(i) ? "text-primary" : ""}>{ch}</span
                             >{/each}
                         </div>
                         {#if item.dir}
-                          <div class="text-muted-foreground truncate font-mono text-[11px]">
+                          <div class="text-muted-foreground truncate font-mono text-[11px]" title={item.dir}>
                             {item.dir}
                           </div>
                         {/if}
@@ -1524,17 +1573,19 @@
                         {/if}
                       {/each}
 
-                      <Badge variant="outline" class="text-muted-foreground gap-1 font-mono text-[11px]">
-                        <GitBranchIcon class="size-3" />
-                        {item.repo.branch}
-                      </Badge>
+                      {#if item.repo.branch}
+                        <Badge variant="outline" class="text-muted-foreground gap-1 font-mono text-[11px]">
+                          <GitBranchIcon class="size-3" />
+                          {item.repo.branch}
+                        </Badge>
+                      {/if}
                       <span class="text-muted-foreground w-12 text-right font-mono text-[11px] tabular-nums">
                         {age(item.repo.last_commit)}
                       </span>
                       {#if nr <= 9}
                         <kbd
                           class="text-muted-foreground border-border hidden w-10 rounded border px-1 py-0.5 text-center font-mono text-[10px] sm:block"
-                          >^{nr}</kbd
+                          >{mac ? "⌘" : "^"}{nr}</kbd
                         >
                       {:else}
                         <span class="hidden w-10 sm:block"></span>
@@ -1546,14 +1597,14 @@
                   <ContextMenu.Content
                     class={cn(menuContent, "min-w-52 rounded-lg shadow-lg")}
                   >
-                    {@render repoItem("Git-Ansicht", "Strg+G", () => openGit(item.repo))}
-                    {@render repoItem("Editor", "Strg+⇧+E", () => openEdit(item.repo))}
-                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", "Strg+⏎", () => launch(item.repo))}
+                    {@render repoItem("Git-Ansicht", `${mod}+G`, () => openGit(item.repo))}
+                    {@render repoItem("Editor", `${mod}+⇧+E`, () => openEdit(item.repo))}
+                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", `${mod}+⏎`, () => launch(item.repo))}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem(mac ? "Im Finder zeigen" : "Im Explorer zeigen", "Strg+E", () => reveal(item.repo))}
+                    {@render repoItem(mac ? "Im Finder zeigen" : "Im Explorer zeigen", `${mod}+E`, () => reveal(item.repo))}
                     {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
                     {@render repoItem("Pfad kopieren", "", () => navigator.clipboard.writeText(item.repo.path))}
-                    {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", "Strg+P", () => togglePin(item.repo.path))}
+                    {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", `${mod}+P`, () => togglePin(item.repo.path))}
                     {@render repoItem("Repo-Gruppe erstellen …", "", () => (groupEdit = { orig: null, g: { name: "", paths: [item.repo.path] } }))}
                     {#if isUnity(item.repo)}
                       <ContextMenu.Separator class={menuSeparator} />
@@ -1589,7 +1640,7 @@
           <button
             role="tab"
             aria-selected={tabOn(s)}
-            onclick={() => (s.group ? (leaveGit(), (editRepo = null), (active = s.id)) : openTab(s.repo))}
+            onclick={() => (s.group ? openGroupTab(s.id) : openTab(s.repo))}
           >
             {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
                 class="text-primary mr-1 inline size-3"
@@ -1675,7 +1726,7 @@
         {new Date(scannedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}{/if}
     </span>
     <span class="flex-1"></span>
-    {#each [["⏎", "Git"], ["Strg ⏎", "Claude"]] as [key, what] (key)}
+    {#each [["⏎", "Git"], [`${mod} ⏎`, "Claude"]] as [key, what] (key)}
       <span class="flex items-center gap-1.5">{@render kbd(key)} {what}</span>
     {/each}
     <button class="hover:text-foreground flex items-center gap-1.5" onclick={() => (help = true)}>
@@ -1751,50 +1802,50 @@
     <div class="grid gap-6 sm:grid-cols-2">
       {@render keys("Liste", [
         ["⏎ / Klick", "Git-Ansicht öffnen"],
-        ["Strg + ⏎ / Umschalt + Klick", "Claude im Projekt starten"],
+        [`${mod} + ⏎ / Umschalt + Klick`, "Claude im Projekt starten"],
         ["↑ ↓", "Projekt wählen"],
-        ["Strg + 1 … 9", "Claude im Treffer starten"],
-        ["Strg + G", "Git-Ansicht öffnen"],
-        ["Strg + ⇧ + E", "Editor öffnen"],
-        ["Strg + N", "Repo klonen"],
-        ["Strg + ⇧ + N", "Neues Repo anlegen"],
-        ["Strg + K", "Suche fokussieren"],
-        ["Strg + P", "Projekt anpinnen"],
-        ["Strg + E", "Ordner im Explorer öffnen"],
-        ["Strg + R", "Neu einlesen"],
-        ["Strg + O", "Dev-Ordner wechseln"],
-        ["Strg + T", "Claude ohne Projekt (im Home-Ordner)"],
+        [`${mod} + 1 … 9`, "Claude im Treffer starten"],
+        [`${mod} + G`, "Git-Ansicht öffnen"],
+        [`${mod} + ⇧ + E`, "Editor öffnen"],
+        [`${mod} + N`, "Repo klonen"],
+        [`${mod} + ⇧ + N`, "Neues Repo anlegen"],
+        [`${mod} + K`, "Suche fokussieren"],
+        [`${mod} + P`, "Projekt anpinnen"],
+        [`${mod} + E`, "Ordner im Explorer öffnen"],
+        [`${mod} + R`, "Neu einlesen"],
+        [`${mod} + O`, "Dev-Ordner wechseln"],
+        [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
         ["Rechtsklick", "Weitere Aktionen, z. B. vom Gerät löschen"],
         ["Esc", "Suche leeren, sonst schließen (bzw. ins Tray)"],
       ])}
       <div class="grid content-start gap-6">
         {@render keys("Überall", [
-          [`${mac ? "⌘" : "Strg"} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
-          [`${mac ? "⌘" : "Strg"} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
+          [`${mod} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
+          [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
         ])}
         {@render keys("Terminal, Git und Editor", [
-          ["⇧ + Esc / Strg + ⇧ + W", "Zurück zur Liste, Sitzung läuft weiter"],
+          [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zur Liste, Sitzung läuft weiter"],
           ["Alt + E", "Ordner im Explorer öffnen"],
           ["Alt + G", "Im Terminal und Editor: Git-Ansicht öffnen"],
-          ["Strg + ⇧ + E", "Editor öffnen"],
+          [`${mod} + ⇧ + E`, "Editor öffnen"],
           ["Strg + ⇧ + C / Strg + V", "Im Terminal: kopieren / einfügen"],
         ])}
         {@render keys("Editor", [
-          ["Strg + S", "Datei speichern"],
-          ["Strg + P", "Datei suchen und öffnen"],
+          [`${mod} + S`, "Datei speichern"],
+          [`${mod} + P`, "Datei suchen und öffnen"],
           ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
         ])}
         {@render keys("Git-Ansicht", [
           ["Esc", "Zurück zur Liste"],
-          ["Strg + 1 … 6", "Änderungen / Verlauf / Releases / Actions / Unity / Skills"],
-          ["Strg + ⇧ + F", "Fetch"],
-          ["Strg + ⇧ + L", "Pull"],
-          ["Strg + ⇧ + P", "Push"],
+          [`${mod} + 1 … 6`, "Änderungen / Verlauf / Releases / Actions / Unity / Skills"],
+          [`${mod} + ⇧ + F`, "Fetch"],
+          [`${mod} + ⇧ + L`, "Pull"],
+          [`${mod} + ⇧ + P`, "Push"],
           ["F5", "Aktualisieren"],
-          ["Strg + ⏎", "Commit"],
+          [`${mod} + ⏎`, "Commit"],
           ["Leertaste", "Datei stagen / unstagen"],
           ["F7 / ⇧ + F7", "Merge-Editor: nächster / vorheriger Konflikt"],
-          ["Strg + S", "Merge-Editor: speichern"],
+          [`${mod} + S`, "Merge-Editor: speichern"],
         ])}
       </div>
     </div>

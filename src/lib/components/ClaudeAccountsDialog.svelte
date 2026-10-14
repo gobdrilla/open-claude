@@ -19,6 +19,8 @@
   let saved = $state<Account[]>([]);
   let error = $state("");
   let busy = $state(false);
+  // Ohne gemerkte Konten zeigte die Liste waehrend des Lesens sonst kurz "Nicht angemeldet."
+  let loading = $state(false);
   // Laufende Anmeldung (claude auth login in einer PTY)
   let login = $state<{ id: string; out: string } | null>(null);
   let code = $state("");
@@ -26,6 +28,7 @@
 
   async function load() {
     error = "";
+    loading = true;
     try {
       // Aktuelle Anmeldung gleich merken, sonst waere sie nach einem Wechsel weg
       await invoke("claude_account_save");
@@ -33,6 +36,7 @@
     } catch (e) {
       error = String(e);
     }
+    loading = false;
   }
   $effect(() => {
     if (open) load();
@@ -143,7 +147,7 @@
               {#if on}<CheckIcon class="size-3.5" />{:else}<UserIcon class="size-3.5" />{/if}
             </span>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-medium">{a.email}</div>
+              <div class="truncate text-sm font-medium" title={a.email}>{a.email}</div>
               <div class="text-muted-foreground truncate text-xs">{on ? "Aktiv" : a.org}</div>
             </div>
             {#if on}
@@ -154,7 +158,7 @@
             {/if}
           </li>
         {:else}
-          <li class="text-muted-foreground px-3 py-3 text-sm">Nicht angemeldet.</li>
+          <li class="text-muted-foreground px-3 py-3 text-sm">{loading ? "Lese Konten …" : "Nicht angemeldet."}</li>
         {/each}
       </ul>
       <div class="flex justify-end">

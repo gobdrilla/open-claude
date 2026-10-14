@@ -390,6 +390,12 @@ fn trashable(path: &str, root: &str) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Vorab pruefen, ob trash_repo loeschen wuerde: vorher werden Sitzung, Run und LSP beendet.
+#[tauri::command]
+fn trash_check(path: String, root: String) -> Result<(), String> {
+    trashable(&path, &root).map(|_| ())
+}
+
 /// Verschiebt das Repo in den Papierkorb, damit ein Fehlklick wiederherstellbar bleibt.
 #[tauri::command]
 async fn trash_repo(path: String, root: String) -> Result<(), String> {
@@ -460,7 +466,7 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
     // Erstes Untermenue = App-Menue, sein letzter Eintrag = Beenden.
     if let Some(sub) = menu.items()?.first().and_then(|i| i.as_submenu()) {
         sub.remove_at(sub.items()?.len().saturating_sub(1))?;
-        sub.append(&tauri::menu::MenuItem::with_id(app, "quit", "Open Claude beenden", true, Some("Cmd+Q"))?)?;
+        sub.append(&tauri::menu::MenuItem::with_id(app, "quit", "L'Atelier de Claude beenden", true, Some("Cmd+Q"))?)?;
     }
     Ok(menu)
 }
@@ -480,7 +486,7 @@ fn tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&oeffnen, &beenden])?;
 
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Open Claude")
+        .tooltip("L'Atelier de Claude")
         .menu(&menu)
         // Linksklick oeffnet, das Menue haengt auf rechts.
         .show_menu_on_left_click(false)
@@ -566,6 +572,7 @@ pub fn run() {
             scan,
             reveal,
             trash_repo,
+            trash_check,
             set_tray,
             deps::deps_missing,
             deps::deps_install,

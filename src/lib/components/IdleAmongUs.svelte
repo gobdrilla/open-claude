@@ -195,8 +195,8 @@
   });
 </script>
 
-<!-- Laufbahn: unterhalb von Titel- und Suchleiste, oberhalb der Fusszeile. -->
-<div class="pointer-events-none fixed inset-x-0 top-[85px] bottom-[41px] z-[998]">
+<!-- Laufbahn: unterhalb von Titel- und Suchleiste, oberhalb der Fusszeile. z-40: unter Dialogen und Menues (z-50). -->
+<div class="pointer-events-none fixed inset-x-0 top-[85px] bottom-[41px] z-40">
 {#each crew as c (c.id)}
   {#if c.dead}
     <img

@@ -6,6 +6,7 @@
   import Notice from "$lib/components/Notice.svelte";
   import { Segmented, Select } from "$lib/components/kit";
   import { fuzzy } from "$lib/fuzzy";
+  import { confirm } from "$lib/confirm.svelte";
   import { skills, renameProfile, fromProject, adjust, emptyProject, type SkillStore, type SkillsInfo } from "$lib/skills";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
 
@@ -43,9 +44,11 @@
   $effect(() => {
     const p = ctx;
     if (!open || !p) return;
+    // Sonst stuende bis zur Antwort die Liste des vorigen Projekts da
+    info = null;
     skills.list(p).then(
       (i) => p === ctx && (info = i),
-      (e) => (error = String(e)),
+      (e) => p === ctx && (error = String(e)),
     );
   });
 
@@ -64,10 +67,22 @@
     name = "";
   }
 
-  function rename(to: string | null) {
-    if (to !== null && (!to.trim() || to.trim() in draft.profiles)) return;
-    draft = renameProfile(draft, sel, to?.trim() ?? null);
-    sel = to?.trim() ?? names[0] ?? "";
+  function rename(input: HTMLInputElement) {
+    const to = input.value.trim();
+    if (to === sel) return;
+    if (!to || to in draft.profiles) {
+      error = to ? `Profil „${to}“ gibt es schon.` : "Name fehlt.";
+      input.value = sel;
+      return;
+    }
+    draft = renameProfile(draft, sel, to);
+    sel = to;
+  }
+
+  async function remove() {
+    if (!(await confirm(`Profil „${sel}“ löschen? Wirkt erst mit Speichern.`, "Löschen"))) return;
+    draft = renameProfile(draft, sel, null);
+    sel = names[0] ?? "";
   }
 
   function setKind(kind: string, n: string) {
@@ -97,6 +112,7 @@
           {#each names as n (n)}
             <button
               class="truncate rounded px-2 py-1 text-left {sel === n ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-secondary'}"
+              title={n}
               onclick={() => (sel = n)}>{n}</button
             >
           {:else}
@@ -145,12 +161,12 @@
                 value={sel}
                 class="h-7 w-48 text-xs"
                 title="Umbenennen mit Enter"
-                onkeydown={(e) => e.key === "Enter" && rename(e.currentTarget.value)}
-                onblur={(e) => e.currentTarget.value !== sel && rename(e.currentTarget.value)}
+                onkeydown={(e) => e.key === "Enter" && rename(e.currentTarget)}
+                onblur={(e) => rename(e.currentTarget)}
               />
               <span class="flex-1"></span>
               <Input bind:value={query} placeholder="Skill suchen" class="h-7 w-40 text-xs" />
-              <Button variant="ghost" size="sm" class="text-destructive h-7" title="Profil löschen" onclick={() => rename(null)}>
+              <Button variant="ghost" size="sm" class="text-destructive h-7" title="Profil löschen" onclick={remove}>
                 <TrashIcon class="size-3.5" />
               </Button>
             </div>

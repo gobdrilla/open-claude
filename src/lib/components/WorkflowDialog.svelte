@@ -4,7 +4,7 @@
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
-  import { Select } from "$lib/components/kit";
+  import { Segmented } from "$lib/components/kit";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import { EFFORTS, MODELS, fromScript, newAgent, newPhase, newTemplate, problems, toScript, type WfFile, type WfTemplate } from "$lib/workflow.logic";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
@@ -33,6 +33,8 @@
   let scope = $state<"user" | "project">("user");
   let busy = $state(false);
   let error = $state("");
+  // Neue Vorlage: Hinweise erst nach dem ersten Speichern-Versuch, nicht schon vor dem ersten Tippen.
+  let tried = $state(false);
 
   // Beim Oeffnen frisch aus der Datei laden
   $effect.pre(() => {
@@ -41,8 +43,12 @@
       t = (entry && fromScript(entry.text)) || newTemplate();
       scope = entry?.scope ?? "user";
       error = "";
+      tried = !!entry;
     });
   });
+
+  // Wie im Einstellungsmenue
+  const EFFORT_LABEL: Record<string, string> = { "": "Session", low: "Low", medium: "Mid", high: "High", xhigh: "XH", max: "Max" };
 
   const issues = $derived(
     problems(
@@ -80,6 +86,7 @@
   }
 
   async function save() {
+    tried = true;
     if (busy || issues.length) return;
     busy = true;
     error = "";
@@ -111,9 +118,7 @@
         <span class="text-muted-foreground">Name</span>
         <div class="flex items-center gap-2">
           <Input bind:value={t.name} placeholder="code-review" class="font-mono text-xs" />
-          {#each [["user", "Global"], ["project", "Projekt"]] as [s, label] (s)}
-            <Button variant={scope === s ? "default" : "outline"} size="sm" class="text-xs" onclick={() => (scope = s as typeof scope)}>{label}</Button>
-          {/each}
+          <Segmented value={scope} options={[["Global", "user"], ["Projekt", "project"]] as const} onchange={(v) => (scope = v)} />
         </div>
         <span class="text-muted-foreground">Beschreibung</span>
         <Input bind:value={t.description} placeholder="Was der Workflow tut" class="text-xs" />
@@ -128,8 +133,7 @@
           <div class="flex items-center gap-1.5">
             <span class="text-muted-foreground shrink-0">Phase {i + 1}</span>
             <Input bind:value={p.title} class="h-7 text-xs" />
-            <Button variant={p.mode === "parallel" ? "default" : "outline"} size="sm" class="text-xs" onclick={() => (p.mode = "parallel")}>parallel</Button>
-            <Button variant={p.mode === "sequence" ? "default" : "outline"} size="sm" class="text-xs" onclick={() => (p.mode = "sequence")}>nacheinander</Button>
+            <Segmented value={p.mode} options={[["parallel", "parallel"], ["nacheinander", "sequence"]] as const} onchange={(v) => (p.mode = v)} />
             <Button variant="ghost" size="icon-sm" aria-label="Nach oben" disabled={i === 0} onclick={() => move(t.phases, i, -1)}><ArrowUpIcon class="size-3.5" /></Button>
             <Button variant="ghost" size="icon-sm" aria-label="Nach unten" disabled={i === t.phases.length - 1} onclick={() => move(t.phases, i, 1)}
               ><ArrowDownIcon class="size-3.5" /></Button
@@ -150,11 +154,9 @@
               <Textarea bind:value={a.prompt} rows={3} placeholder={"Was soll der Agent tun? {{args}} {{prev}}"} class="font-mono text-xs" />
               <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-muted-foreground">Modell</span>
-                {#each MODELS as m (m)}
-                  <Button variant={a.model === m ? "default" : "outline"} size="sm" class="h-6 px-2 text-xs" onclick={() => (a.model = m)}>{m || "Session"}</Button>
-                {/each}
+                <Segmented value={a.model} options={MODELS.map((m) => [m ? m[0].toUpperCase() + m.slice(1) : "Session", m] as const)} onchange={(v) => (a.model = v)} />
                 <span class="text-muted-foreground ml-2">Effort</span>
-                <Select bind:value={a.effort} options={EFFORTS.map((e) => [e || "Session", e] as const)} aria-label="Effort" />
+                <Segmented value={a.effort} options={EFFORTS.map((e) => [EFFORT_LABEL[e] ?? e, e] as const)} onchange={(v) => (a.effort = v)} />
               </div>
               <details open={!!a.schema}>
                 <summary class="text-muted-foreground cursor-pointer">Strukturierte Ausgabe (JSON-Schema)</summary>
@@ -178,7 +180,7 @@
       </details>
     </fieldset>
 
-    {#if issues.length}
+    {#if tried && issues.length}
       <ul class="text-warning max-h-24 list-inside list-disc overflow-y-auto text-xs">
         {#each issues as m, i (i)}<li>{m}</li>{/each}
       </ul>
@@ -188,9 +190,9 @@
     {/if}
     {#if error}<p class="text-destructive text-xs whitespace-pre-wrap">{error}</p>{/if}
 
-    <div class="flex justify-end gap-1.5">
-      <Button variant="outline" size="sm" class="text-xs" disabled={busy} onclick={() => (open = false)}>Abbrechen</Button>
-      <Button size="sm" class="gap-1.5 text-xs" disabled={busy || !!issues.length} onclick={save}>
+    <div class="flex justify-end gap-2">
+      <Button variant="ghost" size="sm" disabled={busy} onclick={() => (open = false)}>Abbrechen</Button>
+      <Button size="sm" class="gap-1.5" disabled={busy || (tried && !!issues.length)} onclick={save}>
         {#if busy}<LoaderCircleIcon class="size-3.5 animate-spin" />{/if}
         Speichern
       </Button>

@@ -40,10 +40,10 @@
         {
           k: "theme",
           label: "Theme",
-          hint: "Auto wechselt live mit der App, Open Claude erst in neuen Sitzungen",
+          hint: "Auto wechselt live mit der App, Atelier erst in neuen Sitzungen",
           type: "enum",
           def: "dark",
-          opts: [["Auto (live mit der App)", "auto"], ["Open Claude (lila)", "custom:open-claude:open-claude"], ["Dunkel", "dark"], ["Hell", "light"], ["Dunkel (farbenblind)", "dark-daltonized"], ["Hell (farbenblind)", "light-daltonized"], ["Dunkel (ANSI)", "dark-ansi"], ["Hell (ANSI)", "light-ansi"]],
+          opts: [["Auto (live mit der App)", "auto"], ["Atelier (lila)", "custom:open-claude:open-claude"], ["Dunkel", "dark"], ["Hell", "light"], ["Dunkel (farbenblind)", "dark-daltonized"], ["Hell (farbenblind)", "light-daltonized"], ["Dunkel (ANSI)", "dark-ansi"], ["Hell (ANSI)", "light-ansi"]],
         },
         { k: "editorMode", label: "Editor-Modus", type: "enum", def: "normal", opts: [["Normal", "normal"], ["Vim", "vim"]] },
         { k: "timeFormat", label: "Zeitformat", type: "enum", def: "auto", opts: [["Auto", "auto"], ["12 h", "12h"], ["24 h", "24h"]] },
@@ -109,6 +109,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import { Segmented, Select, Switch } from "$lib/components/kit";
+  import { confirm } from "$lib/confirm.svelte";
   const MODES = [
     ["Manuell", "default", "Fragt vor Änderungen und Befehlen"],
     ["Edits annehmen", "acceptEdits", "Dateiänderungen ohne Rückfrage"],
@@ -139,6 +140,14 @@
     }
   });
   const globDirty = $derived(JSON.stringify(glob) !== JSON.stringify(globLoaded));
+  const dirty = $derived(text !== loaded || globDirty);
+  const discard = async () => !dirty || (await confirm("Ungespeicherte Änderungen an den Claude-Einstellungen verwerfen?", "Verwerfen"));
+  async function close() {
+    if (await discard()) open = false;
+  }
+  async function reload() {
+    if (await discard()) load();
+  }
 
   async function load() {
     error = "";
@@ -233,7 +242,7 @@
   }
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root bind:open={() => open, (v) => (v ? (open = true) : void close())}>
   <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-2xl">
     <Dialog.Header>
       <Dialog.Title>Claude-Einstellungen</Dialog.Title>
@@ -291,9 +300,10 @@
     {#if !parsed}<p class="text-destructive text-xs">settings.json ist kein gültiges JSON-Objekt</p>{/if}
     {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
 
-    <div class="flex gap-1.5">
-      <Button variant="outline" size="sm" class="text-xs" disabled={busy} onclick={load}>Neu laden</Button>
-      <Button size="sm" class="flex-1 text-xs" disabled={busy || !parsed || (text === loaded && !globDirty)} onclick={save}>Speichern</Button>
+    <div class="flex justify-end gap-2">
+      <Button variant="ghost" size="sm" class="mr-auto" disabled={busy} onclick={reload}>Neu laden</Button>
+      <Button variant="ghost" size="sm" disabled={busy} onclick={close}>Abbrechen</Button>
+      <Button size="sm" disabled={busy || !parsed || !dirty} onclick={save}>Speichern</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

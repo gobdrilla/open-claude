@@ -32,9 +32,19 @@
     if (group) (name = group.name), (paths = [...group.paths]);
   });
 
+  // Verschoben oder geloescht: bleibt sichtbar und entfernbar, zaehlt aber nicht als Repo
+  const missing = $derived(paths.filter((p) => !repos.some((r) => r.path === p)));
   const clean = $derived(name.trim());
   const error = $derived(
-    !clean ? "Name fehlt" : taken.includes(clean) ? "Name schon vergeben" : paths.length < 2 ? "Mindestens zwei Repos wählen" : "",
+    !clean
+      ? "Name fehlt"
+      : taken.includes(clean)
+        ? "Name schon vergeben"
+        : paths.length - missing.length < 2
+          ? "Mindestens zwei Repos wählen"
+          : missing[0] === paths[0]
+            ? "Haupt-Repo nicht gefunden"
+            : "",
   );
   const label = (r: Repo) => r.rel.split(/[\\/]/).pop() || r.rel;
 
@@ -54,13 +64,22 @@
     </Dialog.Header>
     <Input bind:value={name} placeholder="Name, z. B. Shop (Frontend + API)" onkeydown={(e) => e.key === "Enter" && save()} autofocus />
     <ul class="border-border/60 divide-border/60 min-h-0 flex-1 divide-y overflow-y-auto rounded-lg border">
+      {#each missing as p (p)}
+        <li class="flex items-center gap-2.5 px-3 py-1.5">
+          <div class="min-w-0 flex-1">
+            <div class="text-destructive truncate text-sm">nicht gefunden{paths[0] === p ? " (Haupt-Repo)" : ""}</div>
+            <div class="text-muted-foreground truncate font-mono text-[10px]" title={p}>{p}</div>
+          </div>
+          <button class="text-muted-foreground hover:text-destructive text-[10px]" onclick={() => toggle(p)}>Entfernen</button>
+        </li>
+      {/each}
       {#each repos as r (r.path)}
         {@const on = paths.includes(r.path)}
         <li class="flex items-center gap-2.5 px-3 py-1.5">
           <input type="checkbox" checked={on} onchange={() => toggle(r.path)} aria-label="{label(r)} in die Gruppe" />
           <div class="min-w-0 flex-1">
-            <div class="truncate text-sm">{label(r)}</div>
-            <div class="text-muted-foreground truncate font-mono text-[10px]">{r.rel}</div>
+            <div class="truncate text-sm" title={label(r)}>{label(r)}</div>
+            <div class="text-muted-foreground truncate font-mono text-[10px]" title={r.path}>{r.rel}</div>
           </div>
           {#if on && paths[0] === r.path}
             <span class="bg-primary/15 text-primary rounded-full px-2 py-0.5 text-[10px]">Haupt-Repo</span>

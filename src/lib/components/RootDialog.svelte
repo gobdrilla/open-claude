@@ -80,7 +80,7 @@
     interactOutsideBehavior={first ? "ignore" : "close"}
   >
     <Dialog.Header>
-      <Dialog.Title>{first ? "Willkommen bei Open Claude" : "Projektquelle"}</Dialog.Title>
+      <Dialog.Title>{first ? "Willkommen bei L'Atelier de Claude" : "Projektquelle"}</Dialog.Title>
       <Dialog.Description>Wie sollen deine Projekte in die Liste kommen? Ändern geht später jederzeit.</Dialog.Description>
     </Dialog.Header>
 
@@ -102,8 +102,9 @@
       {@render option("single", FolderInputIcon, "Ohne Dev-Ordner", "Projekte einzeln hinzufügen, egal wo sie liegen.")}
     </div>
 
-    <div class="flex justify-end">
-      <Button onclick={submit} disabled={!ready}>Übernehmen</Button>
+    <div class="flex justify-end gap-2">
+      {#if !first}<Button variant="ghost" size="sm" onclick={onclose}>Abbrechen</Button>{/if}
+      <Button size="sm" onclick={submit} disabled={!ready}>Übernehmen</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>
