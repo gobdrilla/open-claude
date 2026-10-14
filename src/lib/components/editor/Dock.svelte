@@ -183,7 +183,11 @@
         <div
           data-bar={n.id}
           role="tablist"
-          class="bg-chrome/50 border-border/60 flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b px-1 select-none"
+          class="bg-chrome/50 border-border/60 flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b px-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onwheel={(e) => {
+            // Ohne Scrollbar: Mausrad scrollt die Tabs seitlich (Trackpad liefert deltaX selbst)
+            if (!e.deltaX) e.currentTarget.scrollLeft += e.deltaY;
+          }}
         >
           {#each n.tabs as id (id)}
             {@const t = tab(id)}
