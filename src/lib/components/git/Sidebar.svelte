@@ -235,15 +235,15 @@
   </DropdownMenu.Item>
 {/snippet}
 
-<div class="flex h-full flex-col overflow-y-auto text-xs {busy ? 'pointer-events-none opacity-60' : ''}" aria-busy={busy}>
+<div class="flex h-full flex-col overflow-y-auto p-1.5 text-xs {busy ? 'pointer-events-none opacity-60' : ''}" aria-busy={busy}>
   <Notice bind:text={error} />
 
   <!-- Noch nicht in die Basis gemergt: Ueberblick ueber alle offenen Branches -->
   {#if base}
-    <div class="border-border border-b">
-      <div class="hover:bg-accent flex items-center pr-1">
+    <div class="border-border border-b py-1.5 last:border-b-0">
+      <div class="hover:bg-accent/40 flex items-center rounded-lg pr-1">
         <button
-          class="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold"
+          class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[11px] font-semibold"
           onclick={() => (expanded.open = !expanded.open)}
           aria-expanded={expanded.open}
           title="Branches mit Commits, die noch nicht in {base} sind{merges < open.length
@@ -251,7 +251,7 @@
             : ''}"
         >
           <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.open ? 'rotate-90' : ''}" />
-          <GitMergeIcon class="size-3.5 shrink-0" />
+          <span class="bg-warning/15 text-warning grid size-5 shrink-0 place-items-center rounded-md"><GitMergeIcon class="size-3" /></span>
           <span class="min-w-0 flex-1 truncate">Nicht in <span class="font-mono">{base}</span></span>
           <span class="font-mono text-[10px] {open.length ? 'text-warning' : 'text-muted-foreground'}"
             >{open.length}</span
@@ -285,7 +285,7 @@
         </DropdownMenu.Root>
       </div>
       {#if expanded.open}
-        <div class="pb-1">
+        <div class="px-1 pb-1">
           {#if open.length === 0}
             <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">
               {allOpen.length ? "Nichts aus den letzten 6 Monaten." : "Alles gemergt."}
@@ -293,7 +293,7 @@
           {/if}
           {#each tree as { b, depth } (b.name)}
             <button
-              class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] {stale(b)
+              class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] {stale(b)
                 ? 'opacity-50'
                 : ''}"
               style="padding-left:{24 + depth * 12}px"
@@ -328,19 +328,19 @@
   {/if}
 
   <!-- Branches -->
-  <div class="border-border border-b">
+  <div class="border-border border-b py-1.5 last:border-b-0">
     <button
-      class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold"
+      class="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
       onclick={() => (expanded.branches = !expanded.branches)}
       aria-expanded={expanded.branches}
     >
       <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.branches ? 'rotate-90' : ''}" />
-      <GitBranchIcon class="size-3.5" />
+      <span class="bg-primary/15 text-primary grid size-5 shrink-0 place-items-center rounded-md"><GitBranchIcon class="size-3" /></span>
       <span class="flex-1">Branches</span>
-      <span class="text-muted-foreground font-mono text-[10px]">{locals.length}</span>
+      <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{locals.length}</span>
     </button>
     {#if expanded.branches}
-      <div class="pb-1">
+      <div class="px-1 pb-1">
         {#if locals.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
         {/if}
@@ -348,8 +348,8 @@
           <ContextMenu.Root>
             <ContextMenu.Trigger>
               <button
-                class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1 pl-6 text-left text-[11px] {b.current
-                  ? 'text-primary font-semibold'
+                class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px] {b.current
+                  ? 'bg-primary/10 text-primary font-semibold'
                   : ''} {merged(b) ? 'opacity-50' : ''}"
                 ondblclick={() => checkout(b)}
                 onclick={() => onselectref(b.sha)}
@@ -430,19 +430,19 @@
   </div>
 
   <!-- Remotes -->
-  <div class="border-border border-b">
+  <div class="border-border border-b py-1.5 last:border-b-0">
     <button
-      class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold"
+      class="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
       onclick={() => (expanded.remotes = !expanded.remotes)}
       aria-expanded={expanded.remotes}
     >
       <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.remotes ? 'rotate-90' : ''}" />
-      <CloudIcon class="size-3.5" />
+      <span class="bg-info/15 text-info grid size-5 shrink-0 place-items-center rounded-md"><CloudIcon class="size-3" /></span>
       <span class="flex-1">Remotes</span>
-      <span class="text-muted-foreground font-mono text-[10px]">{branches.length - locals.length}</span>
+      <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{branches.length - locals.length}</span>
     </button>
     {#if expanded.remotes}
-      <div class="pb-1">
+      <div class="px-1 pb-1">
         {#if remoteGroups.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
         {/if}
@@ -452,7 +452,7 @@
             <ContextMenu.Root>
               <ContextMenu.Trigger>
                 <button
-                  class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1 pl-6 text-left text-[11px] {merged(b)
+                  class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px] {merged(b)
                     ? 'opacity-50'
                     : ''}"
                   ondblclick={() => checkout(b)}
@@ -486,19 +486,19 @@
   </div>
 
   <!-- Tags -->
-  <div class="border-border border-b">
+  <div class="border-border border-b py-1.5 last:border-b-0">
     <button
-      class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold"
+      class="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
       onclick={() => (expanded.tags = !expanded.tags)}
       aria-expanded={expanded.tags}
     >
       <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.tags ? 'rotate-90' : ''}" />
-      <TagIcon class="size-3.5" />
+      <span class="bg-success/15 text-success grid size-5 shrink-0 place-items-center rounded-md"><TagIcon class="size-3" /></span>
       <span class="flex-1">Tags</span>
-      <span class="text-muted-foreground font-mono text-[10px]">{tags.length}</span>
+      <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{tags.length}</span>
     </button>
     {#if expanded.tags}
-      <div class="pb-1">
+      <div class="px-1 pb-1">
         {#if tags.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
         {/if}
@@ -506,7 +506,7 @@
           <ContextMenu.Root>
             <ContextMenu.Trigger>
               <button
-                class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1 pl-6 text-left text-[11px]"
+                class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px]"
                 onclick={() => onselectref(t.sha)}
               >
                 <span class="min-w-0 flex-1 truncate font-mono">{t.name}</span>
@@ -528,19 +528,19 @@
   </div>
 
   <!-- Stashes -->
-  <div class="border-border border-b">
+  <div class="border-border border-b py-1.5 last:border-b-0">
     <button
-      class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold"
+      class="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
       onclick={() => (expanded.stashes = !expanded.stashes)}
       aria-expanded={expanded.stashes}
     >
       <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.stashes ? 'rotate-90' : ''}" />
-      <ArchiveIcon class="size-3.5" />
+      <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><ArchiveIcon class="size-3" /></span>
       <span class="flex-1">Stashes</span>
-      <span class="text-muted-foreground font-mono text-[10px]">{stashes.length}</span>
+      <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{stashes.length}</span>
     </button>
     {#if expanded.stashes}
-      <div class="pb-1">
+      <div class="px-1 pb-1">
         {#if stashes.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
         {/if}
@@ -548,11 +548,11 @@
           <ContextMenu.Root>
             <ContextMenu.Trigger>
               <button
-                class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1 pl-6 text-left text-[11px]"
+                class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px]"
                 onclick={() => showStash(s)}
               >
                 <span class="min-w-0 flex-1 truncate">{s.message}</span>
-                <span class="text-muted-foreground font-mono text-[10px]">{s.branch}</span>
+                <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{s.branch}</span>
               </button>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
@@ -587,25 +587,25 @@
 
   <!-- Pull Requests (nur wenn origin bekannt) -->
   {#if originUrl}
-    <div class="border-border border-b">
+    <div class="border-border border-b py-1.5 last:border-b-0">
       <button
-        class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold"
+        class="hover:bg-accent/40 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
         onclick={() => (expanded.pulls = !expanded.pulls)}
         aria-expanded={expanded.pulls}
       >
         <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.pulls ? 'rotate-90' : ''}" />
-        <GitPullRequestIcon class="size-3.5" />
+        <span class="bg-primary/15 text-primary grid size-5 shrink-0 place-items-center rounded-md"><GitPullRequestIcon class="size-3" /></span>
         <span class="flex-1">Pull Requests</span>
-        <span class="text-muted-foreground font-mono text-[10px]">{pulls.length}</span>
+        <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{pulls.length}</span>
       </button>
       {#if expanded.pulls}
-        <div class="pb-1">
+        <div class="px-1 pb-1">
           {#if pulls.length === 0}
             <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine offenen.</p>
           {/if}
           {#each pulls as p (p.number)}
             <button
-              class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-1 pl-6 text-left text-[11px]"
+              class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px]"
               onclick={() => forge.openUrl(p.web_url)}
               title={p.title}
             >

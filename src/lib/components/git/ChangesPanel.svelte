@@ -1,6 +1,7 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, ConfirmDialog, menuContent } from "$lib/components/kit";
+  import { ContextItem, ConfirmDialog, fileIcon, menuContent } from "$lib/components/kit";
+  import { dirname } from "$lib/tree";
   import { ContextMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
   import { Button } from "$lib/components/ui/button/index.js";
@@ -253,14 +254,25 @@
     C: "text-info",
     "?": "text-muted-foreground",
   };
+  const bg: Record<string, string> = {
+    M: "bg-warning/15",
+    A: "bg-success/15",
+    D: "bg-destructive/15",
+    R: "bg-info/15",
+    C: "bg-info/15",
+  };
 </script>
 
 {#snippet list(title: string, files: FileChange[], isStaged: boolean)}
   {@const picked = chosenIn(files, isStaged)}
-  <div class="flex min-h-0 flex-1 flex-col">
-    <div class="bg-chrome border-border flex items-center gap-1 border-b px-2 py-1">
-      <span class="flex-1 font-semibold">{title}</span>
-      <span class="text-muted-foreground font-mono text-[10px]">{files.length}</span>
+  <div class="bg-background/50 ring-foreground/5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1">
+    <div class="flex items-center gap-2 px-2 py-1.5 {isStaged ? 'bg-success/8' : 'bg-warning/8'}">
+      <span class="size-2 shrink-0 rounded-full {isStaged ? 'bg-success shadow-success/50' : 'bg-warning shadow-warning/50'} shadow-[0_0_6px]"></span>
+      <span class="flex-1 text-[11px] font-semibold">{title}</span>
+      <span
+        class="rounded-full px-1.5 font-mono text-[10px] {isStaged ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}"
+        >{files.length}</span
+      >
       <Button
         variant="ghost"
         size="xs"
@@ -272,7 +284,7 @@
       </Button>
     </div>
     {#if picked.length > 1}
-      <div class="bg-chrome border-border flex flex-wrap items-center gap-1 border-b px-2 py-0.5">
+      <div class="bg-primary/10 mx-1 mt-1 flex flex-wrap items-center gap-1 rounded-md px-2 py-0.5">
         <span class="text-muted-foreground flex-1 text-[11px] whitespace-nowrap">{picked.length} ausgewählt</span>
         <Button
           variant="ghost"
@@ -298,20 +310,22 @@
         {/if}
       </div>
     {/if}
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto p-1">
       {#each files as f (f.path)}
         {@const code = isStaged ? f.index : f.worktree}
+        {@const fi = fileIcon(f.path)}
+        {@const dir = dirname(f.path)}
         <!-- Wie im Dateimanager: Menue wirkt auf die ganze Auswahl, wenn die Zeile dazugehoert, sonst nur auf sie. -->
         {@const multi = isChosen(f, isStaged) && picked.length > 1}
         <ContextMenu.Root>
           <ContextMenu.Trigger>
             <button
-              class="hover:bg-accent flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px] select-none {isChosen(
+              class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] select-none {isChosen(
                 f,
                 isStaged,
               ) ||
               (sel?.path === f.path && sel.staged === isStaged)
-                ? 'bg-accent'
+                ? 'bg-primary/15'
                 : ''}"
               title={f.orig ? `${f.orig} → ${f.path}` : f.path}
               data-file-list={isStaged}
@@ -334,8 +348,15 @@
                 }
               }}
             >
-              <span class="w-3 shrink-0 text-center font-mono font-bold {color[code] ?? ''}">{code}</span>
-              <span class="min-w-0 flex-1 truncate font-mono">{f.path}</span>
+              <fi.icon class="size-3.5 shrink-0 {fi.tint}" />
+              <span class="min-w-0 flex-1 truncate"
+                ><span class="font-medium">{f.path.slice(dir ? dir.length + 1 : 0)}</span
+                >{#if dir}<span class="text-muted-foreground ml-1.5 text-[10px]">{dir}</span>{/if}</span
+              >
+              <span
+                class="grid size-4 shrink-0 place-items-center rounded font-mono text-[9px] font-bold {color[code] ?? ''} {bg[code] ?? 'bg-secondary'}"
+                >{code}</span
+              >
             </button>
           </ContextMenu.Trigger>
           <ContextMenu.Portal>
@@ -377,17 +398,17 @@
   <Notice bind:text={error} />
   <div class="flex min-h-0 flex-1">
     <!-- Schrumpft mit, damit auch im kleinen Fenster Platz fuer den Diff bleibt -->
-    <div class="border-border flex w-2/5 max-w-80 min-w-48 shrink-0 flex-col border-r">
+    <div class="border-border/60 flex w-2/5 max-w-80 min-w-48 shrink-0 flex-col gap-2 border-r p-2">
       {#if conflicts.length}
-        <div class="border-border max-h-40 overflow-y-auto border-b">
-          <div class="bg-destructive/15 text-destructive flex items-center gap-1.5 px-2 py-1 font-semibold">
+        <div class="ring-destructive/30 max-h-40 shrink-0 overflow-y-auto rounded-xl p-1 ring-1">
+          <div class="bg-destructive/15 text-destructive flex items-center gap-1.5 rounded-md px-2 py-1 font-semibold">
             <TriangleAlertIcon class="size-3.5" />
             <span class="flex-1">Konflikte</span>
             <span class="font-mono text-[10px]">{conflicts.length}</span>
           </div>
           {#each conflicts as f (f.path)}
             <button
-              class="text-destructive hover:bg-accent flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px]"
+              class="text-destructive hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-[11px]"
               title="Im Merge-Editor öffnen"
               onclick={() => onconflict(f.path)}
             >
@@ -398,12 +419,12 @@
         </div>
       {/if}
       {@render list("Gestaged", staged, true)}
-      <div class="border-border flex min-h-0 flex-1 flex-col border-t">{@render list("Nicht gestaged", unstaged, false)}</div>
+      {@render list("Nicht gestaged", unstaged, false)}
 
       <!-- Commit -->
-      <div class="border-border flex flex-col gap-1.5 border-t p-2">
+      <div class="bg-background/60 ring-foreground/5 flex flex-col gap-1.5 rounded-xl p-2 ring-1">
         <textarea
-          class="border-input bg-background focus-visible:ring-ring/50 h-24 resize-none rounded-md border px-2 py-1 font-mono text-[11px] outline-none focus-visible:ring-2"
+          class="border-input bg-background focus-visible:ring-ring/50 h-24 resize-none rounded-lg border px-2 py-1 font-mono text-[11px] outline-none focus-visible:ring-2"
           placeholder="Commit-Nachricht (Strg+Enter, mit Umschalt: + Push)"
           bind:value={message}
           onkeydown={(e) => {
@@ -425,7 +446,12 @@
           >
             {subjectLen}/72
           </span>
-          <Button size="xs" disabled={!canCommit} onclick={() => commit()}>
+          <Button
+            size="xs"
+            class="from-primary to-primary/70 shadow-primary/30 bg-linear-to-br shadow-md"
+            disabled={!canCommit}
+            onclick={() => commit()}
+          >
             {amend ? "Amend" : "Commit"}{staged.length ? ` (${staged.length})` : ""}
           </Button>
           {#if !amend}

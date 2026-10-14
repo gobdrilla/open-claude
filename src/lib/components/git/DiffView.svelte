@@ -14,6 +14,8 @@
   import { SvelteSet } from "svelte/reactivity";
   import { parseDiff } from "$lib/diff";
   import { Button } from "$lib/components/ui/button/index.js";
+  import { fileIcon } from "$lib/components/kit";
+  import { dirname } from "$lib/tree";
 
   let {
     diff,
@@ -31,6 +33,7 @@
   const BIG = 1500;
   const opened = new SvelteSet<number>();
   const size = (f: DiffFile) => f.hunks.reduce((n, h) => n + h.lines.length, 0);
+  const count = (f: DiffFile, kind: "add" | "del") => f.hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind === kind).length, 0);
 
   $effect(() => {
     diff;
@@ -51,7 +54,12 @@
     selected[key] = [...cur];
   }
 
-  const bg = { add: "bg-success/10", del: "bg-destructive/10", ctx: "", meta: "text-muted-foreground italic" };
+  const bg = {
+    add: "bg-success/10 border-success",
+    del: "bg-destructive/10 border-destructive",
+    ctx: "border-transparent",
+    meta: "text-muted-foreground italic border-transparent",
+  };
   const sign = { add: "+", del: "-", ctx: " ", meta: "" };
 </script>
 
@@ -60,9 +68,22 @@
     <p class="text-muted-foreground p-3 font-sans text-xs">{empty}</p>
   {/if}
   {#each files as file, fi (fi)}
-    <div class="border-border border-b">
-      <div class="bg-chrome border-border sticky top-0 z-10 truncate border-b px-2 py-1 font-semibold">
-        {file.oldPath !== file.newPath ? `${file.oldPath} → ${file.newPath}` : file.newPath}
+    {@const fic = fileIcon(file.newPath)}
+    {@const dir = dirname(file.newPath)}
+    <!-- w-max: lange Zeilen verbreitern die Karte, gescrollt wird aussen -->
+    <!-- Abstand per Margin statt Container-Padding, sonst scrollt der Inhalt ueber dem sticky Kopf durch -->
+    <div class="bg-background/40 ring-foreground/5 mx-2 mt-2 w-max min-w-[calc(100%-1rem)] rounded-xl ring-1 last:mb-2">
+      <div class="bg-card/95 border-border/60 sticky top-0 z-10 flex items-center gap-2 rounded-t-xl border-b px-2.5 py-1.5 font-sans backdrop-blur">
+        <fic.icon class="size-3.5 shrink-0 {fic.tint}" />
+        <span class="font-semibold">{file.newPath.slice(dir ? dir.length + 1 : 0)}</span>
+        <span class="text-muted-foreground text-[10px]"
+          >{file.oldPath !== file.newPath ? `${file.oldPath} →` : dir}</span
+        >
+        <span class="flex-1"></span>
+        {#if !file.binary}
+          <span class="bg-success/15 text-success rounded-full px-1.5 font-mono text-[10px]">+{count(file, "add")}</span>
+          <span class="bg-destructive/15 text-destructive rounded-full px-1.5 font-mono text-[10px]">−{count(file, "del")}</span>
+        {/if}
       </div>
       {#if file.binary}
         <p class="text-muted-foreground px-2 py-1 font-sans">Binärdatei</p>
@@ -76,7 +97,7 @@
       {#each size(file) > BIG && !opened.has(fi) ? [] : file.hunks as hunk, hi (hi)}
         {@const key = `${fi}:${hi}`}
         {@const sel = new Set(selected[key] ?? [])}
-        <div class="bg-primary/5 text-muted-foreground flex items-center gap-1 px-2 py-0.5">
+        <div class="bg-primary/5 text-primary/70 border-primary/10 flex items-center gap-1 border-y px-2.5 py-0.5">
           <span class="min-w-0 flex-1 truncate">{hunk.header}</span>
           {#each actions as a (a.label)}
             <Button
@@ -93,7 +114,7 @@
           {@const change = line.kind === "add" || line.kind === "del"}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div
-            class="flex {bg[line.kind]} {sel.has(li) ? 'ring-primary/60 ring-1 ring-inset' : ''} {change &&
+            class="flex border-l-2 {bg[line.kind]} {sel.has(li) ? 'ring-primary/60 ring-1 ring-inset' : ''} {change &&
             actions.length
               ? 'cursor-pointer'
               : ''}"

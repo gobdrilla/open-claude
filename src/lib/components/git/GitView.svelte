@@ -230,8 +230,17 @@
 
 <svelte:window {onkeydown} onfocus={() => refresh(false)} />
 
-{#snippet tool(label: string, title: string, onclick: () => void, Icon: typeof CloudDownloadIcon)}
-  <Button variant="ghost" size="sm" class="h-7 gap-1.5 px-2 text-[11px]" {onclick} {title} disabled={!!busy}>
+{#snippet tool(label: string, title: string, onclick: () => void, Icon: typeof CloudDownloadIcon, hot = false)}
+  <Button
+    variant={hot ? "default" : "ghost"}
+    size="sm"
+    class="h-7 gap-1.5 rounded-full px-2.5 text-[11px] {hot
+      ? 'from-primary to-primary/70 shadow-primary/30 bg-linear-to-br shadow-md'
+      : ''}"
+    {onclick}
+    {title}
+    disabled={!!busy}
+  >
     <Icon class="size-3.5" />
     {label}
   </Button>
@@ -240,7 +249,7 @@
 {#snippet menu(items: [string, () => void][])}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground -ml-1 grid h-7 w-4 place-items-center rounded disabled:opacity-50"
+      class="text-muted-foreground hover:bg-secondary hover:text-foreground -ml-1 grid h-7 w-4 place-items-center rounded-full disabled:opacity-50"
       disabled={!!busy}
       aria-label="Weitere Optionen"><ChevronDownIcon class="size-3" /></DropdownMenu.Trigger
     >
@@ -259,35 +268,48 @@
   </DropdownMenu.Root>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
-  <div class="bg-chrome border-border flex items-center gap-0.5 border-b px-2 py-1">
+<div class="flex h-full min-h-0 flex-col gap-2 p-2 text-xs">
+  <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex items-center gap-0.5 px-2 py-1.5">
     {#if status}
-      <span class="mr-2 flex items-center gap-1.5 font-mono text-[11px]" title={status.upstream ?? "Kein Upstream"}>
-        {#if busy}
-          <LoaderCircleIcon class="text-primary size-3.5 animate-spin" />
-        {:else}
-          <GitBranchIcon class="text-muted-foreground size-3.5" />
-        {/if}
-        <span class="font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
-        {#if status.ahead}<span class="text-primary">↑{status.ahead}</span>{/if}
-        {#if status.behind}<span class="text-warning">↓{status.behind}</span>{/if}
-      </span>
+      <div class="mr-3 flex min-w-0 items-center gap-2.5" title={status.upstream ?? "Kein Upstream"}>
+        <div
+          class="from-primary to-primary/50 text-primary-foreground shadow-primary/30 grid size-8 shrink-0 place-items-center rounded-lg bg-linear-to-br shadow-md"
+        >
+          {#if busy}
+            <LoaderCircleIcon class="size-4 animate-spin" />
+          {:else}
+            <GitBranchIcon class="size-4" />
+          {/if}
+        </div>
+        <div class="flex min-w-0 flex-col leading-tight">
+          <span class="text-muted-foreground truncate text-[10px]">{repo.split(/[\\/]/).filter(Boolean).pop()}</span>
+          <span class="flex items-center gap-1.5">
+            <span class="truncate font-mono text-[12px] font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
+            {#if status.ahead}<span class="bg-primary/15 text-primary rounded-full px-1.5 font-mono text-[10px]">↑{status.ahead}</span>{/if}
+            {#if status.behind}<span class="bg-warning/15 text-warning rounded-full px-1.5 font-mono text-[10px]">↓{status.behind}</span>{/if}
+            {#if status.upstream && !status.ahead && !status.behind}
+              <span class="text-success flex items-center gap-1 text-[10px]"><span class="bg-success size-1.5 rounded-full"></span>synchron</span>
+            {/if}
+          </span>
+        </div>
+      </div>
     {/if}
     {@render tool("Fetch", "Fetch (Strg+Umschalt+F)", doFetch, CloudDownloadIcon)}
-    {@render tool("Pull", "Pull (Strg+Umschalt+L)", () => pull(), DownloadIcon)}
+    {@render tool("Pull", "Pull (Strg+Umschalt+L)", () => pull(), DownloadIcon, !!status?.behind)}
     {@render menu([
       ["Pull (Merge)", () => pull(false)],
       ["Pull (Rebase)", () => pull(true)],
     ])}
-    {@render tool("Push", "Push (Strg+Umschalt+P)", push, UploadIcon)}
+    {@render tool("Push", "Push (Strg+Umschalt+P)", push, UploadIcon, !!status?.ahead)}
     {@render menu([["Force-Push …", forcePush]])}
+    <span class="bg-border mx-1.5 h-4 w-px"></span>
     {@render tool("Stash", "Änderungen stashen", () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
     {@render tool("Branch", "Neuer Branch ab HEAD", () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
     <span class="flex-1"></span>
     {#if acct}
       <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
         <DropdownMenu.Trigger
-          class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 items-center gap-1.5 rounded px-2 text-[11px]"
+          class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px]"
           title={acct.name || acct.email ? `Commit als: ${acct.name ?? "?"} <${acct.email ?? "?"}>` : "Keine Commit-Identität gesetzt"}
         >
           {#if acctFor?.avatar}
@@ -340,7 +362,7 @@
   </div>
 
   {#if status && status.state !== "clean"}
-    <div class="border-border flex items-center gap-2 border-b bg-warning/10 px-3 py-1.5 text-warning">
+    <div class="ring-warning/25 flex items-center gap-2 rounded-xl bg-warning/10 px-3 py-1.5 text-warning ring-1">
       <TriangleAlertIcon class="size-3.5" />
       <span class="flex-1">
         {STATE_LABEL[status.state]} läuft{conflicts
@@ -370,8 +392,9 @@
   {#if !error}<Notice bind:text={note} kind="note" />{/if}
 
   {#if status}
-    <div class="flex min-h-0 flex-1">
-      <div class="border-border shrink-0 border-r" style="width:{side}px; max-width:40%">
+    <!-- Sidebar und Inhalt in einer gemeinsamen Karte -->
+    <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex min-h-0 flex-1 overflow-hidden">
+      <div class="border-border/60 shrink-0 border-r" style="width:{side}px; max-width:40%">
         <Sidebar
           {repo}
           {status}
@@ -397,6 +420,7 @@
           />
         {:else}
           <Tabs
+            pill
             bind:value={tab}
             tabs={[
               { id: "changes", label: "Änderungen", title: "Strg+1", count: status.files.length },

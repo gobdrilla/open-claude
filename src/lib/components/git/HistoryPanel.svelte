@@ -32,6 +32,15 @@
   const DARK = ["#5aa9e6", "#e6875a", "#7ec850", "#c85fd6", "#e6c15a", "#5ae6c1", "#e65a7c", "#a9a9e6"];
   const LIGHT = ["#0077bd", "#b64e10", "#478416", "#964bb4", "#916a00", "#008474", "#bf395b", "#6568b6"];
   const PALETTE = $derived(theme.dark ? DARK : LIGHT);
+  // Autor-Avatar: feste Farbe je Name, Initialen aus bis zu zwei Wörtern.
+  const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const initials = (s: string) =>
+    s
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join("");
   // Muss der Zeilenhoehe (h-[26px]) entsprechen, sonst reissen die Linien zwischen den Zeilen ab.
   const ROW_H = 26;
   const LANE_W = 14;
@@ -289,9 +298,9 @@
         tabindex="-1"
         role="option"
         aria-selected={selected === c.sha}
-        class="hover:bg-accent flex h-[26px] w-full items-center gap-2 px-2 text-left outline-none {selected ===
+        class="hover:bg-accent/60 flex h-[26px] w-full items-center gap-2 rounded-md px-2 text-left outline-none {selected ===
         c.sha
-          ? 'bg-accent'
+          ? 'bg-primary/15'
           : ''}"
         onclick={() => select(c.sha)}
       >
@@ -315,12 +324,17 @@
             />
           </svg>
         {/if}
-        <span class="text-muted-foreground shrink-0 font-mono text-[11px]">{c.sha.slice(0, 8)}</span>
         {#each refBadges(c.refs) as b (b.label + b.kind)}
           {@render refBadge(b)}
         {/each}
         <span class="min-w-0 flex-1 truncate text-[11px]">{c.subject}</span>
-        <span class="text-muted-foreground hidden shrink-0 truncate text-[11px] sm:block max-w-28">{c.author}</span>
+        <span
+          class="grid size-4 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white"
+          style="background:{PALETTE[hash(c.author) % PALETTE.length]}"
+          title={c.author}>{initials(c.author)}</span
+        >
+        <span class="text-muted-foreground hidden max-w-28 shrink-0 truncate text-[11px] sm:block">{c.author}</span>
+        <span class="text-muted-foreground bg-secondary/60 shrink-0 rounded px-1 font-mono text-[10px]">{c.sha.slice(0, 7)}</span>
         <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[10px] tabular-nums">{age(c.date)}</span>
       </button>
     </ContextMenu.Trigger>
@@ -371,9 +385,9 @@
 {/snippet}
 
 <div class="flex h-full min-h-0 flex-col text-xs">
-  <div class="border-border flex items-center gap-2 border-b px-2 py-1.5">
+  <div class="flex items-center gap-2 px-2 py-1.5">
     <SearchIcon class="text-muted-foreground size-3.5 shrink-0" />
-    <Input bind:value={query} placeholder="Verlauf durchsuchen" class="h-6! text-[11px]" />
+    <Input bind:value={query} placeholder="Verlauf durchsuchen" class="h-7! rounded-full text-[11px]" />
   </div>
 
   <Notice bind:text={error} />
