@@ -66,6 +66,7 @@
   import FileCodeIcon from "@lucide/svelte/icons/file-code";
   import CloneDialog from "$lib/components/git/CloneDialog.svelte";
   import CreateDialog from "$lib/components/git/CreateDialog.svelte";
+  import RootDialog from "$lib/components/RootDialog.svelte";
   import AccountsDialog from "$lib/components/git/AccountsDialog.svelte";
   import { git, forge, type Account } from "$lib/git";
   import { unity, unityBadgeText, type UnityInfo } from "$lib/unity";
@@ -75,6 +76,7 @@
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
+  import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import UsersIcon from "@lucide/svelte/icons/users";
 
   type Repo = {
@@ -121,7 +123,10 @@
 
   // raw: die Store-Instanz nicht proxien; null bis onMount geladen hat.
   let store = $state.raw<Store>(null!);
+  // Leer = ohne Dev-Ordner, dann nur die einzeln hinzugefuegten Projekte (extra).
   let root = $state("");
+  let extra = $state<string[]>([]);
+  let home = $state("");
   let repos = $state<Repo[]>([]);
   let query = $state("");
   let selected = $state("");
@@ -449,6 +454,8 @@
     applyZoom(clampZoom(await store.get("zoom")));
     const saved = await store.get<string>("root");
     root = saved ?? (await invoke<string>("default_root"));
+    extra = (await store.get<string[]>("extra")) ?? [];
+    home = await homeDir();
     pins = (await store.get<string[]>("pins")) ?? [];
     accounts = (await store.get<Account[]>("accounts")) ?? [];
     autostart = await isEnabled().catch(() => false);
@@ -466,7 +473,7 @@
     if (!mac) await invoke("set_tray", { on: tray });
 
     // Erster Start: Dev-Ordner erst bestaetigen lassen, dann einlesen.
-    if (!saved) {
+    if (saved == null) {
       setup = true;
       scanning = false;
       return;
@@ -492,7 +499,7 @@
     scanning = true;
     error = "";
     try {
-      const found = await invoke<Repo[]>("scan", { root: r });
+      const found = await invoke<Repo[]>("scan", { root: r, extra });
       if (g !== scanGen) return;
       repos = found;
       scannedAt = Date.now();
@@ -508,24 +515,18 @@
   }
 
   let setup = $state(false);
+  let rootOpen = $state(false);
 
-  async function finishSetup() {
-    root = root.trim();
-    if (!root) return;
+  async function chooseRoot(r: string) {
+    root = r;
     await store.set("root", root);
-    setup = false;
-    await rescan();
-  }
-
-  async function pickRoot() {
-    const picked = await open({ directory: true, defaultPath: root });
-    if (typeof picked !== "string") return;
-    root = picked;
-    if (setup) return; // im Erststart-Dialog erst mit "Übernehmen" speichern
-    await store.set("root", root);
+    setup = rootOpen = false;
     repos = [];
     await rescan();
   }
+
+
+  const pickRoot = () => (rootOpen = true);
 
   /** Claude ohne Projekt: laeuft im Home-Ordner, ohne Git. */
   async function launchFree() {
@@ -675,17 +676,37 @@
     return () => void off.then((f) => f());
   });
 
-  /** Nach dem Klonen neu einlesen und das neue Projekt markieren. */
+  /** Nach Klonen/Hinzufuegen neu einlesen und das Projekt markieren. Liegt es nicht im Dev-Ordner,
+   *  merkt es sich die Liste als Einzelprojekt. */
   async function cloned(path: string) {
     await rescan();
     const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
-    const hit = repos.find((r) => norm(r.path) === norm(path));
+    let hit = repos.find((r) => norm(r.path) === norm(path));
+    if (!hit) {
+      extra = [...extra, path];
+      await store.set("extra", extra);
+      await rescan();
+      hit = repos.find((r) => norm(r.path) === norm(path));
+    }
     if (hit) {
       query = "";
       // Der Suchwechsel waehlt per afterTick (Microtasks) den ersten Eintrag, daher danach setzen.
       await new Promise((r) => setTimeout(r));
       selected = hit.path;
     }
+  }
+
+  async function addProject() {
+    const picked = await open({ directory: true, defaultPath: root || home });
+    if (typeof picked === "string") await cloned(picked);
+  }
+
+  /** Einzelprojekt nur aus der Liste nehmen, der Ordner bleibt. */
+  async function unlist(path: string) {
+    extra = extra.filter((p) => p !== path);
+    await store.set("extra", extra);
+    repos = repos.filter((r) => r.path !== path);
+    if (pins.includes(path)) await togglePin(path);
   }
 
   async function reveal(repo?: Repo) {
@@ -896,12 +917,12 @@
     if (e.key === "Escape" && (overlayOnEsc || e.defaultPrevented)) return;
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === "F1" || (ctrl && e.key === "/")) {
-      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !profilesOpen) help = !help;
+      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !rootOpen && !profilesOpen) help = !help;
       e.preventDefault();
       return;
     }
     // Offene Dialoge (Hilfe, Klonen, Anlegen, Konten) bekommen ihre Tasten selbst.
-    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || doomed || profilesOpen) return;
+    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || doomed || profilesOpen) return;
 
     if (ctrl && e.key >= "1" && e.key <= "9") {
       launch(flat[Number(e.key) - 1]?.repo);
@@ -934,7 +955,7 @@
     e.preventDefault();
   }
 
-  const short = $derived(root.replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/]+/, "~"));
+  const short = $derived(root ? root.replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/]+/, "~") : "Kein Dev-Ordner");
 </script>
 
 <svelte:window onkeydown={onKey} onkeydowncapture={noteCtrl} onpointerdowncapture={noteCtrl} />
@@ -1110,7 +1131,7 @@
         variant="ghost"
         size="sm"
         onclick={pickRoot}
-        title="Dev-Ordner wechseln (Strg+O): {root}"
+        title={root ? `Dev-Ordner wechseln (Strg+O): ${root}` : "Dev-Ordner wählen (Strg+O)"}
         class="text-muted-foreground font-mono text-xs"
       >
         <FolderIcon class="size-3.5" />
@@ -1130,6 +1151,9 @@
           aria-label="Claude ohne Projekt starten"
         >
           <TerminalIcon class="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon" onclick={addProject} title="Projektordner hinzufügen" aria-label="Projektordner hinzufügen">
+          <FolderInputIcon class="size-4" />
         </Button>
         <Button variant="ghost" size="icon" onclick={() => (createOpen = true)} title="Neues Repo (Strg+Shift+N)" aria-label="Neues Repo">
           <FolderPlusIcon class="size-4" />
@@ -1276,7 +1300,11 @@
         <p class="text-muted-foreground px-4 py-6 text-sm">Lese Git-Repos …</p>
       {:else}
         <Command.Empty class="px-4 py-6 text-left text-sm">
-          {repos.length ? `Kein Projekt passt zu „${query.trim()}“.` : "Hier liegen keine Git-Repos."}
+          {repos.length
+            ? `Kein Projekt passt zu „${query.trim()}“.`
+            : root
+              ? "Hier liegen keine Git-Repos."
+              : "Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (Strg+O)."}
         </Command.Empty>
         {#each groups as group (group.heading)}
           <Command.Group heading={group.heading || undefined}>
@@ -1408,7 +1436,11 @@
                       {@render repoItem("Unity-Support einrichten", "", () => setupUnity(item.repo))}
                     {/if}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem("Vom Gerät löschen …", "", () => askTrash(item.repo), true)}
+                    {#if extra.includes(item.repo.path)}
+                      {@render repoItem("Aus der Liste entfernen", "", () => unlist(item.repo.path))}
+                    {:else}
+                      {@render repoItem("Vom Gerät löschen …", "", () => askTrash(item.repo), true)}
+                    {/if}
                   </ContextMenu.Content>
                 </ContextMenu.Portal>
               </ContextMenu.Root>
@@ -1637,35 +1669,7 @@
   </Dialog.Content>
 </Dialog.Root>
 
-<!-- Erster Start: nicht wegklickbar, ohne Ordner gibt es nichts einzulesen. -->
-<Dialog.Root open={setup}>
-  <Dialog.Content
-    class="sm:max-w-md"
-    showCloseButton={false}
-    escapeKeydownBehavior="ignore"
-    interactOutsideBehavior="ignore"
-  >
-    <Dialog.Header>
-      <Dialog.Title>Willkommen bei Open Claude</Dialog.Title>
-      <Dialog.Description>
-        Wo liegen deine Projekte? Alle Git-Repos darunter erscheinen in der Liste. Ändern kannst du das später mit Strg+O.
-      </Dialog.Description>
-    </Dialog.Header>
-    <div class="flex gap-2">
-      <Input
-        bind:value={root}
-        class="font-mono text-xs"
-        onkeydown={(e) => e.key === "Enter" && finishSetup()}
-      />
-      <Button variant="outline" size="icon" onclick={pickRoot} aria-label="Ordner wählen">
-        <FolderIcon class="size-4" />
-      </Button>
-    </div>
-    <div class="flex justify-end">
-      <Button onclick={finishSetup} disabled={!root.trim()}>Übernehmen</Button>
-    </div>
-  </Dialog.Content>
-</Dialog.Root>
+<RootDialog open={setup || rootOpen} first={setup} {root} onchoose={chooseRoot} onclose={() => (rootOpen = false)} />
 
 <Dialog.Root open={doomed !== null} onOpenChange={(o) => !o && !trashing && (doomed = null)}>
   <Dialog.Content class="sm:max-w-md">
@@ -1701,7 +1705,7 @@
 <CloneDialog
   bind:open={cloneOpen}
   {accounts}
-  {root}
+  root={root || home}
   existing={repos.map((r) => r.path)}
   onclone={cloned}
   onaccounts={() => {
@@ -1712,7 +1716,7 @@
 <CreateDialog
   bind:open={createOpen}
   {accounts}
-  {root}
+  root={root || home}
   oncreate={cloned}
   onaccounts={() => {
     createOpen = false;

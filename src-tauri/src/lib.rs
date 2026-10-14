@@ -283,20 +283,22 @@ fn read_last_commit(repo: &Path) -> String {
 
 /// Laeuft auf einem Worker-Thread: ein synchrones Command wuerde den UI-Thread blockieren.
 #[tauri::command]
-async fn scan(root: String) -> Result<Vec<Repo>, String> {
-    tauri::async_runtime::spawn_blocking(move || scan_blocking(root))
+async fn scan(root: String, extra: Vec<String>) -> Result<Vec<Repo>, String> {
+    tauri::async_runtime::spawn_blocking(move || scan_blocking(root, extra))
         .await
         .map_err(|e| format!("Scan abgebrochen: {e}"))?
 }
 
-fn scan_blocking(root: String) -> Result<Vec<Repo>, String> {
+/// root leer = kein Dev-Ordner. extra: einzeln hinzugefuegte Projektordner (auch ohne Git), fehlende fallen still weg.
+fn scan_blocking(root: String, extra: Vec<String>) -> Result<Vec<Repo>, String> {
     let root = PathBuf::from(root.trim_end_matches(['\\', '/']));
-    if !root.is_dir() {
+    let has_root = !root.as_os_str().is_empty();
+    if has_root && !root.is_dir() {
         return Err(format!("Ordner nicht gefunden: {}", root.display()));
     }
 
     let mut dirs = Vec::new();
-    let mut walker = WalkDir::new(&root).max_depth(6).into_iter();
+    let mut walker = WalkDir::new(&root).max_depth(6).into_iter().filter_entry(|_| has_root);
     while let Some(entry) = walker.next() {
         let Ok(entry) = entry else { continue };
         if !entry.file_type().is_dir() {
@@ -314,6 +316,12 @@ fn scan_blocking(root: String) -> Result<Vec<Repo>, String> {
         walker.skip_current_dir();
         if let Some(proj) = entry.path().parent() {
             dirs.push(proj.to_path_buf());
+        }
+    }
+    for e in extra {
+        let p = PathBuf::from(e.trim_end_matches(['\\', '/']));
+        if p.is_dir() && !dirs.contains(&p) {
+            dirs.push(p);
         }
     }
 
@@ -812,10 +820,28 @@ mod tests {
         for p in ["a/b/c/d/tief/.git", "flach/.git", "node_modules/x/.git"] {
             std::fs::create_dir_all(root.join(p)).unwrap();
         }
-        let repos = scan_blocking(root.display().to_string()).unwrap();
+        let repos = scan_blocking(root.display().to_string(), vec![]).unwrap();
         let mut rels: Vec<String> = repos.iter().map(|r| r.rel.replace('\\', "/")).collect();
         rels.sort();
         assert_eq!(rels, ["a/b/c/d/tief", "flach"]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn einzelprojekte_ohne_dev_ordner() {
+        let root = std::env::temp_dir().join(format!("ocui-extra-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("ohne-git")).unwrap();
+        std::fs::create_dir_all(root.join("dev/repo/.git")).unwrap();
+        let p = |s: &str| root.join(s).display().to_string();
+        // Ohne Dev-Ordner nur die Einzelprojekte; fehlende fallen weg, doppelte zaehlen einmal.
+        let paths = |r: Vec<crate::Repo>| {
+            let mut v: Vec<_> = r.into_iter().map(|r| r.path).collect();
+            v.sort();
+            v
+        };
+        assert_eq!(paths(scan_blocking(String::new(), vec![p("ohne-git"), p("weg")]).unwrap()), [p("ohne-git")]);
+        assert_eq!(paths(scan_blocking(p("dev"), vec![p("dev/repo"), p("ohne-git")]).unwrap()), [p("dev/repo"), p("ohne-git")]);
         let _ = std::fs::remove_dir_all(&root);
     }
 
