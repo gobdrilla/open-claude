@@ -479,6 +479,22 @@ fn set_tray(on: bool) {
     TRAY.store(on, Ordering::Relaxed);
 }
 
+/// Versteckt das Fenster. macOS: ein verstecktes Vollbildfenster hinterliesse einen schwarzen Space,
+/// darum erst Vollbild verlassen.
+fn hide(window: &tauri::Window) {
+    if !window.is_fullscreen().unwrap_or(false) {
+        let _ = window.hide();
+        return;
+    }
+    let _ = window.set_fullscreen(false);
+    let w = window.clone();
+    // shortcut: feste Wartezeit fuer die Vollbild-Animation, tao meldet ihr Ende nicht eigens; bei Rucklern auf windowDidExitFullScreen umstellen.
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        let _ = w.hide();
+    });
+}
+
 /// Tray-Icon mit Menue. Mit Tray an der einzige Weg, die App wirklich zu beenden.
 fn tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let oeffnen = MenuItem::with_id(app, "oeffnen", "Öffnen", true, None::<&str>)?;
@@ -708,13 +724,13 @@ pub fn run() {
             deps::auto_update();
             tray(app.handle()).map_err(Into::into)
         })
-        // Mit Tray (macOS: immer) versteckt Schliessen nur — raus kommt man dann ueber das Tray-Menue.
+        // Mit Tray versteckt Schliessen nur — raus kommt man dann ueber das Tray-Menue.
         // Ohne Tray beendet Schliessen die App: bei ungespeicherten Aenderungen im Editor erst fragen.
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 if TRAY.load(Ordering::Relaxed) {
-                    let _ = window.hide();
+                    hide(window);
                 } else {
                     preview::quit(window.app_handle());
                 }
