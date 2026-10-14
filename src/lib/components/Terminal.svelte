@@ -20,6 +20,8 @@
   import { DARK, LIGHT, LINKS } from "$lib/termtheme";
   import { modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
+  import { keep, pathHits } from "$lib/termlinks";
+  import { abs, rel } from "$lib/editor.logic";
 
   let {
     id,
@@ -28,7 +30,17 @@
     visible,
     onexit,
     onmode,
-  }: { id: string; cwd: string; dirs?: string[]; visible: boolean; onexit: () => void; onmode?: (mode: string) => void } = $props();
+    onfile,
+  }: {
+    id: string;
+    cwd: string;
+    dirs?: string[];
+    visible: boolean;
+    onexit: () => void;
+    onmode?: (mode: string) => void;
+    /** Klick auf einen Dateipfad im Output; path relativ zu cwd, line/col ab 1. */
+    onfile?: (path: string, line?: number, col?: number) => void;
+  } = $props();
 
   let el: HTMLDivElement;
   let term: Terminal | undefined;
@@ -211,6 +223,32 @@
           activate: () => (pasted.req = { id, n: Number(m[1]) }),
         }));
         cb(links.length ? links : undefined);
+      },
+    });
+    // Dateipfade aus claudes Ausgabe ("src/a.ts:42", ganze Pfadzeilen auch mit Leerzeichen), nur existierende.
+    // Klick: Datei im Projekt oeffnet den Editor, alles andere zeigt der Finder/Explorer.
+    // shortcut: Spalte = Zeichenindex, bei CJK-Zeichen davor verrutscht der Link; umgebrochene Pfade zaehlen nicht.
+    t.registerLinkProvider({
+      provideLinks: (y, cb) => {
+        const line = t.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
+        const hits = pathHits(line);
+        if (!hits.length) return cb(undefined);
+        const paths = hits.map((h) => (/^([\\/~]|[A-Za-z]:)/.test(h.path) ? h.path : abs(cwd, h.path)));
+        invoke<([string, boolean] | null)[]>("path_kinds", { paths })
+          .then((kinds) => {
+            const found = keep(hits.flatMap((h, i) => (kinds[i] ? [{ ...h, full: kinds[i][0], dir: kinds[i][1] }] : [])));
+            const links = found.map((h) => ({
+              text: line.slice(h.start, h.end),
+              range: { start: { x: h.start + 1, y }, end: { x: h.end, y } },
+              activate: () => {
+                const r = rel(cwd, h.full);
+                if (!h.dir && onfile && !/^([\\/]|[A-Za-z]:)/.test(r)) onfile(r, h.line, h.col);
+                else invoke("reveal", { path: h.full }).catch(() => {});
+              },
+            }));
+            cb(links.length ? links : undefined);
+          })
+          .catch(() => cb(undefined));
       },
     });
     t.open(el);

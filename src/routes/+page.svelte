@@ -1676,6 +1676,10 @@
           visible={s.id === active}
           onexit={() => closeSession(s.id)}
           onmode={(m) => (modes[s.id] = m)}
+          onfile={async (path, line, col) => {
+            await openEdit(s.repo);
+            if (editRepo === s.repo) await openFile(s.repo.path, path, line, col && col - 1);
+          }}
         />
       {/each}
       </div>

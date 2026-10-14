@@ -366,15 +366,50 @@ fn scan_blocking(root: String, extra: Vec<String>) -> Result<Vec<Repo>, String> 
     Ok(repos)
 }
 
-/// Oeffnet den Projektordner im Datei-Explorer.
+/// Oeffnet einen Ordner im Datei-Explorer; eine Datei zeigt er markiert in ihrem Ordner.
 #[tauri::command]
 fn reveal(path: String) -> Result<(), String> {
-    let dir = PathBuf::from(&path);
-    if !dir.is_dir() {
-        return Err(format!("Ordner nicht gefunden: {path}"));
+    let p = PathBuf::from(&path);
+    let shown = if p.is_file() {
+        select_file(&p)
+    } else if p.is_dir() {
+        open_system(&p)
+    } else {
+        return Err(format!("Nicht gefunden: {path}"));
+    };
+    shown.map_err(|e| format!("Explorer konnte nicht geoeffnet werden: {e}"))
+}
+
+fn select_file(p: &Path) -> std::io::Result<()> {
+    let mut cmd;
+    if cfg!(target_os = "macos") {
+        cmd = Command::new("open");
+        cmd.arg("-R").arg(p);
+    } else if cfg!(windows) {
+        cmd = Command::new("explorer");
+        // explorer will "/select,<pfad>" als ein Argument, Rusts Quoting um das Ganze versteht es nicht.
+        #[cfg(windows)]
+        std::os::windows::process::CommandExt::raw_arg(&mut cmd, format!("/select,\"{}\"", p.display()));
+    } else {
+        return open_system(p.parent().unwrap_or(p));
     }
-    open_system(&dir)
-        .map_err(|e| format!("Explorer konnte nicht geoeffnet werden: {e}"))
+    detach(cmd)
+}
+
+/// Pfade aus dem Terminal (absolut, ~/ erlaubt): je Pfad der aufgeloeste Pfad und ob Ordner; None = gibt es nicht.
+#[tauri::command]
+fn path_kinds(paths: Vec<String>) -> Vec<Option<(String, bool)>> {
+    paths
+        .into_iter()
+        .map(|p| {
+            let full = match p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
+                Some(rest) => skills::home().join(rest),
+                None => PathBuf::from(&p),
+            };
+            let meta = std::fs::metadata(&full).ok()?;
+            Some((full.to_string_lossy().into_owned(), meta.is_dir()))
+        })
+        .collect()
 }
 
 /// Nur Git-Repos echt unterhalb des Dev-Ordners, nie den Dev-Ordner selbst.
@@ -437,10 +472,14 @@ pub(crate) fn open_system(target: impl AsRef<std::ffi::OsStr>) -> std::io::Resul
     } else {
         "xdg-open"
     };
-    // wait im Thread, sonst bleibt unter Unix ein Zombie-Prozess stehen
     let mut cmd = Command::new(prog);
     cmd.arg(target);
+    detach(cmd)
+}
+
+fn detach(mut cmd: Command) -> std::io::Result<()> {
     unbundle(&mut cmd);
+    // wait im Thread, sonst bleibt unter Unix ein Zombie-Prozess stehen
     let mut child = cmd.spawn()?;
     std::thread::spawn(move || child.wait());
     Ok(())
@@ -587,6 +626,7 @@ pub fn run() {
             default_root,
             scan,
             reveal,
+            path_kinds,
             trash_repo,
             trash_check,
             set_tray,
