@@ -120,9 +120,9 @@ const BRAIN_HINT = {
   commit:
     'Brain-Hinweis: Commit ohne mcp__brain__remember. Steckt darin eine Entscheidung, Regel oder ein Fallstrick, der nicht aus Code oder Git hervorgeht? Dann jetzt mit remember festhalten (kurz, mit Warum). Sonst ignorieren.',
 }
-// Bei laengerer Arbeit sieht der Nutzer sonst nur Tool-Aufrufe und Fenster: kurze Zwischenstaende im Chat.
+// Bei laengerer Arbeit sieht der Nutzer sonst nur Tool-Aufrufe und Fenster: ab und zu kurz, was gerade passiert.
 export const NARRATE =
-  'Transparenz für den Nutzer: Bei Arbeit mit mehreren Tool-Aufrufen vor jedem neuen Arbeitsschritt eine kurze Zeile in den Chat schreiben: was du als Nächstes tust und warum (z. B. „Prüfe X, weil Y“). Nach einem Ergebnis, das die Richtung ändert, eine Zeile, was herauskam. Höchstens eine Zeile je Schritt, nichts wiederholen. Gilt auch, wenn ein Antwortstil sonst Stille zwischen Tool-Aufrufen verlangt.'
+  'Transparenz für den Nutzer: Bei Arbeit mit mehreren Tool-Aufrufen immer mal wieder eine kurze Zeile in den Chat schreiben, was du gerade machst (z. B. „Passe jetzt die Tests an“). Nur den aktuellen Stand nennen, keine Überlegungen, Begründungen oder Abwägungen. Nicht vor jedem Tool-Aufruf, nichts wiederholen. Gilt auch, wenn ein Antwortstil sonst Stille zwischen Tool-Aufrufen verlangt.'
 
 /** Hinweis an normale Eingaben haengen; Slash-Commands laufen ohne. */
 export const withNarrate = <T extends { command?: unknown; context?: readonly string[] }>(e: T): T =>
