@@ -327,9 +327,15 @@
   // macOS: native Ampeln im Overlay-Titelbalken (tauri.macos.conf.json) statt eigener Knoepfe.
   const mac = navigator.userAgent.includes("Mac");
   const mod = mac ? "⌘" : "Strg";
+  // Im macOS-Vollbild sind die Ampeln weg, dann kein Platz dafuer freihalten.
+  let fullscreen = $state(false);
+  const lights = $derived(mac && !fullscreen);
   onMount(() => {
     const win = getCurrentWindow();
-    const sync = async () => (maximized = await win.isMaximized());
+    const sync = async () => {
+      maximized = await win.isMaximized();
+      fullscreen = await win.isFullscreen();
+    };
     sync();
     const off = win.onResized(sync);
     return () => off.then((f) => f());
@@ -1063,13 +1069,13 @@
 {#if amongUs.on}<IdleAmongUs rate={amongUs.rate} volume={amongUs.volume} />{/if}
 
 <div
-  class="bg-chrome border-border flex h-9 items-center border-b {mac ? '' : 'pl-3.5'}"
-  style:padding-left={mac ? `${8000 / zoom}px` : undefined}
+  class="bg-chrome border-border flex h-9 items-center border-b {lights ? '' : 'pl-3.5'}"
+  style:padding-left={lights ? `${8000 / zoom}px` : undefined}
   data-tauri-drag-region
 >
   {#if viewRepo}
     <button
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground {mac ? '' : '-ml-3.5'} mr-1 grid h-9 w-10 place-items-center"
+      class="text-muted-foreground hover:bg-secondary hover:text-foreground {lights ? '' : '-ml-3.5'} mr-1 grid h-9 w-10 place-items-center"
       onclick={back}
       aria-label="Zurück zur Liste ({mod}+Umschalt+W)"
       title="Zurück zur Liste ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /></button
