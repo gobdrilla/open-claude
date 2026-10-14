@@ -284,11 +284,16 @@ pub(crate) fn mod_dirs(app: &AppHandle) -> Option<String> {
 }
 
 /// Mod-Ordner hinter einen schon gesetzten Wert haengen; ohne Mods None (Env bleibt wie geerbt).
+/// Geerbte Ordner mit dem Namen einer eigenen Mod fallen weg: aus einer Open-Claude-Sitzung gestartet
+/// (z. B. tauri dev) stuende die Mod sonst doppelt drin, samt doppelter Themes und Skills.
 fn plugin_dirs(prev: Option<String>, mods: impl Iterator<Item = std::path::PathBuf>) -> Option<String> {
-    let mut mods = mods.peekable();
-    mods.peek()?;
+    let mods: Vec<_> = mods.collect();
+    if mods.is_empty() {
+        return None;
+    }
     let prev = prev.unwrap_or_default();
-    let all = std::env::split_paths(&prev).filter(|p| !p.as_os_str().is_empty()).chain(mods);
+    let own = |p: &Path| mods.iter().any(|m| m.file_name() == p.file_name());
+    let all = std::env::split_paths(&prev).filter(|p| !p.as_os_str().is_empty() && !own(p)).chain(mods.iter().cloned());
     std::env::join_paths(all).ok().map(|s| s.to_string_lossy().into_owned())
 }
 
@@ -614,6 +619,8 @@ mod tests {
         assert_eq!(plugin_dirs(None, m(&["/a", "/b"])), Some(format!("/a{sep}/b")));
         assert_eq!(plugin_dirs(Some(String::new()), m(&["/a"])), Some("/a".into()));
         assert_eq!(plugin_dirs(Some(format!("/x{sep}/y")), m(&["/a"])), Some(format!("/x{sep}/y{sep}/a")));
+        // Geerbte Release-Mod gleichen Namens wird durch die eigene ersetzt
+        assert_eq!(plugin_dirs(Some(format!("/rel/open-claude{sep}/x")), m(&["/dev/open-claude"])), Some(format!("/x{sep}/dev/open-claude")));
     }
 
     fn tmp(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
