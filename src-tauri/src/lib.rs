@@ -842,7 +842,7 @@ mod tests {
             v
         };
         assert_eq!(paths(scan_blocking(String::new(), vec![p("ohne-git"), p("weg")]).unwrap()), [p("ohne-git")]);
-        assert_eq!(paths(scan_blocking(p("dev"), vec![p("dev/repo"), p("ohne-git")]).unwrap()), [p("dev/repo"), p("ohne-git")]);
+        assert_eq!(paths(scan_blocking(p("dev"), vec![p("dev/repo"), p("ohne-git")]).unwrap()), [p("dev/repo"), p("ohne-git")].map(|s| s.replace('/', std::path::MAIN_SEPARATOR_STR)));
         let _ = std::fs::remove_dir_all(&root);
     }
 
