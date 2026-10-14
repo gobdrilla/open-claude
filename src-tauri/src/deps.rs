@@ -34,6 +34,22 @@ pub fn deps_missing() -> Vec<&'static str> {
     out
 }
 
+/// Haelt Claude Code aktuell, auch wenn gerade keine Sitzung laeuft (claude aktualisiert sich sonst nur
+/// selbst, solange es offen ist): `claude update` beim Start und alle 6 h, solange die App (auch im Tray) laeuft.
+/// DISABLE_AUTOUPDATER respektiert claudes eigenen Schalter.
+pub(crate) fn auto_update() {
+    if std::env::var_os("DISABLE_AUTOUPDATER").is_some() {
+        return;
+    }
+    std::thread::spawn(|| loop {
+        if let Some(claude) = which("claude").or_else(|| Some(local_claude()).filter(|p| p.is_file())) {
+            // Fehler (offline, npm-Installation ohne Rechte) still: naechster Versuch in 6 h.
+            let _ = crate::quiet(&claude.to_string_lossy()).arg("update").stdin(Stdio::null()).output();
+        }
+        std::thread::sleep(std::time::Duration::from_secs(6 * 3600));
+    });
+}
+
 #[tauri::command]
 pub async fn deps_install(name: String) -> Result<String, String> {
     crate::git::blocking(move || install(&name)).await

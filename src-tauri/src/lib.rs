@@ -688,6 +688,7 @@ pub fn run() {
         )
         .setup(|app| {
             awake::start(app.handle());
+            deps::auto_update();
             tray(app.handle()).map_err(Into::into)
         })
         // Mit Tray (macOS: immer) versteckt Schliessen nur — raus kommt man dann ueber das Tray-Menue.
