@@ -38,6 +38,8 @@
   import XIcon from "@lucide/svelte/icons/x";
   import LayersIcon from "@lucide/svelte/icons/layers";
   import GroupDialog, { type RepoGroup } from "$lib/components/GroupDialog.svelte";
+  import ClaudeAccountsDialog from "$lib/components/ClaudeAccountsDialog.svelte";
+  import UserCogIcon from "@lucide/svelte/icons/user-cog";
   import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import BotIcon from "@lucide/svelte/icons/bot";
@@ -202,6 +204,7 @@
   let skillStore = $state<SkillStore>({ profiles: {}, kindProfiles: {}, projects: {} });
   let profilesOpen = $state(false);
   let claudeOpen = $state(false);
+  let claudeAccountsOpen = $state(false);
   // Haeufige Claude-Einstellungen direkt im Menue; der volle Dialog bleibt fuer den Rest.
   let claudeCfg = $state<ClaudeCfg | null>(null);
   const loadClaudeCfg = () => readClaude().then((c) => (claudeCfg = c), () => (claudeCfg = null));
@@ -967,12 +970,12 @@
     if (e.key === "Escape" && (overlayOnEsc || e.defaultPrevented)) return;
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === "F1" || (ctrl && e.key === "/")) {
-      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !rootOpen && !profilesOpen && !groupEdit) help = !help;
+      if (!cloneOpen && !createOpen && !accountsOpen && !claudeOpen && !setup && !rootOpen && !profilesOpen && !groupEdit && !claudeAccountsOpen) help = !help;
       e.preventDefault();
       return;
     }
     // Offene Dialoge (Hilfe, Klonen, Anlegen, Konten) bekommen ihre Tasten selbst.
-    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || doomed || profilesOpen || groupEdit) return;
+    if (help || cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || doomed || profilesOpen || groupEdit || claudeAccountsOpen) return;
 
     if (ctrl && e.key >= "1" && e.key <= "9") {
       launch(flat[Number(e.key) - 1]?.repo);
@@ -1350,6 +1353,10 @@
               >
                 <BotIcon class="text-muted-foreground size-3.5" />
                 <span class="flex-1">Claude-Einstellungen</span>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item class={cn(menuItem, "py-1.5")} onSelect={() => (claudeAccountsOpen = true)}>
+                <UserCogIcon class="text-muted-foreground size-3.5" />
+                <span class="flex-1">Claude-Konten</span>
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 class={cn(menuItem, "py-1.5")}
@@ -1820,6 +1827,7 @@
 </Dialog.Root>
 
 <ClaudeSettingsDialog bind:open={claudeOpen} />
+<ClaudeAccountsDialog bind:open={claudeAccountsOpen} running={sessions.length} />
 <GroupDialog
   group={groupEdit?.g ?? null}
   {repos}

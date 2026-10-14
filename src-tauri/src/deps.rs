@@ -21,6 +21,11 @@ fn local_claude() -> PathBuf {
     PathBuf::from(home).join(".local").join("bin").join(format!("claude{}", std::env::consts::EXE_SUFFIX))
 }
 
+/// claude aus PATH oder vom nativen Installer (~/.local/bin), auch ohne PATH-Eintrag.
+pub(crate) fn claude_bin() -> Option<PathBuf> {
+    which("claude").or_else(|| Some(local_claude()).filter(|p| p.is_file()))
+}
+
 #[tauri::command]
 pub fn deps_missing() -> Vec<&'static str> {
     // Git zuerst: Claude Code braucht unter Windows die Git-Bash.

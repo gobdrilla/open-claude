@@ -629,6 +629,15 @@ fn tool_ok(cwd: &Path, name: &str) -> bool {
     run(std::process::Command::new(sh).args(["-lic", &format!("sh -c '{probe}'")]))
 }
 
+/// `claude auth login` in einer PTY: oeffnet die Anmeldung im Browser, fragt evtl. nach einem Code. Ausgabe und
+/// Ende kommen wie beim Terminal als pty:<id> / pty-exit:<id>.
+#[tauri::command]
+pub fn claude_login(app: AppHandle, ptys: State<'_, Ptys>, id: String) -> Result<(), String> {
+    let claude = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    let home = crate::skills::home();
+    spawn(app, &ptys, id, &home.to_string_lossy(), &claude.to_string_lossy(), vec!["auth".into(), "login".into()], 100, 30, &[], true)
+}
+
 /// Was vor dem Start von `target` installiert werden muesste; das Frontend fragt damit vor `run_start` nach.
 #[tauri::command]
 pub async fn run_missing(repo: String, dir: String, target: Target) -> Result<Vec<Need>, String> {
@@ -1074,6 +1083,14 @@ mod tests {
     }
 
     #[test]
+    fn gruppe_als_zusatzordner() {
+        let v: serde_json::Value = serde_json::from_str(&super::settings_json("dark", None, &["/w/api".into()])).unwrap();
+        assert_eq!(v["permissions"]["additionalDirectories"], serde_json::json!(["/w/api"]));
+        let v: serde_json::Value = serde_json::from_str(&super::settings_json("dark", None, &[])).unwrap();
+        assert!(v.get("permissions").is_none());
+    }
+
+    #[test]
     fn theme_nur_zwischen_eigenen() {
         assert_eq!(theme_for("custom:open-claude:open-claude", "light"), Some("custom:open-claude:open-claude-light"));
         assert_eq!(theme_for("custom:open-claude:open-claude-light", "dark"), Some("custom:open-claude:open-claude"));
@@ -1082,14 +1099,6 @@ mod tests {
         assert_eq!(theme_for("dark", "light"), None);
         assert_eq!(theme_for("custom:open-claude:open-claude", "system"), None);
     }
-    #[test]
-    fn gruppe_als_zusatzordner() {
-        let v: serde_json::Value = serde_json::from_str(&super::settings_json("dark", None, &["/w/api".into()])).unwrap();
-        assert_eq!(v["permissions"]["additionalDirectories"], serde_json::json!(["/w/api"]));
-        let v: serde_json::Value = serde_json::from_str(&super::settings_json("dark", None, &[])).unwrap();
-        assert!(v.get("permissions").is_none());
-    }
-
 
     #[test]
     fn id_nur_sichere_zeichen() {

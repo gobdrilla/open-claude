@@ -32,6 +32,7 @@ mod preview;
 mod deps;
 mod activity;
 mod images;
+mod accounts;
 mod workflows;
 // Test-Explorer: Testlaeufe ohne PTY, Output zeilenweise ueber einen Channel.
 mod runner;
@@ -574,6 +575,12 @@ pub fn run() {
             pty::pty_close,
             pty::run_start,
             pty::run_missing,
+            pty::claude_login,
+            accounts::claude_accounts,
+            accounts::claude_account_save,
+            accounts::claude_account_switch,
+            accounts::claude_account_forget,
+            accounts::claude_logout,
             forge::forge_login,
             forge::forge_logout,
             forge::forge_import_cli,
@@ -665,6 +672,7 @@ pub fn run() {
             activity::claude_panel,
             activity::claude_command,
             activity::claude_image,
+            activity::claude_thumb,
             activity::claude_agent_log,
             workflows::workflows_list,
             workflows::workflows_save,
@@ -672,7 +680,6 @@ pub fn run() {
             runner::test_run,
             runner::test_cancel,
             ide::ide_notify,
-            activity::claude_thumb,
             ide::ide_reply,
             lsp::lsp_start,
             lsp::lsp_send,

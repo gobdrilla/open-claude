@@ -194,7 +194,7 @@ pub(crate) fn write_local(
     Ok(())
 }
 
-fn atomic_write(file: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn atomic_write(file: &Path, text: &str) -> Result<(), String> {
     std::fs::create_dir_all(file.parent().unwrap()).map_err(|e| e.to_string())?;
     // eindeutiger Temp-Name, parallele Aufrufe zerstoeren sich sonst gegenseitig die Datei
     static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
