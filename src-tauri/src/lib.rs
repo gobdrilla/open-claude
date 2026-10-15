@@ -366,6 +366,22 @@ fn scan_blocking(root: String, extra: Vec<String>) -> Result<Vec<Repo>, String> 
     Ok(repos)
 }
 
+/// Kindprozesse beenden, Deckel-Aktion zuruecksetzen; mehrfach aufrufbar.
+fn shutdown(app: &tauri::AppHandle) {
+    app.state::<pty::Ptys>().close_all();
+    app.state::<ide::Ides>().close_all();
+    app.state::<lsp::Lsps>().kill_all();
+    awake::stop(app);
+    unity::kill_all();
+    app.state::<runner::Runs>().kill_all();
+}
+
+/// Vor update.install(): unter Windows beendet der Installer die App ohne RunEvent::Exit.
+#[tauri::command]
+fn before_update(app: tauri::AppHandle) {
+    shutdown(&app);
+}
+
 /// Oeffnet einen Ordner im Datei-Explorer; eine Datei zeigt er markiert in ihrem Ordner.
 #[tauri::command]
 fn reveal(path: String) -> Result<(), String> {
@@ -673,6 +689,7 @@ pub fn run() {
             default_root,
             scan,
             reveal,
+            before_update,
             path_kinds,
             trash_repo,
             trash_check,
@@ -835,14 +852,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, event| match event {
-            tauri::RunEvent::Exit => {
-                app.state::<pty::Ptys>().close_all();
-                app.state::<ide::Ides>().close_all();
-                app.state::<lsp::Lsps>().kill_all();
-                awake::stop(app);
-                unity::kill_all();
-                app.state::<runner::Runs>().kill_all();
-            }
+            tauri::RunEvent::Exit => shutdown(app),
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => reopen(app),
             _ => {}

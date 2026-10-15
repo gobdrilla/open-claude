@@ -493,7 +493,10 @@
     if (sessions.length && !(await confirm(sessionsLost(), "Neu starten"))) return;
     updating = true;
     try {
-      await update!.downloadAndInstall();
+      await update!.download();
+      // Windows: install() beendet die App per process::exit, RunEvent::Exit (Aufraeumen) liefe nicht.
+      if (!mac) await invoke("before_update");
+      await update!.install();
       await relaunch();
     } catch (e) {
       notice = String(e);
