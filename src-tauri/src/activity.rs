@@ -1366,8 +1366,9 @@ mod tests {
         put(&base.join("subagents/workflows/wf_b/journal.jsonl"), "{\"type\":\"launched\"}\n{\"type\":\"started\",\"key\":\"k1\",\"agentId\":\"b1\",\"label\":\"eins\",\"phase\":\"Research\"}\n");
         let started = |run: &str, task: &str| {
             format!(
-                r#"{{"type":"user","timestamp":"2026-10-15T14:00:00.000Z","toolUseResult":{{"status":"async_launched","taskId":"{task}","workflowName":"audit","runId":"{run}","scriptPath":"{}"}}}}"#,
-                script.to_string_lossy()
+                r#"{{"type":"user","timestamp":"2026-10-15T14:00:00.000Z","toolUseResult":{{"status":"async_launched","taskId":"{task}","workflowName":"audit","runId":"{run}","scriptPath":{}}}}}"#,
+                // Escaped: Windows-Pfade haben Backslashes.
+                Value::from(script.to_string_lossy())
             )
         };
         let stop = r#"{"type":"user","timestamp":"2026-10-15T14:01:00.000Z","toolUseResult":{"message":"Successfully stopped task: t1 (x)","task_id":"t1","task_type":"local_workflow"}}"#;
