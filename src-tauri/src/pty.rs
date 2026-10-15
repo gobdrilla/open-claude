@@ -20,7 +20,8 @@ struct Session {
     master: Box<dyn MasterPty + Send>,
     // Das Child selbst gehoert dem Waiter-Thread (wait() blockiert).
     killer: Box<dyn ChildKiller + Send + Sync>,
-    // Nur Run-Leiste: pid der Shell, um beim Stoppen den ganzen Prozessbaum zu treffen (npm -> node).
+    // Run-Leiste (unter Windows jede Session): pid der Shell, um beim Stoppen den ganzen Prozessbaum zu treffen
+    // (npm -> node; claude -> MCP-Server mit eigener versteckter Konsole, die ClosePseudoConsole nicht erreicht).
     tree: Option<u32>,
 }
 
@@ -818,7 +819,7 @@ fn spawn(
             input,
             master: pair.master,
             killer: child.clone_killer(),
-            tree: child.process_id().filter(|_| tree),
+            tree: child.process_id().filter(|_| tree || cfg!(windows)),
         },
     );
 
