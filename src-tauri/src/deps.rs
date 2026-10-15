@@ -105,7 +105,14 @@ fn refresh_path() {
     let Ok(out) = crate::quiet("powershell").args(["-NoProfile", "-Command", script]).stdin(Stdio::null()).output() else {
         return;
     };
-    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let mut path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // Nur im Prozess gesetzte Eintraege (Launcher, `tauri dev`) behalten, hinten angehaengt.
+    let old = std::env::var("PATH").unwrap_or_default();
+    for d in old.split(';').filter(|d| !d.trim().is_empty()) {
+        if !path.split(';').any(|p| p.trim_end_matches('\\').eq_ignore_ascii_case(d.trim_end_matches('\\'))) {
+            path = format!("{path};{d}");
+        }
+    }
     // Unter Windows ist set_var threadsicher (die Win32-Umgebung hat ein eigenes Lock).
     if out.status.success() && path.len() > 1 {
         std::env::set_var("PATH", path);
