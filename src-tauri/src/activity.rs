@@ -495,9 +495,22 @@ pub async fn claude_agent_log(cwd: String, sid: String, run: String, agent: Stri
         return Err("Ungueltige Kennung".into());
     }
     blocking(move || {
-        let sub = config_dir().join("projects").join(slug(&real(&cwd))).join(&sid).join("subagents");
-        let dir = if run.is_empty() { sub } else { sub.join("workflows").join(&run) };
-        Ok(agent_log(&dir.join(format!("agent-{agent}.jsonl"))))
+        let proj = config_dir().join("projects").join(slug(&real(&cwd)));
+        let sub = PathBuf::from("subagents");
+        let rel = if run.is_empty() { sub } else { sub.join("workflows").join(&run) }.join(format!("agent-{agent}.jsonl"));
+        // Nach /clear zeigt das Panel auch Agents frueherer Sessions (siehe earlier): dann die neueste Datei mit der id.
+        let own = proj.join(&sid).join(&rel);
+        let f = fs::read_dir(&proj)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let f = e.path().join(&rel);
+                Some((fs::metadata(&f).ok()?.modified().ok()?, f))
+            })
+            .max_by_key(|x| x.0)
+            .map_or(own, |x| x.1);
+        Ok(agent_log(&f))
     })
     .await
 }
@@ -635,7 +648,7 @@ fn finished(v: &Value, id: &str, dir: &Path) -> Run {
 }
 
 /// Run aus journal.jsonl + Agent-Transkripten; alive = startedAt der lebenden Session mit dieser SID.
-fn live(st: &mut State, dir: &Path, scripts: &Path, id: &str, alive: Option<u64>, now: u64) -> Run {
+fn live(st: &mut State, dir: &Path, scripts: &[PathBuf], id: &str, alive: Option<u64>, now: u64) -> Run {
     let journal = dir.join("journal.jsonl");
     let created = fs::metadata(&journal).and_then(|m| m.created()).map(ms).ok();
     // Geaendert statt angelegt: ein fortgesetzter Run (z. B. nach dem Session-Limit) laeuft in einem aelteren Journal weiter.
@@ -670,7 +683,8 @@ fn live(st: &mut State, dir: &Path, scripts: &Path, id: &str, alive: Option<u64>
             a.result = r.map(|r| trunc(&r.as_str().map_or_else(|| r.to_string(), Into::into), 2000));
         }
     }
-    let (name, meta) = script_meta(scripts, id);
+    // Nach /clear liegt das Skript evtl. nur bei der frueheren Session
+    let (name, meta) = scripts.iter().map(|d| script_meta(d, id)).find(|m| m.0.is_some()).unwrap_or_default();
     let (mut phases, planned): (Vec<_>, Vec<_>) = meta.into_iter().unzip();
     let mut agents: Vec<Agent> = agents.into_iter().map(|x| x.1).collect();
     for a in &mut agents {
@@ -700,17 +714,21 @@ fn live(st: &mut State, dir: &Path, scripts: &Path, id: &str, alive: Option<u64>
     }
 }
 
-/// (sid, startedAt der lebenden Session) — sessions/*.json mit passendem cwd, sonst neueste Transkript-Datei.
+/// (sid, startedAt der lebenden Session, SIDs der anderen lebenden Sessions im cwd) — sessions/*.json mit passendem
+/// cwd, sonst neueste Transkript-Datei.
 // ponytail: zwei claude im selben cwd -> neueste gewinnt; exakt waere Kindprozess der PTY-PID
-fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>)> {
-    let live = fs::read_dir(c.join("sessions"))
+fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>, Vec<String>)> {
+    let mut all: Vec<Value> = fs::read_dir(c.join("sessions"))
         .into_iter()
         .flatten()
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
         .filter_map(|e| serde_json::from_str::<Value>(&fs::read_to_string(e.path()).ok()?).ok())
         .filter(|v| str_of(v, "cwd") == cwd)
-        .max_by_key(|v| u64_of(v, "updatedAt"));
+        .collect();
+    all.sort_by_key(|v| u64_of(v, "updatedAt"));
+    let live = all.pop();
+    let others = all.iter().map(|v| str_of(v, "sessionId").to_string()).collect();
     let (sid, alive) = match live {
         Some(v) => (str_of(&v, "sessionId").to_string(), Some(u64_of(&v, "startedAt"))),
         None => {
@@ -722,12 +740,42 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>)> {
             (newest.path().file_stem()?.to_str()?.to_string(), None)
         }
     };
-    (!sid.is_empty() && sid.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')).then_some((sid, alive))
+    (!sid.is_empty() && sid.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')).then_some((sid, alive, others))
+}
+
+/// Fruehere SIDs desselben claude-Prozesses, aelteste zuerst: /clear und /resume wechseln die SID, laufende Agents
+/// und Workflows zeigt claude aber weiter. Transkripte, die seit dem Start geschrieben wurden, ohne andere lebende Sessions.
+// shortcut: ein inzwischen beendetes zweites claude im selben cwd zaehlt mit; exakt waere die PID im Transkript
+fn earlier(p: &Path, sid: &str, started: u64, others: &[String]) -> Vec<String> {
+    let mut out: Vec<(u64, String)> = fs::read_dir(p)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let s = e.path().file_name()?.to_str()?.strip_suffix(".jsonl")?.to_string();
+            let at = ms(e.metadata().ok()?.modified().ok()?);
+            let ok = at >= started && s != sid && !others.contains(&s) && s.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-');
+            ok.then_some((at, s))
+        })
+        .collect();
+    out.sort();
+    out.into_iter().rev().take(5).rev().map(|x| x.1).collect()
+}
+
+/// Derselbe Agent in zwei Sessions (nach /clear uebernommen): die neuere gewinnt, fehlende Angaben kommen aus der aelteren.
+fn merge(old: &mut Agent, mut new: Agent) {
+    for (n, o) in [(&mut new.label, &mut old.label), (&mut new.phase, &mut old.phase)] {
+        if n.is_empty() {
+            *n = std::mem::take(o);
+        }
+    }
+    new.prompt = new.prompt.or(old.prompt.take());
+    *old = new;
 }
 
 fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     let p = c.join("projects").join(slug(cwd));
-    let Some((sid, alive)) = session(c, cwd, &p) else {
+    let Some((sid, alive, others)) = session(c, cwd, &p) else {
         return Activity { session: None, alive: false, runs: vec![], agents: vec![], images: vec![], prompts: vec![], panel: None, limits: None, modes: vec![] };
     };
     // Max. 4 Sessions im Cache; nur die am laengsten unbenutzte faellt raus, die anderen muessten sonst alles neu lesen.
@@ -738,12 +786,18 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     }
     let st = cache.entry(sid.clone()).or_default();
     st.used = now;
-    let base = p.join(&sid);
+    // Fruehere Sessions desselben Prozesses zuerst, die aktuelle zuletzt: sie gewinnt bei doppelten Agents und Runs.
+    let sids: Vec<String> = alive.map_or(vec![], |s| earlier(&p, &sid, s, &others)).into_iter().chain([sid.clone()]).collect();
+    let bases: Vec<PathBuf> = sids.iter().map(|s| p.join(s)).collect();
+    let scripts: Vec<PathBuf> = bases.iter().rev().map(|b| b.join("workflows/scripts")).collect();
 
     // Bilder
-    scan_images(st, &p.join(format!("{sid}.jsonl")));
-    let subs: Vec<PathBuf> = walkdir::WalkDir::new(base.join("subagents"))
-        .into_iter()
+    for s in &sids {
+        scan_images(st, &p.join(format!("{s}.jsonl")));
+    }
+    let subs: Vec<PathBuf> = bases
+        .iter()
+        .flat_map(|b| walkdir::WalkDir::new(b.join("subagents")))
         .flatten()
         .map(|e| e.into_path())
         .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("agent-") && n.ends_with(".jsonl")))
@@ -753,31 +807,49 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
     }
 
     // Agent-Tool-Agents liegen direkt in subagents/, Workflow-Agents darunter
-    let top = base.join("subagents");
-    let mut agents: Vec<Agent> = subs.iter().filter(|f| f.parent() == Some(top.as_path())).filter_map(|f| solo(st, f, alive.is_some())).collect();
+    let tops: Vec<PathBuf> = bases.iter().map(|b| b.join("subagents")).collect();
+    let mut agents: Vec<Agent> = Vec::new();
+    for a in subs.iter().filter(|f| f.parent().is_some_and(|d| tops.iter().any(|t| t == d))).filter_map(|f| solo(st, f, alive.is_some())) {
+        match agents.iter_mut().find(|x| x.id == a.id) {
+            Some(x) => merge(x, a),
+            None => agents.push(a),
+        }
+    }
 
     // Workflows
-    let mut runs = Vec::new();
-    for e in fs::read_dir(base.join("subagents/workflows")).into_iter().flatten().flatten() {
-        let Some(id) = e.file_name().to_str().filter(|n| n.starts_with("wf_")).map(String::from) else { continue };
-        let json = base.join("workflows").join(format!("{id}.json"));
-        // Fortgesetzt: Journal neuer als das Ergebnis, die alte JSON gilt erst wieder, wenn der Run sie neu schreibt.
-        let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
-        if matches!((mtime(&e.path().join("journal.jsonl")), mtime(&json)), (Some(j), Some(w)) if j > w) {
-            st.done.remove(&id);
-            runs.push(live(st, &e.path(), &base.join("workflows/scripts"), &id, alive, now));
-            continue;
-        }
-        if let Some(r) = st.done.get(&id) {
-            runs.push(r.clone());
-            continue;
-        }
-        if let Some(v) = fs::read_to_string(&json).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
-            let r = finished(&v, &id, &e.path());
-            st.done.insert(id, r.clone());
-            runs.push(r);
-        } else {
-            runs.push(live(st, &e.path(), &base.join("workflows/scripts"), &id, alive, now));
+    let mut runs: Vec<Run> = Vec::new();
+    for base in &bases {
+        for e in fs::read_dir(base.join("subagents/workflows")).into_iter().flatten().flatten() {
+            let Some(id) = e.file_name().to_str().filter(|n| n.starts_with("wf_")).map(String::from) else { continue };
+            let json = base.join("workflows").join(format!("{id}.json"));
+            // Fortgesetzt: Journal neuer als das Ergebnis, die alte JSON gilt erst wieder, wenn der Run sie neu schreibt.
+            let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+            let r = if matches!((mtime(&e.path().join("journal.jsonl")), mtime(&json)), (Some(j), Some(w)) if j > w) {
+                st.done.remove(&id);
+                live(st, &e.path(), &scripts, &id, alive, now)
+            } else if let Some(r) = st.done.get(&id) {
+                r.clone()
+            } else if let Some(v) = fs::read_to_string(&json).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
+                let r = finished(&v, &id, &e.path());
+                st.done.insert(id, r.clone());
+                r
+            } else {
+                live(st, &e.path(), &scripts, &id, alive, now)
+            };
+            match runs.iter_mut().find(|x| x.id == r.id) {
+                // Uebernommener Run ohne Skript: Name und Phasen aus der frueheren Session
+                Some(x) => {
+                    let mut r = r;
+                    if r.name == r.id {
+                        r.name = std::mem::take(&mut x.name);
+                    }
+                    if r.phases.is_empty() {
+                        (r.phases, r.planned) = (std::mem::take(&mut x.phases), std::mem::take(&mut x.planned));
+                    }
+                    *x = r;
+                }
+                None => runs.push(r),
+            }
         }
     }
     let rank = |s: &str| match s {
@@ -1148,6 +1220,39 @@ mod tests {
         append(&base.join("subagents/agent-a1.jsonl"), &t(9));
         let a = activity_in(&mut cache, &c, "/w/p", 0);
         assert!(a.agents.iter().all(|a| a.state == "running"));
+    }
+
+    #[test]
+    fn nach_clear() {
+        let (c, base) = setup("clear", true);
+        let proj = c.join("projects/-w-p");
+        let (old, other) = (proj.join("0000aaaa-0000-0000-0000-000000000001"), "0000aaaa-0000-0000-0000-000000000002");
+        put(&c.join("sessions/2.json"), &format!(r#"{{"sessionId":"{other}","cwd":"/w/p","startedAt":0,"updatedAt":0}}"#));
+        let t = r#"{"type":"assistant","timestamp":"1970-01-01T00:00:01.000Z","message":{"content":[]}}"#.to_string() + "\n";
+        for f in ["0000aaaa-0000-0000-0000-000000000001.jsonl", &format!("{other}.jsonl")] {
+            put(&proj.join(f), "");
+        }
+        // vor /clear: Agent a1 mit Namen, a5, Workflow mit Skript
+        put(&old.join("subagents/agent-a1.jsonl"), &t);
+        put(&old.join("subagents/agent-a1.meta.json"), r#"{"agentType":"Explore","description":"Suche"}"#);
+        put(&old.join("subagents/agent-a5.jsonl"), &t);
+        put(&old.join("subagents/workflows/wf_1/journal.jsonl"), JOURNAL);
+        put(&old.join("workflows/scripts/mein-flow-wf_1.js"), "export const meta = {\n  phases: [{ title: 'Research' }],\n}\n");
+        // nach /clear: in die neue Session uebernommen, ohne meta und Skript
+        put(&base.join("subagents/agent-a1.jsonl"), &(t.clone() + &t));
+        put(&base.join("subagents/workflows/wf_1/journal.jsonl"), JOURNAL);
+        // andere lebende Session im selben cwd bleibt draussen
+        put(&proj.join(other).join("subagents/agent-a7.jsonl"), &t);
+
+        let a = activity_in(&mut Cache::new(), &c, "/w/p", now_ms());
+        assert_eq!(a.session.as_deref(), Some(SID));
+        let mut ids: Vec<_> = a.agents.iter().map(|a| a.id.as_str()).collect();
+        ids.sort();
+        assert_eq!(ids, ["a1", "a5"]);
+        let a1 = a.agents.iter().find(|a| a.id == "a1").unwrap();
+        assert_eq!((a1.label.as_str(), a1.phase.as_str()), ("Suche", "Explore"));
+        assert_eq!((a.runs.len(), a.runs[0].name.as_str()), (1, "mein-flow"));
+        assert_eq!(a.runs[0].phases, ["Research", "Extra"]);
     }
 
     #[test]
