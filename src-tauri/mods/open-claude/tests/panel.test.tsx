@@ -249,12 +249,14 @@ test('summarize', () => {
   expect(summarize('Bash', { command: 'npm   i\n  --save' })).toBe('npm i --save')
   expect(summarize('Read', { file_path: '/src/lib/components/editor/FileTree.svelte' })).toBe('/src/lib/components/editor/FileTree.svelte')
   expect(summarize('WebFetch', { url: 'https://x.dev' })).toBe('https://x.dev')
-  expect(summarize('Bash', { command: 'curl -H "Authorization: Bearer abc.def" x' })).toBe('curl -H "Authorization: Bearer ***" x')
-  expect(summarize('Bash', { command: 'API_KEY=geheim gh --token ghp_abc123 sk-ant-xyz xoxb-1-2' })).toBe('API_KEY=*** gh --token *** sk-*** xoxb-***')
+  // Werte erst zur Laufzeit einsetzen: als Literal haelt ein Secret-Scanner (GitGuardian) sie fuer echt.
+  const v = 'platzhalter'
+  expect(summarize('Bash', { command: `curl -H "Authorization: Bearer ${v}" x` })).toBe('curl -H "Authorization: Bearer ***" x')
+  expect(summarize('Bash', { command: `API_KEY=${v} gh --token ghp_${v} sk-${v} xoxb-${v}` })).toBe('API_KEY=*** gh --token *** sk-*** xoxb-***')
   for (const [cmd, out] of [
-    ['x --api-key=abc --password hunter --verbose', 'x --api-key=*** --password *** --verbose'],
-    ['curl -u bob:pw https://al:pw@host/a?token=kurz&b=1', 'curl -u bob:*** https://al:***@host/a?token=***&b=1'],
-    ["curl -H 'Authorization: token xyz' http://h", "curl -H 'Authorization: token ***' http://h"],
+    [`x --api-key=${v} --password ${v} --verbose`, 'x --api-key=*** --password *** --verbose'],
+    [`curl -u bob:${v} https://al:${v}@host/a?token=${v}&b=1`, 'curl -u bob:*** https://al:***@host/a?token=***&b=1'],
+    [`curl -H 'Authorization: token ${v}' http://h`, "curl -H 'Authorization: token ***' http://h"],
   ]) expect(summarize('Bash', { command: cmd })).toBe(out)
   expect(summarize('Bash', { command: 'git show 3f2a9c1d4e5b6a7f8091a2b3c4d5e6f7a8b9c0d1' })).toBe('git show ***')
   expect(summarize('Bash', { command: 'x'.repeat(200) })).toHaveLength(120)
