@@ -122,7 +122,22 @@ pub(crate) fn git(repo: &str) -> Command {
 pub(crate) fn net(repo: &str) -> Command {
     let mut cmd = git(repo);
     cmd.envs(crate::forge::repo_auth(repo).into_iter().flatten());
+    cmd.envs(ssh_batch(Some(repo)));
     cmd
+}
+
+/// ssh ohne Rueckfragen: ohne Askpass (unter Linux meist keins) haengt eine Passphrase- oder Hostkey-Abfrage
+/// sonst am Terminal, aus dem die App gestartet wurde, oder scheitert stumm. ssh-agent funktioniert weiter.
+/// Eigenes GIT_SSH(_COMMAND) oder core.sshCommand des Nutzers bleibt unangetastet.
+pub(crate) fn ssh_batch(repo: Option<&str>) -> Option<(&'static str, &'static str)> {
+    let own = ["GIT_SSH_COMMAND", "GIT_SSH"].iter().any(|k| std::env::var_os(k).is_some_and(|v| !v.is_empty()))
+        || out(match repo {
+            Some(r) => git(r),
+            None => git("."),
+        }
+        .args(["config", "--get", "core.sshCommand"]))
+        .is_ok_and(|s| !s.trim().is_empty());
+    (!own).then_some(("GIT_SSH_COMMAND", "ssh -o BatchMode=yes"))
 }
 
 /// Fuer Nutzerpfade: keine Pathspec-Magie. Nicht global, stash nutzt intern selbst Magie.

@@ -811,6 +811,8 @@ pub fn run() {
         .setup(|app| {
             awake::start(app.handle());
             deps::auto_update();
+            // Kontenliste fuer git fetch/pull/push mit automatisch gewaehltem Konto (forge::repo_auth).
+            forge::known(app.handle());
             // Ohne Tray (Linux ohne AppIndicator-Bibliothek) weiterstarten, Schliessen beendet dann.
             let ok = tray_supported() && tray(app.handle()).map_err(|e| eprintln!("Tray nicht verfügbar: {e}")).is_ok();
             TRAY_OK.store(ok, Ordering::Relaxed);

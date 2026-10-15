@@ -219,12 +219,17 @@ fn parse_account(id: &str) -> Option<(&'static str, String, String)> {
 }
 
 /// Vom Frontend gepflegte Kontenliste (settings.json, "accounts") als (kind, host, user).
-fn known<R: tauri::Runtime>(app: &AppHandle<R>) -> Vec<(String, String, String)> {
+/// Letzte gelesene Kontenliste fuer repo_auth, das ohne AppHandle laeuft (git::net); known() frischt sie auf.
+static KNOWN: std::sync::Mutex<Vec<(String, String, String)>> = std::sync::Mutex::new(Vec::new());
+
+pub(crate) fn known<R: tauri::Runtime>(app: &AppHandle<R>) -> Vec<(String, String, String)> {
     let Ok(store) = app.store("settings.json") else {
         return Vec::new();
     };
     let list = store.get("accounts").unwrap_or_default();
-    items(&list, |a| (s(&a["kind"]), s(&a["host"]), s(&a["user"])))
+    let v = items(&list, |a| (s(&a["kind"]), s(&a["host"]), s(&a["user"])));
+    *KNOWN.lock().unwrap_or_else(|e| e.into_inner()) = v.clone();
+    v
 }
 
 /// Explizites Konto, wenn gueltig und fuer diesen Host; sonst erstes bekanntes (GitHub vor GitLab).
@@ -251,9 +256,17 @@ fn auth_env(kind: &str, host: &str, tok: &str) -> [(String, String); 3] {
     ]
 }
 
-/// Fuer fetch/pull/push: nur mit explizit gewaehltem Konto, sonst None (System-Credential-Helper).
+/// Fuer fetch/pull/push: das fest gewaehlte Konto, sonst wie in der Anzeige (repo_account, "auto") das erste
+/// bekannte fuer den Host von origin; ohne Treffer None (System-Credential-Helper, unter Linux oft keiner).
 pub(crate) fn repo_auth(repo: &str) -> Option<[(String, String); 3]> {
-    let (kind, host, user) = parse_account(&crate::git::config(repo, "ocui.account")?)?;
+    let (kind, host, user) = match crate::git::config(repo, "ocui.account") {
+        Some(a) => parse_account(&a)?,
+        None => {
+            let host = crate::git::config(repo, "remote.origin.url").and_then(|u| parse_remote(&u)).map(|(h, _)| h)?;
+            let known = KNOWN.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            pick(None, &host, &known)?
+        }
+    };
     // Ohne Kontenliste kein Umzug; set_repo_account hat den Token beim Binden schon umgezogen.
     let tok = token(kind, &host, &user, &[]).ok()??;
     Some(auth_env(kind, &host, &tok))
@@ -1138,6 +1151,7 @@ fn clone_blocking(
 
     let mut cmd = crate::quiet("git");
     cmd.args(["clone", "--progress", "--", &url, &dest])
+        .envs(crate::git::ssh_batch(None))
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("LC_ALL", "C")
         .stdin(Stdio::null())
