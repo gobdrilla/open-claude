@@ -186,13 +186,12 @@ fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
     let _lock = guard(&INSTALL);
     std::fs::create_dir_all(own).map_err(|e| e.to_string())?;
     let fail = |e: String| format!("Installation von {cmd} fehlgeschlagen: {e}");
-    let mut child = crate::quiet(&prog.to_string_lossy())
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| fail(e.to_string()))?;
+    let mut c = crate::quiet(&prog.to_string_lossy());
+    c.args(&args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
+    // Eigene Gruppe, sonst trifft kill_tree beim Zeitlimit unter Unix nichts und wait() haelt den Lock ewig.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut c, 0);
+    let mut child = c.spawn().map_err(|e| fail(e.to_string()))?;
     // stderr nebenher lesen, sonst blockiert ein volles Pipe den Prozess.
     let mut pipe = child.stderr.take();
     let reader = std::thread::spawn(move || {
@@ -210,6 +209,7 @@ fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
         }
         if std::time::Instant::now() > deadline {
             crate::kill_tree(child.id());
+            let _ = child.kill();
             let _ = child.wait();
             return Err(fail("Zeitüberschreitung nach 5 Minuten".into()));
         }
