@@ -226,7 +226,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const ctrl = e.ctrlKey || e.metaKey;
+    const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey; // AltGr = Strg+Alt
     const k = e.key.toLowerCase();
     if (ctrl && !e.shiftKey && e.key === "1") tab = "changes";
     else if (ctrl && !e.shiftKey && e.key === "2") tab = "history";

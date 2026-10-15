@@ -1073,7 +1073,8 @@
     }
     // Esc hat schon ein Dialog oder Menue geschlossen, nicht auch noch das Fenster.
     if (e.key === "Escape" && (overlayOnEsc || e.defaultPrevented)) return;
-    const ctrl = e.ctrlKey || e.metaKey;
+    // Ohne Alt: AltGr ist unter Windows Strg+Alt und loest sonst Kuerzel statt Zeichen aus.
+    const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey;
     if (e.key === "F1" || (ctrl && e.key === "/")) {
       if (!anyDialog) help = !help;
       e.preventDefault();

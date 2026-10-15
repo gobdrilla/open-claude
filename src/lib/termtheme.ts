@@ -64,7 +64,7 @@ export const LIGHT = {
 /** Strg+Umschalt+C, Strg+C mit Auswahl (nicht macOS: dort ist Cmd+C nativ) und Strg+V fuer Terminal und RunPane.
  *  true = erledigt, xterm soll das Event schlucken; sonst nicht zustaendig. `noText`: Zwischenablage ohne Text. */
 export function clipboardKey(term: { hasSelection(): boolean; getSelection(): string; clearSelection(): void; paste(t: string): void }, e: KeyboardEvent, mac: boolean, noText?: () => unknown): boolean {
-  if (e.type !== "keydown" || !e.ctrlKey) return false;
+  if (e.type !== "keydown" || !e.ctrlKey || e.altKey) return false; // AltGr = Strg+Alt
   const key = e.key.toLowerCase();
   // Ctrl+Umschalt+C nie als ^C durchlassen (bricht den Prozess ab); Ctrl+C mit Auswahl kopiert wie im Windows-Terminal.
   if (key === "c" && (e.shiftKey || (!mac && term.hasSelection()))) {
