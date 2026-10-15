@@ -242,6 +242,13 @@ fn branch_name<'a>(repo: &str, name: &'a str) -> Result<&'a str, String> {
     }
 }
 
+/// Windows-Geraetename (CON, nul.txt, COM1 ...): oeffnet das Geraet statt einer Datei.
+pub(crate) fn device(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").trim_end().to_ascii_lowercase();
+    matches!(stem.as_str(), "con" | "prn" | "aux" | "nul" | "conin$" | "conout$")
+        || (stem.len() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem.as_bytes()[3].is_ascii_digit())
+}
+
 /// Relativer Pfad im Repo, ohne `..`, absolute Anteile oder `.git`.
 pub(crate) fn inside(repo: &str, path: &str) -> Result<PathBuf, String> {
     let p = Path::new(path);
@@ -251,7 +258,11 @@ pub(crate) fn inside(repo: &str, path: &str) -> Result<PathBuf, String> {
             let n = n.to_string_lossy();
             let n = n.trim_end_matches(['.', ' ']);
             // NTFS-Datenstroeme: ".git::$INDEX_ALLOCATION" oeffnet unter Windows den Ordner .git.
-            n.eq_ignore_ascii_case(".git") || n.eq_ignore_ascii_case("git~1") || (cfg!(windows) && n.contains(':'))
+            n.eq_ignore_ascii_case(".git")
+                // 8.3-Kurzname: GIT~1, bei Namenskollisionen auch GIT~2 ...
+                || (n.len() > 4 && n.get(..4).is_some_and(|h| h.eq_ignore_ascii_case("git~")) && n[4..].bytes().all(|b| b.is_ascii_digit()))
+                // Windows: "x." / "x " landen still in "x", Geraetenamen (NUL, CON.txt) sind keine Dateien.
+                || (cfg!(windows) && (n.contains(':') || n.len() != c.as_os_str().len() || device(n)))
         }
         _ => true,
     };
@@ -1516,8 +1527,13 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         assert!(inside("C:/r", ".GIT/hooks/pre-commit").is_err());
         assert!(inside("C:/r", ".git./config").is_err());
         assert!(inside("C:/r", "a/.git . /config").is_err());
-        assert!(inside("C:/r", "GIT~1/config").is_err());
+        assert!(inside("C:/r", "GIT~1/config").is_err() && inside("C:/r", "git~12/config").is_err());
+        assert!(inside("C:/r", "git~a").is_ok() && inside("C:/r", "git~").is_ok());
         assert!(inside("C:/r", ".gitignore").is_ok());
+        for odd in ["nul", "a/CON.txt", "com1.log", "x.", "a/x /b"] {
+            assert_eq!(inside("C:/r", odd).is_err(), cfg!(windows), "{odd}");
+        }
+        assert!(inside("C:/r", "console.txt").is_ok() && inside("C:/r", "com10").is_ok());
         // Unter Unix ist ":" ein gewoehnliches Zeichen im Dateinamen.
         for stream in [".git::$INDEX_ALLOCATION/config", "a.txt::$DATA"] {
             assert_eq!(inside("C:/r", stream).is_err(), cfg!(windows), "{stream}");

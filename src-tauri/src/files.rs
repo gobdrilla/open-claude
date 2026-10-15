@@ -46,6 +46,11 @@ pub(crate) fn within(repo: &str, path: &str) -> Result<PathBuf, String> {
     if !real.starts_with(&root) {
         return Err(format!("Liegt außerhalb des Projekts: {path}"));
     }
+    // Symlink/Junction (unter Windows ohne Adminrechte) auf .git: der aufgeloeste Pfad muss dieselbe Regel bestehen.
+    let rest = real.strip_prefix(&root).unwrap_or(Path::new(""));
+    if !rest.as_os_str().is_empty() && inside(repo, &rest.to_string_lossy()).is_err() {
+        return Err(format!("Ungültiger Pfad: {path}"));
+    }
     Ok(file)
 }
 
@@ -450,6 +455,22 @@ mod tests {
         assert!(within(&repo, "raus/x.txt").is_err());
         assert!(write(&repo, "raus/x.txt", "x", false, false, None, true).is_err());
         assert!(!Path::new(&outside).join("x.txt").exists());
+    }
+
+    /// Junction (Windows, ohne Admin) bzw. Symlink auf .git darf .git nicht schreibbar machen.
+    #[test]
+    fn kein_git_per_link() {
+        let repo = tmp("gitlink");
+        let git = Path::new(&repo).join(".git");
+        std::fs::create_dir_all(&git).unwrap();
+        let link = Path::new(&repo).join("x");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&git, &link).unwrap();
+        #[cfg(windows)]
+        assert!(std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(&link).arg(&git).output().unwrap().status.success());
+        assert!(within(&repo, "x/config").is_err());
+        assert!(write(&repo, "x/config", "x", false, false, None, true).is_err());
+        assert!(!git.join("config").exists());
     }
 
     #[test]

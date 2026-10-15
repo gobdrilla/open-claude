@@ -21,7 +21,7 @@ pub struct WfFile {
 fn dir(scope: &str, cwd: &str) -> Result<PathBuf, String> {
     match scope {
         "user" => Ok(crate::activity::config_dir().join("workflows")),
-        "project" => Ok(Path::new(cwd).join(".claude/workflows")),
+        "project" => Ok(Path::new(cwd).join(".claude").join("workflows")),
         _ => Err(format!("Unbekannter Ort: {scope}")),
     }
 }
@@ -46,7 +46,7 @@ fn list(dirs: &[(&'static str, PathBuf)]) -> Vec<WfFile> {
 }
 
 fn save(dir: &Path, file: &str, text: &str) -> Result<(), String> {
-    if !crate::pty::valid_id(file) {
+    if !crate::pty::valid_id(file) || crate::git::device(file) {
         return Err(format!("Ungueltiger Name: {file}"));
     }
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;

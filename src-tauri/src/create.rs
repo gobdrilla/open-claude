@@ -75,15 +75,10 @@ fn lang(id: &str) -> Option<&'static Lang> {
 /// abschliessender ., max. 100. Dazu keine Windows-Geraetenamen (con, nul, com1, ...).
 fn valid_name(n: &str) -> bool {
     let mut c = n.chars();
-    let stem = n.split('.').next().unwrap_or("").to_ascii_lowercase();
-    let device = matches!(stem.as_str(), "con" | "prn" | "aux" | "nul")
-        || (stem.len() == 4
-            && (stem.starts_with("com") || stem.starts_with("lpt"))
-            && stem.as_bytes()[3].is_ascii_digit());
     c.next().is_some_and(|f| f.is_ascii_alphanumeric() || f == '_')
         && n.len() <= 100
         && !n.ends_with('.')
-        && !device
+        && !crate::git::device(n)
         && c.all(|x| x.is_ascii_alphanumeric() || matches!(x, '.' | '_' | '-'))
 }
 

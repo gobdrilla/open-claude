@@ -895,10 +895,7 @@ pub async fn forge_releases(app: AppHandle, repo: String, remote_url: String, pa
 fn safe_name(n: &str) -> String {
     let mut s: String = n.chars().map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }).take(200).collect();
     s = s.trim_end_matches(['.', ' ']).to_string();
-    let stem = s.split('.').next().unwrap_or("").to_ascii_lowercase();
-    let device = matches!(stem.as_str(), "con" | "prn" | "aux" | "nul")
-        || (stem.len() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem.as_bytes()[3].is_ascii_digit());
-    if device || s.is_empty() {
+    if crate::git::device(&s) || s.is_empty() {
         s.insert(0, '_');
     }
     s
@@ -1312,6 +1309,7 @@ mod tests {
         assert_eq!(super::safe_name("a:b?.zip"), "a_b_.zip");
         assert_eq!(super::safe_name("CON.txt"), "_CON.txt");
         assert_eq!(super::safe_name("x. "), "x");
+        assert_eq!(super::safe_name("con .zip"), "_con .zip");
     }
 
     #[test]
