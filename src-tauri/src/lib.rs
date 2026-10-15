@@ -537,6 +537,43 @@ fn hide(window: &tauri::Window) {
 }
 
 /// Tray-Icon mit Menue. Mit Tray an der einzige Weg, die App wirklich zu beenden.
+/// Linux: tray-icon laedt libappindicator erst beim Bauen und bricht ohne sie per panic ab (Release: abort),
+/// das map_err in setup() kaeme nie dran. Und ohne StatusNotifierWatcher (GNOME ohne AppIndicator-Erweiterung)
+/// waere das Icon unsichtbar, Schliessen versteckte das Fenster dann ins Nichts.
+#[cfg(target_os = "linux")]
+fn tray_supported() -> bool {
+    use gio::prelude::*;
+    let libs = ["libayatana-appindicator3.so.1", "libappindicator3.so.1", "libayatana-appindicator3.so", "libappindicator3.so"];
+    if !libs.iter().any(|l| unsafe { libloading::Library::new(l) }.is_ok()) {
+        eprintln!("Tray nicht verfügbar: keine AppIndicator-Bibliothek");
+        return false;
+    }
+    let watcher = gio::bus_get_sync(gio::BusType::Session, None::<&gio::Cancellable>).ok().and_then(|bus| {
+        bus.call_sync(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "NameHasOwner",
+            Some(&("org.kde.StatusNotifierWatcher",).to_variant()),
+            gio::glib::VariantTy::new("(b)").ok(),
+            gio::DBusCallFlags::NONE,
+            2000,
+            None::<&gio::Cancellable>,
+        )
+        .ok()?
+        .get::<(bool,)>()
+    });
+    if watcher != Some((true,)) {
+        eprintln!("Tray nicht verfügbar: kein StatusNotifierWatcher auf dem Session-Bus");
+    }
+    watcher == Some((true,))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn tray_supported() -> bool {
+    true
+}
+
 fn tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let oeffnen = MenuItem::with_id(app, "oeffnen", "Öffnen", true, None::<&str>)?;
     let beenden = MenuItem::with_id(app, "beenden", "Beenden", true, None::<&str>)?;
@@ -545,7 +582,8 @@ fn tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("L'Atelier de Claude")
         .menu(&menu)
-        // Linksklick oeffnet, das Menue haengt auf rechts.
+        // Linksklick oeffnet, das Menue haengt auf rechts. Linux (AppIndicator) kennt keine Klick-Events:
+        // dort oeffnet jeder Klick das Menue, "Öffnen" steht deshalb oben.
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "oeffnen" => reopen(app),
@@ -774,7 +812,7 @@ pub fn run() {
             awake::start(app.handle());
             deps::auto_update();
             // Ohne Tray (Linux ohne AppIndicator-Bibliothek) weiterstarten, Schliessen beendet dann.
-            let ok = tray(app.handle()).map_err(|e| eprintln!("Tray nicht verfügbar: {e}")).is_ok();
+            let ok = tray_supported() && tray(app.handle()).map_err(|e| eprintln!("Tray nicht verfügbar: {e}")).is_ok();
             TRAY_OK.store(ok, Ordering::Relaxed);
             TRAY.store(ok, Ordering::Relaxed);
             Ok(())
