@@ -532,7 +532,7 @@ fn keys(v: Option<&Value>) -> Vec<String> {
     v.and_then(Value::as_object).map(|m| m.keys().cloned().collect()).unwrap_or_default()
 }
 
-// ponytail: Windows nur claude.exe (nativer Installer); npm-Shim claude.cmd braeuchte cmd /c wie runner.rs, erst bei Bedarf
+// Windows: claude.exe (nativer Installer) oder npm-Shim claude.cmd; .cmd startet Rust std (>= 1.77.2) selbst ueber cmd.exe.
 fn claude(path: &str, args: &[String]) -> Result<std::process::Output, String> {
     if !Path::new(path).is_dir() {
         return Err(format!("{path} ist kein Ordner"));

@@ -157,8 +157,9 @@ fn put_new(dest: &str, file: &str, text: &str) -> Result<(), String> {
 fn fill(dest: &str, name: &str, lang_id: &str, mit: bool) -> Result<(), String> {
     let l = lang(lang_id).ok_or_else(|| format!("Unbekannte Sprache: {lang_id}"))?;
     if let (Some(tool), Some(args)) = (l.tool.filter(|t| crate::deps::on_path(t)), scaffold_args(l.id, name, mit)) {
-        let exe = if cfg!(windows) && tool == "npm" { "npm.cmd" } else { tool };
-        let o = crate::quiet(exe)
+        // Aufgeloester Pfad: Windows findet .cmd-Shims (npm, scoop/volta) nicht ueber den nackten Namen.
+        let exe = crate::deps::which(tool).map_or_else(|| tool.into(), |p| p.to_string_lossy().into_owned());
+        let o = crate::quiet(&exe)
             .args(&args)
             .current_dir(dest)
             .stdin(Stdio::null())

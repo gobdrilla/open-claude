@@ -22,8 +22,10 @@ const REPORTERS: [(&str, &str); 3] = [
 ];
 
 /// Fuer alle Laeufe: keine Farben, kein Watch-Modus und keine Rueckfragen (CI), dotnet englisch und ohne
-/// Build-Knoten, die nach dem Lauf weiterleben und die Pipe offen hielten.
-const ENV: [(&str, &str); 6] = [
+/// Build-Knoten, die nach dem Lauf weiterleben und die Pipe offen hielten. Python schreibt UTF-8 statt
+/// Windows-Codepage in die Pipe (Umlaute in Pfaden).
+const ENV: [(&str, &str); 7] = [
+    ("PYTHONUTF8", "1"),
     ("NO_COLOR", "1"),
     ("FORCE_COLOR", "0"),
     ("CI", "1"),
@@ -162,7 +164,12 @@ fn test_command(fw: Fw, scope: &Scope, prog: &str, reporters: &Path, windows: bo
         Fw::Node => {
             // Windows: ESM-Specifier statt Pfad, sonst liest node "C:" als Schema.
             let r = rep("node.mjs");
-            let r = if windows { format!("file:///{}", r.replace('\\', "/")) } else { r };
+            // from_file_path kodiert #, % und Leerzeichen; Rueckfall nur fuer Tests auf Unix-Hosts.
+            let r = if windows {
+                tauri::Url::from_file_path(&r).map_or_else(|_| format!("file:///{}", r.replace('\\', "/")), String::from)
+            } else {
+                r
+            };
             a.extend(["--test".into(), format!("--test-reporter={r}")]);
             match scope {
                 // Wie in CI: die erkannten Dateien ausdruecklich, node findet .ts nicht von selbst.
@@ -233,32 +240,35 @@ fn test_command(fw: Fw, scope: &Scope, prog: &str, reporters: &Path, windows: bo
                     a.push(key.clone());
                 }
             }
-            return Ok(((if windows { "python" } else { "python3" }).into(), a));
+            let p = if prog == "py" { prog } else if windows { "python" } else { "python3" };
+            return Ok((p.into(), a));
         }
     }
     Ok((prog.into(), a))
 }
 
 /// Lokales JS-Tool: node_modules/.bin/<tool> ab cwd aufwaerts bis zum Projektordner. Kein npx: kein Netz, kein Overhead.
-/// Unix: cargo/dotnet aus ~/.cargo/bin bzw. ~/.dotnet, wenn die Login-Shell sie nicht in den PATH legt
-/// (rustup --no-modify-path, dotnet-install); die Run-Leiste macht das in pty::setup_unix genauso.
+/// cargo/dotnet aus ~/.cargo/bin bzw. ~/.dotnet, wenn PATH sie nicht kennt (rustup --no-modify-path,
+/// dotnet-install, unter Windows auch veralteter PATH des App-Prozesses); die Run-Leiste macht das genauso.
 fn sdk(tool: &str) -> String {
-    if cfg!(windows) || crate::deps::which(tool).is_some() {
+    if crate::deps::which(tool).is_some() {
         return tool.into();
     }
     let home = crate::skills::home();
+    let exe = format!("{tool}{}", std::env::consts::EXE_SUFFIX);
     let local = match tool {
-        "cargo" => std::env::var_os("CARGO_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".cargo")).join("bin").join("cargo"),
-        _ => home.join(".dotnet").join(tool),
+        "cargo" => std::env::var_os("CARGO_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".cargo")).join("bin").join(exe),
+        _ => home.join(".dotnet").join(exe),
     };
     if local.is_file() { local.to_string_lossy().into_owned() } else { tool.into() }
 }
 
 pub(crate) fn local_bin(repo: &Path, cwd: &Path, tool: &str, windows: bool, exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
-    let exe = if windows { format!("{tool}.cmd") } else { tool.into() };
+    // Windows: npm/pnpm legen .cmd-Shims an, bun .exe
+    let exes: Vec<String> = if windows { vec![format!("{tool}.cmd"), format!("{tool}.exe")] } else { vec![tool.into()] };
     cwd.ancestors()
         .take_while(|d| d.starts_with(repo))
-        .map(|d| d.join("node_modules").join(".bin").join(&exe))
+        .flat_map(|d| exes.iter().map(move |e| d.join("node_modules").join(".bin").join(e)))
         .find(|p| exists(p))
 }
 
@@ -329,6 +339,14 @@ fn start(app: AppHandle, id: String, repo: &str, dir: &str, fw: Fw, scope: &Scop
         Fw::Node => "node".into(),
         Fw::Cargo => sdk("cargo"),
         Fw::Dotnet => sdk("dotnet"),
+        // Windows: "python" ohne Installation ist der Store-Stub (WindowsApps); dann den py-Launcher.
+        Fw::Pytest
+            if cfg!(windows)
+                && crate::deps::which("python").is_none_or(|p| p.to_string_lossy().contains("WindowsApps"))
+                && crate::deps::which("py").is_some() =>
+        {
+            "py".into()
+        }
         Fw::Pytest => String::new(),
     };
     let (prog, args) = test_command(fw, scope, &prog, &reporters(&app)?, cfg!(windows))?;
