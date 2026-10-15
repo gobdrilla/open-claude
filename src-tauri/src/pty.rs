@@ -281,6 +281,19 @@ fn theme_for(cur: &str, mode: &str) -> Option<&'static str> {
     (cur.starts_with("custom:open-claude:open-claude") && cur != want).then_some(want)
 }
 
+/// Dateien der eingebauten Mod fuer Release (Test mod_files_vollstaendig prueft, dass keine fehlt).
+const FILES: &[(&str, &str)] = &[
+    (".claude-plugin/plugin.json", include_str!("../mods/open-claude/.claude-plugin/plugin.json")),
+    ("hooks/hooks.json", include_str!("../mods/open-claude/hooks/hooks.json")),
+    ("skills/smart-tests/SKILL.md", include_str!("../mods/open-claude/skills/smart-tests/SKILL.md")),
+    ("skills/workflow-templates/SKILL.md", include_str!("../mods/open-claude/skills/workflow-templates/SKILL.md")),
+    ("skills/forge-pr/SKILL.md", include_str!("../mods/open-claude/skills/forge-pr/SKILL.md")),
+    ("hooks/register.tsx", include_str!("../mods/open-claude/hooks/register.tsx")),
+    ("types/index.d.ts", include_str!("../mods/open-claude/types/index.d.ts")),
+    ("themes/open-claude.json", include_str!("../mods/open-claude/themes/open-claude.json")),
+    ("themes/open-claude-light.json", include_str!("../mods/open-claude/themes/open-claude-light.json")),
+];
+
 /// Eingebaute Mod. Debug: Quellordner direkt (Hot-Reload). Release: eingebettet und nach
 /// app_data_dir geschrieben, weil claude in jeden Mod-Ordner .claude-plugin/types/ schreibt
 /// und das signierte .app-Bundle dabei kaputt ginge.
@@ -289,16 +302,6 @@ pub(crate) fn builtin_mod(app: &AppHandle) -> Option<PathBuf> {
         return Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("mods/open-claude"));
     }
     let dir = app.path().app_data_dir().ok()?.join("mods/open-claude");
-    const FILES: [(&str, &str); 8] = [
-        (".claude-plugin/plugin.json", include_str!("../mods/open-claude/.claude-plugin/plugin.json")),
-        ("hooks/hooks.json", include_str!("../mods/open-claude/hooks/hooks.json")),
-        ("skills/smart-tests/SKILL.md", include_str!("../mods/open-claude/skills/smart-tests/SKILL.md")),
-        ("skills/workflow-templates/SKILL.md", include_str!("../mods/open-claude/skills/workflow-templates/SKILL.md")),
-        ("hooks/register.tsx", include_str!("../mods/open-claude/hooks/register.tsx")),
-        ("types/index.d.ts", include_str!("../mods/open-claude/types/index.d.ts")),
-        ("themes/open-claude.json", include_str!("../mods/open-claude/themes/open-claude.json")),
-        ("themes/open-claude-light.json", include_str!("../mods/open-claude/themes/open-claude-light.json")),
-    ];
     for (rel, text) in FILES {
         let p = dir.join(rel);
         // Nur bei Aenderung schreiben, sonst laedt claude die Mod bei jedem Terminal neu.
@@ -899,6 +902,28 @@ pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>,
 #[cfg(test)]
 mod tests {
     use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, UNIX_SHELL};
+
+    /// Jede Datei der Mod muss in FILES stehen, sonst fehlt sie im Release.
+    #[test]
+    fn mod_files_vollstaendig() {
+        fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<String>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                let rel = p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                // Nicht ausgeliefert: von claude erzeugte Typen, Tests, Dev-tsconfig (erbt aus den Typen).
+                let skip = [".DS_Store", "node_modules"].contains(&&*e.file_name().to_string_lossy());
+                if skip || ["tests", ".claude-plugin/types", "tsconfig.json"].contains(&rel.as_str()) {
+                    continue;
+                }
+                if p.is_dir() { walk(&p, root, out) } else { out.push(rel) }
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mods/open-claude");
+        let mut found = Vec::new();
+        walk(&root, &root, &mut found);
+        let missing: Vec<_> = found.iter().filter(|f| !super::FILES.iter().any(|(r, _)| r == f)).collect();
+        assert!(missing.is_empty(), "nicht in FILES (pty.rs): {missing:?}");
+    }
 
     /// Lasttest: 16 MB an ein Kind, das nie liest (sleep), duerfen weder den Aufrufer noch den Map-Lock
     /// noch eine zweite Session aufhalten.

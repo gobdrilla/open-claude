@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { modeOf, tabState } from "./claudemode.ts";
+import { bannerText, modeOf, tabState } from "./claudemode.ts";
 
 test("modeOf", () => {
   assert.equal(modeOf(["❯ ", "  ▸▸ auto mode on (shift+tab to cycle)"]), "auto");
@@ -21,4 +21,11 @@ test("tabState", () => {
   // Rueckfrage beantwortet ohne neuen Turn (abgelehnt): nicht als fertig melden
   assert.equal(tabState("ask", { busy: false }, false), undefined);
   assert.equal(tabState(undefined, null, false), undefined);
+});
+
+test("bannerText", () => {
+  assert.equal(bannerText("projekt", { tool: "Bash", summary: "npm i" }), "projekt: Bash »npm i« wartet");
+  assert.equal(bannerText("p", { tool: "Rückfrage", summary: "" }), "p: Rückfrage wartet");
+  // aeltere Mod ohne waitingFor
+  assert.equal(bannerText("p", undefined), "p: Claude wartet");
 });

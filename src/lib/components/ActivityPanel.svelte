@@ -27,6 +27,7 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import WorkflowDialog from "$lib/components/WorkflowDialog.svelte";
   import { ptyWrite } from "$lib/files";
+  import { blocked } from "$lib/ide.svelte";
   import { screens } from "$lib/components/Terminal.svelte";
   import { fromScript, metaOf, type WfFile } from "$lib/workflow.logic";
   import { chunks, tally } from "$lib/activity.logic";
@@ -240,8 +241,11 @@
     }
   }
   // Ohne Enter: Args dahinter tippen, dann selbst abschicken; startet nie versehentlich einen teuren Lauf
-  const startTemplate = (f: WfFile) =>
-    ptyWrite(id, `Fuehre den Workflow mit dem Workflow-Tool aus, scriptPath: ${JSON.stringify(f.path)}. Args: `).catch((e) => (tplError = String(e)));
+  // Wartet claude auf eine Freigabe, waere der Text dort die Antwort.
+  const startTemplate = async (f: WfFile) => {
+    if (await blocked(id)) return void (tplError = "Claude wartet auf Freigabe");
+    await ptyWrite(id, `Fuehre den Workflow mit dem Workflow-Tool aus, scriptPath: ${JSON.stringify(f.path)}. Args: `).catch((e) => (tplError = String(e)));
+  };
 
   // Agent-Tool-Agents als Pseudo-Run mit id "": gleiche Liste und Zeitleiste wie Workflow-Agents
   const solo = $derived<Run>({ id: "", name: "Agents", status: "", started: 0, duration_ms: 0, tokens: 0, phases: [], planned: [], agents: data?.agents ?? [] });

@@ -10,6 +10,7 @@
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { check, type Update } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
+  import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
   import * as Command from "$lib/components/ui/command/index.js";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
@@ -53,7 +54,7 @@
   import IdleAmongUs from "$lib/components/IdleAmongUs.svelte";
   import Terminal from "$lib/components/Terminal.svelte";
   import ClaudeBar from "$lib/components/ClaudeBar.svelte";
-  import { tabState, type TabState } from "$lib/claudemode";
+  import { bannerText, tabState, type TabState } from "$lib/claudemode";
   import ActivityPanel from "$lib/components/ActivityPanel.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
@@ -61,7 +62,7 @@
   import EditorView from "$lib/components/editor/EditorView.svelte";
   import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
-  import { ide, listenIde } from "$lib/ide.svelte";
+  import { claudeTarget, ide, listenIde } from "$lib/ide.svelte";
   import { testCancel } from "$lib/testing.svelte";
   import { listen } from "@tauri-apps/api/event";
   import IdeDiff from "$lib/components/IdeDiff.svelte";
@@ -158,6 +159,8 @@
   // Eine Session pro Projekt; die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
   // group/dirs: Sitzung einer Repo-Gruppe, startet in repo und kennt dirs als weitere Arbeitsordner
   let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[] }[]>([]);
+  // sendToClaude (Kontextmenues "An Claude") schreibt in die Projekt-Sitzung, nie in eine Gruppen-Sitzung.
+  claudeTarget.find = (p) => sessions.find((s) => !s.group && s.repo.path === p)?.id;
   let repoGroups = $state<RepoGroup[]>([]);
   // Gruppe im Dialog; orig = bisheriger Name (null = neu)
   let groupEdit = $state<{ orig: string | null; g: RepoGroup } | null>(null);
@@ -166,6 +169,8 @@
   let modes = $state<Record<string, string>>({});
   // Tab-Status je Session aus dem Panel der Mod: laeuft, Rueckfrage, fertig (bis angesehen)
   let tabs = $state<Record<string, TabState>>({});
+  // Was eine Hintergrund-Session fragt (Tool + Befehl); weg, sobald beantwortet oder Tab angesehen.
+  let banners = $state<Record<string, string>>({});
   const TAB: Record<string, [string, string, string]> = {
     run: ["◐", "text-primary animate-pulse", "Claude arbeitet"],
     ask: ["?", "text-warning font-bold", "Claude wartet auf dich"],
@@ -416,8 +421,9 @@
       e.preventDefault();
       external(a.getAttribute("href")!);
     };
-    // Natives Kontextmenue auf Links ("In neuem Fenster oeffnen") wuerde ein App-Fenster aufmachen.
-    const onMenu = (e: MouseEvent) => (e.target as Element | null)?.closest?.("a[href]") && e.preventDefault();
+    // Natives WebView-Kontextmenue nie zeigen (Browser-Eintraege, auf Links "In neuem Fenster oeffnen").
+    // Bubble-Phase: eigene Menues (bits-ui) haben ihr contextmenu da schon verarbeitet.
+    const onMenu = (e: MouseEvent) => e.preventDefault();
     window.addEventListener("click", onClick);
     window.addEventListener("auxclick", onClick);
     window.addEventListener("contextmenu", onMenu);
@@ -631,6 +637,27 @@
   onMount(() => {
     const win = getCurrentWindow();
     let badge = 0;
+    // Session, die bei unfokussiertem Fenster zu fragen begann; beim Zurueckkehren aktivieren (Desktop hat keinen Klick-Callback).
+    let pendingFocus: string | null = null;
+    let asked = false;
+    // Zuletzt gemeldete Rueckfrage je Session.
+    const asks = new Map<string, string>();
+    // Abgelehnt oder nicht verfuegbar: still, Banner und Dock-Huepfen bleiben.
+    const notify = async (body: string) => {
+      let ok = await isPermissionGranted();
+      if (!ok && !asked) {
+        asked = true;
+        ok = (await requestPermission()) === "granted";
+      }
+      if (ok) sendNotification({ title: "Claude wartet auf dich", body });
+    };
+    const onFocus = () => {
+      const s = sessions.find((s) => s.id === pendingFocus);
+      pendingFocus = null;
+      // Nicht activate: in Editor/Git-Ansicht oeffnete openTab das Repo dort statt das Terminal mit der Rueckfrage.
+      if (s && tabs[s.id] === "ask") s.group ? openGroupTab(s.id) : launch(s.repo);
+    };
+    window.addEventListener("focus", onFocus);
     // Ein langsamer Durchlauf (viele Sitzungen) darf sich nicht mit dem naechsten ueberlappen.
     let busy = false;
     const tick = async () => {
@@ -646,20 +673,34 @@
       const focused = document.hasFocus();
       let alert = false;
       for (const s of sessions) {
-        const p = await invoke<{ busy?: boolean; waiting?: boolean } | null>("claude_panel", { id: s.id }).catch(() => null);
+        const p = await invoke<{ busy?: boolean; waiting?: boolean; waitingFor?: { tool: string; summary: string } | null } | null>(
+          "claude_panel",
+          { id: s.id },
+        ).catch(() => null);
         if (!sessions.includes(s)) continue;
         const prev = tabs[s.id];
-        const next = tabState(prev, p, focused && view === "term" && s.id === active);
-        if (next === prev) continue;
-        tabs[s.id] = next;
-        alert ||= next === "ask" || next === "done";
+        const seen = focused && view === "term" && s.id === active;
+        const next = tabState(prev, p, seen);
+        const text = next === "ask" ? bannerText(label(s), p?.waitingFor) : undefined;
+        // Neue Rueckfrage auch ohne Statuswechsel (zweite direkt nach der ersten): Text vergleichen.
+        const fresh = text !== undefined && (prev !== "ask" || text !== asks.get(s.id));
+        if (text === undefined) asks.delete(s.id);
+        else asks.set(s.id, text);
+        if (seen || text === undefined) delete banners[s.id];
+        else banners[s.id] = text;
+        if (fresh && !seen && !focused) {
+          pendingFocus = s.id;
+          notify(text).catch(() => {});
+        }
+        alert ||= (fresh && !seen) || (next === "done" && prev !== "done");
+        if (next !== prev) tabs[s.id] = next;
       }
       if (alert && !focused) win.requestUserAttention(UserAttentionType.Informational).catch(() => {});
       const n = sessions.filter((s) => tabs[s.id] === "ask" || tabs[s.id] === "done").length;
       if (n !== badge) win.setBadgeCount((badge = n) || undefined).catch(() => {});
     };
     const t = setInterval(tick, 1500);
-    return () => clearInterval(t);
+    return () => (clearInterval(t), window.removeEventListener("focus", onFocus));
   });
 
   /** Offene Session des Projekts zeigen, sonst eine neue starten. */
@@ -739,6 +780,9 @@
     editRepo = null;
     active = id;
   }
+
+  const activate = (s: (typeof sessions)[number]) => (s.group ? openGroupTab(s.id) : openTab(s.repo));
+  const label = (s: (typeof sessions)[number]) => s.group ?? split(s.repo.rel)[1];
 
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
   async function openEdit(repo?: Repo) {
@@ -952,7 +996,7 @@
     if (await confirm("Sitzung beenden? Ein laufender claude-Prozess wird abgebrochen.", "Beenden")) closeSession(id);
   }
 
-  const forget = (id: string) => (delete tabs[id], delete modes[id]);
+  const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id]);
 
   /** Aus der Liste nehmen; der Terminal-Unmount schliesst die PTY. */
   function closeSession(id: string) {
@@ -1220,6 +1264,7 @@
   <!-- Ueber allen Ansichten: Fehler aus Update, Wach-Halt oder Alt+E kommen auch aus Terminal und Git -->
   <Notice bind:text={notice} />
   {#if !notice}<Notice bind:text={okNotice} kind="ok" />{/if}
+  <Notice bind:text={ide.notice} kind="note" timeout={3000} />
   <Command.Root
     shouldFilter={false}
     bind:value={selected}
@@ -1646,11 +1691,14 @@
           <button
             role="tab"
             aria-selected={tabOn(s)}
-            onclick={() => (s.group ? openGroupTab(s.id) : openTab(s.repo))}
+            onclick={() => activate(s)}
           >
             {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
                 class="text-primary mr-1 inline size-3"
-              />{s.group}{:else}{split(s.repo.rel)[1]}{/if}
+              />{s.group}{:else}{split(s.repo.rel)[1]}{/if}{#if banners[s.id]}<span
+                class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
+                title={banners[s.id]}>{banners[s.id]}</span
+              >{/if}
           </button>
           <button
             class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {tabOn(s)

@@ -19,6 +19,8 @@ export type Panel = {
   busy: boolean
   // Claude wartet auf den User (Rueckfrage, Rechte-Dialog); Tab-Icon und Dock-Hinweis der App.
   waiting: boolean
+  // Was wartet (Tool + gekuerzter, maskierter Befehl/Pfad); Banner und OS-Hinweis der App.
+  waitingFor?: { tool: string; summary: string } | null
   // Zeitstempel (at) des App-Befehls, den die Mod zuletzt ins Eingabefeld gesetzt hat; die App drueckt dann Enter.
   filled: number
 }

@@ -1,14 +1,16 @@
 // Run-Leiste je Projekt: erkannte Startziele und hoechstens ein Prozess (PTY). Lebt auf Modulebene wie editor():
 // RunPane wird beim Andocken neu gemountet, Prozess und Ausgabe bleiben. Die Auswahl steht im Editor-Store (run).
 // Invariante: laeuft etwas, ist das Panel RUN im Layout (runStart dockt es an, Schliessen/Zuruecksetzen stoppt).
-import { Channel } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { RUN, activate, groupOf, mainGroup, splitAt } from "./dock.ts";
 import { fs, ptyClose, ptyWrite, runMissing, runStart as startCmd } from "./files.ts";
 import { confirm } from "./confirm.svelte.ts";
 import { serverUrl } from "./editor.logic.ts";
-import { configs, markers, pickDefault, profileOf, scan, type RunConfig } from "./run.logic.ts";
-import { editor, setLayout } from "./editor.svelte.ts";
+import { configs, markers, pickDefault, profileOf, scan, tailText, type RunConfig } from "./run.logic.ts";
+import { codeBlock, failuresReport } from "./testing.logic.ts";
+import { editor, peek, setLayout } from "./editor.svelte.ts";
+import { failedItems } from "./testing.svelte.ts";
 
 export type Run = { cfg: RunConfig; id: string; state: "running" | "exited" | "idle"; exit: number | null; started: number; url: string };
 type Sink = (b: Uint8Array) => void;
@@ -37,6 +39,7 @@ const detected = new Map<string, Promise<void>>();
 type Buf = { id: string; chunks: Uint8Array[]; bytes: number; sink: Sink | null; tail: string; fixed: boolean; off: Promise<UnlistenFn>[] };
 const bufs = new Map<string, Buf>();
 const MAX_BYTES = 1 << 20;
+const TAIL_BYTES = 1 << 16;
 // RIS: setzt das angehaengte xterm vor einem neuen Lauf zurueck.
 const RESET = new TextEncoder().encode("\x1bc");
 
@@ -100,12 +103,53 @@ export function attach(repo: string, sink: Sink | null): Uint8Array[] {
   return [...b.chunks];
 }
 
+/** Letzte n Zeilen der Ausgabe als Markdown fuer den Prompt, mit Befehl und Status; liest den Puffer, braucht kein RunPane. */
+export function tailOutput(repo: string, n = 200): string {
+  const cur = store.get(repo)?.current;
+  if (!cur) return "";
+  // Nur die letzten 64 KiB dekodieren: 1 MiB Dauer-Log kostete ~4 ms je Push, so ~0,25 ms.
+  const cs = bufs.get(repo)?.chunks ?? [];
+  let i = cs.length;
+  let sum = 0;
+  while (i > 0 && sum < TAIL_BYTES) sum += cs[--i].length;
+  const parts = cs.slice(i);
+  if (sum > TAIL_BYTES) parts[0] = parts[0].subarray(sum - TAIL_BYTES);
+  const dec = new TextDecoder();
+  let text = parts.map((c) => dec.decode(c, { stream: true })).join("") + dec.decode();
+  if (sum > TAIL_BYTES) text = text.slice(text.indexOf("\n") + 1); // angeschnittene erste Zeile weg
+  const st = cur.state === "running" ? "läuft" : cur.state === "idle" ? "gestoppt" : cur.exit === null ? "beendet" : `exit ${cur.exit}`;
+  return `Ausgabe von \`${cur.cfg.label}\` (${st}), letzte ${n} Zeilen:\n${codeBlock(tailText(text, n))}\n`;
+}
+
+const runTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Run-Ausgabe und rote Tests fuer das MCP-Tool run_state (ide.rs). Trailing 1 s, der Timer wird bei neuen Chunks nicht
+ * neu gestartet: bei Dauer-Log hoechstens ein invoke je Sekunde. Projekt geschlossen (drop): null.
+ */
+export function pushRunState(repo: string): void {
+  if (runTimers.has(repo)) return;
+  runTimers.set(
+    repo,
+    setTimeout(() => {
+      runTimers.delete(repo);
+      let text = "";
+      if (peek(repo)) {
+        const failed = failedItems(repo);
+        text = tailOutput(repo) + (failed.length ? failuresReport(failed, 20) : "");
+      }
+      invoke("ide_run_state", { repo, state: text || null }).catch(() => {});
+    }, 1000),
+  );
+}
+
 /** Ausgabe leeren ("Leeren"-Knopf). */
 export function clearOutput(repo: string): void {
   const b = buf(repo);
   b.chunks = [];
   b.bytes = 0;
   b.sink?.(RESET);
+  pushRunState(repo);
 }
 
 function unlisten(b: Buf) {
@@ -144,10 +188,12 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
   const mine = () => b.id === id && r.current?.id === id;
   const dec = new TextDecoder();
   r.current = { cfg: c, id, state: "running", exit: null, started: Date.now(), url: "" };
+  pushRunState(repo);
   const out = new Channel<ArrayBuffer>((buf) => {
     if (!mine()) return;
     const bytes = new Uint8Array(buf);
     push(b, bytes);
+    if (r.current?.state === "running") pushRunState(repo);
     const chunk = dec.decode(bytes, { stream: true });
     // Cursor-Abfrage (ConPTY beim Start): mit angehaengtem xterm antwortet es selbst.
     if (!b.sink && chunk.includes("\x1b[6n")) ptyWrite(id, "\x1b[1;1R").catch(() => {});
@@ -163,7 +209,9 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
   // Exit-Listener vor dem Start, damit ein sofortiges Ende nicht verloren geht.
   b.off = [
     listen<number | null>(`pty-exit:${id}`, (e) => {
-      if (mine()) r.current = { ...r.current!, state: "exited", exit: e.payload ?? null, url: "" };
+      if (!mine()) return;
+      r.current = { ...r.current!, state: "exited", exit: e.payload ?? null, url: "" };
+      pushRunState(repo);
     }),
   ];
   try {
@@ -175,6 +223,7 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
     if (!mine()) return;
     push(b, new TextEncoder().encode(`\x1b[31m${e}\x1b[0m\r\n`));
     r.current = { ...r.current!, state: "exited" };
+    pushRunState(repo);
   }
 }
 
@@ -187,6 +236,7 @@ export function runStop(repo: string): Promise<void> {
   b.id = "";
   unlisten(b);
   if (r.current.state === "running") r.current = { ...r.current, state: "idle", url: "" };
+  pushRunState(repo);
   return ptyClose(id).catch(() => {});
 }
 

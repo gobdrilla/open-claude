@@ -1,8 +1,12 @@
 import { test } from "node:test";
+import { pasteFrame } from "./editor.logic.ts";
 import assert from "node:assert/strict";
 import {
   aggregate,
+  codeBlock,
   discover,
+  failureReport,
+  failuresReport,
   inScope,
   jsFw,
   marks,
@@ -259,4 +263,32 @@ test("toRepo: Windows-Pfade aus file:/// und andere Schreibweise des Laufwerks",
   assert.equal(toRepo("/r", "", "/r/src/a.ts"), "src/a.ts");
   assert.equal(toRepo("/r", "", "/R/src/a.ts"), "/R/src/a.ts");
   assert.equal(toRepo("/r", "", ""), null);
+});
+
+test("failureReport: Ort, Meldung, Labels, Stack gekuerzt", () => {
+  const stack = Array.from({ length: 40 }, (_, i) => `    at f${i} (src/a.test.ts:${i + 1}:3)`).join("\n");
+  const r: Result = { state: "failed", msg: "boom", exp: "1", act: "2", stack, at: { file: "src/a.test.ts", line: 7 } };
+  const md = failureReport("suite › geht", r);
+  assert.match(md, /^### suite › geht\n\n`src\/a\.test\.ts:7`\n\n```\nboom\n```/);
+  assert.match(md, /Erwartet:\n```\n1\n```/);
+  assert.match(md, /Tatsächlich:\n```\n2\n```/);
+  assert.ok(md.includes("f14 ") && !md.includes("f15 ") && md.includes("\n…"));
+  const cargo = failureReport("t", { state: "failed", exp: "a", act: "b", labels: ["right", "left"] }, "src/lib.rs");
+  assert.ok(cargo.includes("`src/lib.rs`") && cargo.includes("right:\n") && cargo.includes("left:\n") && !cargo.includes("Erwartet"));
+  const big = failureReport("t", { state: "failed", stack: "x".repeat(10_000) });
+  assert.ok(big.length < 2200);
+  assert.equal(codeBlock("a ``` b"), "````\na ``` b\n````");
+});
+
+test("failuresReport: max und Deckel mit Schlusszeile, auch nach pasteFrame", () => {
+  const items = Array.from({ length: 143 }, (_, i) => ({ name: `t${i}`, r: { state: "failed", msg: "m" } as Result }));
+  const md = failuresReport(items);
+  assert.ok(md.includes("### t19") && !md.includes("### t20"));
+  assert.ok(md.endsWith("… und 123 weitere Fehler (nicht mitgesendet)"));
+  assert.ok(!failuresReport(items.slice(0, 3)).includes("weitere"));
+  const fat = items.map((it) => ({ ...it, r: { state: "failed", msg: "m".repeat(2000), stack: "s".repeat(2000) } as Result }));
+  const capped = failuresReport(fat);
+  assert.ok(capped.length <= 18000 + 100, String(capped.length));
+  assert.match(capped, /… und \d+ weitere Fehler \(nicht mitgesendet\)$/);
+  assert.match(pasteFrame(capped), /… und \d+ weitere Fehler \(nicht mitgesendet\)\x1b\[201~$/);
 });

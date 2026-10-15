@@ -2,6 +2,9 @@
   import Notice from "$lib/components/Notice.svelte";
   import { ContextItem, ConfirmDialog, fileIcon, menuContent } from "$lib/components/kit";
   import { dirname } from "$lib/tree";
+  import { atRef } from "$lib/editor.logic";
+  import { sendToClaude } from "$lib/ide.svelte";
+  import { reviewCount, sendReview } from "$lib/review.svelte";
   import { ContextMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
   import { Button } from "$lib/components/ui/button/index.js";
@@ -390,6 +393,10 @@
               {#if onedit && code !== "D"}
                 <ContextItem label="Im Editor öffnen" onSelect={() => onedit(f.path)} />
               {/if}
+              <ContextItem
+                label={multi ? `Ausgewählte an Claude (${picked.length})` : "An Claude"}
+                onSelect={() => sendToClaude(repo, (multi ? picked : [f]).map((x) => atRef(x.path)).join(""))}
+              />
               <ContextItem label="Im Explorer zeigen" onSelect={() => reveal(f)} />
               <ContextItem label="Pfad kopieren" onSelect={() => navigator.clipboard.writeText(f.path)} />
             </ContextMenu.Content>
@@ -471,11 +478,16 @@
       </div>
     </div>
 
-    <div class="min-w-0 flex-1">
+    <div class="relative min-w-0 flex-1">
+      {#if reviewCount(repo)}
+        <Button size="xs" class="absolute right-4 bottom-3 z-20 shadow-md" onclick={() => sendReview(repo)}>
+          Review an Claude ({reviewCount(repo)})
+        </Button>
+      {/if}
       {#if sel && diff === null}
         <p class="text-muted-foreground p-3">Lädt …</p>
       {:else if sel}
-        <DiffView diff={diff ?? ""} {actions} {busy} />
+        <DiffView diff={diff ?? ""} {actions} {busy} {repo} />
       {:else}
         <p class="text-muted-foreground p-3">Datei links auswählen.</p>
       {/if}

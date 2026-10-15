@@ -637,3 +637,50 @@ export function stackLinks(text: string): { text: string; loc?: Loc }[] {
   if (last < text.length) out.push({ text: text.slice(last) });
   return out;
 }
+
+// --- Fehler an Claude ---
+
+/** Markdown-Codeblock; der Zaun ist laenger als jede Backtick-Folge im Inhalt. */
+export function codeBlock(s: string): string {
+  const f = "`".repeat(Math.max(3, ...(s.match(/`+/g) ?? []).map((m) => m.length + 1)));
+  return `${f}\n${s}\n${f}`;
+}
+
+// shortcut: Grenzen in UTF-16-Zeichen statt Bytes, bei Nicht-ASCII etwas mehr als 2 KB.
+const MAX_FIELD = 2048;
+const MAX_STACK_LINES = 15;
+// Unter dem 20000-Zeichen-Deckel von pasteFrame, sonst fiele die Schlusszeile weg.
+const MAX_REPORT = 18000;
+const clip = (s: string, max = MAX_FIELD) => (s.length > max ? `${s.slice(0, max)}…` : s);
+
+/** Ein fehlgeschlagener Test als Markdown fuer den Prompt. file: Ort, wenn r.at fehlt. */
+export function failureReport(name: string, r: Result, file?: string): string {
+  const where = r.at ? `${r.at.file}:${r.at.line}` : file;
+  const out = [`### ${name}`];
+  if (where) out.push(`\`${where}\``);
+  if (r.msg) out.push(codeBlock(clip(r.msg)));
+  const [exp, act] = r.labels ?? ["Erwartet", "Tatsächlich"];
+  if (r.exp !== undefined) out.push(`${exp}:\n${codeBlock(clip(r.exp))}`);
+  if (r.act !== undefined) out.push(`${act}:\n${codeBlock(clip(r.act))}`);
+  if (r.stack) {
+    const lines = r.stack.trimEnd().split("\n");
+    const more = lines.length > MAX_STACK_LINES ? "\n…" : "";
+    out.push(`Stack:\n${codeBlock(clip(lines.slice(0, MAX_STACK_LINES).join("\n")) + more)}`);
+  }
+  return out.join("\n\n");
+}
+
+/** Hoechstens max Fehler, zusammen hoechstens 18000 Zeichen; der Rest wird nur gezaehlt. */
+export function failuresReport(items: { name: string; r: Result; file?: string }[], max = 20): string {
+  const parts: string[] = [];
+  let size = 0;
+  for (const it of items.slice(0, max)) {
+    const p = failureReport(it.name, it.r, it.file);
+    if (parts.length && size + p.length > MAX_REPORT) break;
+    parts.push(p);
+    size += p.length + 2;
+  }
+  const rest = items.length - parts.length;
+  if (rest > 0) parts.push(`… und ${rest} weitere Fehler (nicht mitgesendet)`);
+  return parts.join("\n\n");
+}

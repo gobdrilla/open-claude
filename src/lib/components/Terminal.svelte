@@ -21,7 +21,10 @@
   import { modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
   import { keep, pathHits } from "$lib/termlinks";
-  import { abs, rel } from "$lib/editor.logic";
+  import { abs, cite, rel } from "$lib/editor.logic";
+  import { sendTo } from "$lib/ide.svelte";
+  import { ContextMenu } from "bits-ui";
+  import { ContextItem, menuContent } from "$lib/components/kit";
 
   let {
     id,
@@ -43,6 +46,8 @@
   } = $props();
 
   let el: HTMLDivElement;
+  // Terminal-Auswahl beim letzten Rechtsklick, fuer "An Claude"
+  let cited = $state("");
   let term: Terminal | undefined;
   const fit = new FitAddon();
   // Zuletzt an die PTY gemeldete Groesse; leer bis pty_open durch ist.
@@ -376,10 +381,20 @@
     style:background-color={fixedBg}
     class="bg-card glow h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 ring-foreground/5 transition-shadow duration-300 focus-within:ring-primary/40 focus-within:shadow-primary/10"
   >
-    <div class="relative h-full">
-      <div bind:this={el} class="h-full"></div>
-      {#if booting}<ClaudeLoader />{/if}
-    </div>
+    <!-- Auswahl beim Rechtsklick merken: das Menue nimmt den Fokus, danach waere sie evtl. weg. -->
+    <ContextMenu.Root>
+      <ContextMenu.Trigger class="relative block h-full" oncontextmenu={() => (cited = term?.getSelection() ?? "")}>
+        <div bind:this={el} class="h-full"></div>
+        {#if booting}<ClaudeLoader />{/if}
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        {#if cited.trim()}
+          <ContextMenu.Content class={menuContent}>
+            <ContextItem label="An Claude" onSelect={() => sendTo(id, cite(cited)).then(() => term?.focus())} />
+          </ContextMenu.Content>
+        {/if}
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   </div>
 </div>
 
@@ -387,5 +402,9 @@
   /* xterm.css gibt dem Viewport schwarz, das verdeckt den Verlauf. */
   :global(.xterm .xterm-viewport) {
     background-color: transparent !important;
+  }
+  /* xterm 6 bringt eine eigene Scrollbar mit; Scrollen per Rad/Trackpad reicht. */
+  :global(.xterm .xterm-scrollable-element > .scrollbar) {
+    display: none !important;
   }
 </style>

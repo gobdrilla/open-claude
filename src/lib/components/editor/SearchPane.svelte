@@ -14,11 +14,13 @@
 <script lang="ts">
   // Suche ueber alle Projektdateien (fs_search). Klick springt zur Fundstelle.
   import Notice from "$lib/components/Notice.svelte";
-  import { Empty, fileIcon, paneBar } from "$lib/components/kit";
+  import { ContextItem, Empty, fileIcon, menuContent, paneBar } from "$lib/components/kit";
+  import { ContextMenu } from "bits-ui";
+  import { sendToClaude } from "$lib/ide.svelte";
   import SearchIcon from "@lucide/svelte/icons/search";
   import { fs, type Hit } from "$lib/files";
   import { open } from "$lib/editor.svelte";
-  import { MOD } from "$lib/editor.logic";
+  import { MOD, atRef } from "$lib/editor.logic";
 
   let { repo }: { repo: string } = $props();
 
@@ -84,13 +86,22 @@
             <span class="text-muted-foreground ml-auto text-[10px]">{list.length}</span>
           </div>
           {#each list as h (h.line)}
-            <button
-              class="hover:bg-accent flex w-full items-baseline gap-2 py-0.5 pr-2 pl-7 text-left"
-              onclick={() => open(repo, path, h.line, h.col)}
-            >
-              <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-[10px]">{h.line}</span>
-              <span class="truncate font-mono text-[11px]">{h.text}</span>
-            </button>
+            <ContextMenu.Root>
+              <ContextMenu.Trigger>
+                <button
+                  class="hover:bg-accent flex w-full items-baseline gap-2 py-0.5 pr-2 pl-7 text-left"
+                  onclick={() => open(repo, path, h.line, h.col)}
+                >
+                  <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-[10px]">{h.line}</span>
+                  <span class="truncate font-mono text-[11px]">{h.text}</span>
+                </button>
+              </ContextMenu.Trigger>
+              <ContextMenu.Portal>
+                <ContextMenu.Content class={menuContent}>
+                  <ContextItem label="An Claude" onSelect={() => sendToClaude(repo, atRef(path, `#L${h.line}`))} />
+                </ContextMenu.Content>
+              </ContextMenu.Portal>
+            </ContextMenu.Root>
           {/each}
         </li>
       {/each}

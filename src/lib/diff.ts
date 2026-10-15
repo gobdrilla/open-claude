@@ -206,3 +206,18 @@ export function linesPatch(file: DiffFile, hunk: Hunk, selected: Set<number>, re
   const keep = partial && file.status === (reverse ? "added" : "deleted");
   return emit(keep ? asModify(file.head) : file.head, hunk, lines);
 }
+
+export type ReviewNote = { text: string; lines: string[] };
+
+/** Review-Kommentare ("datei:zeile" -> Kommentar + Diff-Zeilen) als Prompt, sortiert nach Datei und Zeile. */
+export function reviewPrompt(entries: Record<string, ReviewNote>): string {
+  const split = (k: string) => [k.slice(0, k.lastIndexOf(":")), +k.slice(k.lastIndexOf(":") + 1)] as const;
+  return Object.keys(entries)
+    .map(split)
+    .sort(([a, x], [b, y]) => a.localeCompare(b) || x - y)
+    .map(([p, n]) => {
+      const e = entries[`${p}:${n}`];
+      return `${p}:${n} – ${e.text}\n\`\`\`diff\n${e.lines.join("\n")}\n\`\`\``;
+    })
+    .join("\n\n");
+}

@@ -31,3 +31,8 @@ export function tabState(prev: TabState, p: { busy?: boolean; waiting?: boolean 
   if (p?.busy) return "run";
   return !seen && (prev === "run" || prev === "done") ? "done" : undefined;
 }
+
+/** Banner im Tab-Kopf und Text der OS-Benachrichtigung, z. B. "atelier: Bash »npm i« wartet". */
+export function bannerText(projekt: string, w: { tool: string; summary: string } | null | undefined): string {
+  return `${projekt}: ${w?.tool ?? "Claude"}${w?.summary ? ` »${w.summary}«` : ""} wartet`;
+}

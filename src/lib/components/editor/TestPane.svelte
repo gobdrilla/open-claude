@@ -21,8 +21,9 @@
   import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { open } from "$lib/editor.svelte";
-  import { rescan, setExpanded, testCancel, testRun, tests, title, where } from "$lib/testing.svelte";
-  import { rows, stackLinks, type Row, type St } from "$lib/testing.logic";
+  import { failedItems, failure, rescan, setExpanded, testCancel, testRun, tests, title, where } from "$lib/testing.svelte";
+  import { failureReport, failuresReport, rows, stackLinks, type Row, type St } from "$lib/testing.logic";
+  import { sendToClaude } from "$lib/ide.svelte";
 
   let { repo }: { repo: string } = $props();
 
@@ -63,6 +64,16 @@
   function click(r: Row) {
     t.selected = r.id;
     if (r.kids && t.nodes[r.id].kind === "file") setExpanded(repo, r.id, !r.open);
+  }
+
+  const MAX_SEND = 20;
+  // Erst beim Klick: failedItems() laeuft ueber den ganzen Baum.
+  function sendFailures() {
+    void sendToClaude(repo, failuresReport(failedItems(repo), MAX_SEND));
+  }
+  function sendFailure(id: string) {
+    const f = failure(t, id);
+    void sendToClaude(repo, failureReport(f.name, f.r, f.file));
   }
 
   function definition(id: string) {
@@ -128,6 +139,14 @@
       aria-label="Tests neu suchen"
       onclick={() => rescan(repo)}><RefreshCwIcon class={t.scanning ? "animate-spin" : ""} /></Button
     >
+    {#if counts.failed}
+      <Button
+        variant="ghost"
+        size="xs"
+        title="Fehlgeschlagene Tests mit Meldung und Stack in den Prompt von Claude"
+        onclick={sendFailures}>Alle Fehler an Claude ({counts.failed > MAX_SEND ? `${MAX_SEND} von ${counts.failed}` : counts.failed})</Button
+      >
+    {/if}
     <span class="flex-1"></span>
     <span class="text-muted-foreground flex items-center gap-1.5 px-1 font-mono text-[10px]" role="status">
       <span class="text-success">✓{counts.passed}</span>
@@ -223,6 +242,9 @@
             <ContextMenu.Content class={cn(menuContent, "min-w-40")}>
               <ContextItem label="Ausführen" onSelect={() => run(r.id)} />
               <ContextItem label="Zur Definition" onSelect={() => definition(r.id)} />
+              {#if t.results[r.id]?.state === "failed"}
+                <ContextItem label="An Claude" onSelect={() => sendFailure(r.id)} />
+              {/if}
             </ContextMenu.Content>
           </ContextMenu.Portal>
         </ContextMenu.Root>

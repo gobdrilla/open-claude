@@ -25,6 +25,8 @@ If the change is only docs, comments, formatting or config without runtime effec
 
 ## 3. Run targeted
 
+In L'Atelier de Claude: call the `run_state` tool first. It returns the last run output and failing tests from the app's Run/Test panel, so you may not need to rerun anything.
+
 | Stack | Targeted run |
 |---|---|
 | vitest | `npx vitest run <files>` or `npx vitest related <src files> --run` |

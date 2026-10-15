@@ -19,6 +19,7 @@
     "dialog:allow-open",
     "store:default",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "notification:default"
   ]
 }

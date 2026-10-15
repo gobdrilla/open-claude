@@ -14,6 +14,8 @@
     empty,
     onclose,
     step,
+    repo,
+    rev,
     children,
   }: {
     diff: string | null;
@@ -22,6 +24,10 @@
     empty?: string;
     onclose: () => void;
     step?: (d: 1 | -1) => void;
+    /** Zeilen kommentierbar (Review an Claude) */
+    repo?: string;
+    /** Commit des Diffs; Kommentare beziehen sich dann auf ihn statt auf die Arbeitskopie */
+    rev?: string;
     children?: Snippet;
   } = $props();
 
@@ -53,7 +59,7 @@
       {#if description}<Dialog.Description class="truncate font-mono text-[11px]">{description}</Dialog.Description>{/if}
     </Dialog.Header>
     <div class="border-border/60 min-h-0 flex-1 overflow-hidden rounded-lg border">
-      <DiffView diff={diff ?? ""} {empty} />
+      <DiffView diff={diff ?? ""} {empty} {repo} {rev} />
     </div>
   </Dialog.Content>
 </Dialog.Root>

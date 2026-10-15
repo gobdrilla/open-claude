@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseDiff, hunkPatch, linesPatch, fileDiff, stat } from "./diff.ts";
+import { parseDiff, hunkPatch, linesPatch, fileDiff, stat, reviewPrompt } from "./diff.ts";
 
 const sample = `diff --git a/src/x.ts b/src/x.ts
 index 1111111..2222222 100644
@@ -140,4 +140,18 @@ Binary files a/bild.png and b/bild.png differ
   for (const f of files) assert.deepEqual(parseDiff(fileDiff(f)), [f]);
   assert.deepEqual(stat(files[0]), { a: 3, d: 2 });
   assert.deepEqual(stat(files[3]), { a: 0, d: 0 });
+});
+
+test("reviewPrompt: sortiert nach Datei, dann Zeile numerisch", () => {
+  assert.equal(
+    reviewPrompt({
+      "src/b.ts:3": { text: "Name?", lines: ["+let x"] },
+      "src/a.ts:10": { text: "zu lang", lines: ["-alt", "+neu"] },
+      "src/a.ts:9": { text: "Tippfehler", lines: ["+Fehelr"] },
+    }),
+    "src/a.ts:9 – Tippfehler\n```diff\n+Fehelr\n```\n\n" +
+      "src/a.ts:10 – zu lang\n```diff\n-alt\n+neu\n```\n\n" +
+      "src/b.ts:3 – Name?\n```diff\n+let x\n```",
+  );
+  assert.equal(reviewPrompt({}), "");
 });

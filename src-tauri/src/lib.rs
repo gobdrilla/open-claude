@@ -614,6 +614,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(pty::Ptys::default())
         .manage(preview::PreviewRoots::default())
         .manage(runner::Runs::default())
@@ -650,6 +651,7 @@ pub fn run() {
             forge::forge_repos,
             forge::forge_pulls,
             forge::forge_releases,
+            forge::forge_download,
             forge::forge_release_save,
             forge::forge_release_delete,
             forge::forge_runs,
@@ -744,6 +746,8 @@ pub fn run() {
             runner::test_cancel,
             ide::ide_notify,
             ide::ide_reply,
+            ide::ide_editor_state,
+            ide::ide_run_state,
             lsp::lsp_start,
             lsp::lsp_send,
             lsp::lsp_stop,

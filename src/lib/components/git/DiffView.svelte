@@ -14,7 +14,8 @@
   import { SvelteSet } from "svelte/reactivity";
   import { parseDiff } from "$lib/diff";
   import { Button } from "$lib/components/ui/button/index.js";
-  import { fileIcon } from "$lib/components/kit";
+  import { PromptDialog, fileIcon } from "$lib/components/kit";
+  import { review } from "$lib/review.svelte";
   import { dirname } from "$lib/tree";
 
   let {
@@ -22,7 +23,9 @@
     actions = [],
     empty = "Keine Änderungen.",
     busy = false,
-  }: { diff: string; actions?: HunkAction[]; empty?: string; busy?: boolean } = $props();
+    repo,
+    rev,
+  }: { diff: string; actions?: HunkAction[]; empty?: string; busy?: boolean; repo?: string; rev?: string } = $props();
 
   const files = $derived(parseDiff(diff));
 
@@ -35,6 +38,32 @@
   const opened = new SvelteSet<number>();
   const size = (f: DiffFile) => f.hunks.reduce((n, h) => n + h.lines.length, 0);
   const count = (f: DiffFile, kind: "add" | "del") => f.hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind === kind).length, 0);
+
+  // Mit repo: gewaehlte Zeilen kommentieren (review.svelte.ts), Schluessel "datei:zeile" der ersten Zeile.
+  const pickable = $derived(actions.length > 0 || !!repo);
+  // shortcut: "-5" und "+5" teilen sich datei:5, reicht fuers Review
+  // Commit-Diff (rev): "sha:datei:zeile" wie git show sha:datei, damit Claude es nicht fuer die Arbeitskopie haelt
+  const noteKey = (file: DiffFile, l: { old?: number; new?: number }) =>
+    `${rev ? rev.slice(0, 7) + ":" : ""}${file.newPath}:${l.new ?? l.old}`;
+  let note = $state<{ key: string; hunkKey: string; lines: string[] } | null>(null);
+  let noteText = $state("");
+
+  function comment(file: DiffFile, hunk: Hunk, hunkKey: string, sel: Set<number>) {
+    const idx = [...sel].sort((a, b) => a - b);
+    const key = noteKey(file, hunk.lines[idx[0]]);
+    note = { key, hunkKey, lines: idx.map((i) => sign[hunk.lines[i].kind] + hunk.lines[i].text) };
+    noteText = review[repo!]?.[key]?.text ?? "";
+  }
+
+  function saveNote() {
+    if (!note || !repo) return;
+    const notes = (review[repo] ??= {});
+    // Leerer Text loescht den Kommentar
+    if (noteText.trim()) notes[note.key] = { text: noteText.trim(), lines: note.lines };
+    else delete notes[note.key];
+    selected[note.hunkKey] = [];
+    note = null;
+  }
 
   $effect(() => {
     diff;
@@ -100,6 +129,11 @@
         {@const sel = new Set(selected[key] ?? [])}
         <div class="bg-primary/5 text-primary/70 border-primary/10 flex items-center gap-1 border-y px-2.5 py-0.5">
           <span class="min-w-0 flex-1 truncate">{hunk.header}</span>
+          {#if repo && sel.size}
+            <Button variant="ghost" size="xs" class="h-5 font-sans text-[11px]" onclick={() => comment(file, hunk, key, sel)}>
+              Kommentieren
+            </Button>
+          {/if}
           {#each actions as a (a.label)}
             <Button
               variant={a.destructive ? "destructive" : "ghost"}
@@ -114,13 +148,15 @@
         </div>
         {#each hunk.lines as line, li (li)}
           {@const change = line.kind === "add" || line.kind === "del"}
+          {@const noted = repo && change ? review[repo]?.[noteKey(file, line)] : undefined}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div
             class="flex border-l-2 {bg[line.kind]} {sel.has(li) ? 'ring-primary/60 ring-1 ring-inset' : ''} {change &&
-            actions.length
+            pickable
               ? 'cursor-pointer'
-              : ''}"
-            onclick={(e) => change && actions.length && pick(key, hunk, li, e.shiftKey)}
+              : ''} {noted ? 'outline-warning outline-1 -outline-offset-1 outline-dashed' : ''}"
+            title={noted?.text}
+            onclick={(e) => change && pickable && pick(key, hunk, li, e.shiftKey)}
           >
             <span class="text-muted-foreground/60 w-10 shrink-0 pr-1 text-right select-none">{line.old ?? ""}</span>
             <span class="text-muted-foreground/60 w-10 shrink-0 pr-1 text-right select-none">{line.new ?? ""}</span>
@@ -138,3 +174,14 @@
     </div>
   {/each}
 </div>
+
+<PromptDialog
+  open={note !== null}
+  title="Kommentar für Claude"
+  description={note?.key}
+  bind:value={noteText}
+  placeholder="Was soll Claude hier ändern?"
+  action="Speichern"
+  onsubmit={saveNote}
+  oncancel={() => (note = null)}
+/>

@@ -25,6 +25,7 @@ const fresh = (startedAt: number): Panel => ({
   todos: [],
   busy: false,
   waiting: false,
+  waitingFor: null,
   filled: 0,
 })
 const panel = atom({ plugin: 'open-claude', key: 'panel' } as const, fresh(0))
@@ -80,9 +81,70 @@ export const line = (s: Panel) => {
 const limitsOf = (limits: readonly Limit[]): Limit[] => limits.map(l => ({ ...l }))
 
 // Arbeitet Claude gerade bzw. wartet auf den User? Nur bei Aenderung schreiben (turn.step kommt oft).
-const setBusy = async ($: EngineInterface, busy: boolean, waiting = false) => {
+const setBusy = async ($: EngineInterface, busy: boolean, waiting = false, waitingFor: Panel['waitingFor'] = null) => {
   const s = await read($, panel)
-  if (s.busy !== busy || s.waiting !== waiting) await put($, s => ({ ...s, busy, waiting }))
+  if (s.busy !== busy || s.waiting !== waiting || s.waitingFor?.summary !== waitingFor?.summary || s.waitingFor?.tool !== waitingFor?.tool)
+    await put($, s => ({ ...s, busy, waiting, waitingFor }))
+}
+
+// Token-artige Teile, bevor der Befehl im Banner/OS-Hinweis landet.
+const SECRETS = [
+  /\b(sk-|ghp_|xox[a-z]?-)[\w-]+/gi,
+  /(Bearer\s+)[\w.~+/=-]+/gi,
+  /(Authorization:\s*(?:\w+\s+)?)[^\s'"]+/gi,
+  // Env, --flag=wert und ?query=wert; '&' trennt den naechsten Query-Parameter.
+  /([\w-]*(?:key|token|secret|passw(?:or)?d)[\w-]*=)[^\s&]+/gi,
+  /((?:^|\s)--?[\w-]*(?:key|token|secret|pass(?:word)?)\s+)(?!-)\S+/gi,
+  /((?:^|\s)-u\s+[^\s:]+:)\S+/g,
+  /(:\/\/[^:/\s@]+:)[^@\s]+(?=@)/g,
+  // Base64/Hex ab 20 Zeichen; ohne '/' und nur mit Ziffer, damit Pfade und lange Woerter lesbar bleiben.
+  /(?=[A-Za-z0-9+]*\d)[A-Za-z0-9+]{20,}={0,2}/g,
+]
+// Kurzfassung des wartenden Tool-Calls fuer Banner und Benachrichtigung der App.
+export const summarize = (tool: string, input: unknown) => {
+  const i = (input ?? {}) as Record<string, unknown>
+  const keys = tool === 'Bash' ? ['command'] : ['file_path', 'pattern', 'url', 'description']
+  const raw = keys.map(k => i[k]).find(v => typeof v === 'string') as string | undefined
+  let s = (raw ?? '').replace(/\s+/g, ' ').trim()
+  for (const re of SECRETS) s = s.replace(re, (_, pre) => (typeof pre === 'string' ? `${pre}***` : '***'))
+  return s.length <= 120 ? s : `${s.slice(0, 119)}…`
+
+}
+// Guardrails: riskante Aufrufe -> 'ask' (nie deny). Regex auf Klartext, nur Erinnerung: Umgehung (Skript, Variablen) faengt das nicht.
+const RM_RF = /\brm\s+((?:-\S+\s+)+)([^;&|]*)/g
+const rmOutside = (cmd: string, cwd?: string) => {
+  for (const [, flags, targets] of cmd.matchAll(RM_RF)) {
+    const f = flags.trim().split(/\s+/)
+    const rec = f.some(x => /^-[a-z]*[rR]/.test(x) || x === '--recursive')
+    const force = f.some(x => /^-[a-z]*f/.test(x) || x === '--force')
+    if (!rec || !force) continue
+    // Ziele ausserhalb: ~, $VAR, '..' oder absolut ausserhalb des Repos (ohne cwd: jeder absolute Pfad).
+    if (targets.split(/\s+/).map(t => t.replace(/^['"]|['"]$/g, '')).some(t => /^(~|\$)|(^|\/)\.\.(\/|$)/.test(t) || (t.startsWith('/') && !(cwd && (t === cwd || t.startsWith(`${cwd}/`)))))) return true
+  }
+  return false
+}
+// shortcut: Regex fängt nur direkte Aufrufe (keine Skripte/Variablen, keine Flags nach dem Ziel wie `rm dir -rf`); unter bypassPermissions ist 'ask' laut Issues nur Hinweis – für hartes Blockieren deny-Regel nötig.
+export const guard = (tool: string, input: unknown, cwd?: string) => {
+  const i = (input ?? {}) as Record<string, unknown>
+  const atelier = (n: string) => tool === `${ATELIER_TOOL}${n}`
+  if (atelier('forge_write')) {
+    const m = String(i.method ?? '').toUpperCase(), p = String(i.path ?? '').split('?')[0], b = (i.body ?? {}) as Record<string, unknown>
+    const why =
+      m === 'DELETE' ? 'Forge-Ressource löschen (DELETE)'
+      : m === 'POST' && /\/(pulls|merge_requests)\/?$/.test(p) ? 'PR/MR anlegen'
+      : m === 'PUT' && /\/merge\/?$/.test(p) ? 'PR/MR mergen'
+      : b.state === 'closed' || b.state_event === 'close' ? 'PR/MR/Issue schließen'
+      : undefined
+    return why && { text: `${m} ${i.path ?? ''}`.trim(), why }
+  }
+  const cmd = tool === 'Bash' ? i.command : atelier('git') && Array.isArray(i.args) ? `git ${i.args.join(' ')}` : undefined
+  if (typeof cmd !== 'string') return
+  const why =
+    /\bpush\b[^;&|]*(\s--force\b|\s--force-with-lease\b|\s-[a-zA-Z]*f|\s\+\S)/.test(cmd) ? 'Force-Push überschreibt den Remote-Verlauf'
+    : /\breset\s+--hard\b/.test(cmd) ? 'reset --hard verwirft lokale Änderungen'
+    : rmOutside(cmd, cwd) ? 'rm -rf außerhalb des Repos löscht unwiederbringlich'
+    : undefined
+  return why && { text: cmd, why }
 }
 // Laeuft gerade ein Haupt-Turn? Sonst haengt busy nur an laufenden Agents (Heartbeat rechnet nach).
 let mainTurn = false
@@ -92,8 +154,11 @@ const agentsRunning = async ($: EngineInterface) =>
 
 // App-Panel liest die Datei; ohne Env (claude ausserhalb der App) nur Atom. Pfad wird in session.start
 // gemerkt und aus der Env genommen, damit verschachtelte `claude -p` nicht dieselbe Datei ueberschreiben.
-// ponytail: Hot-Reload der Mod verliert den Pfad (Env schon leer) – bis zum naechsten claude-Start keine Writes.
+// Hot-Reload leert die Modul-Variablen und die Env: der Pfad liegt zusaetzlich im Store, je Sitzungs-ID (Store ist pro Plugin global).
 let file: string | undefined
+// Timer einmalig; ein Reload bricht die alten ab und setzt auch dieses Flag zurueck
+// (Plugin-Doku: Reload startet register in frischer Umgebung, "the previous environment's timers are dropped").
+let timers = false
 // Writes laufen nacheinander und schreiben den aktuellen Atom-Stand, sonst ueberholt ein aelterer Snapshot.
 let chain = Promise.resolve()
 // Fehler duerfen weder Tool-Calls noch die Kette kippen.
@@ -131,6 +196,13 @@ export const withNarrate = <T extends { command?: unknown; context?: readonly st
 type BrainTurn = { recall: boolean; remember: boolean; hinted: Set<string> }
 const brainTurn = (): BrainTurn => ({ recall: false, remember: false, hinted: new Set() })
 let brainOn = false
+
+// App-Tools (MCP-Server der App, Plugin-Präfix): Hinweis nur, wenn sie in der Sitzung verbunden sind.
+const ATELIER_TOOL = 'mcp__plugin_open-claude_open-claude__'
+export const ATELIER_RULE =
+  `Atelier-Tools (${ATELIER_TOOL}*): Bei Bezug auf die offene Datei oder Auswahl zuerst editor_state aufrufen. ` +
+  'Fundstellen mit open_file im Editor zeigen. ' +
+  'GitHub/GitLab per forge_read/forge_write statt gh/curl (Pfad mit führendem /).'
 let brain = brainTurn()
 
 // Welcher Brain-Hinweis zu diesem Tool-Aufruf passt, oder null.
@@ -169,7 +241,14 @@ const pollCmd = async ($: EngineInterface) => {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    file ??= await $.env.get('OPEN_CLAUDE_PANEL')
+    const env = await $.env.get('OPEN_CLAUDE_PANEL')
+    const id = await $.session.id().catch(() => '')
+    const saved = (await $.store.get('panelFiles').catch(() => undefined)) as Record<string, string> | undefined
+    if (env && id) {
+      file = env
+      // shortcut: /clear vergibt eine neue ID, ein Reload danach findet den Pfad nicht; letzte 20 Sitzungen, Lesen-Aendern-Schreiben ohne Sperre.
+      await $.store.set('panelFiles', Object.fromEntries(Object.entries({ ...saved, [id]: env }).slice(-20))).catch(() => {})
+    } else file ??= env ?? (id ? saved?.[id] : undefined)
     await $.env.set('OPEN_CLAUDE_PANEL', undefined)
     await $.command.register({ name: 'panel', description: 'Session-Panel ein/aus' })
     await $.command.register({
@@ -187,14 +266,17 @@ export const register: Register = on => {
       model,
     }))
     // Countdowns und Dauer laufen ohne neue Daten weiter. Heartbeat: busy gilt in der App nur bei frischer Datei.
-    $.clock.every(500, () => pollCmd($))
-    $.clock.every(30_000, async () => {
-      $.ui.invalidate('ui.render')
-      if (!(await read($, panel)).busy) return
-      // Ohne Haupt-Turn nur so lange busy, wie noch Agents laufen; sonst bliebe es bis zum naechsten Turn haengen.
-      const busy = mainTurn || (await agentsRunning($).catch(() => false))
-      await put($, s => ({ ...s, busy }))
-    })
+    if (!timers) {
+      timers = true
+      $.clock.every(500, () => pollCmd($))
+      $.clock.every(30_000, async () => {
+        $.ui.invalidate('ui.render')
+        if (!(await read($, panel)).busy) return
+        // Ohne Haupt-Turn nur so lange busy, wie noch Agents laufen; sonst bliebe es bis zum naechsten Turn haengen.
+        const busy = mainTurn || (await agentsRunning($).catch(() => false))
+        await put($, s => ({ ...s, busy }))
+      })
+    }
     if (!(await $.store.get('themeHint'))) {
       $.ui.toast('Tipp: /theme → Atelier (Hell/Dunkel, folgt der App)')
       await $.store.set('themeHint', true)
@@ -250,13 +332,15 @@ export const register: Register = on => {
 
   // Rechte-Dialog: Claude wartet auf den User.
   on('tool.check', async ($, e, next) => {
-    const v = await next(e)
-    if (v.decision === 'ask') await setBusy($, false, true)
+    let v = await next(e)
+    const risk = guard(e.tool, e.input, await $.env.get('PWD'))
+    if (risk && v.decision !== 'deny') v = { decision: 'ask', reason: `Riskant: ${risk.why}. Wirklich ausführen?` }
+    if (v.decision === 'ask') await setBusy($, false, true, { tool: e.tool, summary: risk ? summarize('Bash', { command: risk.text }) : summarize(e.tool, e.input) })
     return v
   })
 
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
-    await setBusy($, false, true)
+    await setBusy($, false, true, { tool: 'Rückfrage', summary: e.questions?.[0]?.question ?? '' })
     const ran = await next(e)
     await setBusy($, true)
     return ran
@@ -282,6 +366,7 @@ export const register: Register = on => {
       ...s,
       busy: busy ?? s.busy,
       waiting: e.agentId ? s.waiting : false,
+      waitingFor: e.agentId ? s.waitingFor : null,
       turns: s.turns + (e.agentId ? 0 : 1),
       // Abgebrochene Tool-Calls kommen nie aus 'run' zurueck; Turn-Ende raeumt sie auf.
       active: e.agentId ? s.active : s.active.map(a => (a.state === 'run' ? { ...a, state: end } : a)),
@@ -319,7 +404,10 @@ export const register: Register = on => {
   on('prompt.compose', async ($, e, next) => {
     const r = await next(e)
     brainOn = e.tools.includes('mcp__brain__recall')
-    return brainOn ? { sections: [...r.sections, { id: 'open-claude:brain', text: BRAIN_RULE, scope: 'session' as const }] } : r
+    const sections = [...r.sections]
+    if (brainOn) sections.push({ id: 'open-claude:brain', text: BRAIN_RULE, scope: 'session' as const })
+    if (e.tools.includes(`${ATELIER_TOOL}editor_state`)) sections.push({ id: 'open-claude:atelier', text: ATELIER_RULE, scope: 'session' as const })
+    return { sections }
   })
 
   on('tool.call', { tool: /^mcp__brain__/ }, async ($, e, next) => {

@@ -10,11 +10,15 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
-  import { git, forge, type ForgeKind, type Release, type ReleaseInput } from "$lib/git";
+  import { git, forge, type ForgeKind, type Release, type ReleaseAsset, type ReleaseInput } from "$lib/git";
+  import { invoke } from "@tauri-apps/api/core";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import PackageIcon from "@lucide/svelte/icons/package";
+  import DownloadIcon from "@lucide/svelte/icons/download";
+  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import LoaderIcon from "@lucide/svelte/icons/loader-circle";
 
   let { repo, refreshKey }: { repo: string; refreshKey: number } = $props();
 
@@ -99,6 +103,25 @@
       return false;
     } finally {
       busy = false;
+    }
+  }
+
+  // ---------- Download ----------
+
+  // Asset-URL -> "laeuft" bzw. Pfad im Downloads-Ordner; zweiter Klick zeigt die Datei im Finder.
+  let downloads = $state<Record<string, "…" | string>>({});
+
+  async function download(a: ReleaseAsset) {
+    const d = downloads[a.url];
+    if (d === "…") return;
+    if (d) return invoke("reveal", { path: d }).catch(() => delete downloads[a.url]);
+    if (!originUrl) return;
+    downloads[a.url] = "…";
+    try {
+      downloads[a.url] = await forge.download(repo, originUrl, a);
+    } catch (e) {
+      delete downloads[a.url];
+      error = String(e);
     }
   }
 
@@ -246,12 +269,21 @@
             {#if r.assets.length}
               <ul class="border-border space-y-0.5 border-t pt-2">
                 {#each r.assets as a (a.url)}
+                  {@const d = downloads[a.url]}
                   <li>
                     <button
-                      class="hover:bg-accent flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[11px]"
-                      onclick={() => forge.openUrl(a.url).catch((e) => (error = String(e)))}
+                      class="hover:bg-accent group flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[11px]"
+                      title={d === "…" ? "Wird heruntergeladen …" : d ? `Im Finder zeigen: ${d}` : "In den Downloads-Ordner laden"}
+                      onclick={() => download(a)}
                     >
-                      <PackageIcon class="text-muted-foreground size-3 shrink-0" />
+                      {#if d === "…"}
+                        <LoaderIcon class="text-muted-foreground size-3 shrink-0 animate-spin" />
+                      {:else if d}
+                        <FolderOpenIcon class="text-primary size-3 shrink-0" />
+                      {:else}
+                        <PackageIcon class="text-muted-foreground size-3 shrink-0 group-hover:hidden" />
+                        <DownloadIcon class="text-muted-foreground hidden size-3 shrink-0 group-hover:block" />
+                      {/if}
                       <span class="min-w-0 flex-1 truncate">{a.name}</span>
                       <span class="text-muted-foreground shrink-0 font-mono text-[10px]">{size(a.size)}</span>
                       {#if kind === "github"}

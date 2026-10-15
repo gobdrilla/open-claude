@@ -138,3 +138,17 @@ export function parseArgs(text: string): string[] | null {
 
 /** Gewaehltes Profil, sonst Debug. */
 export const profileOf = (custom: Profile[], name: string): Profile => [...BUILTIN, ...custom].find((p) => p.name === name) ?? BUILTIN[0];
+
+/**
+ * Letzte n Zeilen wie im Terminal sichtbar: pro Zeile nur der Text nach dem letzten \r (Fortschrittsbalken),
+ * ESC[2K / ESC[G zaehlen wie \r, dann ohne Escape-Sequenzen. Hoechstens max Zeichen vom Ende (pasteFrame kappt bei 20000 das Ende).
+ */
+export function tailText(s: string, n: number, max = 18000): string {
+  const lines = s
+    .replace(/\x1b\[(?:2K|[01]?G)/g, "\r")
+    .split(/\r*\n/)
+    .map((l) => plain(l.slice(l.replace(/\r+$/, "").lastIndexOf("\r") + 1).replace(/\r+$/, "")));
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const t = lines.slice(-n).join("\n");
+  return t.length > max ? `…${t.slice(-max)}` : t;
+}

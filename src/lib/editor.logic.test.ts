@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abs, rel, ancestors, devUrl, gutterMarks, huge, moved, packageManager, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
+import { abs, rel, ancestors, atRef, cite, devUrl, gutterMarks, huge, moved, packageManager, pasteFrame, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
 import { parseDiff } from "./diff.ts";
 
 test("unveraenderte Platte: nichts tun, egal ob lokal geaendert", () => {
@@ -140,4 +140,25 @@ test("gutterMarks: neu, geaendert, geloescht am Anfang und am Ende", () => {
   // Geloescht ganz oben: erste Zeile; am Ende: letzte verbliebene.
   assert.deepEqual(marks("@@ -1 +0,0 @@\n-a"), [{ line: 1, kind: "del" }]);
   assert.deepEqual(marks("@@ -5,2 +4,0 @@\n-a\n-b"), [{ line: 4, kind: "del" }]);
+});
+
+test("pasteFrame: Rahmen, kein \\r am Ende, Rahmen-Sequenzen im Text entfernt", () => {
+  assert.equal(pasteFrame("@a.ts "), "\x1b[200~@a.ts \x1b[201~");
+  assert.equal(pasteFrame("x\x1b[201~\ry\x1b[200~"), "\x1b[200~x\ny\x1b[201~");
+  assert.equal(pasteFrame("a\r\nb\rc\n"), "\x1b[200~a\nb\nc\n\x1b[201~");
+  assert.ok(!pasteFrame("a\r").includes("\r"));
+  assert.equal(pasteFrame("a\x1b[20\x1b[201~1~b"), "\x1b[200~a[201~b\x1b[201~");
+  assert.equal(pasteFrame("a\tb\x03\x7fc"), "\x1b[200~a\tbc\x1b[201~");
+});
+
+test("pasteFrame kuerzt ab 20000 Zeichen", () => {
+  const f = pasteFrame("x".repeat(25000));
+  assert.ok(f.endsWith("… [gekürzt]\x1b[201~"));
+  assert.equal(f.length, 6 + 20000 + "… [gekürzt]".length + 6);
+});
+
+test("atRef und cite", () => {
+  assert.equal(atRef("src/a.ts", "#L2-4"), "@src/a.ts#L2-4 ");
+  assert.equal(atRef("my dir/a.ts"), '@"my dir/a.ts" ');
+  assert.equal(cite("\neins   \r\nzwei  \n\n"), "> eins\n> zwei\n");
 });

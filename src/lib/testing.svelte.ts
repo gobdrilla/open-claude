@@ -20,6 +20,7 @@ import {
   projects,
   relTo,
   replaceFiles,
+  rows,
   stackLinks,
   subtree,
   inScope,
@@ -32,6 +33,7 @@ import {
   type TestProject,
   type Tree,
 } from "./testing.logic.ts";
+import { pushRunState } from "./run.svelte.ts";
 
 /** ponytail: Obergrenze fuer die Discovery; darueber Hinweis im Panel. */
 const MAX_FILES = 3000;
@@ -407,6 +409,7 @@ export async function testRun(repo: string, target: string): Promise<void> {
   restore(t, prev, Object.keys(t.results));
   t.last = { ms: performance.now() - started, exit };
   t.run = null;
+  pushRunState(repo);
   await refresh(t);
 }
 
@@ -416,6 +419,7 @@ export async function testCancel(repo: string): Promise<void> {
   if (!t?.run) return;
   cancelled.add(repo);
   if (t.run.id) await cancelCmd(t.run.id).catch((e) => (t.error = String(e)));
+  pushRunState(repo);
 }
 
 /** Nach einem Lauf: Testdateien mit neuer mtime neu einlesen (ein fs.stat fuer alle). Kein Polling. */
@@ -434,6 +438,22 @@ export function where(repo: string, id: string, file: string): string | null {
   const t = tests(repo);
   const n = t.nodes[id];
   return toRepo(repo, n ? (projectOf(t, n.file, n.fw)?.dir ?? "") : "", file);
+}
+
+/** Name und Datei aus dem Baum fuer failureReport. */
+export const failure = (t: RepoTests, id: string) => ({ name: title(t, id) || t.nodes[id].name, r: t.results[id], file: t.nodes[id].file });
+
+/**
+ * Rote Tests in der Reihenfolge der Liste "nur Fehler", ohne suites (wie counts.failed). Laeuft rows() ueber den
+ * ganzen Baum: nur auf Klick bzw. im run_state-Push (hoechstens 1/s) rufen, nicht je Ergebnis-Batch.
+ */
+export function failedItems(repo: string) {
+  const t = peek(repo);
+  if (!t) return [];
+  return rows(t.nodes, t.states, t.expanded, "", true)
+    .map((r) => r.id)
+    .filter((id) => t.results[id]?.state === "failed" && t.nodes[id].kind !== "suite")
+    .map((id) => failure(t, id));
 }
 
 /** Lesbare Bezeichnung fuer die Detailansicht: Pfad ohne Datei. */

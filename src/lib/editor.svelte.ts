@@ -30,11 +30,12 @@ import {
 } from "./dock.ts";
 import { KONFLIKT, fs, isBinaryImage, previewAllow } from "./files.ts";
 import { moved, pushNav, under, verdict, type Spot } from "./editor.logic.ts";
-import { redetect, run as runOf, runStop } from "./run.svelte.ts";
+import { pushRunState, redetect, run as runOf, runStop } from "./run.svelte.ts";
 import { BUILTIN, type Profile } from "./run.logic.ts";
 import { rescan, testCancel } from "./testing.svelte.ts";
 // Zirkulaer (lsp.svelte.ts nutzt open/peek/setText): beide Seiten greifen erst zur Laufzeit zu, nie auf Modulebene.
 import { closed, disk, stop as stopLsp } from "./lsp.svelte.ts";
+import { pushEditor } from "./ide.svelte.ts";
 
 /** Platte weicht vom Puffer ab, waehrend lokale Aenderungen offen sind. */
 export type Conflict = "changed" | "deleted";
@@ -99,6 +100,8 @@ export type RepoEditor = {
 // reaktiv auf neue/verworfene Projekte.
 const store = new Map<string, RepoEditor>();
 let count = $state(0);
+/** Beendet den editor_state-Push je Projekt (drop). */
+const unwatch = new Map<string, () => void>();
 
 /**
  * CodeMirror-Zustand (samt Undo-Verlauf) und Scrollposition je Datei, nur fuer CodePane. Nicht reaktiv: ein
@@ -219,7 +222,15 @@ export function editor(repo: string): RepoEditor {
   });
   store.set(repo, s);
   // Nicht synchron: editor() laeuft auch in $derived.
-  queueMicrotask(() => count++);
+  queueMicrotask(() => {
+    count++;
+    if (store.get(repo) !== s) return;
+    // Liest nur active/path/dirty/conflict, nicht text: Tippen pusht erst, wenn dirty umspringt.
+    const off = $effect.root(() => {
+      $effect(() => pushEditor(repo, { active: s.active, files: Object.values(s.files).map((f) => ({ path: f.path, dirty: f.dirty, conflict: f.conflict })) }));
+    });
+    unwatch.set(repo, off);
+  });
   previewAllow(repo).catch(() => {});
   for (const path of paths)
     load(s, path).catch(() => {
@@ -652,6 +663,11 @@ export async function drop(repo: string, force = false): Promise<boolean> {
   stopLsp(repo);
   for (const key of [...snapshots.keys()]) if (key.startsWith(snapKey(repo, ""))) snapshots.delete(key);
   store.delete(repo);
+  unwatch.get(repo)?.();
+  unwatch.delete(repo);
+  pushEditor(repo, null);
+  // Ohne Editor-Store schickt der Push null (auch wenn testRun danach noch endet).
+  pushRunState(repo);
   previewAllow(repo, false).catch(() => {});
   count++;
   return true;

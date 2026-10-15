@@ -11,6 +11,8 @@
   import { fileDiff, parseDiff, stat, type FileStatus } from "$lib/diff";
   import { dirname } from "$lib/tree";
   import { ask } from "$lib/ask.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { reviewCount, sendReview } from "$lib/review.svelte";
   import { theme } from "$lib/theme.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import SearchIcon from "@lucide/svelte/icons/search";
@@ -529,6 +531,8 @@
   diff={cur && fileDiff(cur)}
   title={cur ? base(cur.newPath) : ""}
   onclose={() => (shown = null)}
+  {repo}
+  rev={detail?.commit.sha}
   step={files.length > 1 ? (d) => (shown = (shown! + d + files.length) % files.length) : undefined}
 >
   {#if cur && shown !== null}
@@ -539,5 +543,8 @@
       {#if stats[shown].d}<span class="text-destructive">−{stats[shown].d}</span>{/if}
     </span>
     <span class="text-muted-foreground shrink-0 text-xs font-normal tabular-nums">{shown + 1} / {files.length}</span>
+  {/if}
+  {#if reviewCount(repo)}
+    <Button size="xs" class="shrink-0" onclick={() => sendReview(repo)}>Review an Claude ({reviewCount(repo)})</Button>
   {/if}
 </DiffDialog>

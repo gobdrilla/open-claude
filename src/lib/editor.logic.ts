@@ -148,3 +148,31 @@ export function gutterMarks(hunks: Hunk[]): GitMark[] {
     return Array.from({ length: h.newLines }, (_, i) => ({ line: h.newStart + i, kind }));
   });
 }
+
+/**
+ * Text als Bracketed Paste fuer claudes Prompt: landet im Eingabefeld, wird nie abgeschickt (kein \r am Ende).
+ * Rahmen-Sequenzen im Text werden entfernt, sonst beendete ein \x1b[201~ den Paste vorzeitig und der Rest liefe als Tastendruck.
+ */
+export function pasteFrame(text: string): string {
+  // Restliche Steuerzeichen (v. a. ESC) raus: verschachtelte Rahmen wie "\x1b[20\x1b[201~1~" bilden sonst neue.
+  let t = text
+    .replaceAll("\x1b[200~", "")
+    .replaceAll("\x1b[201~", "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+  if (t.length > 20000) t = t.slice(0, 20000) + "… [gekürzt]";
+  return "\x1b[200~" + t + "\x1b[201~";
+}
+
+/** @-Erwaehnung fuer claudes Prompt; Pfade mit Leerzeichen in Anfuehrungszeichen (claudes Syntax, kein Shell-Quoting). */
+export const atRef = (path: string, suffix = "") => (/\s/.test(path) ? `@"${path}"${suffix} ` : `@${path}${suffix} `);
+
+/** Terminal-Auswahl als Markdown-Zitat: Fuellleerzeichen am Zeilenende weg, jede Zeile mit "> ". */
+export const cite = (text: string) =>
+  text
+    .replace(/\r\n?/g, "\n")
+    .trimEnd()
+    .replace(/^\s*\n/, "")
+    .split("\n")
+    .map((l) => "> " + l.trimEnd())
+    .join("\n") + "\n";

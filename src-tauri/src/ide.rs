@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
@@ -216,18 +216,26 @@ async fn ws_conn<R: Runtime>(s: TcpStream, ctx: Arc<Ctx<R>>) {
 }
 
 /// Notification aus dem Editor an die Claude-Sessions dieses Repos (Auswahl, @-Erwaehnung).
+/// true = mindestens ein Client hat sie bekommen; sonst faellt das Frontend auf Einfuegen ins Terminal zurueck.
 #[tauri::command]
-pub fn ide_notify(ides: tauri::State<'_, Ides>, repo: String, method: String, params: Value) -> Result<(), String> {
-    if method != "selection_changed" && method != "at_mentioned" {
-        return Err(format!("Unbekannte Notification: {method}"));
-    }
-    let msg = json!({ "jsonrpc": "2.0", "method": method, "params": params }).to_string();
-    for ide in ides.lock().values().filter(|i| i.ctx.repo == repo) {
-        for c in ide.ctx.clients.lock().unwrap_or_else(|e| e.into_inner()).iter() {
-            let _ = c.send(msg.clone());
+pub fn ide_notify(ides: tauri::State<'_, Ides>, repo: String, method: String, params: Value) -> Result<bool, String> {
+    ides.notify(&repo, &method, params)
+}
+
+impl<R: Runtime> Ides<R> {
+    fn notify(&self, repo: &str, method: &str, params: Value) -> Result<bool, String> {
+        if method != "selection_changed" && method != "at_mentioned" {
+            return Err(format!("Unbekannte Notification: {method}"));
         }
+        let msg = json!({ "jsonrpc": "2.0", "method": method, "params": params }).to_string();
+        let mut sent = false;
+        for ide in self.lock().values().filter(|i| i.ctx.repo == repo) {
+            for c in ide.ctx.clients.lock().unwrap_or_else(|e| e.into_inner()).iter() {
+                sent |= c.send(msg.clone()).is_ok();
+            }
+        }
+        Ok(sent)
     }
-    Ok(())
 }
 
 /// Entscheidung zu einem Diff: accept mit (ggf. bearbeitetem) Inhalt, sonst abgelehnt.
@@ -238,6 +246,39 @@ pub fn ide_reply(id: u64, accept: bool, content: Option<String>) {
         let (_, x) = p.remove(i);
         let _ = x.reply.send(json!({ "accept": accept, "content": content }));
     }
+}
+
+/// Letzter Editor-Stand je Projekt (offene Dateien, aktive Datei, Auswahl; ohne Pufferinhalt) fuer das Tool editor_state.
+static EDITORS: LazyLock<Mutex<HashMap<String, Value>>> = LazyLock::new(Default::default);
+
+fn editors() -> std::sync::MutexGuard<'static, HashMap<String, Value>> {
+    EDITORS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Vom Frontend (ide.svelte.ts pushEditor); null = Editor geschlossen.
+#[tauri::command]
+pub fn ide_editor_state(repo: String, state: Value) {
+    if state.is_null() {
+        editors().remove(&repo);
+    } else {
+        editors().insert(repo, state);
+    }
+}
+
+/// Letzte Run-Ausgabe + rote Tests je Projekt fuer das Tool run_state; Text, weil das Frontend ihn fertig formatiert.
+static RUNS: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
+
+fn runs() -> std::sync::MutexGuard<'static, HashMap<String, String>> {
+    RUNS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Vom Frontend (run.svelte.ts pushRunState); None = nichts mehr zu zeigen.
+#[tauri::command]
+pub fn ide_run_state(repo: String, state: Option<String>) {
+    match state {
+        Some(s) => runs().insert(repo, s),
+        None => runs().remove(&repo),
+    };
 }
 
 // ---------- HTTP (MCP fuers Modell) ----------
@@ -440,7 +481,37 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
             }), &[]),
             "annotations": { "destructiveHint": true },
         },
+        {
+            "name": "editor_state",
+            "description": "Offene Dateien im Editor (dirty/conflict), aktive Datei und Auswahl. Bei Fragen zur offenen Datei/Auswahl aufrufen; \
+                vor Edits prüfen, ob die Datei ungespeichert ist.",
+            "inputSchema": obj(json!({}), &[]),
+            "annotations": { "readOnlyHint": true },
+        },
+        {
+            "name": "run_state",
+            "description": "Letzte Ausgabe des Run-Panels (Befehl, Status, exit, 200 Zeilen ohne ANSI) und fehlgeschlagene Tests. \
+                Vor dem Fragen nach Logs oder Testfehlern aufrufen.",
+            "inputSchema": obj(json!({}), &[]),
+            "annotations": { "readOnlyHint": true },
+        },
     ])
+}
+
+/// Konto-Auth nur fuers Session-Repo: keine globalen Optionen (-C, -c, --git-dir ...) und kein eigener Pack-Befehl.
+// shortcut: Hooks und Repo-Config laufen weiter mit Auth-Env, wer per Bash Hooks schreibt, kommt an den Token; erst mit Credential-Helper statt Env dicht.
+fn git_args_ok(args: &[String]) -> Result<(), String> {
+    if args.first().is_none_or(|a| a.starts_with('-')) {
+        return Err("Erstes Argument muss der git-Befehl sein, globale Optionen wie -C/-c sind nicht erlaubt".into());
+    }
+    // config/var listen die Env-Config samt Auth-Header; lokal geht beides über Bash.
+    if ["config", "var"].contains(&args[0].as_str()) {
+        return Err(format!("git {} nur über Bash", args[0]));
+    }
+    match args.iter().find(|a| ["--upload-pack", "--receive-pack", "--exec"].iter().any(|o| a.starts_with(o))) {
+        Some(a) => Err(format!("Nicht erlaubt: {a}")),
+        None => Ok(()),
+    }
 }
 
 async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Value>, String> {
@@ -452,6 +523,7 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
     let out = match name {
         "git" => {
             let args: Vec<String> = a["args"].as_array().ok_or("args fehlt")?.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+            git_args_ok(&args)?;
             let repo = ctx.repo.clone();
             crate::git::blocking(move || {
                 let o = crate::git::exec(crate::git::net(&repo).args(&args), None)?;
@@ -481,6 +553,8 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
             let r = crate::git::blocking(move || Ok(crate::images::clean(&crate::activity::config_dir(), days, sid.as_deref()))).await?;
             crate::images::summary(&r)
         }
+        "editor_state" => editors().get(&ctx.repo).map_or_else(|| "Editor für dieses Projekt nicht geöffnet.".into(), Value::to_string),
+        "run_state" => runs().get(&ctx.repo).cloned().unwrap_or_else(|| "Kein Run/Test für dieses Projekt.".into()),
         _ => return Err(format!("Tool unbekannt: {name}")),
     };
     Ok(vec![text(&clip(&out))])
@@ -500,6 +574,22 @@ fn clip(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn git_args_nur_session_repo() {
+        let v = |a: &[&str]| git_args_ok(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert!(v(&["push", "-u", "origin", "x"]).is_ok() && v(&["status", "-sb"]).is_ok());
+        for a in [&["-C", "/x", "push"][..], &["-c", "core.sshCommand=x", "push"], &["--git-dir=/x", "push"], &[], &["config", "-l"], &["fetch", "--upload-pack=sh", "/x"], &["push", "--receive-pack", "x"]] {
+            assert!(v(a).is_err(), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn notify_ohne_clients_ist_false() {
+        let ides = Ides::<tauri::test::MockRuntime>::default();
+        assert_eq!(ides.notify("/x", "at_mentioned", json!({})), Ok(false));
+        assert!(ides.notify("/x", "boese", json!({})).is_err());
+    }
 
     #[test]
     fn clip_behaelt_anfang_und_ende() {
@@ -560,6 +650,28 @@ mod tests {
             assert!(list.contains("\"forge_write\"") && list.contains("hat kein Remote"), "{list}");
             let st = post(&http_port, &format!("Bearer {tok}"), call(3, "git", json!({ "args": ["status"] }))).await;
             assert!(st.contains("No commits yet"), "{st}");
+            assert!(list.contains("\"editor_state\""), "{list}");
+            let bearer = format!("Bearer {tok}");
+            let es = || post(&http_port, &bearer, call(4, "editor_state", json!({})));
+            assert!(es().await.contains("nicht geöffnet"));
+            ide_editor_state("/anderes-repo".into(), json!({ "active": "fremd.rs" }));
+            assert!(es().await.contains("nicht geöffnet"));
+            let snap = json!({ "active": "a.rs", "files": [{ "path": "a.rs", "dirty": true, "conflict": null }], "selection": { "path": "a.rs", "startLine": 2, "endLine": 3, "text": "x" } });
+            ide_editor_state(repo_s.clone(), snap);
+            let r = es().await;
+            assert!(r.contains(r#"\"dirty\":true"#) && r.contains("startLine") && !r.contains("fremd"), "{r}");
+            ide_editor_state(repo_s.clone(), Value::Null);
+            assert!(es().await.contains("nicht geöffnet"));
+            assert!(list.contains("\"run_state\""), "{list}");
+            let rs = || post(&http_port, &bearer, call(5, "run_state", json!({})));
+            assert!(rs().await.contains("Kein Run/Test für dieses Projekt."));
+            ide_run_state("/anderes-repo".into(), Some("fremd-log".into()));
+            assert!(rs().await.contains("Kein Run/Test"));
+            ide_run_state(repo_s.clone(), Some("$ npm test\nexit 1".into()));
+            let r = rs().await;
+            assert!(r.contains("npm test") && !r.contains("fremd"), "{r}");
+            ide_run_state(repo_s.clone(), None);
+            assert!(rs().await.contains("Kein Run/Test"));
 
             let mut bad = format!("ws://127.0.0.1:{ws_port}").into_client_request().unwrap();
             bad.headers_mut().insert("x-claude-code-ide-authorization", "falsch".parse().unwrap());

@@ -205,7 +205,7 @@ export type CloneProgress = { line: string; percent: number | null };
 /** Ergebnis einer Forge-Abfrage zum Remote eines lokalen Repos; null, wenn Remote unbekannt oder kein Konto passt. */
 export type ForgeList<T> = { kind: ForgeKind; items: T[] } | null;
 
-export type ReleaseAsset = { name: string; size: number; downloads: number; url: string };
+export type ReleaseAsset = { name: string; size: number; downloads: number; url: string; api: string | null };
 
 export type Release = {
   /** GitHub: numerische Release-ID als String; GitLab: Tag-Name (Releases haben dort keine eigene ID). */
@@ -312,6 +312,9 @@ export const forge = {
     call<string>("forge_create_remote", { repo, name, private: private_ }),
   /** Oeffnet eine URL im Standardbrowser. */
   openUrl: (url: string) => call<void>("open_url", { url }),
+  /** Laedt ein Release-Asset in den Downloads-Ordner; liefert den vollen Pfad. */
+  download: (repo: string, remoteUrl: string, a: ReleaseAsset) =>
+    call<string>("forge_download", { repo, remoteUrl, name: a.name, url: a.url, api: a.api }),
   /** Browser-URL zu einem Remote (ssh/scp -> https); null, wenn nicht erkennbar. */
   webUrl: (remoteUrl: string) => call<string | null>("forge_web_url", { remoteUrl }),
 };

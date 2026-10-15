@@ -8,7 +8,7 @@ use std::time::Duration;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
 #[derive(Serialize)]
@@ -63,6 +63,8 @@ pub struct ReleaseAsset {
     size: u64,
     downloads: u64,
     url: String,
+    /// GitHub-API-Pfad des Assets (/repos/o/r/releases/assets/<id>); damit klappt der Download auch privat.
+    api: Option<String>,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -581,6 +583,13 @@ pub(crate) fn mcp_target<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str) -> R
     origin(app, repo).map(|r| (r.kind, r.host, r.base))
 }
 
+/// Nur das eigene Repo: Praefix mit Grenze, keine Punkt-Segmente (URL-Parser loest ../ und %2e%2e/ auf).
+fn in_repo(path: &str, base: &str) -> bool {
+    let Some(rest) = path.strip_prefix(base) else { return false };
+    (rest.is_empty() || rest.starts_with(['/', '?']))
+        && !rest.split(['/', '\\', '?']).any(|s| matches!(s.to_ascii_lowercase().replace("%2e", ".").as_str(), "." | ".."))
+}
+
 /// Beliebiger API-Aufruf fuer Claude mit dem Token des Kontos; Antwort roh als Text (JSON, Diff, Log).
 pub(crate) async fn mcp_call<R: tauri::Runtime>(
     app: &AppHandle<R>,
@@ -595,6 +604,9 @@ pub(crate) async fn mcp_call<R: tauri::Runtime>(
     // Nur Pfade unter der API-Wurzel, damit der Token nie an einen anderen Host geht.
     if !path.starts_with('/') || path.starts_with("//") {
         return Err(format!("path muss mit / beginnen: {path}"));
+    }
+    if !in_repo(path, &r.base) {
+        return Err(format!("path muss mit {} beginnen: {path}", r.base));
     }
     let method = reqwest::Method::from_bytes(method.to_ascii_uppercase().as_bytes()).map_err(|_| format!("Ungültige Methode: {method}"))?;
     let default = if r.github() { "application/vnd.github+json" } else { "application/json" };
@@ -750,6 +762,7 @@ fn gh_release(r: &Value) -> Release {
                 size: a["size"].as_u64().unwrap_or(0),
                 downloads: a["download_count"].as_u64().unwrap_or(0),
                 url: s(&a["browser_download_url"]),
+                api: s(&a["url"]).find("/repos/").map(|i| s(&a["url"])[i..].to_string()),
             })
             .collect(),
     }
@@ -770,7 +783,7 @@ fn gl_release(r: &Value) -> Release {
         web_url: s(&r["_links"]["self"]),
         assets: links
             .iter()
-            .map(|a| ReleaseAsset { name: s(&a["name"]), size: 0, downloads: 0, url: s(&a["url"]) })
+            .map(|a| ReleaseAsset { name: s(&a["name"]), size: 0, downloads: 0, url: s(&a["url"]), api: None })
             .collect(),
     }
 }
@@ -862,6 +875,68 @@ pub async fn forge_releases(app: AppHandle, repo: String, remote_url: String, pa
     let body = repo.get("/releases", &page_qs(page)).await?;
     let items = if repo.github() { items(&body, gh_release) } else { items(&body, gl_release) };
     Ok(Some(ForgeList { kind: repo.kind, items }))
+}
+
+/// Freier Dateiname im Ordner: "a.zip", sonst "a (1).zip" usw.
+fn free_name(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let p = std::path::Path::new(name);
+    let (stem, ext) = (p.file_stem().and_then(|s| s.to_str()).unwrap_or(name), p.extension().and_then(|s| s.to_str()));
+    (0..)
+        .map(|i| match (i, ext) {
+            (0, _) => name.to_string(),
+            (_, Some(e)) => format!("{stem} ({i}).{e}"),
+            (_, None) => format!("{stem} ({i})"),
+        })
+        .map(|n| dir.join(n))
+        .find(|p| !p.exists())
+        .unwrap()
+}
+
+/// Laedt ein Release-Asset in den Downloads-Ordner; Rueckgabe ist der volle Pfad.
+#[tauri::command]
+pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, name: String, url: String, api: Option<String>) -> Result<String, String> {
+    use std::io::Write;
+    // Nur der letzte Pfadteil: ein Asset-Name wie "../x" darf nicht aus dem Ordner heraus.
+    let name = std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.starts_with('.')).ok_or("Ungültiger Dateiname")?.to_string();
+    // Ohne Gesamt-Timeout: grosse DMGs brauchen laenger als 30 s, haengen soll aber nichts.
+    let plain = reqwest::Client::builder().user_agent("ocui").read_timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+    let res = match (resolve(&app, &repo, &remote_url)?, api) {
+        // Privates GitHub-Repo: ueber die API mit Token; die Weiterleitung zum Blob-Host ohne Token (wie mcp_call).
+        (Some(r), Some(api)) if r.github() && in_repo(&api, &r.base) => {
+            let req = client()?.get(format!("{}{api}", api_base(r.kind, &r.host))).header("Accept", "application/octet-stream");
+            let res = authed(req, r.kind, &r.tok).send().await.map_err(|e| format!("{} nicht erreichbar: {e}", r.host))?;
+            match res.headers().get(reqwest::header::LOCATION).and_then(|l| l.to_str().ok()) {
+                Some(loc) if res.status().is_redirection() => plain.get(loc).send().await,
+                _ => Ok(res),
+            }
+        }
+        // shortcut: GitLab-Links und GitHub ohne Konto laden ohne Token, private GitLab-Uploads scheitern dann; bei Bedarf API-Upload-Endpunkt nutzen.
+        _ => plain.get(&url).send().await,
+    }
+    .map_err(|e| format!("Download nicht erreichbar: {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!("Download fehlgeschlagen: HTTP {}", res.status().as_u16()));
+    }
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let dest = free_name(&dir, &name);
+    // Erst .part, dann umbenennen: ein abgebrochener Download liegt nie als fertige Datei da.
+    let mut part = dest.clone().into_os_string();
+    part.push(".part");
+    let result = async {
+        let mut f = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut res = res;
+        while let Some(chunk) = res.chunk().await.map_err(|e| format!("Download abgebrochen: {e}"))? {
+            f.write_all(&chunk).map_err(|e| e.to_string())?;
+        }
+        f.sync_all().map_err(|e| e.to_string())?;
+        std::fs::rename(&part, &dest).map_err(|e| e.to_string())
+    }
+    .await;
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&part);
+        return Err(e);
+    }
+    Ok(dest.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -1201,6 +1276,19 @@ pub fn forge_web_url(remote_url: String) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn free_name_zaehlt_hoch() {
+        let dir = std::env::temp_dir().join(format!("ocui-free-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(super::free_name(&dir, "a.dmg"), dir.join("a.dmg"));
+        std::fs::write(dir.join("a.dmg"), "").unwrap();
+        std::fs::write(dir.join("a (1).dmg"), "").unwrap();
+        assert_eq!(super::free_name(&dir, "a.dmg"), dir.join("a (2).dmg"));
+        std::fs::write(dir.join("LICENSE"), "").unwrap();
+        assert_eq!(super::free_name(&dir, "LICENSE"), dir.join("LICENSE (1)"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     use super::*;
     use serde_json::json;
 
@@ -1262,6 +1350,11 @@ mod tests {
         assert_eq!(norm_host(" https://GitLab.Firma.de/ ").unwrap(), "gitlab.firma.de");
         assert!(norm_host("evil.com/x").is_err());
         assert!(norm_host("a@b").is_err());
+        assert!(in_repo("/repos/o/r", "/repos/o/r") && in_repo("/repos/o/r/pulls?state=open", "/repos/o/r"));
+        assert!(in_repo("/repos/o/r/compare/main...x", "/repos/o/r"));
+        for p in ["/repos/o/rx/pulls", "/repos/other/r", "/user", "/repos/o/r/../../x/y", "/repos/o/r/%2E%2e/x", "/repos/o/r/..\\x"] {
+            assert!(!in_repo(p, "/repos/o/r"), "{p}");
+        }
         assert_eq!(api_base("github", "github.com"), "https://api.github.com");
         assert_eq!(api_base("github", "ghe.firma.de"), "https://ghe.firma.de/api/v3");
         assert_eq!(api_base("gitlab", "gitlab.com"), "https://gitlab.com/api/v4");
@@ -1378,12 +1471,12 @@ mod tests {
             "id": 42, "tag_name": "v1.0", "name": "Eins", "body": "<script>x</script>",
             "draft": true, "prerelease": false, "created_at": "2024-01-01T00:00:00Z", "published_at": null,
             "author": {"login": "octo"}, "html_url": "https://github.com/o/r/releases/tag/v1.0",
-            "assets": [{"name": "a.zip", "size": 10, "download_count": 3, "browser_download_url": "https://x/a.zip"}]
+            "assets": [{"name": "a.zip", "size": 10, "download_count": 3, "browser_download_url": "https://x/a.zip", "url": "https://api.github.com/repos/o/r/releases/assets/7"}]
         }));
         assert_eq!((r.id.as_str(), r.tag.as_str(), r.author.as_str()), ("42", "v1.0", "octo"));
         assert!(r.draft && r.published_at.is_none());
         assert_eq!(r.body, "<script>x</script>");
-        assert_eq!(r.assets, vec![ReleaseAsset { name: "a.zip".into(), size: 10, downloads: 3, url: "https://x/a.zip".into() }]);
+        assert_eq!(r.assets, vec![ReleaseAsset { name: "a.zip".into(), size: 10, downloads: 3, url: "https://x/a.zip".into(), api: Some("/repos/o/r/releases/assets/7".into()) }]);
 
         let r = gl_release(&json!({
             "tag_name": "v2", "name": "Zwei", "description": "Notes", "created_at": "c", "released_at": "r",

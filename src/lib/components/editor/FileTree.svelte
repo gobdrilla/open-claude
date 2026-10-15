@@ -10,7 +10,8 @@
   import { fs, type Entry } from "$lib/files";
   import { editor, open, setExpanded, renamed, removed, poll } from "$lib/editor.svelte";
   import { rows, join, dirname, type Row } from "$lib/tree";
-  import { under } from "$lib/editor.logic";
+  import { atRef, under } from "$lib/editor.logic";
+  import { sendToClaude } from "$lib/ide.svelte";
 
   let { repo }: { repo: string } = $props();
 
@@ -178,6 +179,7 @@
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content class={menuContent}>
+            <ContextItem label="An Claude" onSelect={() => sendToClaude(repo, atRef(r.path))} />
             <ContextItem label="Neue Datei" onSelect={() => create(dir, false)} />
             <ContextItem label="Neuer Ordner" onSelect={() => create(dir, true)} />
             <ContextItem label="Umbenennen" onSelect={() => rename(r)} />

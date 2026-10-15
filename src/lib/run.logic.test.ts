@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cargoConfigs, configs, dotnetRunnable, npmConfigs, parseArgs, pickDefault, profileOf, scan } from "./run.logic.ts";
+import { cargoConfigs, configs, dotnetRunnable, npmConfigs, parseArgs, pickDefault, profileOf, scan, tailText } from "./run.logic.ts";
 import { serverUrl } from "./editor.logic.ts";
 
 const labels = (c: { label: string }[]) => c.map((x) => x.label);
@@ -84,4 +84,13 @@ test("profileOf: eigene Profile, Fallback Debug", () => {
   assert.equal(profileOf(mine, "Profiling"), mine[0]);
   assert.equal(profileOf(mine, "Release").release, true);
   assert.equal(profileOf(mine, "weg").name, "Debug");
+});
+
+test("tailText: ohne ANSI, nur der Stand nach dem letzten \\r, letzte n Zeilen", () => {
+  const raw = "\x1b[32mok\x1b[0m\r\n  10%\r  50%\r 100%\x1b[K\r\n\x1b]0;titel\x07fertig\n\x1b[2Kspin\x1b[2Kdone\n\n";
+  assert.equal(tailText(raw, 10), "ok\n 100%\nfertig\ndone");
+  assert.equal(tailText(raw, 2), "fertig\ndone");
+  assert.equal(tailText("a\r\nb\r", 5), "a\nb");
+  assert.equal(tailText("", 5), "");
+  assert.equal(tailText("abc\ndef", 5, 4), "…\ndef");
 });
