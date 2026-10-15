@@ -1,7 +1,8 @@
 //! Mehrere Claude-Konten. claude kennt nur eine Anmeldung: die Tokens (macOS im Schluesselbund
 //! "Claude Code-credentials", sonst ~/.claude/.credentials.json) und `oauthAccount` in ~/.claude.json.
 //! Die App merkt sich beides je Konto und tauscht es beim Wechsel; Einstellungen und Verlauf bleiben geteilt.
-//! Gemerkte Anmeldungen liegen wie bei claude selbst: macOS im Schluesselbund, sonst als Datei (nur fuer den Nutzer lesbar).
+//! Gemerkte Anmeldungen liegen wie bei claude selbst: macOS im Schluesselbund, sonst als Datei (nur fuer den Nutzer lesbar,
+//! unter Windows zusaetzlich per DPAPI verschluesselt).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -85,7 +86,59 @@ fn kc_delete(svc: &str, acct: &str) {
     let _ = crate::quiet("security").args(["delete-generic-password", "-s", svc, "-a", acct]).stdin(Stdio::null()).output();
 }
 
-fn private_write(file: &Path, text: &str) -> Result<(), String> {
+/// Windows: gemerkte Anmeldungen per DPAPI an den Nutzer gebunden (wie der Schluesselbund auf macOS).
+/// Nur unsere Kopien; .credentials.json liest claude selbst und bleibt Klartext.
+#[cfg(windows)]
+mod dpapi {
+    use std::ffi::c_void;
+
+    #[repr(C)]
+    struct Blob {
+        len: u32,
+        data: *mut u8,
+    }
+
+    #[link(name = "crypt32")]
+    extern "system" {
+        fn CryptProtectData(i: *const Blob, desc: *const u16, ent: *const Blob, res: *const c_void, prompt: *const c_void, flags: u32, o: *mut Blob) -> i32;
+        fn CryptUnprotectData(i: *const Blob, desc: *mut *mut u16, ent: *const Blob, res: *const c_void, prompt: *const c_void, flags: u32, o: *mut Blob) -> i32;
+    }
+    extern "system" {
+        fn LocalFree(h: *mut c_void) -> *mut c_void;
+    }
+    const UI_FORBIDDEN: u32 = 0x1;
+
+    fn run(protect: bool, data: &[u8]) -> Option<Vec<u8>> {
+        let i = Blob { len: u32::try_from(data.len()).ok()?, data: data.as_ptr() as *mut u8 };
+        let mut o = Blob { len: 0, data: std::ptr::null_mut() };
+        let n = std::ptr::null();
+        // SAFETY: i zeigt auf gueltige Bytes; o wird von Windows per LocalAlloc gefuellt und unten freigegeben.
+        let ok = unsafe {
+            if protect {
+                CryptProtectData(&i, n as _, n as _, n, n, UI_FORBIDDEN, &mut o)
+            } else {
+                CryptUnprotectData(&i, std::ptr::null_mut(), n as _, n, n, UI_FORBIDDEN, &mut o)
+            }
+        };
+        if ok == 0 || o.data.is_null() {
+            return None;
+        }
+        // SAFETY: o.data/o.len stammen aus dem erfolgreichen Aufruf.
+        let v = unsafe { std::slice::from_raw_parts(o.data, o.len as usize).to_vec() };
+        unsafe { LocalFree(o.data as *mut c_void) };
+        Some(v)
+    }
+
+    pub fn protect(data: &[u8]) -> Result<Vec<u8>, String> {
+        run(true, data).ok_or_else(|| "Verschlüsseln (DPAPI) fehlgeschlagen".into())
+    }
+
+    pub fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
+        run(false, data)
+    }
+}
+
+fn private_write(file: &Path, text: &[u8]) -> Result<(), String> {
     std::fs::create_dir_all(file.parent().ok_or("kein Ordner")?).map_err(|e| e.to_string())?;
     let tmp = file.with_extension("tmp");
     {
@@ -93,7 +146,7 @@ fn private_write(file: &Path, text: &str) -> Result<(), String> {
         o.write(true).create(true).truncate(true);
         #[cfg(unix)]
         std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
-        o.open(&tmp).and_then(|mut f| f.write_all(text.as_bytes())).map_err(|e| e.to_string())?;
+        o.open(&tmp).and_then(|mut f| f.write_all(text)).map_err(|e| e.to_string())?;
     }
     std::fs::rename(&tmp, file).map_err(|e| e.to_string())
 }
@@ -112,7 +165,7 @@ fn creds_write(p: &Paths, creds: &str) -> Result<(), String> {
         let user = std::env::var("USER").unwrap_or_default();
         return kc_write(CLAUDE_SVC, &user, creds);
     }
-    private_write(&p.config.join(".credentials.json"), creds)
+    private_write(&p.config.join(".credentials.json"), creds.as_bytes())
 }
 
 /// Mit CLAUDE_CONFIG_DIR liegt .claude.json dort, sonst im Home.
@@ -155,12 +208,22 @@ fn index(p: &Paths) -> Vec<Account> {
 }
 
 fn index_write(p: &Paths, list: &[Account]) -> Result<(), String> {
-    private_write(&p.own.join("index.json"), &serde_json::to_string_pretty(list).map_err(|e| e.to_string())?)
+    private_write(&p.own.join("index.json"), serde_json::to_string_pretty(list).map_err(|e| e.to_string())?.as_bytes())
 }
 
 fn stored_read(p: &Paths, email: &str) -> Option<Login> {
-    let text = if p.keychain { kc_read(OWN_SVC, Some(email))? } else { std::fs::read_to_string(p.own.join(format!("{email}.json"))).ok()? };
-    serde_json::from_str(&text).ok()
+    if p.keychain {
+        return serde_json::from_str(&kc_read(OWN_SVC, Some(email))?).ok();
+    }
+    let raw = std::fs::read(p.own.join(format!("{email}.json"))).ok()?;
+    // Klartext: Altbestand vor der Verschluesselung (bzw. nicht Windows); wird beim naechsten Merken verschluesselt.
+    if let Ok(l) = serde_json::from_slice(&raw) {
+        return Some(l);
+    }
+    #[cfg(windows)]
+    return serde_json::from_slice(&dpapi::unprotect(&raw)?).ok();
+    #[cfg(not(windows))]
+    None
 }
 
 fn stored_write(p: &Paths, email: &str, l: &Login) -> Result<(), String> {
@@ -168,7 +231,9 @@ fn stored_write(p: &Paths, email: &str, l: &Login) -> Result<(), String> {
     if p.keychain {
         return kc_write(OWN_SVC, email, &text);
     }
-    private_write(&p.own.join(format!("{email}.json")), &text)
+    #[cfg(windows)]
+    let text = dpapi::protect(text.as_bytes())?;
+    private_write(&p.own.join(format!("{email}.json")), text.as_ref())
 }
 
 /// Aktuelle Anmeldung merken (nach dem Anmelden, vor jedem Wechsel: claude erneuert Tokens selbst).
@@ -286,6 +351,27 @@ mod tests {
         assert_eq!(index(&p).len(), 1);
         assert!(switch(&p, "a@x.de").is_err());
         assert!(switch(&p, "../x").is_err());
+        let _ = std::fs::remove_dir_all(&p.home);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn gemerkte_tokens_per_dpapi() {
+        let p = tmp("dpapi");
+        login_as(&p, "a@x.de", "TOKEN-GEHEIM");
+        save(&p).unwrap();
+        let file = p.own.join("a@x.de.json");
+        let raw = std::fs::read(&file).unwrap();
+        assert!(!String::from_utf8_lossy(&raw).contains("TOKEN-GEHEIM"));
+        assert_eq!(stored_read(&p, "a@x.de").unwrap().creds, "TOKEN-GEHEIM");
+        // .credentials.json liest claude selbst: bleibt Klartext
+        switch(&p, "a@x.de").unwrap();
+        assert_eq!(std::fs::read_to_string(p.config.join(".credentials.json")).unwrap(), "TOKEN-GEHEIM");
+        // Altbestand im Klartext bleibt lesbar
+        std::fs::write(&file, r#"{"creds":"ALT","oauth":{}}"#).unwrap();
+        assert_eq!(stored_read(&p, "a@x.de").unwrap().creds, "ALT");
+        std::fs::write(&file, b"kaputt").unwrap();
+        assert!(stored_read(&p, "a@x.de").is_none());
         let _ = std::fs::remove_dir_all(&p.home);
     }
 
