@@ -7,7 +7,7 @@ import { RUN, activate, groupOf, mainGroup, splitAt } from "./dock.ts";
 import { fs, ptyClose, ptyWrite, runMissing, runStart as startCmd } from "./files.ts";
 import { confirm } from "./confirm.svelte.ts";
 import { serverUrl } from "./editor.logic.ts";
-import { configs, markers, pickDefault, profileOf, scan, tailText, type RunConfig } from "./run.logic.ts";
+import { configs, customConfig, markers, pickDefault, profileOf, scan, tailText, type RunConfig } from "./run.logic.ts";
 import { codeBlock, failuresReport } from "./testing.logic.ts";
 import { editor, peek, setLayout } from "./editor.svelte.ts";
 import { failedItems } from "./testing.svelte.ts";
@@ -93,8 +93,11 @@ async function scanConfigs(repo: string) {
   run(repo).configs = configs(files, Object.fromEntries(ms.map((f, i) => [f, texts[i]])));
 }
 
+/** Erkannte plus eigene Startziele. */
+export const allConfigs = (repo: string) => [...run(repo).configs, ...editor(repo).custom.map(customConfig)];
+
 /** Gewaehltes Ziel bzw. die Vorauswahl. */
-export const chosen = (repo: string) => pickDefault(run(repo).configs, editor(repo).run, editor(repo).active);
+export const chosen = (repo: string) => pickDefault(allConfigs(repo), editor(repo).run, editor(repo).active);
 
 /** Sink fuer RunPane setzen (null = abgehaengt); liefert die bisherige Ausgabe zum Nachspielen. */
 export function attach(repo: string, sink: Sink | null): Uint8Array[] {

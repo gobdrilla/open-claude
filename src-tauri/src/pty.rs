@@ -337,9 +337,17 @@ fn plugin_dirs(prev: Option<String>, mods: impl Iterator<Item = std::path::PathB
 #[derive(serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Target {
-    Npm { pm: String, script: String },
+    /// args hinter dem Script, z. B. ["dev"] fuer `npm run tauri dev`.
+    Npm {
+        pm: String,
+        script: String,
+        #[serde(default)]
+        args: Vec<String>,
+    },
     Dotnet { watch: bool },
     Cargo { bin: Option<String> },
+    /// Eigenes Startziel: Befehlszeile, die der Nutzer selbst eingetragen hat; laeuft unveraendert in der Login-Shell.
+    Shell { command: String },
 }
 
 /// Build-Profil der Run-Leiste: release haengt --release (cargo) bzw. -c Release (dotnet) an, args kommen hinten dran.
@@ -361,7 +369,8 @@ fn name_ok(s: &str) -> bool {
     !s.is_empty() && !s.starts_with('-') && s.chars().all(|c| c.is_ascii_alphanumeric() || ":_.-".contains(c))
 }
 
-/// Kommando der Run-Leiste in cwd. Nur feste Woerter und gepruefte Namen erreichen die Shell, darum bleibt es
+/// Kommando der Run-Leiste in cwd. Nur feste Woerter und gepruefte Namen erreichen die Shell (ausser Target::Shell,
+/// dessen Befehl der Nutzer selbst getippt hat; Windows: pwsh bzw. PowerShell statt Login-Shell), darum bleibt es
 /// ein Shell-String (Login-Shell wie das Terminal, auch fish). Prueft, dass das Ziel im Ordner existiert.
 /// `ready` (nur Windows): Toolchain im App-PATH gefunden (`toolchain_ready`). `install`: der Nutzer hat der
 /// Installation fehlender Teile (`missing`) zugestimmt; ohne wird nur gestartet, ein Fehler landet in der Ausgabe.
@@ -374,10 +383,24 @@ fn run_command(
     ready: bool,
     install: bool,
 ) -> Result<(String, Vec<String>), String> {
+    if let Target::Shell { command } = t {
+        let command = command.trim();
+        if command.is_empty() {
+            return Err("Leerer Befehl".into());
+        }
+        if windows {
+            // pwsh (7+) kennt && und || wie die Login-Shell; Windows PowerShell 5.1 nur als Rueckfall.
+            let ps = if crate::deps::on_path("pwsh") { "pwsh" } else { "powershell" };
+            let args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command].map(String::from).to_vec();
+            return Ok((ps.into(), args));
+        }
+        let sh = env("SHELL").filter(|s| !s.trim().is_empty()).unwrap_or_else(|| UNIX_SHELL.into());
+        return Ok((sh, vec!["-lic".into(), command.into()]));
+    }
     let npm_install = install && matches!(t, Target::Npm { .. }) && !has_node_modules(cwd);
     let mut words: Vec<&str> = match t {
-        Target::Npm { pm, script } => {
-            if !["npm", "pnpm", "yarn", "bun"].contains(&pm.as_str()) || !name_ok(script) {
+        Target::Npm { pm, script, args } => {
+            if !["npm", "pnpm", "yarn", "bun"].contains(&pm.as_str()) || !name_ok(script) || !args.iter().all(|a| arg_ok(a)) {
                 return Err(format!("Nicht erlaubt: {pm} run {script}"));
             }
             let pkg = std::fs::read_to_string(cwd.join("package.json"))
@@ -388,7 +411,9 @@ fn run_command(
             if !has {
                 return Err(format!("Script „{script}“ fehlt in package.json"));
             }
-            vec![pm, "run", script]
+            let mut w = vec![pm.as_str(), "run", script];
+            w.extend(args.iter().map(String::as_str));
+            w
         }
         Target::Dotnet { watch } => {
             // Ohne --project: dotnet nimmt die eine Projektdatei im Ordner, kein Pfad in der Shell.
@@ -415,13 +440,14 @@ fn run_command(
             }
             w
         }
+        Target::Shell { .. } => unreachable!("oben behandelt"),
     };
     if p.release {
         match t {
             Target::Cargo { .. } => words.push("--release"),
             Target::Dotnet { .. } => words.extend(["-c", "Release"]),
             // npm kennt kein Release, das Script ist das Profil.
-            Target::Npm { .. } => {}
+            _ => {}
         }
     }
     if let Some(a) = p.args.iter().find(|a| !arg_ok(a)) {
@@ -440,7 +466,9 @@ fn run_command(
             if npm_install {
                 ps += &format!("& {pm} install; if (-not $?) {{ exit 1 }}; ");
             }
-            ps += &format!("& {run}; exit $LASTEXITCODE");
+            // PowerShell: "a,b" waere ein Array, "@x" Splatting. arg_ok laesst kein ' zu, Quoten reicht.
+            let quoted: Vec<String> = words.iter().map(|w| if w.contains([',', '@']) { format!("'{w}'") } else { (*w).to_string() }).collect();
+            ps += &format!("& {}; exit $LASTEXITCODE", quoted.join(" "));
             let args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps].map(String::from).to_vec();
             return Ok(("powershell".into(), args));
         }
@@ -562,7 +590,7 @@ fn setup_unix(t: &Target, cwd: &Path, install: bool) -> String {
             };
             format!("if ! command -v cargo >/dev/null 2>&1 && [ -f \"$HOME/.cargo/env\" ]; then . \"$HOME/.cargo/env\"; fi; {get}")
         }
-        Target::Npm { .. } => String::new(),
+        _ => String::new(),
     }
 }
 
@@ -595,6 +623,7 @@ fn setup_windows(t: &Target, cwd: &Path, install: bool) -> String {
             }
             ps
         }
+        Target::Shell { .. } => String::new(),
     }
 }
 
@@ -603,6 +632,7 @@ fn toolchain_ready(t: &Target, cwd: &Path) -> bool {
     match t {
         Target::Npm { pm, .. } => crate::deps::on_path("npm") && crate::deps::on_path(pm),
         Target::Cargo { .. } => crate::deps::on_path("cargo"),
+        Target::Shell { .. } => true,
         // Nur das System-dotnet: ein nutzerlokales braucht den PowerShell-Vorspann fuer den PATH.
         Target::Dotnet { .. } => crate::quiet("dotnet")
             .arg("--version")
@@ -634,7 +664,7 @@ fn tool_ok(cwd: &Path, name: &str) -> bool {
         _ => "false",
     };
     let sh = std::env::var("SHELL").ok().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| UNIX_SHELL.into());
-    run(std::process::Command::new(sh).args(["-lic", &format!("sh -c '{probe}'")]))
+    run(crate::quiet(&sh).args(["-lic", &format!("sh -c '{probe}'")]))
 }
 
 /// `claude auth login` in einer PTY: oeffnet die Anmeldung im Browser, fragt evtl. nach einem Code. Ausgabe kommt
@@ -683,7 +713,7 @@ pub fn run_start(
         // Vite, CRA & Co. oeffnen sonst zusaetzlich den Browser.
         Target::Npm { .. } => &[("BROWSER", "none")],
         Target::Dotnet { .. } => &[("DOTNET_CLI_UI_LANGUAGE", "en")],
-        Target::Cargo { .. } => &[],
+        Target::Cargo { .. } | Target::Shell { .. } => &[],
     };
     spawn(app, &ptys, id, &cwd.to_string_lossy(), &program, args, 120, 30, env, true, out)
 }
@@ -1053,7 +1083,7 @@ mod tests {
     #[test]
     fn run_kommando_nur_feste_werte() {
         let env = |k: &str| (k == "SHELL").then(|| "/bin/fish".to_string());
-        let npm = |pm: &str, s: &str| Target::Npm { pm: pm.into(), script: s.into() };
+        let npm = |pm: &str, s: &str| Target::Npm { pm: pm.into(), script: s.into(), args: vec![] };
         let d = tmp("npm", &[("package.json", r#"{"scripts":{"dev":"vite","tauri:dev":"x","-x":"y"}}"#)]);
         // Ohne node_modules wird vorher installiert
         assert_eq!(run_command(&Profile::default(), false, &npm("pnpm", "dev"), &d, env, true, true).unwrap().1, ["-lic", "pnpm install && pnpm run dev"]);
@@ -1071,7 +1101,21 @@ mod tests {
             assert!(run_command(&Profile::default(), true, &npm("npm", s), &d, env, true, false).is_err(), "{s}");
         }
         assert!(run_command(&Profile::default(), false, &npm("npm", "dev"), &d.join("fehlt"), env, true, false).is_err());
+        // Script-Argumente (tauri dev) nur mit erlaubten Zeichen.
+        let with = |a: &str| Target::Npm { pm: "npm".into(), script: "dev".into(), args: vec![a.into()] };
+        assert_eq!(run_command(&Profile::default(), false, &with("--host"), &d, env, true, false).unwrap().1, ["-lic", "npm run dev --host"]);
+        assert!(run_command(&Profile::default(), false, &with("x;y"), &d, env, true, false).is_err());
         let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn run_eigener_befehl() {
+        let env = |k: &str| (k == "SHELL").then(|| "/bin/zsh".to_string());
+        let sh = |c: &str| Target::Shell { command: c.into() };
+        let d = std::env::temp_dir();
+        assert_eq!(run_command(&Profile::default(), false, &sh(" npm run tauri dev "), &d, env, true, false).unwrap(), ("/bin/zsh".into(), vec!["-lic".into(), "npm run tauri dev".into()]));
+        assert!(["pwsh", "powershell"].contains(&run_command(&Profile::default(), true, &sh("cargo tauri dev"), &d, env, true, false).unwrap().0.as_str()));
+        assert!(run_command(&Profile::default(), false, &sh("  "), &d, env, true, false).is_err());
     }
 
     #[test]
@@ -1137,7 +1181,7 @@ mod tests {
         let m = missing(&dn, &p.join("app"), false, |_| false);
         assert_eq!((m[0].name.as_str(), m[0].detail.as_str()), (".NET SDK 8.0.404", "offizielles dotnet-install-Skript von dot.net · nach ~/.dotnet"));
         let n = tmp("node", &[("package.json", r#"{"scripts":{"dev":"vite"}}"#)]);
-        let npm = Target::Npm { pm: "pnpm".into(), script: "dev".into() };
+        let npm = Target::Npm { pm: "pnpm".into(), script: "dev".into(), args: vec![] };
         assert_eq!(missing(&npm, &n, false, |_| false)[0].detail, "aus package.json per pnpm install · nach node_modules");
         assert_eq!(missing(&npm, &n, true, |c| c == "npm").len(), 2);
         assert_eq!(missing(&npm, &n, true, |_| false)[0].name, "Node.js LTS");

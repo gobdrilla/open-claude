@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cargoConfigs, configs, dotnetRunnable, npmConfigs, parseArgs, pickDefault, profileOf, scan, tailText } from "./run.logic.ts";
+import { cargoConfigs, configs, customConfig, dotnetRunnable, npmConfigs, parseArgs, pickDefault, profileOf, scan, tailText } from "./run.logic.ts";
 import { serverUrl } from "./editor.logic.ts";
 
 const labels = (c: { label: string }[]) => c.map((x) => x.label);
@@ -13,7 +13,7 @@ test("npmConfigs: dev, start, serve, watch zuerst, Hooks und unsichere Namen fal
   assert.deepEqual(npmConfigs(pkg, "apps/web", "pnpm")[0], {
     label: "pnpm run dev (apps/web)",
     dir: "apps/web",
-    target: { kind: "npm", pm: "pnpm", script: "dev" },
+    target: { kind: "npm", pm: "pnpm", script: "dev", args: [] },
   });
   assert.deepEqual(npmConfigs("kaputt", "", "npm"), []);
   assert.deepEqual(npmConfigs('{"scripts":null}', "", "npm"), []);
@@ -48,6 +48,27 @@ test("configs: Paketmanager nach Lockfile aufwaerts, dotnet nur bei einer Projek
     "rs/Cargo.toml": "[package]",
   };
   assert.deepEqual(labels(configs(files, texts)), ["pnpm run dev (apps/web)", "dotnet run (a)", "dotnet watch (a)", "cargo run (rs)"]);
+});
+
+test("configs: Tauri-App startet per tauri dev statt cargo run (weisses Fenster)", () => {
+  const files = ["package-lock.json", "package.json", "src-tauri/Cargo.toml", "src-tauri/tauri.conf.json", "src-tauri/src/main.rs", "src-tauri/src/bin/sh.rs"];
+  const texts = { "package.json": '{"scripts":{"dev":"vite","tauri":"tauri"}}', "src-tauri/Cargo.toml": "[package]" };
+  const cfgs = configs(files, texts);
+  assert.deepEqual(labels(cfgs), ["npm run dev", "npm run tauri dev", "cargo run --bin sh (src-tauri)"]);
+  assert.deepEqual(cfgs[1].target, { kind: "npm", pm: "npm", script: "tauri", args: ["dev"] });
+  assert.equal(pickDefault(cfgs, null, "src/App.svelte")?.label, "npm run tauri dev");
+  // Ohne tauri-Script bleibt cargo run (besser als nichts).
+  assert.ok(labels(configs(files, { ...texts, "package.json": '{"scripts":{"dev":"vite"}}' })).includes("cargo run (src-tauri)"));
+  // Ohne tauri.conf.json ist es kein Tauri-Crate.
+  assert.ok(labels(configs(files.filter((f) => !f.endsWith("tauri.conf.json")), texts)).includes("cargo run (src-tauri)"));
+});
+
+test("customConfig: eigenes Startziel als Shell-Befehl", () => {
+  assert.deepEqual(customConfig({ name: "App", dir: "web", command: "npm run tauri dev" }), {
+    label: "App",
+    dir: "web",
+    target: { kind: "shell", command: "npm run tauri dev" },
+  });
 });
 
 test("pickDefault: zuletzt gewaehlt, Naehe zur Datei, Fallbacks", () => {

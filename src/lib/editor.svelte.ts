@@ -31,7 +31,7 @@ import {
 import { KONFLIKT, fs, isBinaryImage, previewAllow } from "./files.ts";
 import { moved, pushNav, under, verdict, type Spot } from "./editor.logic.ts";
 import { pushRunState, redetect, run as runOf, runStop } from "./run.svelte.ts";
-import { BUILTIN, type Profile } from "./run.logic.ts";
+import { BUILTIN, type CustomRun, type Profile } from "./run.logic.ts";
 import { rescan, testCancel } from "./testing.svelte.ts";
 // Zirkulaer (lsp.svelte.ts nutzt open/peek/setText): beide Seiten greifen erst zur Laufzeit zu, nie auf Modulebene.
 import { closed, disk, stop as stopLsp } from "./lsp.svelte.ts";
@@ -81,6 +81,8 @@ export type RepoEditor = {
   /** Gewaehltes Build-Profil (Profile.name) und die eigenen Profile dieses Projekts. */
   profile: string;
   profiles: Profile[];
+  /** Eigene Startziele dieses Projekts (Befehlszeile), zusaetzlich zu den erkannten. */
+  custom: CustomRun[];
   /** Aufgeklappte Ordner im Baum. */
   expanded: string[];
   /** mtime der beobachteten Ordner ("" = Projektordner + expanded). Aendert sich ein Wert, liest der Baum den Ordner neu. */
@@ -119,8 +121,8 @@ const NEVER = "\0";
 
 function persist(s: RepoEditor) {
   try {
-    const { layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles } = s;
-    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles }));
+    const { layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles, custom } = s;
+    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles, custom }));
   } catch {
     // Ohne localStorage gilt das Layout nur fuer diese Sitzung.
   }
@@ -211,6 +213,9 @@ export function editor(repo: string): RepoEditor {
     profile: str(p.profile) ?? "Debug",
     profiles: Array.isArray(p.profiles)
       ? p.profiles.filter((x): x is Profile => typeof x?.name === "string" && Array.isArray(x.args) && x.args.every((a: unknown) => typeof a === "string"))
+      : [],
+    custom: Array.isArray(p.custom)
+      ? p.custom.filter((x): x is CustomRun => typeof x?.name === "string" && typeof x.dir === "string" && typeof x.command === "string")
       : [],
     expanded: Array.isArray(p.expanded) ? p.expanded.filter((d) => typeof d === "string") : [],
     dirs: {},
@@ -538,6 +543,13 @@ export function setProfiles(repo: string, list: Profile[]): void {
   const s = editor(repo);
   s.profiles = list;
   if (![...BUILTIN, ...list].some((p) => p.name === s.profile)) s.profile = "Debug";
+  persist(s);
+}
+
+/** Eigene Startziele ersetzen und speichern. */
+export function setCustom(repo: string, list: CustomRun[]): void {
+  const s = editor(repo);
+  s.custom = list;
   persist(s);
 }
 

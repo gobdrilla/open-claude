@@ -20,9 +20,11 @@
   import SearchIcon from "@lucide/svelte/icons/search";
   import { tick } from "svelte";
   import BuildProfilesDialog from "./BuildProfilesDialog.svelte";
+  import RunConfigsDialog from "./RunConfigsDialog.svelte";
+  import ListPlusIcon from "@lucide/svelte/icons/list-plus";
   import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, panelPath, type PanelId } from "$lib/dock";
   import { closeTab, editor, focus, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
-  import { chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
+  import { allConfigs, chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
   import { MOD } from "$lib/editor.logic";
   import Dock, { type TabInfo } from "./Dock.svelte";
@@ -45,6 +47,7 @@
   let quick = $state(false);
   let quickInit = $state("");
   let profilesOpen = $state(false);
+  let customOpen = $state(false);
 
   // Aenderungen von aussen (claude im Terminal) nur verfolgen, solange die Ansicht sichtbar ist.
   $effect(() => watch(repo));
@@ -53,11 +56,13 @@
   $effect(() => void detect(repo));
   const r = $derived(run(repo));
   const cfg = $derived(chosen(repo));
+  const cfgs = $derived(allConfigs(repo));
   const running = $derived(r.current?.state === "running");
   const kinds: [RunConfig["target"]["kind"], string][] = [
     ["npm", "npm-Scripts"],
     ["dotnet", ".NET"],
     ["cargo", "Cargo"],
+    ["shell", "Eigene"],
   ];
 
   function info(id: PanelId): TabInfo {
@@ -178,14 +183,22 @@
         value={cfg?.label ?? ""}
         groups={kinds.map(([kind, label]) => ({
           label,
-          options: r.configs.filter((c) => c.target.kind === kind).map((c) => [c.label, c.label] as const),
+          options: cfgs.filter((c) => c.target.kind === kind).map((c) => [c.label, c.label] as const),
         }))}
         placeholder="Nichts zum Starten"
-        disabled={!r.configs.length}
+        disabled={!cfgs.length}
         aria-label="Startziel"
         title="Startziel (F5 startet)"
         onchange={(v) => setRun(repo, v)}
       />
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        class="text-muted-foreground"
+        title="Eigene Startziele"
+        aria-label="Eigene Startziele"
+        onclick={() => (customOpen = true)}><ListPlusIcon /></Button
+      >
       <Select
         class="h-5 max-w-32 border-0 bg-transparent text-[11px]"
         value={s.profile}
@@ -257,3 +270,4 @@
 </div>
 
 <BuildProfilesDialog bind:open={profilesOpen} {repo} />
+<RunConfigsDialog bind:open={customOpen} {repo} />

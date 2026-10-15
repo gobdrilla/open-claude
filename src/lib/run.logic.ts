@@ -2,9 +2,16 @@
 import { LOCKFILES, ancestors, packageManager, plain } from "./editor.logic.ts";
 
 /** Spiegel von pty::Target. */
-export type Target = { kind: "npm"; pm: string; script: string } | { kind: "dotnet"; watch: boolean } | { kind: "cargo"; bin: string | null };
+export type Target =
+  | { kind: "npm"; pm: string; script: string; args?: string[] }
+  | { kind: "dotnet"; watch: boolean }
+  | { kind: "cargo"; bin: string | null }
+  | { kind: "shell"; command: string };
 /** label ist eindeutig und dient als gespeicherte Auswahl. dir relativ zum Repo, "" = Projektordner. */
 export type RunConfig = { label: string; dir: string; target: Target };
+/** Eigenes Startziel des Nutzers (pro Projekt gespeichert): Befehlszeile in der Login-Shell. */
+export type CustomRun = { name: string; dir: string; command: string };
+export const customConfig = (c: CustomRun): RunConfig => ({ label: c.name, dir: c.dir, target: { kind: "shell", command: c.command } });
 
 const dirOf = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")));
 const at = (dir: string, f: string) => (dir ? `${dir}/${f}` : f);
@@ -32,9 +39,13 @@ export function npmConfigs(pkg: string, dir: string, pm: string): RunConfig[] {
   };
   const names = Object.keys(all).filter((n) => typeof all[n] === "string" && nameOk(n) && !hook(n));
   const rank = (n: string) => (FIRST.includes(n) ? FIRST.indexOf(n) : FIRST.length);
+  // "tauri" ist die Tauri-CLI: ohne Unterbefehl zeigt sie nur die Hilfe, gestartet wird mit "tauri dev".
   return names
     .sort((a, b) => rank(a) - rank(b))
-    .map((script) => ({ label: `${pm} run ${script}${where(dir)}`, dir, target: { kind: "npm", pm, script } }));
+    .map((script) => {
+      const args = script === "tauri" ? ["dev"] : [];
+      return { label: `${pm} run ${[script, ...args].join(" ")}${where(dir)}`, dir, target: { kind: "npm", pm, script, args } };
+    });
 }
 
 /** Startbares .NET-Projekt: Exe/WinExe oder Web-/Worker-/Blazor-SDK, nie ein Testprojekt. */
@@ -56,6 +67,8 @@ export function cargoConfigs(toml: string, dir: string, bins: string[]): RunConf
 const PKG = /(^|\/)package\.json$/;
 const PROJ = /\.[cf]sproj$/;
 const CARGO = /(^|\/)Cargo\.toml$/;
+const TAURI_CONF = ["tauri.conf.json", "tauri.conf.json5", "Tauri.toml"];
+const isTauriDev = (c: RunConfig) => c.target.kind === "npm" && c.target.script === "tauri";
 
 /** ponytail: hoechstens 200 Marker lesen; reicht fuer Monorepos, sonst Obergrenze hochsetzen. */
 export const markers = (files: string[]) =>
@@ -88,7 +101,11 @@ export function configs(files: string[], texts: Record<string, string>): RunConf
       const dir = dirOf(f);
       const pre = dir ? `${dir}/` : "";
       const bins = files.filter((x) => x.startsWith(pre)).map((x) => x.slice(pre.length));
-      return cargoConfigs(texts[f], dir, bins);
+      const cfgs = cargoConfigs(texts[f], dir, bins);
+      // Tauri-App: cargo run zeigt nur ein weisses Fenster (kein Frontend-Dev-Server). Gibt es "tauri dev" im
+      // Paket darueber, faellt die App selbst weg; Hilfs-Binaries (--bin) bleiben.
+      const tauri = TAURI_CONF.some((c) => has.has(at(dir, c))) && npm.some((c) => isTauriDev(c) && ancestors(f).includes(c.dir));
+      return tauri ? cfgs.filter((c) => c.target.kind !== "cargo" || c.target.bin !== null) : cfgs;
     });
   return [...npm, ...dotnet, ...cargo];
 }
@@ -102,10 +119,11 @@ export function devConfig(cfgs: RunConfig[], path: string): RunConfig | null {
   return null;
 }
 
-/** Vorauswahl: zuletzt gewaehlt, sonst Dev-Server zur aktiven Datei, sonst erstes dotnet-, cargo-, irgendein Ziel. */
+/** Vorauswahl: zuletzt gewaehlt, sonst Tauri-App, sonst Dev-Server zur aktiven Datei, sonst erstes dotnet-, cargo-, irgendein Ziel. */
 export function pickDefault(cfgs: RunConfig[], last: string | null, activeFile: string | null): RunConfig | null {
   return (
     cfgs.find((c) => c.label === last) ??
+    cfgs.find(isTauriDev) ??
     devConfig(cfgs, activeFile ?? "") ??
     cfgs.find((c) => c.target.kind === "dotnet") ??
     cfgs.find((c) => c.target.kind === "cargo") ??
