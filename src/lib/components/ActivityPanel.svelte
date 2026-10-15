@@ -130,6 +130,7 @@
     aborted: ["⊘", "text-muted-foreground", "abgebrochen"],
     open: ["○", "text-muted-foreground/60", "offen"],
     killed: ["⊘", "text-muted-foreground", "abgebrochen"],
+    paused: ["⏸", "text-muted-foreground", "pausiert"],
   };
   const status = (s: string) => STATUS[s] ?? ["○", "text-muted-foreground", s];
 

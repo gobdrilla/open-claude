@@ -205,15 +205,27 @@ struct State {
     imgs: Vec<(ImgRef, Img)>,
     prompts: Vec<Prompt>,
     sums: HashMap<PathBuf, Sum>,
-    done: HashMap<String, Run>,
-    /// agentId -> (Zeitpunkt, Endstatus) aus dem Haupttranskript, siehe ended()
+    /// Fertige Runs mit mtime ihrer Ergebnis-JSON: schreibt Claude sie neu (Resume), wird neu gelesen.
+    done: HashMap<String, (Option<std::time::SystemTime>, Run)>,
+    /// agentId bzw. Task-ID -> (Zeitpunkt, Endstatus) aus dem Haupttranskript, siehe ended()
     ended: HashMap<String, (u64, String)>,
+    /// runId -> letzter Start per Workflow-Tool aus dem Haupttranskript, siehe launch()
+    launches: HashMap<String, Launch>,
     /// Letzter Zugriff, fuer die Verdraengung im Cache
     used: u64,
 }
 
 /// Cache pro Session-ID: Tab-Wechsel liest nichts neu, Bild-ids bleiben je Session stabil.
 type Cache = HashMap<String, State>;
+
+/// Start eines Workflows (toolUseResult des Workflow-Tools). Ein Neustart per scriptPath legt kein eigenes
+/// <name>-<runId>.js an, Name und Phasen kommen dann von hier; die Task-ID verraet Stopp und Ende.
+#[derive(Clone, Default)]
+struct Launch {
+    task: String,
+    name: String,
+    script: PathBuf,
+}
 static CACHE: LazyLock<Mutex<Cache>> = LazyLock::new(Default::default);
 
 const IMAGE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -331,6 +343,9 @@ fn scan_images(st: &mut State, path: &Path) {
         if let Some((id, at, status)) = ended(line) {
             st.ended.insert(id, (at, status));
         }
+        if let Some((run, l)) = launch(line) {
+            st.launches.insert(run, l);
+        }
         if line.contains("\"name\":\"Read\"") {
             if let Ok(v) = serde_json::from_str::<Value>(line) {
                 let map = st.reads.entry(path.to_path_buf()).or_default();
@@ -380,7 +395,20 @@ fn scan_images(st: &mut State, path: &Path) {
     });
 }
 
-/// Ende eines Agent-Tool-Agents: <task-notification> (Hintergrund) oder toolUseResult mit agentId (Vordergrund).
+/// runId -> Launch aus dem toolUseResult des Workflow-Tools (auch beim Resume: gleiche runId, neue Task-ID).
+fn launch(line: &str) -> Option<(String, Launch)> {
+    if !line.contains("\"runId\":\"wf_") || !line.contains("\"toolUseResult\"") {
+        return None;
+    }
+    let v: Value = serde_json::from_str(line).ok()?;
+    let r = v.get("toolUseResult")?;
+    let run = r.get("runId")?.as_str()?.to_string();
+    let l = Launch { task: str_of(r, "taskId").into(), name: str_of(r, "workflowName").into(), script: str_of(r, "scriptPath").into() };
+    Some((run, l))
+}
+
+/// Ende eines Agent-Tool-Agents oder Workflows: <task-notification> (Hintergrund), toolUseResult mit agentId
+/// (Vordergrund) oder TaskStop (keine Notification beim Stoppen).
 fn ended(line: &str) -> Option<(String, u64, String)> {
     let note = line.contains("\"content\":\"<task-notification>");
     if !note && !line.contains("\"toolUseResult\"") {
@@ -392,7 +420,10 @@ fn ended(line: &str) -> Option<(String, u64, String)> {
         (tag("task-id")?, tag("status")?)
     } else {
         let r = v.get("toolUseResult")?;
-        (r.get("agentId")?.as_str()?.to_string(), str_of(r, "status").to_string())
+        match r.get("task_id").and_then(Value::as_str) {
+            Some(t) if str_of(r, "message").starts_with("Successfully stopped") => (t.to_string(), "killed".to_string()),
+            _ => (r.get("agentId")?.as_str()?.to_string(), str_of(r, "status").to_string()),
+        }
     };
     let status = match status.as_str() {
         "completed" => "done",
@@ -629,6 +660,9 @@ fn phases_of(script: &str) -> Vec<(String, u32)> {
 /// dir = subagents/workflows/<id> mit den Agent-Transkripten (fuer den vollen Auftrag).
 fn finished(v: &Value, id: &str, dir: &Path) -> Run {
     let arr = |k: &str| v.get(k).and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    // Claude kennt start (wartet) und progress; in einem gestoppten/pausierten/fehlgeschlagenen Run sind das
+    // Agents, die nie fertig wurden, nicht laufende.
+    let over = str_of(v, "status") != "running";
     let agents = arr("workflowProgress")
         .iter()
         .filter(|a| str_of(a, "type") == "workflow_agent")
@@ -644,8 +678,11 @@ fn finished(v: &Value, id: &str, dir: &Path) -> Run {
                 label: str_of(a, "label").into(),
                 phase: str_of(a, "phaseTitle").into(),
                 state: match str_of(a, "state") {
-                    "" => "done",
-                    s => s,
+                    "" | "done" => "done",
+                    "error" | "failed" => "error",
+                    _ if over => "aborted",
+                    "start" => "open",
+                    _ => "running",
                 }
                 .into(),
                 started,
@@ -682,12 +719,14 @@ fn finished(v: &Value, id: &str, dir: &Path) -> Run {
 }
 
 /// Run aus journal.jsonl + Agent-Transkripten; alive = startedAt der lebenden Session mit dieser SID.
-fn live(st: &mut State, dir: &Path, scripts: &[PathBuf], id: &str, alive: Option<u64>, now: u64) -> Run {
+/// `launch`: Start aus dem Transkript und ob seine Task schon beendet (gestoppt, fertig) gemeldet ist.
+fn live(st: &mut State, dir: &Path, scripts: &[PathBuf], id: &str, alive: Option<u64>, now: u64, launch: Option<(&Launch, bool)>) -> Run {
     let journal = dir.join("journal.jsonl");
     let created = fs::metadata(&journal).and_then(|m| m.created()).map(ms).ok();
     // Geaendert statt angelegt: ein fortgesetzter Run (z. B. nach dem Session-Limit) laeuft in einem aelteren Journal weiter.
     let modified = fs::metadata(&journal).and_then(|m| m.modified()).map(ms).ok();
-    let running = alive.is_some_and(|s| modified.is_none_or(|c| s <= c));
+    // Gestoppt in derselben, weiter lebenden Session: sonst blieben Agents ohne result ewig "laeuft".
+    let running = alive.is_some_and(|s| modified.is_none_or(|c| s <= c)) && !launch.is_some_and(|l| l.1);
     let mut agents: Vec<(String, Agent)> = Vec::new();
     for line in fs::read_to_string(&journal).unwrap_or_default().lines() {
         let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
@@ -717,8 +756,16 @@ fn live(st: &mut State, dir: &Path, scripts: &[PathBuf], id: &str, alive: Option
             a.result = r.map(|r| trunc(&r.as_str().map_or_else(|| r.to_string(), Into::into), 2000));
         }
     }
-    // Nach /clear liegt das Skript evtl. nur bei der frueheren Session
-    let (name, meta) = scripts.iter().map(|d| script_meta(d, id)).find(|m| m.0.is_some()).unwrap_or_default();
+    // Nach /clear liegt das Skript evtl. nur bei der frueheren Session; Neustart per scriptPath: Skript des Starts.
+    let (name, meta) = scripts
+        .iter()
+        .map(|d| script_meta(d, id))
+        .find(|m| m.0.is_some())
+        .or_else(|| {
+            let l = launch?.0;
+            Some((Some(l.name.clone()).filter(|n| !n.is_empty()), phases_of(&fs::read_to_string(&l.script).unwrap_or_default())))
+        })
+        .unwrap_or_default();
     let (mut phases, planned): (Vec<_>, Vec<_>) = meta.into_iter().unzip();
     let mut agents: Vec<Agent> = agents.into_iter().map(|x| x.1).collect();
     for a in &mut agents {
@@ -856,19 +903,24 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
         for e in fs::read_dir(base.join("subagents/workflows")).into_iter().flatten().flatten() {
             let Some(id) = e.file_name().to_str().filter(|n| n.starts_with("wf_")).map(String::from) else { continue };
             let json = base.join("workflows").join(format!("{id}.json"));
+            let launch = st.launches.get(&id).cloned();
+            let over = launch.as_ref().map(|l| st.ended.contains_key(&l.task));
+            let lt = launch.as_ref().zip(over);
             // Fortgesetzt: Journal neuer als das Ergebnis, die alte JSON gilt erst wieder, wenn der Run sie neu schreibt.
+            // Ist der letzte Start laut Transkript schon beendet, war es nur ein nachgeschriebenes result.
             let mtime = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
-            let r = if matches!((mtime(&e.path().join("journal.jsonl")), mtime(&json)), (Some(j), Some(w)) if j > w) {
+            let wm = mtime(&json);
+            let r = if over != Some(true) && matches!((mtime(&e.path().join("journal.jsonl")), wm), (Some(j), Some(w)) if j > w) {
                 st.done.remove(&id);
-                live(st, &e.path(), &scripts, &id, alive, now)
-            } else if let Some(r) = st.done.get(&id) {
+                live(st, &e.path(), &scripts, &id, alive, now, lt)
+            } else if let Some((_, r)) = st.done.get(&id).filter(|d| d.0 == wm) {
                 r.clone()
             } else if let Some(v) = fs::read_to_string(&json).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
                 let r = finished(&v, &id, &e.path());
-                st.done.insert(id, r.clone());
+                st.done.insert(id, (wm, r.clone()));
                 r
             } else {
-                live(st, &e.path(), &scripts, &id, alive, now)
+                live(st, &e.path(), &scripts, &id, alive, now, lt)
             };
             match runs.iter_mut().find(|x| x.id == r.id) {
                 // Uebernommener Run ohne Skript: Name und Phasen aus der frueheren Session
@@ -1287,6 +1339,63 @@ mod tests {
         assert_eq!((a1.label.as_str(), a1.phase.as_str()), ("Suche", "Explore"));
         assert_eq!((a.runs.len(), a.runs[0].name.as_str()), (1, "mein-flow"));
         assert_eq!(a.runs[0].phases, ["Research", "Extra"]);
+    }
+
+    #[test]
+    fn gestoppter_run_aus_json() {
+        let (c, base) = setup("killed", true);
+        put(&base.join("subagents/workflows/wf_5/journal.jsonl"), JOURNAL);
+        put(
+            &base.join("workflows/wf_5.json"),
+            r#"{"workflowName":"audit","status":"killed","workflowProgress":[
+                 {"type":"workflow_agent","label":"a","state":"progress"},{"type":"workflow_agent","label":"b","state":"start"},
+                 {"type":"workflow_agent","label":"c","state":"done"},{"type":"workflow_agent","label":"d","state":"error"}]}"#,
+        );
+        let r = &activity_in(&mut Cache::new(), &c, "/w/p", now_ms()).runs[0];
+        let st: Vec<(&str, &str)> = ["a", "b", "c", "d"].map(|l| (l, r.agents.iter().find(|a| a.label == l).unwrap().state.as_str())).to_vec();
+        assert_eq!((r.status.as_str(), st), ("killed", vec![("a", "aborted"), ("b", "aborted"), ("c", "done"), ("d", "error")]));
+    }
+
+    /// TaskStop in derselben lebenden Session, danach Neustart per scriptPath (gleicher Name, kein eigenes Skript).
+    #[test]
+    fn stopp_und_neustart_per_skript() {
+        let (c, base) = setup("restart", true);
+        let script = base.join("workflows/scripts/audit-wf_a.js");
+        put(&script, "export const meta = {\n  name: 'audit',\n  phases: [{ title: 'Research', detail: '3 Leser' }],\n}\n");
+        put(&base.join("subagents/workflows/wf_a/journal.jsonl"), JOURNAL);
+        put(&base.join("subagents/workflows/wf_b/journal.jsonl"), "{\"type\":\"launched\"}\n{\"type\":\"started\",\"key\":\"k1\",\"agentId\":\"b1\",\"label\":\"eins\",\"phase\":\"Research\"}\n");
+        let started = |run: &str, task: &str| {
+            format!(
+                r#"{{"type":"user","timestamp":"2026-10-15T14:00:00.000Z","toolUseResult":{{"status":"async_launched","taskId":"{task}","workflowName":"audit","runId":"{run}","scriptPath":"{}"}}}}"#,
+                script.to_string_lossy()
+            )
+        };
+        let stop = r#"{"type":"user","timestamp":"2026-10-15T14:01:00.000Z","toolUseResult":{"message":"Successfully stopped task: t1 (x)","task_id":"t1","task_type":"local_workflow"}}"#;
+        put(&c.join(format!("projects/-w-p/{SID}.jsonl")), &([started("wf_a", "t1"), stop.into(), started("wf_b", "t2")].join("\n") + "\n"));
+        let runs = activity_in(&mut Cache::new(), &c, "/w/p", now_ms()).runs;
+        let run = |id: &str| runs.iter().find(|r| r.id == id).unwrap();
+        let (a, b) = (run("wf_a"), run("wf_b"));
+        assert_eq!((a.status.as_str(), a.agents.iter().find(|x| x.label == "drei").unwrap().state.as_str()), ("aborted", "aborted"));
+        assert_eq!((b.status.as_str(), b.name.as_str(), b.planned.as_slice()), ("running", "audit", &[3][..]));
+        assert_eq!(b.agents[0].state, "running");
+    }
+
+    /// Ein result, das nach der Kill-JSON ins Journal kommt, macht den gestoppten Run nicht wieder lebendig.
+    #[test]
+    fn nachgeschriebenes_result_nach_stopp() {
+        let (c, base) = setup("late", true);
+        let journal = base.join("subagents/workflows/wf_6/journal.jsonl");
+        put(&journal, JOURNAL);
+        put(&base.join("workflows/wf_6.json"), r#"{"status":"killed","workflowProgress":[{"type":"workflow_agent","label":"drei","state":"progress"}]}"#);
+        let lines = [
+            r#"{"type":"user","timestamp":"2026-10-15T14:00:00.000Z","toolUseResult":{"status":"async_launched","taskId":"t6","runId":"wf_6","workflowName":"w","scriptPath":""}}"#,
+            r#"{"type":"user","timestamp":"2026-10-15T14:01:00.000Z","toolUseResult":{"message":"Successfully stopped task: t6","task_id":"t6","task_type":"local_workflow"}}"#,
+        ];
+        put(&c.join(format!("projects/-w-p/{SID}.jsonl")), &(lines.join("\n") + "\n"));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        append(&journal, "{\"type\":\"result\",\"key\":\"k3\",\"agentId\":\"a3\",\"result\":\"spaet\"}\n");
+        let r = &activity_in(&mut Cache::new(), &c, "/w/p", now_ms()).runs[0];
+        assert_eq!((r.status.as_str(), r.agents[0].state.as_str()), ("killed", "aborted"));
     }
 
     #[test]
