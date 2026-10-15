@@ -160,10 +160,14 @@
       if (text) navigator.clipboard.writeText(text);
       term!.clearSelection();
     } else if (key === "v") {
-      navigator.clipboard.readText().then(async (t) => {
-        if (!t) await grabClipboard();
-        term?.paste(t);
-      });
+      // readText kann unter WebKitGTK/WebView2 abgelehnt werden: dann wenigstens ein Bild versuchen.
+      navigator.clipboard.readText().then(
+        async (t) => {
+          if (!t) await grabClipboard();
+          term?.paste(t);
+        },
+        () => grabClipboard(),
+      );
     } else {
       return true;
     }

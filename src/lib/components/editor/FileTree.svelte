@@ -10,7 +10,7 @@
   import { fs, type Entry } from "$lib/files";
   import { editor, open, setExpanded, renamed, removed, poll } from "$lib/editor.svelte";
   import { rows, join, dirname, type Row } from "$lib/tree";
-  import { atRef, under } from "$lib/editor.logic";
+  import { FILES_APP, atRef, under } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
 
   let { repo }: { repo: string } = $props();
@@ -183,7 +183,7 @@
             <ContextItem label="Neue Datei" onSelect={() => create(dir, false)} />
             <ContextItem label="Neuer Ordner" onSelect={() => create(dir, true)} />
             <ContextItem label="Umbenennen" onSelect={() => rename(r)} />
-            <ContextItem label={mac ? "Im Finder zeigen" : "Im Explorer zeigen"} onSelect={() => reveal(dir)} />
+            <ContextItem label="Im {FILES_APP} zeigen" onSelect={() => reveal(dir)} />
             <ContextItem label="Löschen" onSelect={() => remove(r)} destructive />
           </ContextMenu.Content>
         </ContextMenu.Portal>

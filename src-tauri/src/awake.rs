@@ -239,7 +239,8 @@ fn keep_idle_awake(_: bool) {}
 
 #[cfg(target_os = "linux")]
 fn hold(_: &Path) -> Result<Hold, String> {
-    let mut c = std::process::Command::new("systemd-inhibit")
+    // quiet(): im AppImage sonst mit dessen LD_LIBRARY_PATH gestartet.
+    let mut c = crate::quiet("systemd-inhibit")
         .args(["--what=handle-lid-switch:sleep:idle", "--mode=block", "--who=L'Atelier de Claude", "--why=Claude arbeitet", "cat"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())

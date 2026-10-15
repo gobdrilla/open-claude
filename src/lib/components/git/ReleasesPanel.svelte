@@ -12,6 +12,7 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { git, forge, type ForgeKind, type Release, type ReleaseAsset, type ReleaseInput } from "$lib/git";
   import { invoke } from "@tauri-apps/api/core";
+  import { FILES_APP } from "$lib/editor.logic";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
@@ -108,7 +109,7 @@
 
   // ---------- Download ----------
 
-  // Asset-URL -> "laeuft" bzw. Pfad im Downloads-Ordner; zweiter Klick zeigt die Datei im Finder.
+  // Asset-URL -> "laeuft" bzw. Pfad im Downloads-Ordner; zweiter Klick zeigt die Datei im Dateimanager.
   let downloads = $state<Record<string, "…" | string>>({});
 
   async function download(a: ReleaseAsset) {
@@ -273,7 +274,7 @@
                   <li>
                     <button
                       class="hover:bg-accent group flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[11px]"
-                      title={d === "…" ? "Wird heruntergeladen …" : d ? `Im Finder zeigen: ${d}` : "In den Downloads-Ordner laden"}
+                      title={d === "…" ? "Wird heruntergeladen …" : d ? `Im ${FILES_APP} zeigen: ${d}` : "In den Downloads-Ordner laden"}
                       onclick={() => download(a)}
                     >
                       {#if d === "…"}

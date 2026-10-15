@@ -877,6 +877,20 @@ pub async fn forge_releases(app: AppHandle, repo: String, remote_url: String, pa
     Ok(Some(ForgeList { kind: repo.kind, items }))
 }
 
+/// Dateiname, den auch Windows anlegen kann: keine <>:"/\\|?* und Steuerzeichen (":" waere ein NTFS-Datenstrom),
+/// kein Punkt/Leerzeichen am Ende, keine Geraetenamen (CON, NUL, COM1 ...), hoechstens 200 Zeichen.
+fn safe_name(n: &str) -> String {
+    let mut s: String = n.chars().map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }).take(200).collect();
+    s = s.trim_end_matches(['.', ' ']).to_string();
+    let stem = s.split('.').next().unwrap_or("").to_ascii_lowercase();
+    let device = matches!(stem.as_str(), "con" | "prn" | "aux" | "nul")
+        || (stem.len() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem.as_bytes()[3].is_ascii_digit());
+    if device || s.is_empty() {
+        s.insert(0, '_');
+    }
+    s
+}
+
 /// Freier Dateiname im Ordner: "a.zip", sonst "a (1).zip" usw.
 fn free_name(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
     let p = std::path::Path::new(name);
@@ -897,7 +911,7 @@ fn free_name(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
 pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, name: String, url: String, api: Option<String>) -> Result<String, String> {
     use std::io::Write;
     // Nur der letzte Pfadteil: ein Asset-Name wie "../x" darf nicht aus dem Ordner heraus.
-    let name = std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.starts_with('.')).ok_or("Ungültiger Dateiname")?.to_string();
+    let name = std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.starts_with('.')).map(safe_name).ok_or("Ungültiger Dateiname")?;
     // Ohne Gesamt-Timeout: grosse DMGs brauchen laenger als 30 s, haengen soll aber nichts.
     let plain = reqwest::Client::builder().user_agent("ocui").read_timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
     let res = match (resolve(&app, &repo, &remote_url)?, api) {
@@ -917,7 +931,9 @@ pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, na
     if !res.status().is_success() {
         return Err(format!("Download fehlgeschlagen: HTTP {}", res.status().as_u16()));
     }
-    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    // Ohne XDG-user-dirs (Linux-Minimalsetups) kennt Tauri keinen Downloads-Ordner.
+    let dir = app.path().download_dir().unwrap_or_else(|_| crate::skills::home().join("Downloads"));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = free_name(&dir, &name);
     // Erst .part, dann umbenennen: ein abgebrochener Download liegt nie als fertige Datei da.
     let mut part = dest.clone().into_os_string();
@@ -1276,6 +1292,14 @@ pub fn forge_web_url(remote_url: String) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn safe_name_fuer_windows() {
+        assert_eq!(super::safe_name("app_1.0_x64.dmg"), "app_1.0_x64.dmg");
+        assert_eq!(super::safe_name("a:b?.zip"), "a_b_.zip");
+        assert_eq!(super::safe_name("CON.txt"), "_CON.txt");
+        assert_eq!(super::safe_name("x. "), "x");
+    }
+
     #[test]
     fn free_name_zaehlt_hoch() {
         let dir = std::env::temp_dir().join(format!("ocui-free-{}", std::process::id()));

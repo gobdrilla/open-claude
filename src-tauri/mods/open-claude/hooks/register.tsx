@@ -103,23 +103,39 @@ const SECRETS = [
 // Kurzfassung des wartenden Tool-Calls fuer Banner und Benachrichtigung der App.
 export const summarize = (tool: string, input: unknown) => {
   const i = (input ?? {}) as Record<string, unknown>
-  const keys = tool === 'Bash' ? ['command'] : ['file_path', 'pattern', 'url', 'description']
+  const keys = SHELLS.has(tool) ? ['command'] : ['file_path', 'pattern', 'url', 'description']
   const raw = keys.map(k => i[k]).find(v => typeof v === 'string') as string | undefined
   let s = (raw ?? '').replace(/\s+/g, ' ').trim()
   for (const re of SECRETS) s = s.replace(re, (_, pre) => (typeof pre === 'string' ? `${pre}***` : '***'))
   return s.length <= 120 ? s : `${s.slice(0, 119)}…`
 
 }
+// Shell-Tools von Claude Code: Bash (auch Git-Bash unter Windows) und das PowerShell-Tool unter Windows.
+const SHELLS = new Set(['Bash', 'PowerShell'])
 // Guardrails: riskante Aufrufe -> 'ask' (nie deny). Regex auf Klartext, nur Erinnerung: Umgehung (Skript, Variablen) faengt das nicht.
 const RM_RF = /\brm\s+((?:-\S+\s+)+)([^;&|]*)/g
+// PowerShell (Remove-Item -Recurse -Force, Alias ri) und cmd (rd/rmdir/del /s /q).
+const WIN_DEL = /\b(?:Remove-Item|ri|rd|rmdir|del|erase)\s+([^;&|]*)/gi
+// Pfade vergleichbar machen: Backslash zu /, Git-Bash /c/... zu c:/..., Laufwerke ohne Gross/Klein.
+const norm = (p: string) => p.replace(/\\/g, '/').replace(/^\/([a-z])(\/|$)/i, '$1:/').replace(/^[a-z]:/i, d => d.toLowerCase()).replace(/\/+$/, '')
+// Ziel ausserhalb: ~, $VAR, '..' oder absolut ausserhalb des Repos (ohne cwd: jeder absolute Pfad).
+const outside = (target: string, cwd?: string) => {
+  const t = norm(target.replace(/^['"]|['"]$/g, '')), c = cwd && norm(cwd)
+  return /^(~|\$)|(^|\/)\.\.(\/|$)/.test(t) || (/^(\/|[a-z]:\/)/i.test(t) && !(c && (t === c || t.startsWith(`${c}/`))))
+}
 const rmOutside = (cmd: string, cwd?: string) => {
   for (const [, flags, targets] of cmd.matchAll(RM_RF)) {
     const f = flags.trim().split(/\s+/)
     const rec = f.some(x => /^-[a-z]*[rR]/.test(x) || x === '--recursive')
     const force = f.some(x => /^-[a-z]*f/.test(x) || x === '--force')
-    if (!rec || !force) continue
-    // Ziele ausserhalb: ~, $VAR, '..' oder absolut ausserhalb des Repos (ohne cwd: jeder absolute Pfad).
-    if (targets.split(/\s+/).map(t => t.replace(/^['"]|['"]$/g, '')).some(t => /^(~|\$)|(^|\/)\.\.(\/|$)/.test(t) || (t.startsWith('/') && !(cwd && (t === cwd || t.startsWith(`${cwd}/`)))))) return true
+    if (rec && force && targets.split(/\s+/).some(t => outside(t, cwd))) return true
+  }
+  for (const [, rest] of cmd.matchAll(WIN_DEL)) {
+    const toks = rest.trim().split(/\s+/)
+    const flag = (t: string) => /^-|^\/[a-z]$/i.test(t)
+    const rec = toks.some(t => /^(-r(ecurse)?|\/s)$/i.test(t))
+    const force = toks.some(t => /^(-fo(rce)?|\/q)$/i.test(t))
+    if (rec && force && toks.filter(t => t && !flag(t)).some(t => outside(t, cwd))) return true
   }
   return false
 }
@@ -137,7 +153,7 @@ export const guard = (tool: string, input: unknown, cwd?: string) => {
       : undefined
     return why && { text: `${m} ${i.path ?? ''}`.trim(), why }
   }
-  const cmd = tool === 'Bash' ? i.command : atelier('git') && Array.isArray(i.args) ? `git ${i.args.join(' ')}` : undefined
+  const cmd = SHELLS.has(tool) ? i.command : atelier('git') && Array.isArray(i.args) ? `git ${i.args.join(' ')}` : undefined
   if (typeof cmd !== 'string') return
   const why =
     /\bpush\b[^;&|]*(\s--force\b|\s--force-with-lease\b|\s-[a-zA-Z]*f|\s\+\S)/.test(cmd) ? 'Force-Push überschreibt den Remote-Verlauf'

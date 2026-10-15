@@ -9,6 +9,7 @@
   import { load, type Store } from "@tauri-apps/plugin-store";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { check, type Update } from "@tauri-apps/plugin-updater";
+  import { FILES_APP } from "$lib/editor.logic";
   import { relaunch } from "@tauri-apps/plugin-process";
   import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
@@ -512,7 +513,8 @@
     repoGroups = (await store.get<RepoGroup[]>("repoGroups")) ?? [];
     accounts = (await store.get<Account[]>("accounts")) ?? [];
     autostart = await isEnabled().catch(() => false);
-    tray = (await store.get<boolean>("tray")) ?? true;
+    // Linux: Tray-Icons brauchen unter GNOME eine Erweiterung, ohne sie waere das versteckte Fenster weg.
+    tray = (await store.get<boolean>("tray")) ?? !navigator.userAgent.includes("Linux");
     lidAwake = (await store.get<boolean>("lidAwake")) ?? false;
     // Meldung vom Aufraeumen nach einem Absturz kam vor diesem Listener: hier abholen.
     const awakeErr = await invoke<string | null>("set_awake", { on: lidAwake });
@@ -649,7 +651,10 @@
         asked = true;
         ok = (await requestPermission()) === "granted";
       }
-      if (ok) sendNotification({ title: "Claude wartet auf dich", body });
+      // Linux ohne Benachrichtigungsdienst wirft: still bleiben.
+      try {
+        if (ok) sendNotification({ title: "Claude wartet auf dich", body });
+      } catch {}
     };
     const onFocus = () => {
       const s = sessions.find((s) => s.id === pendingFocus);
@@ -1158,7 +1163,7 @@
         size="sm"
         class="text-muted-foreground h-6 gap-1.5 text-[11px]"
         onclick={() => reveal(gitRepo!)}
-        title="Ordner im Explorer öffnen (Alt+E)"><FolderOpenIcon class="size-3.5" /> Explorer</Button
+        title="Ordner im {FILES_APP} öffnen (Alt+E)"><FolderOpenIcon class="size-3.5" /> {FILES_APP}</Button
       >
       <Button
         variant="ghost"
@@ -1652,7 +1657,7 @@
                     {@render repoItem("Editor", `${mod}+⇧+E`, () => openEdit(item.repo))}
                     {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", `${mod}+⏎`, () => launch(item.repo))}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem(mac ? "Im Finder zeigen" : "Im Explorer zeigen", `${mod}+E`, () => reveal(item.repo))}
+                    {@render repoItem(`Im ${FILES_APP} zeigen`, `${mod}+E`, () => reveal(item.repo))}
                     {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
                     {@render repoItem("Pfad kopieren", "", () => navigator.clipboard.writeText(item.repo.path))}
                     {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", `${mod}+P`, () => togglePin(item.repo.path))}
@@ -1869,7 +1874,7 @@
         [`${mod} + ⇧ + N`, "Neues Repo anlegen"],
         [`${mod} + K`, "Suche fokussieren"],
         [`${mod} + P`, "Projekt anpinnen"],
-        [`${mod} + E`, "Ordner im Explorer öffnen"],
+        [`${mod} + E`, `Ordner im ${FILES_APP} öffnen`],
         [`${mod} + R`, "Neu einlesen"],
         [`${mod} + O`, "Dev-Ordner wechseln"],
         [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
@@ -1883,7 +1888,7 @@
         ])}
         {@render keys("Terminal, Git und Editor", [
           [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zur Liste, Sitzung läuft weiter"],
-          ["Alt + E", "Ordner im Explorer öffnen"],
+          ["Alt + E", `Ordner im ${FILES_APP} öffnen`],
           ["Alt + G", "Im Terminal und Editor: Git-Ansicht öffnen"],
           [`${mod} + ⇧ + E`, "Editor öffnen"],
           ["Strg + ⇧ + C / Strg + V", "Im Terminal: kopieren / einfügen"],

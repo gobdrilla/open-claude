@@ -44,7 +44,12 @@
     return () => ((stale = true), clearTimeout(t));
   });
 
-  const groups = $derived(Object.entries(Object.groupBy(hits, (h) => h.path)) as [string, Hit[]][]);
+  // Ohne Object.groupBy: das fehlt in aelteren WebKitGTK (Linux-Distros mit WebKitGTK < 2.44).
+  const groups = $derived.by(() => {
+    const m = new Map<string, Hit[]>();
+    for (const h of hits) m.set(h.path, [...(m.get(h.path) ?? []), h]);
+    return [...m];
+  });
 </script>
 
 {#snippet flag(label: string, title: string, on: boolean, set: (v: boolean) => void)}

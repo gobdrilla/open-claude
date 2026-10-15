@@ -512,10 +512,12 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
 
 /// Schliessen versteckt ins Tray statt zu beenden. Das Frontend setzt es aus den Einstellungen.
 static TRAY: AtomicBool = AtomicBool::new(true);
+/// Tray-Icon liess sich anlegen. Sonst versteckte Schliessen das Fenster unerreichbar (z. B. Linux ohne AppIndicator).
+static TRAY_OK: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 fn set_tray(on: bool) {
-    TRAY.store(on, Ordering::Relaxed);
+    TRAY.store(on && TRAY_OK.load(Ordering::Relaxed), Ordering::Relaxed);
 }
 
 /// Versteckt das Fenster. macOS: ein verstecktes Vollbildfenster hinterliesse einen schwarzen Space,
@@ -593,6 +595,11 @@ pub fn run() {
         if let Some(path) = login_path() {
             std::env::set_var("PATH", path);
         }
+    }
+    // WebKitGTK mit DMABUF-Renderer zeigt auf NVIDIA nur ein weisses Fenster (v2.tauri.app/develop/debug/linux-graphics).
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() && Path::new("/proc/driver/nvidia/version").exists() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
@@ -766,7 +773,11 @@ pub fn run() {
         .setup(|app| {
             awake::start(app.handle());
             deps::auto_update();
-            tray(app.handle()).map_err(Into::into)
+            // Ohne Tray (Linux ohne AppIndicator-Bibliothek) weiterstarten, Schliessen beendet dann.
+            let ok = tray(app.handle()).map_err(|e| eprintln!("Tray nicht verfügbar: {e}")).is_ok();
+            TRAY_OK.store(ok, Ordering::Relaxed);
+            TRAY.store(ok, Ordering::Relaxed);
+            Ok(())
         })
         // Mit Tray versteckt Schliessen nur — raus kommt man dann ueber das Tray-Menue.
         // Ohne Tray beendet Schliessen die App: bei ungespeicherten Aenderungen im Editor erst fragen.

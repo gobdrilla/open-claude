@@ -115,8 +115,13 @@ fn creds_write(p: &Paths, creds: &str) -> Result<(), String> {
     private_write(&p.config.join(".credentials.json"), creds)
 }
 
+/// Mit CLAUDE_CONFIG_DIR liegt .claude.json dort, sonst im Home.
+fn claude_json_path(p: &Paths) -> PathBuf {
+    if std::env::var_os("CLAUDE_CONFIG_DIR").is_some() { p.config.join(".claude.json") } else { p.home.join(".claude.json") }
+}
+
 fn claude_json(p: &Paths) -> Result<Map<String, Value>, String> {
-    match std::fs::read_to_string(p.home.join(".claude.json")) {
+    match std::fs::read_to_string(claude_json_path(p)) {
         Ok(t) => match serde_json::from_str(&t) {
             Ok(Value::Object(m)) => Ok(m),
             _ => Err("~/.claude.json ist kein JSON-Objekt".into()),
@@ -130,7 +135,7 @@ fn claude_json(p: &Paths) -> Result<Map<String, Value>, String> {
 fn oauth_write(p: &Paths, oauth: Value) -> Result<(), String> {
     let mut all = claude_json(p)?;
     all.insert("oauthAccount".into(), oauth);
-    crate::skills::atomic_write(&p.home.join(".claude.json"), &(serde_json::to_string_pretty(&all).map_err(|e| e.to_string())? + "\n"))
+    crate::skills::atomic_write(&claude_json_path(p), &(serde_json::to_string_pretty(&all).map_err(|e| e.to_string())? + "\n"))
 }
 
 fn account_of(oauth: &Value) -> Option<Account> {

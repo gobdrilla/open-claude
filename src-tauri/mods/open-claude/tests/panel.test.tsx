@@ -294,6 +294,15 @@ test('guardrails', () => {
   expect(guard(`${A}forge_write`, { method: 'POST', path: '/repos/a/b/pulls/3/comments' })).toBe(undefined)
   expect(g('rm -rf build', '/repo')).toBe(undefined)
   expect(g('rm -rf /repo/build', '/repo')).toBe(undefined)
+  // Windows: PowerShell/cmd, Laufwerke, Backslash, Git-Bash-Pfade
+  const w = (c: string) => guard('PowerShell', { command: c }, 'C:\\repo')?.why
+  expect(w('Remove-Item -Recurse -Force C:\\Users\\x')).toMatch(/rm -rf/)
+  expect(w('rd /s /q ..\\other')).toMatch(/rm -rf/)
+  expect(w('Remove-Item -Recurse -Force build')).toBe(undefined)
+  expect(w('Remove-Item -Recurse -Force c:\\repo\\dist')).toBe(undefined)
+  expect(w('Remove-Item -Recurse C:\\x')).toBe(undefined)
+  expect(g('rm -rf /c/repo/dist', 'C:\\repo')).toBe(undefined)
+  expect(g('rm -rf /c/other', 'C:\\repo')).toMatch(/rm -rf/)
   expect(g('rm -f /tmp/x')).toBe(undefined)
 })
 

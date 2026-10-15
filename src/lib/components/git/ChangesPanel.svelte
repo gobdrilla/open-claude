@@ -2,7 +2,7 @@
   import Notice from "$lib/components/Notice.svelte";
   import { ContextItem, ConfirmDialog, fileIcon, menuContent } from "$lib/components/kit";
   import { dirname } from "$lib/tree";
-  import { atRef } from "$lib/editor.logic";
+  import { FILES_APP, atRef } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
   import { reviewCount, sendReview } from "$lib/review.svelte";
   import { ContextMenu } from "bits-ui";
@@ -397,7 +397,7 @@
                 label={multi ? `Ausgewählte an Claude (${picked.length})` : "An Claude"}
                 onSelect={() => sendToClaude(repo, (multi ? picked : [f]).map((x) => atRef(x.path)).join(""))}
               />
-              <ContextItem label="Im Explorer zeigen" onSelect={() => reveal(f)} />
+              <ContextItem label="Im {FILES_APP} zeigen" onSelect={() => reveal(f)} />
               <ContextItem label="Pfad kopieren" onSelect={() => navigator.clipboard.writeText(f.path)} />
             </ContextMenu.Content>
           </ContextMenu.Portal>

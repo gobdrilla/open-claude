@@ -307,8 +307,8 @@ fn start(app: AppHandle, id: String, repo: &str, dir: &str, fw: Fw, scope: &Scop
             let tool = if fw == Fw::Vitest { "vitest" } else { "jest" };
             let root = Path::new(repo).canonicalize().map_err(|e| e.to_string())?;
             let at = cwd.canonicalize().map_err(|e| e.to_string())?;
-            local_bin(&root, &at, tool, cfg!(windows), Path::is_file)
-                .ok_or_else(|| format!("{tool} nicht installiert (npm install)"))?
+            let bin = local_bin(&root, &at, tool, cfg!(windows), Path::is_file).ok_or_else(|| format!("{tool} nicht installiert (npm install)"))?;
+            crate::lsp::plain(bin)
                 .to_string_lossy()
                 .into_owned()
         }

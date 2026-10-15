@@ -103,6 +103,9 @@ export const huge = (text: string) => text.length > 1_000_000 || /[^\n]{10000}/.
 
 /** Modifier-Taste fuer Tastenkuerzel in Texten, wie in +page.svelte. */
 export const MOD = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") ? "⌘" : "Strg";
+/** Name des Dateimanagers fuer "Im … zeigen": Finder, Explorer, unter Linux allgemein. */
+export const FILES_APP =
+  typeof navigator === "undefined" ? "Explorer" : navigator.userAgent.includes("Mac") ? "Finder" : navigator.userAgent.includes("Windows") ? "Explorer" : "Dateimanager";
 
 const win = (repo: string) => repo.includes("\\");
 const slash = (p: string) => p.replace(/\\/g, "/");
