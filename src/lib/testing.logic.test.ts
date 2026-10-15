@@ -252,6 +252,11 @@ test("Stack-Links: Pfade mit Zeile, file:// entfernt", () => {
     { file: "/abs/T.cs", line: 4 },
   ]);
   assert.equal(parts.map((p) => p.text).join(""), "at f (file:///r/src/a.test.ts:5:26)\n at /abs/T.cs:line 4");
+  const win = stackLinks("at f (C:\\Users\\Max Muster\\a.test.ts:3:5)\n   at T() in C:\\Max Muster\\T.cs:line 12");
+  assert.deepEqual(win.filter((p) => p.loc).map((p) => p.loc), [
+    { file: "C:\\Users\\Max Muster\\a.test.ts", line: 3 },
+    { file: "C:\\Max Muster\\T.cs", line: 12 },
+  ]);
 });
 
 test("toRepo: Windows-Pfade aus file:/// und andere Schreibweise des Laufwerks", () => {

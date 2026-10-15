@@ -21,6 +21,11 @@ test("ganze zeile mit leerzeichen", () => {
   const two = pathHits("/x/a.ts /y/b.ts");
   assert.deepEqual(keep(two).map((h) => h.path), ["/x/a.ts /y/b.ts"]);
   assert.deepEqual(keep(two.slice(1)).map((h) => h.path), ["/x/a.ts", "/y/b.ts"]);
+  // Windows-Pfad mit Leerzeichen mitten im Satz: Kandidat ab dem Laufwerk, keep waehlt den laengsten existierenden
+  const win = pathHits("Fehler in C:\\Users\\Max Muster\\x.ts:12 gefunden");
+  assert.deepEqual(win.map((h) => [h.path, h.line]), [["Muster\\x.ts", 12], ["C:\\Users\\Max Muster\\x.ts", 12]]);
+  assert.deepEqual(keep(win).map((h) => [h.start, h.end]), [[10, 37]]);
+  assert.deepEqual(paths("C:\\a\\x.ts (siehe b.ts)").map((h) => h[0]), ["C:\\a\\x.ts", "b.ts"]);
   // Satz mit Pfad darin: nur der Pfad, nicht die ganze Zeile
   assert.deepEqual(paths("/tmp/a.ts ist kaputt."), [["/tmp/a.ts", undefined, undefined]]);
 });

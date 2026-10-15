@@ -9,6 +9,8 @@ const PATH = /(?<![\w.~@+/\\:-])(?:[A-Za-z]:)?[\w.~@+/\\-]*[\w-]\.[A-Za-z]\w{0,9
 // Zeile, die nur aus einem absoluten Pfad besteht (claude setzt Pfade gern so ab): darf Leerzeichen enthalten.
 const WHOLE = /^(\s*)((?:~|[A-Za-z]:)?[\\/]\S.*?\.[A-Za-z]\w{0,9})(?::(\d+))?(?::(\d+))?\s*$/;
 
+const DRIVE = /(?<![\w.~@+/\\:-])[A-Za-z]:[\\/]/g;
+
 const hit = (start: number, end: number, path: string, line?: string, col?: string): PathHit => ({
   start,
   end,
@@ -24,6 +26,14 @@ export function pathHits(text: string): PathHit[] {
     const path = all.slice(0, all.length - (line ? line.length + 1 : 0) - (col ? col.length + 1 : 0));
     return hit(m.index, m.index + all.length, path, line, col);
   });
+  // Windows-Pfad mit Leerzeichen mitten im Satz ("in C:\Users\Max Muster\a.ts:3"): vom Laufwerk bis zu jedem
+  // spaeteren Treffer ein Kandidat; keep nimmt nach der Existenzpruefung den laengsten.
+  for (const d of text.matchAll(DRIVE))
+    for (const h of out.slice()) {
+      const gap = text.slice(d.index, h.start);
+      if (h.start > d.index && gap.length <= 260 && gap.includes(" ") && !/[()"'`<>|*?\t:]/.test(gap.slice(2)))
+        out.push({ ...h, start: d.index, path: gap + h.path });
+    }
   const w = text.match(WHOLE);
   if (w?.[2].includes(" ")) out.unshift(hit(w[1].length, w[0].trimEnd().length, w[2], w[3], w[4]));
   return out;

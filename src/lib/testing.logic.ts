@@ -627,7 +627,8 @@ export function fails(nodes: Tree, results: Record<string, Result>, file: string
 /** Klickbare Orte in einem Stack: "pfad.ext:zeile" bzw. dotnet "pfad.ext:line n" (file://-Praefix entfernt). */
 export function stackLinks(text: string): { text: string; loc?: Loc }[] {
   const out: { text: string; loc?: Loc }[] = [];
-  const re = /((?:file:\/\/)?[^\s()'"]+\.\w+):(?:line )?(\d+)/g;
+  // Windows-Laufwerkspfade duerfen Leerzeichen enthalten ("C:\Users\Max Muster\a.test.ts:3").
+  const re = /([A-Za-z]:[\\/][^()'"\n]*?\.\w+|(?:file:\/\/)?[^\s()'"]+\.\w+):(?:line )?(\d+)/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index > last) out.push({ text: text.slice(last, m.index) });
