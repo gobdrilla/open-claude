@@ -571,14 +571,18 @@ fn missing(t: &Target, cwd: &Path, windows: bool, ok: impl Fn(&str) -> bool) -> 
 
 /// POSIX-Vorspann: nutzerlokale SDKs (~/.dotnet, ~/.cargo) nutzen, wenn das System keins hat; mit `install`
 /// fehlende installieren. Keine einfachen Anfuehrungszeichen, das Skript steht selbst in welchen.
+/// Download erst in eine Datei: bei `curl | sh` zaehlt nur der Exit-Code von sh (dash kennt kein pipefail),
+/// ein fehlendes curl oder ein Netzfehler fiele erst mit einer irrefuehrenden Folgemeldung auf.
 fn setup_unix(t: &Target, cwd: &Path, install: bool) -> String {
+    const CURL: &str = "command -v curl >/dev/null 2>&1 || { echo \"[Atelier] curl fehlt, bitte installieren\"; exit 1; }; ";
     match t {
         Target::Dotnet { .. } => {
             let (k, v) = dotnet_sdk(cwd);
             let get = if install {
                 format!(
-                    "if ! dotnet --version >/dev/null 2>&1; then echo \"[Atelier] Installiere .NET SDK nach ~/.dotnet\"; \
-                     curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --install-dir \"$HOME/.dotnet\" --{k} {v} || exit 1; fi; "
+                    "if ! dotnet --version >/dev/null 2>&1; then echo \"[Atelier] Installiere .NET SDK nach ~/.dotnet\"; {CURL}\
+                     t=$(mktemp) && curl -fsSL https://dot.net/v1/dotnet-install.sh -o \"$t\" && bash \"$t\" --install-dir \"$HOME/.dotnet\" --{k} {v}; \
+                     r=$?; rm -f \"$t\"; [ $r -eq 0 ] || exit 1; fi; "
                 )
             } else {
                 String::new()
@@ -589,10 +593,13 @@ fn setup_unix(t: &Target, cwd: &Path, install: bool) -> String {
         }
         Target::Cargo { .. } => {
             let get = if install {
-                "if ! command -v cargo >/dev/null 2>&1; then echo \"[Atelier] Installiere Rust per rustup\"; \
-                 curl --proto =https --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y || exit 1; . \"$HOME/.cargo/env\"; fi; "
+                format!(
+                    "if ! command -v cargo >/dev/null 2>&1; then echo \"[Atelier] Installiere Rust per rustup\"; {CURL}\
+                     t=$(mktemp) && curl --proto =https --tlsv1.2 -fsSL https://sh.rustup.rs -o \"$t\" && sh \"$t\" -y; \
+                     r=$?; rm -f \"$t\"; [ $r -eq 0 ] || exit 1; . \"$HOME/.cargo/env\"; fi; "
+                )
             } else {
-                ""
+                String::new()
             };
             format!("if ! command -v cargo >/dev/null 2>&1 && [ -f \"$HOME/.cargo/env\" ]; then . \"$HOME/.cargo/env\"; fi; {get}")
         }

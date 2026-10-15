@@ -69,7 +69,8 @@ fn install(name: &str) -> Result<String, String> {
         ),
         ("claude", false) => (
             "bash",
-            &["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+            // pipefail: ohne curl oder bei Netzfehler bekaeme bash leere Eingabe und meldete trotzdem Erfolg.
+            &["-c", "set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash"],
             "curl -fsSL https://claude.ai/install.sh | bash",
         ),
         ("git", true) => (
