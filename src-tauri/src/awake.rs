@@ -190,15 +190,26 @@ fn battery() -> Option<(bool, u8)> {
 
 #[cfg(target_os = "linux")]
 fn battery() -> Option<(bool, u8)> {
+    let (mut mains, mut draining, mut pcts) = (None, false, Vec::new());
     for e in std::fs::read_dir("/sys/class/power_supply").ok()?.flatten() {
         let read = |f: &str| std::fs::read_to_string(e.path().join(f)).map(|s| s.trim().to_string()).unwrap_or_default();
-        // Nur der Laptop-Akku, nicht der einer Funkmaus (hidpp_battery_0 …).
-        if e.file_name().to_string_lossy().starts_with("BAT") && read("type") == "Battery" {
-            let pct = read("capacity").parse().ok()?;
-            return Some((read("status") != "Discharging", pct));
+        match read("type").as_str() {
+            // Netzteil: online sagt verlaesslich, ob Strom anliegt (mehrere Netzteile/USB-C: eins genuegt).
+            "Mains" => mains = Some(mains.unwrap_or(false) || read("online") == "1"),
+            // Nur Laptop-Akkus (auch zwei, z. B. ThinkPad BAT0+BAT1), nicht der einer Funkmaus (hidpp_battery_0 …).
+            "Battery" if e.file_name().to_string_lossy().starts_with("BAT") => {
+                draining |= read("status") == "Discharging";
+                pcts.extend(read("capacity").parse::<u32>().ok());
+            }
+            _ => {}
         }
     }
-    None
+    if pcts.is_empty() {
+        return None;
+    }
+    let pct = (pcts.iter().sum::<u32>() / pcts.len() as u32).min(100) as u8;
+    // Ohne Netzteil-Eintrag: am Netz, solange kein Akku entlaedt.
+    Some((mains.unwrap_or(!draining), pct))
 }
 
 #[cfg(windows)]
