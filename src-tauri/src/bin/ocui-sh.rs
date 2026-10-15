@@ -588,8 +588,9 @@ fn path_commands() -> Vec<String> {
             let name = e.file_name().to_string_lossy().into_owned();
             if !cfg!(windows) {
                 out.push(name);
-            } else if let Some(stem) = exts.iter().find_map(|x| name.to_lowercase().strip_suffix(x).map(|s| s.len())) {
-                out.push(name[..stem].to_string());
+            // get statt Slice: to_lowercase kann die Byte-Laenge aendern (Nicht-ASCII), dann kein Panic.
+            } else if let Some(stem) = exts.iter().filter(|x| name.to_lowercase().ends_with(*x)).find_map(|x| name.get(..name.len() - x.len())) {
+                out.push(stem.to_string());
             }
         }
     }
