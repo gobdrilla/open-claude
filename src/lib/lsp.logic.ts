@@ -108,6 +108,20 @@ export function editsOf(r: { changes?: Record<string, TextEdit[]>; documentChang
 type Diag = { range: { start: LspPos }; severity?: number };
 
 /** Befunde eines Projekts aus lsp.diags (Schluessel repo+"\n"+path) als Liste: Fehler zuerst, dann Pfad, dann Zeile. */
+/** Server, denen fuer projektweite Probleme alle Dateien geoeffnet werden (sie melden nur geoeffnete). */
+const OPEN_ALL = new Set(["typescript", "svelte", "python", "csharp"]);
+/** Server, die ohnehin den ganzen Workspace pruefen (cargo check, go packages): nur starten. */
+const WHOLE = new Set(["rust", "go"]);
+/** ponytail: hoechstens so viele Dateien im Hintergrund oeffnen; darueber wird es fuer tsserver & Co. zaeh. */
+export const SCAN_MAX = 2000;
+
+/** Was "ganzes Projekt pruefen" braucht: zu oeffnende Dateien (gedeckelt), nur zu startende Server, ob gekappt. */
+export function projectScan(files: string[], max = SCAN_MAX): { open: string[]; start: string[]; capped: number } {
+  const all = files.filter((f) => OPEN_ALL.has(serverFor(f)?.server ?? ""));
+  const start = [...new Set(files.map((f) => serverFor(f)?.server ?? "").filter((s) => WHOLE.has(s)))];
+  return { open: all.slice(0, max), start, capped: Math.max(0, all.length - max) };
+}
+
 export function problems<D extends Diag>(diags: Record<string, { list: D[] }>, repo: string): { path: string; d: D }[] {
   const pre = `${repo}\n`;
   return Object.entries(diags)

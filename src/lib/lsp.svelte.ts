@@ -24,7 +24,7 @@ import {
 import DOMPurify from "dompurify";
 import { fs } from "./files.ts";
 import { open, peek, setText } from "./editor.svelte.ts";
-import { applyEdits, editsOf, fileUri, flatSymbols, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
+import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
 
 type Out = { t: "msg"; m: string } | { t: "exit"; code: number | null; err: string };
 export type LspDiag = { range: { start: LspPos; end: LspPos }; severity?: number; message: string; source?: string };
@@ -38,10 +38,13 @@ export const lsp = $state<{
   diags: Record<string, { doc: Text | null; list: LspDiag[] }>;
   status: Record<string, string>;
   gen: Record<string, number>;
-}>({ diags: {}, status: {}, gen: {} });
+  /** Projektweite Pruefung je repo: laeuft (true) bzw. fertig mit Zahl nicht geoeffneter Dateien ueber SCAN_MAX. */
+  scan: Record<string, { busy: boolean; capped: number }>;
+}>({ diags: {}, status: {}, gen: {}, scan: {} });
 const k = (repo: string, x: string) => `${repo}\n${x}`;
 
-type File = WorkspaceFile & { path: string; view: EditorView | null; stale: boolean; pending?: Text };
+/** mtime: nur bei im Hintergrund geoeffneten Dateien (projektweite Probleme), zum Abgleich mit der Platte. */
+type File = WorkspaceFile & { path: string; view: EditorView | null; stale: boolean; pending?: Text; mtime?: number };
 
 /** Dokumente leben hier, nicht an der View: eine abgebaute View schliesst sie beim Server nicht. */
 class StoreWorkspace extends Workspace {
@@ -82,6 +85,24 @@ class StoreWorkspace extends Workspace {
       doc: view.state.doc,
       view,
       stale: false,
+      getView: () => file.view,
+    };
+    this.files.push(file);
+    this.client.didOpen(file);
+  }
+
+  /** Ohne Editor oeffnen, damit der Server die Datei prueft (projektweite Probleme). */
+  openBackground(path: string, text: string, mtime: number) {
+    if (this.byPath(path)) return;
+    const file: File = {
+      uri: fileUri(this.repo, path),
+      path,
+      languageId: serverFor(path)?.languageId ?? "",
+      version: 0,
+      doc: Text.of(text.split("\n")),
+      view: null,
+      stale: false,
+      mtime,
       getView: () => file.view,
     };
     this.files.push(file);
@@ -206,6 +227,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
       // Exit eines alten Prozesses nach "Erneut versuchen" betrifft den neuen nicht.
       if (!mine()) return;
       clients.delete(key);
+      conns.delete(key);
       conn?.client.disconnect();
       lsp.status[key] = o.err;
       lsp.gen[key] = (lsp.gen[key] ?? 0) + 1;
@@ -304,6 +326,8 @@ export function retry(repo: string, server: string) {
   clients.delete(key);
   delete lsp.status[key];
   lsp.gen[key] = (lsp.gen[key] ?? 0) + 1;
+  // Neuer Prozess kennt die Hintergrund-Dateien nicht: projektweite Pruefung neu anstossen.
+  if (scans.has(repo)) void scanProject(repo);
 }
 
 /** Banner ausblenden; der Server bleibt aus, bis "Erneut versuchen" oder das Projekt neu geoeffnet wird. */
@@ -338,6 +362,12 @@ export async function disk(repo: string, path: string) {
 
 /** Tab geschlossen bzw. Datei umbenannt/geloescht: beim Server schliessen, Befunde weg. */
 export function closed(repo: string, path: string) {
+  // Projektweite Pruefung: Datei bleibt beim Server offen, mit dem Stand der Platte (Puffer evtl. verworfen).
+  const f = scans.has(repo) ? scanned(repo, path) : undefined;
+  if (f) {
+    f.mtime = -1;
+    return;
+  }
   delete lsp.diags[k(repo, path)];
   void connOf(repo, path).then((c) => {
     c?.ws.close(path);
@@ -345,8 +375,83 @@ export function closed(repo: string, path: string) {
   });
 }
 
+// ---------- Projektweite Probleme ----------
+
+/** Repos mit projektweiter Pruefung; Wert = Timer des Platten-Abgleichs. */
+const scans = new Map<string, ReturnType<typeof setInterval>>();
+/** Server-Verbindungen, deren Dateien im Hintergrund offen sind (ohne Abwarten, nur bereits verbundene). */
+const conns: Map<string, Conn> = new Map();
+
+function scanned(repo: string, path: string): File | undefined {
+  const sv = serverFor(path);
+  const f = sv ? conns.get(k(repo, sv.server))?.ws.byPath(path) : null;
+  return f && f.mtime !== undefined ? f : undefined;
+}
+
+/**
+ * Alle Dateien des Projekts pruefen lassen: Server starten, unterstuetzte Dateien ohne Editor oeffnen, danach alle 3 s
+ * per fs_stat mit der Platte abgleichen (Edits von Claude, git checkout). Erneuter Aufruf nimmt neue Dateien mit.
+ */
+export async function scanProject(repo: string): Promise<void> {
+  if (!peek(repo)?.lsp || lsp.scan[repo]?.busy) return;
+  lsp.scan[repo] = { busy: true, capped: 0 };
+  try {
+    const plan = projectScan(await fs.files(repo));
+    const servers = [...new Set([...plan.start, ...plan.open.map((f) => serverFor(f)!.server)])];
+    for (const server of servers) {
+      const key = k(repo, server);
+      if (key in lsp.status) continue;
+      const c = await (clients.get(key) ?? connect(repo, server));
+      if (c) conns.set(key, c);
+    }
+    for (const path of plan.open) {
+      const c = conns.get(k(repo, serverFor(path)!.server));
+      if (!c || c.ws.byPath(path)) continue;
+      const t = await fs.read(repo, path).catch(() => null);
+      if (t && peek(repo)?.lsp) c.ws.openBackground(path, t.content, t.mtime);
+    }
+    lsp.scan[repo] = { busy: false, capped: plan.capped };
+    if (!scans.has(repo)) scans.set(repo, setInterval(() => void refresh(repo), 3000));
+  } catch {
+    delete lsp.scan[repo];
+  }
+}
+
+/** Hintergrund-Dateien mit der Platte abgleichen: geaendert neu einlesen, geloescht schliessen. */
+async function refresh(repo: string) {
+  // Im Hintergrund nicht pollen (Windows: fs_stat auf tausende Dateien kostet mit Defender spuerbar); beim Zurueckkehren holt der naechste Takt nach.
+  if (!document.hasFocus()) return;
+  for (const [key, c] of conns) {
+    if (!key.startsWith(k(repo, ""))) continue;
+    const bg = c.ws.files.filter((f) => f.mtime !== undefined && !f.view);
+    if (!bg.length) continue;
+    const times = await fs.stat(repo, bg.map((f) => f.path)).catch(() => null);
+    if (!times) continue;
+    let dirty = false;
+    for (const [i, f] of bg.entries()) {
+      const m = times[i];
+      if (m === null) {
+        c.ws.close(f.path);
+        delete lsp.diags[k(repo, f.path)];
+      } else if (m !== f.mtime) {
+        const t = await fs.read(repo, f.path).catch(() => null);
+        if (!t) continue;
+        f.mtime = t.mtime;
+        f.pending = Text.of(t.content.split("\n"));
+        f.stale = true;
+        dirty = true;
+      }
+    }
+    if (dirty) c.client.sync();
+  }
+}
+
 /** Projekt geschlossen: alle Server des Projekts beenden. Erfuellt, wenn die Prozesse beendet sind. */
 export function stop(repo: string): Promise<unknown> {
+  clearInterval(scans.get(repo));
+  scans.delete(repo);
+  delete lsp.scan[repo];
+  for (const key of [...conns.keys()]) if (key.startsWith(k(repo, ""))) conns.delete(key);
   const done = [];
   for (const [key, p] of [...clients]) {
     const [r, server] = key.split("\n");

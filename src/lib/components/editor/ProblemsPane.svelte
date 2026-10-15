@@ -10,13 +10,28 @@
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import { allowLsp, editor, open } from "$lib/editor.svelte";
   import { mentionLines } from "$lib/ide.svelte";
-  import { lsp } from "$lib/lsp.svelte";
-  import { problems } from "$lib/lsp.logic";
+  import LoaderIcon from "@lucide/svelte/icons/loader-circle";
+  import { lsp, scanProject } from "$lib/lsp.svelte";
+  import { problems, SCAN_MAX } from "$lib/lsp.logic";
 
   let { repo }: { repo: string } = $props();
 
   const list = $derived(problems(lsp.diags, repo));
+  const scan = $derived(lsp.scan[repo]);
+
+  // Sichtbar: ganzes Projekt pruefen lassen (einmal je Projekt, danach haelt der Platten-Abgleich es aktuell).
+  $effect(() => {
+    if (editor(repo).lsp && !lsp.scan[repo]) void scanProject(repo);
+  });
 </script>
+
+<div class="flex h-full min-h-0 flex-col">
+{#if scan?.busy || scan?.capped}
+  <p class="text-muted-foreground flex items-center gap-1.5 px-2 py-1 text-[11px]" role="status">
+    {#if scan.busy}<LoaderIcon class="size-3 animate-spin" /> Prüfe das ganze Projekt …
+    {:else}Nur die ersten {SCAN_MAX} Dateien geprüft, {scan.capped} weitere nicht.{/if}
+  </p>
+{/if}
 
 {#if !editor(repo).lsp}
   <!-- Einziger Rueckweg nach "Nicht fuer dieses Projekt" im Datei-Banner. -->
@@ -25,9 +40,9 @@
     <div class="mt-2"><Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button></div>
   </Empty>
 {:else if !list.length}
-  <Empty icon={CircleAlertIcon}>Keine Probleme in offenen Dateien.</Empty>
+  <Empty icon={CircleAlertIcon}>{scan?.busy ? "Noch keine Probleme gefunden." : "Keine Probleme im Projekt."}</Empty>
 {:else}
-  <ul class="h-full min-h-0 overflow-y-auto py-0.5 text-xs" aria-label="Probleme">
+  <ul class="min-h-0 flex-1 overflow-y-auto py-0.5 text-xs" aria-label="Probleme">
     {#each list as { path, d }, i (i)}
       {@const line = d.range.start.line}
       <li class="group hover:bg-accent flex items-center gap-1.5 pr-1 pl-2">
@@ -49,3 +64,4 @@
     {/each}
   </ul>
 {/if}
+</div>

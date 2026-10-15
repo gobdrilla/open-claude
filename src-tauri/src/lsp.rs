@@ -147,9 +147,100 @@ fn remember(diags: &Mutex<HashMap<String, Value>>, msg: &str) {
     }
 }
 
-fn resolve(root: &Path, cmd: &str, npm: bool) -> Option<PathBuf> {
+/// Projekt-node_modules, PATH, dann die Ordner, in die install() legt (App-eigenes npm-Prefix, cargo, go, dotnet).
+fn resolve(root: &Path, cmd: &str, npm: bool, own: &Path) -> Option<PathBuf> {
     let local = npm.then(|| crate::runner::local_bin(root, root, cmd, cfg!(windows), Path::is_file)).flatten();
-    local.or_else(|| crate::deps::which(cmd))
+    let home = PathBuf::from(std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default());
+    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let gobin = env("GOBIN").unwrap_or_else(|| env("GOPATH").unwrap_or_else(|| home.join("go")).join("bin"));
+    let cargo = env("CARGO_HOME").unwrap_or_else(|| home.join(".cargo")).join("bin");
+    let dirs = [own.join("node_modules").join(".bin"), cargo, gobin, home.join(".dotnet").join("tools")];
+    let exts: &[&str] = if cfg!(windows) { &[".cmd", ".exe"] } else { &[""] };
+    local
+        .or_else(|| crate::deps::which(cmd))
+        .or_else(|| dirs.iter().find_map(|d| exts.iter().map(|e| d.join(format!("{cmd}{e}"))).find(|p| p.is_file())))
+}
+
+/// Automatische Installation aus dem Hinweistext: "npm i -g a b" ins App-eigene Prefix (kein sudo, kein globales
+/// Paket), rustup/go/dotnet wie angegeben. None = nur von Hand (clangd, sourcekit-lsp) oder Werkzeug fehlt.
+fn install_cmd(hint: &str, own: &Path) -> Option<(PathBuf, Vec<String>)> {
+    let words: Vec<&str> = hint.split_whitespace().collect();
+    let (prog, args): (&str, Vec<String>) = match words.as_slice() {
+        ["npm", "i", "-g", pkgs @ ..] => {
+            let mut a: Vec<String> = ["install", "--no-audit", "--no-fund", "--prefix"].map(String::from).to_vec();
+            a.push(own.to_string_lossy().into_owned());
+            a.extend(pkgs.iter().map(|p| p.to_string()));
+            ("npm", a)
+        }
+        [p @ ("rustup" | "go" | "dotnet"), rest @ ..] => (p, rest.iter().map(|w| w.to_string()).collect()),
+        _ => return None,
+    };
+    Some((crate::deps::which(prog)?, args))
+}
+
+/// Eine Installation zur Zeit: json/css/html teilen sich ein npm-Paket und dasselbe Prefix.
+static INSTALL: Mutex<()> = Mutex::new(());
+
+fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
+    let (prog, args) = install_cmd(hint, own).ok_or_else(|| format!("{cmd} nicht gefunden. Installieren: {hint}"))?;
+    let _lock = guard(&INSTALL);
+    std::fs::create_dir_all(own).map_err(|e| e.to_string())?;
+    let fail = |e: String| format!("Installation von {cmd} fehlgeschlagen: {e}");
+    let mut child = crate::quiet(&prog.to_string_lossy())
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| fail(e.to_string()))?;
+    // stderr nebenher lesen, sonst blockiert ein volles Pipe den Prozess.
+    let mut pipe = child.stderr.take();
+    let reader = std::thread::spawn(move || {
+        let mut s = String::new();
+        if let Some(p) = pipe.as_mut() {
+            let _ = p.read_to_string(&mut s);
+        }
+        s
+    });
+    // Haengendes Netz darf den INSTALL-Lock nicht ewig halten.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
+    let status = loop {
+        if let Some(s) = child.try_wait().map_err(|e| fail(e.to_string()))? {
+            break s;
+        }
+        if std::time::Instant::now() > deadline {
+            crate::kill_tree(child.id());
+            let _ = child.wait();
+            return Err(fail("Zeitüberschreitung nach 5 Minuten".into()));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    };
+    let err = reader.join().unwrap_or_default();
+    if !status.success() {
+        let tail: Vec<&str> = err.lines().rev().take(5).collect();
+        return Err(format!("Installation von {cmd} fehlgeschlagen ({hint}):\n{}", tail.into_iter().rev().collect::<Vec<_>>().join("\n")));
+    }
+    Ok(())
+}
+
+/// rustup legt rust-analyzer als Proxy an, auch wenn die Komponente fehlt: dann startet er nicht.
+/// Einmal vorhanden, bleibt es so: nicht bei jedem Serverstart erneut rustup fragen.
+fn rust_analyzer_missing() -> bool {
+    static OK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if OK.load(std::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    let missing = crate::deps::which("rustup").is_some_and(|r| !crate::quiet(&r.to_string_lossy()).args(["which", "rust-analyzer"]).stdin(Stdio::null()).output().is_ok_and(|o| o.status.success()));
+    OK.store(!missing, std::sync::atomic::Ordering::Relaxed);
+    missing
+}
+
+/// Windows: canonicalize() liefert "\\?\C:\..."; cmd.exe (.cmd-Shims) und dotnet koennen damit nichts anfangen.
+pub(crate) fn plain(p: PathBuf) -> PathBuf {
+    match p.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+        Some(rest) if !rest.starts_with("UNC") => PathBuf::from(rest),
+        _ => p,
+    }
 }
 
 /// Server fuer das Projekt starten; laeuft schon einer, wird er ersetzt (Webview neu geladen: kein Leck).
@@ -162,7 +253,15 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
     let root = Path::new(repo).canonicalize().map_err(|e| format!("Projekt nicht gefunden: {e}"))?;
     let &(key, cmd, args, npm, hint) =
         SERVERS.iter().find(|s| s.0 == server).ok_or_else(|| format!("Unbekannter Language-Server: {server}"))?;
-    let prog = resolve(&root, cmd, npm).ok_or_else(|| format!("{cmd} nicht gefunden. Installieren: {hint}"))?;
+    let own = app.path().app_data_dir().map_err(|e| e.to_string())?.join("lsp");
+    let prog = match resolve(&root, cmd, npm, &own) {
+        Some(p) if !(key == "rust" && rust_analyzer_missing()) => p,
+        // Fehlt: selbst installieren (der Nutzer hat Language-Server fuer das Projekt schon freigegeben).
+        _ => {
+            install(cmd, hint, &own)?;
+            resolve(&root, cmd, npm, &own).ok_or_else(|| format!("{cmd} nach der Installation nicht gefunden. Von Hand: {hint}"))?
+        }
+    };
 
     let state = app.state::<Lsps>();
     let id = (root.clone(), key.to_string());
@@ -171,8 +270,14 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
     if let Some(old) = old {
         crate::kill_tree(old.pid);
     }
-    let mut c = crate::quiet(&prog.to_string_lossy());
-    c.args(args).current_dir(&root).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut c = crate::quiet(&plain(prog).to_string_lossy());
+    c.args(args).current_dir(plain(root.clone())).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // dotnet-Tools (csharp-ls) suchen die Runtime nur am Standardort; bei ~/.dotnet oder Homebrew braucht es DOTNET_ROOT.
+    if key == "csharp" && !cfg!(windows) && std::env::var_os("DOTNET_ROOT").is_none() {
+        if let Some(d) = crate::deps::which("dotnet").and_then(|p| p.canonicalize().ok()).and_then(|p| p.parent().map(Path::to_path_buf)) {
+            c.env("DOTNET_ROOT", d);
+        }
+    }
     // Eigene Gruppe: kill_tree trifft auch Kinder (tsserver, Proc-Macro-Server).
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut c, 0);
@@ -307,6 +412,21 @@ mod tests {
         let mut b = b"X: 1\r\n\r\n".to_vec();
         assert!(matches!(frame(&mut b), Some(Err(_))));
         assert!(b.is_empty());
+    }
+
+    #[test]
+    fn install_aus_hinweis() {
+        let own = Path::new("/tmp/lsp");
+        if crate::deps::which("npm").is_some() {
+            let (_, a) = install_cmd("npm i -g typescript-language-server typescript", own).unwrap();
+            assert_eq!(a, ["install", "--no-audit", "--no-fund", "--prefix", "/tmp/lsp", "typescript-language-server", "typescript"]);
+        }
+        if crate::deps::which("rustup").is_some() {
+            assert_eq!(install_cmd("rustup component add rust-analyzer", own).unwrap().1, ["component", "add", "rust-analyzer"]);
+        }
+        // Von Hand: nichts Automatisches.
+        assert!(install_cmd("Xcode bzw. Swift-Toolchain", own).is_none());
+        assert!(install_cmd("Xcode Command Line Tools, LLVM oder Paketmanager (clangd)", own).is_none());
     }
 
     /// Echter Server (clangd, fehlt er: uebersprungen): Start, Framing in beide Richtungen, Diagnostics-Cache, Stopp.
