@@ -78,7 +78,8 @@
 
   async function startLogin() {
     error = "";
-    await invoke("claude_account_save").catch(() => {});
+    // claude auth login ersetzt die aktive Anmeldung: danach wieder auf dieses Konto zurueck.
+    const prev = await invoke<Account | null>("claude_account_save").catch(() => null);
     const id = `login-${crypto.randomUUID()}`;
     const dec = new TextDecoder();
     login = { id, out: "" };
@@ -91,7 +92,11 @@
         if (login?.id !== id) return;
         const out = login.out;
         stopLogin();
-        if (e.payload === 0) await act(() => invoke("claude_account_save"));
+        if (e.payload === 0)
+          await act(async () => {
+            const added = await invoke<Account | null>("claude_account_save");
+            if (prev && added && added.email !== prev.email) await invoke("claude_account_switch", { email: prev.email });
+          });
         else error = `Anmeldung nicht abgeschlossen.\n${out.trim().split("\n").slice(-4).join("\n")}`;
       }),
     ];
