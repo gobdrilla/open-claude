@@ -235,8 +235,16 @@ pub(crate) fn config_dir() -> PathBuf {
 }
 
 /// Pfad, wie claude ihn sieht: realpath mit echter Schreibweise (Dev -> dev, /tmp -> /private/tmp), Windows ohne "\\?\".
+/// Netzlaufwerke loest canonicalize zu "\\?\UNC\..." auf, claude behaelt aber "Z:\..." — dann der Pfad wie uebergeben.
 pub(crate) fn real(cwd: &str) -> String {
-    fs::canonicalize(cwd).map_or_else(|_| cwd.into(), |p| p.to_string_lossy().trim_start_matches(r"\\?\").into())
+    fs::canonicalize(cwd).map_or_else(
+        |_| cwd.into(),
+        |p| match p.to_string_lossy().strip_prefix(r"\\?\") {
+            Some(r) if r.starts_with("UNC") => cwd.into(),
+            Some(r) => r.into(),
+            None => p.to_string_lossy().into(),
+        },
+    )
 }
 
 pub(crate) fn slug(cwd: &str) -> String {
@@ -805,7 +813,8 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>, Vec<St
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
         .filter_map(|e| serde_json::from_str::<Value>(&fs::read_to_string(e.path()).ok()?).ok())
-        .filter(|v| str_of(v, "cwd") == cwd)
+        // Windows: Schreibweise kann vom realpath abweichen (c:\dev vs C:\Dev)
+        .filter(|v| if cfg!(windows) { str_of(v, "cwd").eq_ignore_ascii_case(cwd) } else { str_of(v, "cwd") == cwd })
         .collect();
     all.sort_by_key(|v| u64_of(v, "updatedAt"));
     let live = all.pop();
