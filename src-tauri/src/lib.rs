@@ -615,7 +615,8 @@ fn tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 /// Aus Finder/Dock gestartet ist PATH nur /usr/bin:/bin:… — git findet dann weder git-lfs
 /// noch Credential-Helper aus Homebrew & Co. PATH daher einmal aus der Login-Shell holen.
 fn login_path() -> Option<String> {
-    let sh = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    // Leeres/fehlendes SHELL: Plattform-Standard wie im Terminal (Linux hat meist kein /bin/zsh).
+    let sh = std::env::var("SHELL").ok().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| crate::pty::UNIX_SHELL.into());
     let out = quiet(&sh)
         .args(["-lic", "printf '\\n__PATH__%s__PATH__' \"$PATH\""])
         .stdin(std::process::Stdio::null())

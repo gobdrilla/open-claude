@@ -1110,7 +1110,13 @@
     e.preventDefault();
   }
 
-  const short = $derived(root ? root.replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/]+/, "~") : "Kein Dev-Ordner");
+  // Home-Ordner als ~ (alle Plattformen); bis homeDir() da ist, wenigstens das Windows-Muster.
+  const short = $derived.by(() => {
+    if (!root) return "Kein Dev-Ordner";
+    const h = home.replace(/[\\/]+$/, "");
+    if (h && (root === h || root.startsWith(h + "/") || root.startsWith(h + "\\"))) return "~" + root.slice(h.length);
+    return root.replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/]+/, "~");
+  });
 </script>
 
 <svelte:window onkeydown={onKey} onkeydowncapture={noteCtrl} onpointerdowncapture={noteCtrl} />

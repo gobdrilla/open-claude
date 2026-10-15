@@ -537,7 +537,9 @@ fn claude(path: &str, args: &[String]) -> Result<std::process::Output, String> {
     if !Path::new(path).is_dir() {
         return Err(format!("{path} ist kein Ordner"));
     }
-    crate::quiet("claude")
+    // Auch ~/.local/bin, falls die Login-Shell es nicht in den PATH legt.
+    let bin = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    crate::quiet(&bin.to_string_lossy())
         .arg("plugin")
         .args(args)
         .current_dir(path)
