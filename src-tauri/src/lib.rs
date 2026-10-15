@@ -519,6 +519,17 @@ pub(crate) fn open_system(target: impl AsRef<std::ffi::OsStr>) -> std::io::Resul
     detach(cmd)
 }
 
+/// http(s)-Link im Standardbrowser. Windows: explorer zerlegt URLs an Kommas, url.dll nimmt die Zeile unveraendert.
+pub(crate) fn open_link(url: &str) -> std::io::Result<()> {
+    if cfg!(windows) {
+        let mut cmd = Command::new("rundll32");
+        cmd.args(["url.dll,FileProtocolHandler", url]);
+        detach(cmd)
+    } else {
+        open_system(url)
+    }
+}
+
 fn detach(mut cmd: Command) -> std::io::Result<()> {
     unbundle(&mut cmd);
     // wait im Thread, sonst bleibt unter Unix ein Zombie-Prozess stehen
@@ -847,7 +858,7 @@ pub fn run() {
             tauri::plugin::Builder::<tauri::Wry>::new("nav-guard")
                 .on_navigation(|w, url| {
                     nav(url, w.app_handle().config().build.dev_url.as_ref()).unwrap_or_else(|| {
-                        let _ = open_system(url.as_str());
+                        let _ = open_link(url.as_str());
                         false
                     })
                 })

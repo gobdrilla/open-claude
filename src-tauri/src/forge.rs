@@ -1291,7 +1291,7 @@ pub fn open_url(url: String) -> Result<(), String> {
     if !valid_url(&url) {
         return Err(format!("Keine http(s)-URL: {url}"));
     }
-    crate::open_system(&url)
+    crate::open_link(&url)
         .map_err(|e| format!("Browser konnte nicht geöffnet werden: {e}"))
 }
 
