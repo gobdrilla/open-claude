@@ -411,7 +411,8 @@ fn windows_build() -> Option<u32> {
 /// Oeffnet einen Ordner im Datei-Explorer; eine Datei zeigt er markiert in ihrem Ordner.
 #[tauri::command]
 fn reveal(path: String) -> Result<(), String> {
-    let p = PathBuf::from(&path);
+    // explorer /select versteht kein "/" (oeffnet sonst "Dokumente"); Terminal-Pfade kommen gemischt.
+    let p = PathBuf::from(if cfg!(windows) { path.replace('/', "\\") } else { path.clone() });
     let shown = if p.is_file() {
         select_file(&p)
     } else if p.is_dir() {
