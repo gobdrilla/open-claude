@@ -3,6 +3,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import { NARRATE, bar, brainHint, guard, level, pace, summarize, withNarrate } from '../hooks/register'
 
 const HOUR = 3_600_000
+// Testharness macht /tmp/x unter Windows zu C:\tmp\x
+const posix = (p?: string) => p?.replace(/\\/g, '/').replace(/^[a-z]:/i, '')
 
 test('bar', () => {
   // 0.62 * 33 = 20.46 Zellen: 20 volle plus Halbzelle
@@ -71,7 +73,7 @@ test('datei fuers app-panel', async ($, on) => {
     rateLimits: [{ kind: 'five_hour', percentUsed: 10 }],
     changed: ['context', 'rateLimits'],
   })
-  expect(w.at(-1)?.path).toBe('/tmp/x/p.json')
+  expect(posix(w.at(-1)?.path)).toBe('/tmp/x/p.json')
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ context: { percent: 25 }, limits: [{ percentUsed: 10 }] })
 })
 
@@ -124,8 +126,8 @@ test('befehle aus der app', async ($, on) => {
   on('ui.toast', () => ({ value: undefined }) as never)
   let reads = 0
   on('fs.read', (_$, e) => {
-    if (e.path === '/tmp/x/p.cmd') reads++
-    if (e.path !== '/tmp/x/p.cmd' || !cmd) throw new Error('fehlt')
+    if (posix(e.path) === '/tmp/x/p.cmd') reads++
+    if (posix(e.path) !== '/tmp/x/p.cmd' || !cmd) throw new Error('fehlt')
     return { value: cmd }
   })
   on('command.run', (_$, e) => (runs.push(`${e.command} ${e.args}`), { text: '' }))
@@ -179,7 +181,7 @@ test('panel-pfad aus dem store nach reload', async ($, on) => {
   on('session.model', () => ({ value: 'm' }) as never)
   on('store.get', (_$, e) => ({ value: e.key === 'panelFiles' ? { s1: '/tmp/x/p.json', s2: '/tmp/y/q.json' } : true }) as never)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never)
-  expect(w.at(-1)?.path).toBe('/tmp/x/p.json')
+  expect(posix(w.at(-1)?.path)).toBe('/tmp/x/p.json')
 })
 
 test('panelFiles hoechstens 20 eintraege', async ($, on) => {
@@ -232,6 +234,7 @@ test('brainHint', () => {
   expect(brainHint(t, 'Agent', { subagent_type: 'Plan' })).toBe(null)
   expect(brainHint(t, 'Bash', { command: 'git add -A && git commit -m x' })).toBe('commit')
   expect(brainHint(t, 'Bash', { command: 'git status' })).toBe(null)
+  expect(brainHint(t, 'PowerShell', { command: 'git commit -m x' })).toBe('commit')
   expect(brainHint({ ...t, recall: true, remember: true }, 'Grep', {})).toBe(null)
   expect(brainHint({ ...t, recall: true, remember: true }, 'Bash', { command: 'git commit' })).toBe(null)
 })
@@ -300,6 +303,8 @@ test('guardrails', () => {
   expect(w('rd /s /q ..\\other')).toMatch(/rm -rf/)
   expect(w('Remove-Item -Recurse -Force build')).toBe(undefined)
   expect(w('Remove-Item -Recurse -Force c:\\repo\\dist')).toBe(undefined)
+  expect(w('Remove-Item -Recurse -Force C:\\Repo\\dist')).toBe(undefined)
+  expect(w('Remove-Item -Recurse -Force C:\\Repo2\\dist')).toMatch(/rm -rf/)
   expect(w('Remove-Item -Recurse C:\\x')).toBe(undefined)
   expect(g('rm -rf /c/repo/dist', 'C:\\repo')).toBe(undefined)
   expect(g('rm -rf /c/other', 'C:\\repo')).toMatch(/rm -rf/)

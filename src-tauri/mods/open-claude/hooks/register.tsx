@@ -116,8 +116,8 @@ const SHELLS = new Set(['Bash', 'PowerShell'])
 const RM_RF = /\brm\s+((?:-\S+\s+)+)([^;&|]*)/g
 // PowerShell (Remove-Item -Recurse -Force, Alias ri) und cmd (rd/rmdir/del /s /q).
 const WIN_DEL = /\b(?:Remove-Item|ri|rd|rmdir|del|erase)\s+([^;&|]*)/gi
-// Pfade vergleichbar machen: Backslash zu /, Git-Bash /c/... zu c:/..., Laufwerke ohne Gross/Klein.
-const norm = (p: string) => p.replace(/\\/g, '/').replace(/^\/([a-z])(\/|$)/i, '$1:/').replace(/^[a-z]:/i, d => d.toLowerCase()).replace(/\/+$/, '')
+// Pfade vergleichbar machen: Backslash zu /, Git-Bash /c/... zu c:/..., Windows-Pfade ganz ohne Gross/Klein.
+const norm = (p: string) => p.replace(/\\/g, '/').replace(/^\/([a-z])(\/|$)/i, '$1:/').replace(/^[a-z]:.*/i, d => d.toLowerCase()).replace(/\/+$/, '')
 // Ziel ausserhalb: ~, $VAR, '..' oder absolut ausserhalb des Repos (ohne cwd: jeder absolute Pfad).
 const outside = (target: string, cwd?: string) => {
   const t = norm(target.replace(/^['"]|['"]$/g, '')), c = cwd && norm(cwd)
@@ -172,6 +172,8 @@ const agentsRunning = async ($: EngineInterface) =>
 // gemerkt und aus der Env genommen, damit verschachtelte `claude -p` nicht dieselbe Datei ueberschreiben.
 // Hot-Reload leert die Modul-Variablen und die Env: der Pfad liegt zusaetzlich im Store, je Sitzungs-ID (Store ist pro Plugin global).
 let file: string | undefined
+// Sitzungs-cwd fuer guard: PWD fehlt unter Windows meist (Explorer-Start, ocui-sh setzt es nicht).
+let cwd: string | undefined
 // Timer einmalig; ein Reload bricht die alten ab und setzt auch dieses Flag zurueck
 // (Plugin-Doku: Reload startet register in frischer Umgebung, "the previous environment's timers are dropped").
 let timers = false
@@ -224,7 +226,7 @@ let brain = brainTurn()
 // Welcher Brain-Hinweis zu diesem Tool-Aufruf passt, oder null.
 export const brainHint = (t: BrainTurn, tool: string, input: Record<string, unknown>): keyof typeof BRAIN_HINT | null => {
   if (tool === 'Grep' || tool === 'Glob' || ((tool === 'Agent' || tool === 'Task') && input.subagent_type === 'Explore')) return t.recall ? null : 'search'
-  if (tool === 'Bash' && /\bgit\b.*\bcommit\b/.test(String(input.command ?? ''))) return t.remember ? null : 'commit'
+  if (SHELLS.has(tool) && /\bgit\b.*\bcommit\b/.test(String(input.command ?? ''))) return t.remember ? null : 'commit'
   return null
 }
 
@@ -257,6 +259,7 @@ const pollCmd = async ($: EngineInterface) => {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    cwd = (e as { cwd?: string }).cwd || cwd
     const env = await $.env.get('OPEN_CLAUDE_PANEL')
     const id = await $.session.id().catch(() => '')
     const saved = (await $.store.get('panelFiles').catch(() => undefined)) as Record<string, string> | undefined
@@ -349,7 +352,7 @@ export const register: Register = on => {
   // Rechte-Dialog: Claude wartet auf den User.
   on('tool.check', async ($, e, next) => {
     let v = await next(e)
-    const risk = guard(e.tool, e.input, await $.env.get('PWD'))
+    const risk = guard(e.tool, e.input, (e as { cwd?: string }).cwd || cwd || (await $.env.get('PWD')))
     if (risk && v.decision !== 'deny') v = { decision: 'ask', reason: `Riskant: ${risk.why}. Wirklich ausführen?` }
     if (v.decision === 'ask') await setBusy($, false, true, { tool: e.tool, summary: risk ? summarize('Bash', { command: risk.text }) : summarize(e.tool, e.input) })
     return v
@@ -437,7 +440,7 @@ export const register: Register = on => {
 
   on('prompt.submit', ($, e, next) => next(withNarrate(e)))
 
-  on('tool.call', { tool: /^(Grep|Glob|Agent|Task|Bash)$/ }, async ($, e, next) => {
+  on('tool.call', { tool: /^(Grep|Glob|Agent|Task|Bash|PowerShell)$/ }, async ($, e, next) => {
     const ran = await next(e)
     const hint = brainOn ? brainHint(brain, String(e.tool), e as unknown as Record<string, unknown>) : null
     if (!hint || brain.hinted.has(hint) || ran.isError || 'deny' in ran) return ran
