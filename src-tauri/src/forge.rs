@@ -955,7 +955,7 @@ pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, na
             f.write_all(&chunk).map_err(|e| e.to_string())?;
         }
         f.sync_all().map_err(|e| e.to_string())?;
-        std::fs::rename(&part, &dest).map_err(|e| e.to_string())
+        crate::files::rename_retry(&part, &dest).map_err(|e| e.to_string())
     }
     .await;
     if let Err(e) = result {

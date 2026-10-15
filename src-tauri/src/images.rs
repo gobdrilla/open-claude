@@ -103,8 +103,11 @@ fn clean_file(p: &Path) -> std::io::Result<(usize, u64)> {
     let tmp = p.with_extension("jsonl.clean");
     fs::write(&tmp, &out)?;
     // Transkripte sind 0600, die neue Datei bekaeme sonst Standardrechte.
-    fs::set_permissions(&tmp, fs::metadata(p)?.permissions())?;
-    fs::rename(&tmp, p)?;
+    // Windows: Virenscanner/Indexer sperren die Datei kurz; dann kein *.jsonl.clean liegen lassen.
+    if let Err(e) = fs::metadata(p).and_then(|m| fs::set_permissions(&tmp, m.permissions())).and_then(|()| fs::rename(&tmp, p)) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
     Ok((n + m, (read + raw.len() as u64).saturating_sub(out.len() as u64)))
 }
 

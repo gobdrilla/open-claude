@@ -54,6 +54,19 @@ pub(crate) fn within(repo: &str, path: &str) -> Result<PathBuf, String> {
     Ok(file)
 }
 
+/// Umbenennen; unter Windows halten Virenscanner/Indexer frische Dateien kurz offen (PermissionDenied).
+pub(crate) fn rename_retry(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+    for _ in 0..5 {
+        match std::fs::rename(&from, &to) {
+            Err(e) if cfg!(windows) && e.kind() == std::io::ErrorKind::PermissionDenied => {
+                std::thread::sleep(std::time::Duration::from_millis(50))
+            }
+            r => return r,
+        }
+    }
+    std::fs::rename(from, to)
+}
+
 /// Millisekunden seit 1970; 0, wenn das Dateisystem keine Aenderungszeit liefert.
 fn mtime(path: &Path) -> Option<u64> {
     std::fs::metadata(path).ok().map(|m| millis(&m))
@@ -146,11 +159,16 @@ fn write(
     let name = target.file_name().ok_or_else(|| format!("Ungültiger Pfad: {path}"))?.to_string_lossy();
     let tmp = target.with_file_name(format!(".{name}.ocui-tmp"));
     let err = |e: std::io::Error| format!("Konnte {path} nicht schreiben: {e}");
+    // Windows: Rechte sind nur das Schreibschutz-Bit; eine schreibgeschuetzte Temp-Datei liesse sich weder umbenennen noch loeschen.
+    if cfg!(windows) && std::fs::metadata(&target).is_ok_and(|m| m.permissions().readonly()) {
+        return Err(format!("{path} ist schreibgeschützt."));
+    }
     let done = (|| {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(data.as_bytes())?;
         f.sync_all()?;
         // Rechte (ausfuehrbar) der alten Datei behalten.
+        #[cfg(unix)]
         if let Ok(meta) = std::fs::metadata(&target) {
             std::fs::set_permissions(&tmp, meta.permissions())?;
         }
@@ -158,7 +176,7 @@ fn write(
         // beim Umbenennen erhalten, und danach koennte schon ein anderer geschrieben haben.
         drop(f);
         let at = millis(&std::fs::metadata(&tmp)?);
-        std::fs::rename(&tmp, &target)?;
+        rename_retry(&tmp, &target)?;
         Ok(at)
     })();
     done.map_err(|e| {
@@ -471,6 +489,20 @@ mod tests {
         assert!(within(&repo, "x/config").is_err());
         assert!(write(&repo, "x/config", "x", false, false, None, true).is_err());
         assert!(!git.join("config").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn schreibgeschuetzt_ohne_temp_rest() {
+        let repo = tmp("readonly");
+        let file = Path::new(&repo).join("a.txt");
+        std::fs::write(&file, "alt").unwrap();
+        let mut p = std::fs::metadata(&file).unwrap().permissions();
+        p.set_readonly(true);
+        std::fs::set_permissions(&file, p).unwrap();
+        assert!(write(&repo, "a.txt", "neu", false, false, None, true).is_err());
+        assert!(!Path::new(&repo).join(".a.txt.ocui-tmp").exists());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "alt");
     }
 
     #[test]
