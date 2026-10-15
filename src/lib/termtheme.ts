@@ -1,4 +1,5 @@
 import { forge } from "$lib/git";
+import { invoke } from "@tauri-apps/api/core";
 
 /** xterm-linkHandler fuer OSC-8-Links (claude gibt Links so aus): http(s) im Browser, Rest verwerfen.
  *  xterms Standard fragt per window.confirm und oeffnet window.open, also ein App-Fenster. */
@@ -60,6 +61,13 @@ export const LIGHT = {
   brightWhite: "#5e636f", // --muted-foreground
 };
 
+
+let pty: Promise<{ backend: "conpty"; buildNumber: number } | undefined> | undefined;
+/** Windows: ConPTY samt Build fuer xterm (Reflow erst ab Build 21376, sonst doppelte Zeilen nach Resize); sonst undefined. */
+export const windowsPty = () =>
+  (pty ??= invoke<number | null>("windows_build")
+    .then((b) => (b ? { backend: "conpty" as const, buildNumber: b } : undefined))
+    .catch(() => undefined));
 
 /** Strg+Umschalt+C, Strg+C mit Auswahl (nicht macOS: dort ist Cmd+C nativ) und Strg+V fuer Terminal und RunPane.
  *  true = erledigt, xterm soll das Event schlucken; sonst nicht zustaendig. `noText`: Zwischenablage ohne Text. */

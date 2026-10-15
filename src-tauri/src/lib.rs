@@ -382,6 +382,32 @@ fn before_update(app: tauri::AppHandle) {
     shutdown(&app);
 }
 
+/// Windows-Build fuer xterms windowsPty (ConPTY kann erst ab 21376 selbst umbrechen); sonst None.
+#[tauri::command]
+fn windows_build() -> Option<u32> {
+    #[cfg(windows)]
+    {
+        #[repr(C)]
+        struct Info {
+            size: u32,
+            major: u32,
+            minor: u32,
+            build: u32,
+            platform: u32,
+            sp: [u16; 128],
+        }
+        #[link(name = "ntdll")]
+        extern "system" {
+            fn RtlGetVersion(i: *mut Info) -> i32;
+        }
+        // RtlGetVersion statt GetVersionEx: ohne Manifest-Eintrag luegt GetVersionEx (meldet 9200).
+        let mut i = Info { size: std::mem::size_of::<Info>() as u32, major: 0, minor: 0, build: 0, platform: 0, sp: [0; 128] };
+        (unsafe { RtlGetVersion(&mut i) } == 0).then_some(i.build)
+    }
+    #[cfg(not(windows))]
+    None
+}
+
 /// Oeffnet einen Ordner im Datei-Explorer; eine Datei zeigt er markiert in ihrem Ordner.
 #[tauri::command]
 fn reveal(path: String) -> Result<(), String> {
@@ -690,6 +716,7 @@ pub fn run() {
             scan,
             reveal,
             before_update,
+            windows_build,
             path_kinds,
             trash_repo,
             trash_check,

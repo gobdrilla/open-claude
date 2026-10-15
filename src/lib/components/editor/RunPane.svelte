@@ -15,7 +15,7 @@
   import SquareIcon from "@lucide/svelte/icons/square";
   import { ptyResize } from "$lib/files";
   import { MOD } from "$lib/editor.logic";
-  import { DARK, LIGHT, LINKS, clipboardKey } from "$lib/termtheme";
+  import { DARK, LIGHT, LINKS, clipboardKey, windowsPty } from "$lib/termtheme";
   import { theme } from "$lib/theme.svelte";
   import { attach, clearOutput, run, runRestart, runStart, runStop, runWrite, tailOutput } from "$lib/run.svelte";
   import { sendToClaude } from "$lib/ide.svelte";
@@ -75,6 +75,7 @@
       theme: theme.dark ? DARK : LIGHT,
     });
     term = t;
+    windowsPty().then((p) => p && (t.options.windowsPty = p));
     t.loadAddon(fit);
     // Emoji-Breiten wie moderne Tools (sonst verrutschen Neuzeichnungen, siehe Terminal.svelte)
     t.loadAddon(new Unicode11Addon());

@@ -17,7 +17,7 @@
   import ClaudeLoader from "./ClaudeLoader.svelte";
   import { evenCell } from "$lib/termcell";
   import { theme } from "$lib/theme.svelte";
-  import { DARK, LIGHT, LINKS, clipboardKey } from "$lib/termtheme";
+  import { DARK, LIGHT, LINKS, clipboardKey, windowsPty } from "$lib/termtheme";
   import { modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
   import { keep, pathHits } from "$lib/termlinks";
@@ -196,6 +196,7 @@
       theme: theme.dark ? DARK : LIGHT,
     });
     term = t;
+    windowsPty().then((p) => p && (t.options.windowsPty = p));
     screens.set(id, () => {
       const b = t.buffer.active;
       return Array.from({ length: t.rows }, (_, i) => b.getLine(b.viewportY + i)?.translateToString(true) ?? "").join("\n");
