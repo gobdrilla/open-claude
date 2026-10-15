@@ -39,13 +39,15 @@
     {@render children?.()}
   </div>
 {:else}
-  <div class="border-border flex items-center gap-1 border-b px-2" role="tablist">
+  <!-- Zu schmal: Tabs scrollen in ihrer Leiste (ohne Balken). Sonst schob der Fokus eines verdeckten Tabs das ganze Panel zur Seite. -->
+  <div class="flex items-center gap-1 px-2 shadow-[inset_0_-1px_0_var(--border)]">
+    <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
     {#each tabs as t (t.id)}
       <button
         role="tab"
         aria-selected={value === t.id}
         title={t.title}
-        class="-mb-px border-b-2 px-2 {dense ? 'py-1 text-[11px]' : 'py-1.5'} {value === t.id
+        class="shrink-0 border-b-2 px-2 whitespace-nowrap {dense ? 'py-1 text-[11px]' : 'py-1.5'} {value === t.id
           ? 'border-primary text-foreground'
           : 'text-muted-foreground hover:text-foreground border-transparent'}"
         onclick={() => (value = t.id)}
@@ -55,6 +57,7 @@
           >{:else if t.count}<span class="text-muted-foreground ml-1.5 tabular-nums">{t.count}</span>{/if}</button
       >
     {/each}
+    </div>
     {@render children?.()}
   </div>
 {/if}

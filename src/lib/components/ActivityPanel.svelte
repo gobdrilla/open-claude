@@ -484,9 +484,9 @@
   >
     {#if claudeState}
       {@const [i, c, t] = claudeState}
-      <span class="text-foreground ml-auto flex items-center gap-1.5 pr-1 text-[11px]"><span class={c}>{i}</span>{t}</span>
+      <span class="text-foreground ml-auto flex shrink-0 items-center gap-1.5 pr-1 pl-1 text-[11px] whitespace-nowrap"><span class={c}>{i}</span>{t}</span>
     {:else if live}
-      <span class="text-muted-foreground ml-auto flex items-center gap-1.5 pr-1 text-[11px]">
+      <span class="text-muted-foreground ml-auto flex shrink-0 items-center gap-1.5 pr-1 pl-1 text-[11px] whitespace-nowrap">
         <span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{runningRuns ? "Workflow läuft" : runningAgents ? "Agents laufen" : "läuft"}
       </span>
     {/if}
@@ -512,27 +512,30 @@
         </div>
         {#each tpls as x (x.f.path)}
           <div class="border-border/60 flex items-center gap-1.5 border-t px-2 py-1">
-            <span class="max-w-32 shrink-0 truncate font-medium" title={x.f.path}>{x.name}</span>
-            <span class="text-muted-foreground shrink-0 text-[10px]">{x.f.scope === "user" ? "Global" : "Projekt"}</span>
-            {#if !x.builder}<span class="bg-secondary shrink-0 rounded px-1 text-[10px]" title="Freies Skript: nur starten und löschen">Skript</span>{/if}
-            {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-[10px]">Projekt überschreibt Global</span>{/if}
+            <span class="max-w-32 min-w-10 truncate font-medium" title={x.f.path}>{x.name}</span>
+            <!-- Badges werden bei Platzmangel abgeschnitten, die Knoepfe rechts nie. -->
+            <span class="flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
+              <span class="text-muted-foreground shrink-0 text-[10px]">{x.f.scope === "user" ? "Global" : "Projekt"}</span>
+              {#if !x.builder}<span class="bg-secondary shrink-0 rounded px-1 text-[10px]" title="Freies Skript: nur starten und löschen">Skript</span>{/if}
+              {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-[10px]" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
+            </span>
             <span class="text-muted-foreground min-w-0 flex-1 truncate" title={x.description}>{x.description}</span>
             <button
-              class="hover:text-foreground text-muted-foreground disabled:opacity-40"
+              class="hover:text-foreground text-muted-foreground shrink-0 disabled:opacity-40"
               disabled={!data?.alive}
               title={data?.alive ? "In die Claude-Session schreiben (Enter selbst drücken)" : "Kein laufendes claude in diesem Terminal-Ordner"}
               aria-label="Starten"
               onclick={() => startTemplate(x.f)}><PlayIcon class="size-3.5" /></button
             >
             <button
-              class="hover:text-foreground text-muted-foreground disabled:opacity-40"
+              class="hover:text-foreground text-muted-foreground shrink-0 disabled:opacity-40"
               disabled={!x.builder}
               title={x.builder ? "Bearbeiten" : "Freies Skript: nur in einer Datei bearbeitbar"}
               aria-label="Bearbeiten"
               onclick={() => editTemplate(x.f)}><PencilIcon class="size-3.5" /></button
             >
             <button
-              class="hover:text-destructive text-muted-foreground disabled:opacity-40"
+              class="hover:text-destructive text-muted-foreground shrink-0 disabled:opacity-40"
               disabled={!/^[A-Za-z0-9_-]+$/.test(x.f.file)}
               title={/^[A-Za-z0-9_-]+$/.test(x.f.file) ? "Löschen" : "Dateiname mit Sonderzeichen: nur von Hand löschbar"}
               aria-label="Löschen"
@@ -636,11 +639,11 @@
             {#each panel.todos as t, i (i)}
               <div class="flex gap-2">
                 {#if t.status === "completed"}
-                  <span class="text-success">✓</span><span class="text-muted-foreground line-through">{t.content}</span>
+                  <span class="text-success">✓</span><span class="text-muted-foreground min-w-0 line-through [overflow-wrap:anywhere]">{t.content}</span>
                 {:else if t.status === "in_progress"}
-                  <span class="text-primary">◐</span><span>{t.content}</span>
+                  <span class="text-primary">◐</span><span class="min-w-0 [overflow-wrap:anywhere]">{t.content}</span>
                 {:else}
-                  <span class="text-muted-foreground">○</span><span>{t.content}</span>
+                  <span class="text-muted-foreground">○</span><span class="min-w-0 [overflow-wrap:anywhere]">{t.content}</span>
                 {/if}
               </div>
             {/each}
@@ -678,8 +681,8 @@
               onclick={() => (openRuns[r.id] = !open)}
             >
               <span class={color} title={text}>{icon}</span>
-              <span class="min-w-0 flex-1 truncate font-medium" title={r.name}>{r.name}</span>
-              <span class="text-muted-foreground shrink-0 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
+              <span class="min-w-16 flex-1 truncate font-medium" title={r.name}>{r.name}</span>
+              <span class="text-muted-foreground min-w-0 truncate tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
             </button>
             <button class="text-muted-foreground hover:text-foreground shrink-0 p-1.5" title="Groß anzeigen" aria-label="Groß anzeigen" onclick={() => openBig(r)}
               ><Maximize2Icon class="size-3.5" /></button
@@ -828,8 +831,8 @@
       >
         <ChevronDownIcon class="text-muted-foreground size-3.5 shrink-0 transition-transform {open ? '' : '-rotate-90'}" />
         <span class={pc} title={pt}>{pi}</span>
-        <span class="min-w-0 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}">{g.p || "Ohne Phase"}</span>
-        <span class="text-muted-foreground shrink-0 tabular-nums"
+        <span class="min-w-16 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}" title={g.p}>{g.p || "Ohne Phase"}</span>
+        <span class="text-muted-foreground min-w-0 truncate tabular-nums"
           >{pt} · {n}/{Math.max(g.agents.length, r.planned[r.phases.indexOf(g.p)] ?? 0)}{#if err}<span class="text-destructive"> · {err} ✕</span>{/if}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
               g.agents.reduce((t, a) => t + a.tokens, 0),
             )}{/if}</span
@@ -852,8 +855,8 @@
             >
               <div class="flex items-center gap-2">
                 <span class={ac} title={at}>{ai}</span>
-                <span class="min-w-0 flex-1 truncate" title={a.label || a.id}>{a.label || a.id}</span>
-                <span class="text-muted-foreground shrink-0 tabular-nums"
+                <span class="min-w-16 flex-1 truncate" title={a.label || a.id}>{a.label || a.id}</span>
+                <span class="text-muted-foreground min-w-0 truncate tabular-nums"
                   >{dur(agentDur(r, a))}{#if a.tokens} · {tokens(a.tokens)}{/if}</span
                 >
                 {#if a.id}<ChevronRightIcon class="text-muted-foreground size-3.5 shrink-0 opacity-0 group-hover/agent:opacity-100" />{/if}
