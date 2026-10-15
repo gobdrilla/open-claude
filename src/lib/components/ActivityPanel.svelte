@@ -137,7 +137,7 @@
   const runningRuns = $derived(data?.runs.filter((r) => r.status === "running").length ?? 0);
   const runningAgents = $derived(data?.agents.filter((a) => a.state === "running").length ?? 0);
   const live = $derived(!!runningRuns || !!runningAgents || !!panel?.active.some((a) => a.state === "run"));
-  // Status rechts in der Tab-Leiste; Glyphen und Farben wie an den Sitzungs-Tabs oben. Ohne laufendes claude
+  // Status in der Fusszeile; Glyphen und Farben wie an den Sitzungs-Tabs oben. Ohne laufendes claude
   // kann busy in der Panel-Datei haengen geblieben sein.
   const claudeState = $derived(
     !data?.alive
@@ -482,16 +482,7 @@
       { id: "img", label: "Bilder", count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
     ]}
-  >
-    {#if claudeState}
-      {@const [i, c, t] = claudeState}
-      <span class="text-foreground ml-auto flex shrink-0 items-center gap-1.5 pr-1 pl-1 text-[11px] whitespace-nowrap"><span class={c}>{i}</span>{t}</span>
-    {:else if live}
-      <span class="text-muted-foreground ml-auto flex shrink-0 items-center gap-1.5 pr-1 pl-1 text-[11px] whitespace-nowrap">
-        <span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{runningRuns ? "Workflow läuft" : runningAgents ? "Agents laufen" : "läuft"}
-      </span>
-    {/if}
-  </Tabs>
+  />
 
   {#if inFocus}
     <!-- Ausserhalb des Scrollbereichs: sticky lag dort ueber breitem Inhalt. -->
@@ -711,6 +702,18 @@
       <Empty>Noch keine Bilder in dieser Session.</Empty>
     {/if}
   </div>
+
+  <!-- Status unten statt in der Tab-Leiste: dort nahm er den Tabs bei schmalem Panel den Platz. -->
+  {#if claudeState || live}
+    <div class="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 truncate border-t px-2.5 py-1 text-[11px] whitespace-nowrap">
+      {#if claudeState}
+        {@const [i, c, t] = claudeState}
+        <span class={c}>{i}</span><span class="text-foreground truncate">{t}</span>
+      {:else}
+        <span class="bg-primary size-1.5 shrink-0 animate-pulse rounded-full"></span><span class="truncate">{runningRuns ? "Workflow läuft" : runningAgents ? "Agents laufen" : "läuft"}</span>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 {#snippet agentHead()}
