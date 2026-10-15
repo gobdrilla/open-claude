@@ -916,6 +916,17 @@ fn free_name(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
         .unwrap()
 }
 
+/// Windows: Mark-of-the-Web wie ein Browser, damit SmartScreen bzw. Office den Download als aus dem Internet erkennen.
+/// Ohne NTFS-Datenstroeme (FAT, exFAT) geht das nicht; dann ohne Markierung.
+fn mark_web(dest: &std::path::Path, url: &str) {
+    if cfg!(windows) {
+        let host = url.split(['?', '#']).next().unwrap_or("");
+        let mut ads = dest.as_os_str().to_owned();
+        ads.push(":Zone.Identifier");
+        let _ = std::fs::write(ads, format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={host}\r\n"));
+    }
+}
+
 /// Laedt ein Release-Asset in den Downloads-Ordner; Rueckgabe ist der volle Pfad.
 #[tauri::command]
 pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, name: String, url: String, api: Option<String>) -> Result<String, String> {
@@ -962,6 +973,7 @@ pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, na
         let _ = std::fs::remove_file(&part);
         return Err(e);
     }
+    mark_web(&dest, &url);
     Ok(dest.to_string_lossy().into_owned())
 }
 
@@ -1310,6 +1322,20 @@ mod tests {
         assert_eq!(super::safe_name("CON.txt"), "_CON.txt");
         assert_eq!(super::safe_name("x. "), "x");
         assert_eq!(super::safe_name("con .zip"), "_con .zip");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn download_bekommt_mark_of_the_web() {
+        let f = std::env::temp_dir().join(format!("ocui-motw-{}.exe", std::process::id()));
+        std::fs::write(&f, b"x").unwrap();
+        super::mark_web(&f, "https://github.com/o/r/releases/download/v1/a.exe?token=geheim");
+        let mut ads = f.as_os_str().to_owned();
+        ads.push(":Zone.Identifier");
+        let z = std::fs::read_to_string(ads).unwrap();
+        assert_eq!(z, "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://github.com/o/r/releases/download/v1/a.exe\r\n");
+        assert_eq!(std::fs::read(&f).unwrap(), b"x");
+        let _ = std::fs::remove_file(&f);
     }
 
     #[test]
