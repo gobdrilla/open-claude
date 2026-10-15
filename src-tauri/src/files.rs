@@ -266,9 +266,18 @@ fn diff_texts(repo: &str, path: &str, old: &str, new: &str, zero: bool) -> Resul
         let n = N.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!("ocui-diff-{}-{n}-{side}", std::process::id()))
     };
+    // Ungespeicherter Editor-Inhalt im gemeinsamen /tmp: nur fuer uns lesbar, nie einem fremden Symlink folgen.
+    let write = |p: &Path, s: &str| -> std::io::Result<()> {
+        let _ = std::fs::remove_file(p);
+        let mut o = std::fs::OpenOptions::new();
+        o.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+        o.open(p)?.write_all(s.as_bytes())
+    };
     let (a, b) = (tmp("a"), tmp("b"));
-    let res = std::fs::write(&a, old)
-        .and_then(|()| std::fs::write(&b, new))
+    let res = write(&a, old)
+        .and_then(|()| write(&b, new))
         .map_err(|e| format!("Vergleich fehlgeschlagen: {e}"))
         .and_then(|()| {
             let mut cmd = git(repo);

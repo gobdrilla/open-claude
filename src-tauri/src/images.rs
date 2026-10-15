@@ -102,6 +102,8 @@ fn clean_file(p: &Path) -> std::io::Result<(usize, u64)> {
     out.push_str(&tail);
     let tmp = p.with_extension("jsonl.clean");
     fs::write(&tmp, &out)?;
+    // Transkripte sind 0600, die neue Datei bekaeme sonst Standardrechte.
+    fs::set_permissions(&tmp, fs::metadata(p)?.permissions())?;
     fs::rename(&tmp, p)?;
     Ok((n + m, (read + raw.len() as u64).saturating_sub(out.len() as u64)))
 }

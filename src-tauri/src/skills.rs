@@ -201,6 +201,10 @@ pub(crate) fn atomic_write(file: &Path, text: &str) -> Result<(), String> {
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = file.with_extension(format!("json.{}.{n}.tmp", std::process::id()));
     std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    // Rechte der alten Datei behalten: ~/.claude.json (OAuth) ist 0600 und darf nicht lesbar werden.
+    if let Ok(meta) = std::fs::metadata(file) {
+        std::fs::set_permissions(&tmp, meta.permissions()).map_err(|e| e.to_string())?;
+    }
     std::fs::rename(&tmp, file).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
         e.to_string()
