@@ -133,6 +133,7 @@
   }
   ::-webkit-scrollbar {
     width: 10px;
+    height: 10px;
   }
   /* WebView2 bei 125/150 % rastert die Drehung sonst je Frame an Pixel geschnappt: Icon eiert um falsche Mitte. */
   .animate-spin {

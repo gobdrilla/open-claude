@@ -16,7 +16,6 @@
   let { repo }: { repo: string } = $props();
 
   const s = $derived(editor(repo));
-  const mac = navigator.userAgent.includes("Mac");
   let error = $state("");
   /** Projektordner nicht lesbar: steht statt des Baums da, bis "Neu laden" klappt. */
   let rootError = $state("");

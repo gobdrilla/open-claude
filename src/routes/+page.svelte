@@ -1650,11 +1650,11 @@
                       </span>
                       {#if nr <= 9}
                         <kbd
-                          class="text-muted-foreground border-border hidden w-10 rounded border px-1 py-0.5 text-center font-mono text-[10px] sm:block"
-                          >{mac ? "⌘" : "^"}{nr}</kbd
+                          class="text-muted-foreground border-border hidden {mac ? 'w-10' : 'w-12'} rounded border px-1 py-0.5 text-center font-mono text-[10px] sm:block"
+                          >{mac ? `⌘${nr}` : `${mod}+${nr}`}</kbd
                         >
                       {:else}
-                        <span class="hidden w-10 sm:block"></span>
+                        <span class="hidden {mac ? 'w-10' : 'w-12'} sm:block"></span>
                       {/if}
                     </Command.Item>
                   {/snippet}

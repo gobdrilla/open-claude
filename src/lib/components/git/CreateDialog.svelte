@@ -52,7 +52,7 @@
   // Zielordner nachfuehren, solange der Nutzer ihn nicht selbst angefasst hat.
   $effect(() => {
     if (destTouched) return;
-    dest = name ? `${root}/${name}` : "";
+    dest = name ? `${root}${root.includes("\\") ? "\\" : "/"}${name}` : "";
   });
 
   async function browseDest() {

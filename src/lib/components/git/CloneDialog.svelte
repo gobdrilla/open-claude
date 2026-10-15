@@ -73,7 +73,7 @@
   $effect(() => {
     if (destTouched) return;
     const name = mode === "url" ? nameFromUrl(url) : (selected?.name ?? "");
-    dest = name ? `${root}/${name}` : "";
+    dest = name ? `${root}${root.includes("\\") ? "\\" : "/"}${name}` : "";
   });
 
   async function selectAccount(a: Account) {
