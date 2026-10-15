@@ -195,10 +195,16 @@ pub fn pty_open(
     let (program, args) =
         shell(cfg!(windows), &own, settings.is_some(), |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
     let dirs = mod_dirs(&app);
-    let panel = crate::activity::panel_file(&id).to_string_lossy().into_owned();
+    // Ordner vorher sicher anlegen; geht das nicht (fremder Besitzer), laeuft die Sitzung ohne Panel.
+    let panel = crate::activity::ensure_panel_dir()
+        .map_err(|e| eprintln!("Panel-Ordner: {e}"))
+        .ok()
+        .map(|_| crate::activity::panel_file(&id).to_string_lossy().into_owned());
     let mut env: Vec<_> = dirs.iter().map(|d| ("CLAUDE_CODE_PLUGIN_DIRS", d.as_str())).collect();
     // Die Mod schreibt ihre Session-Daten dorthin, das App-Panel liest sie.
-    env.push(("OPEN_CLAUDE_PANEL", &panel));
+    if let Some(p) = &panel {
+        env.push(("OPEN_CLAUDE_PANEL", p));
+    }
     if let Some(s) = &settings {
         env.push(("OPEN_CLAUDE_SETTINGS", s));
     }

@@ -57,9 +57,43 @@ fn modes(c: &Path) -> Vec<Mode> {
     out
 }
 
+/// Ordner fuer Panel- und Befehlsdateien. Linux: $XDG_RUNTIME_DIR (0700, nur unserer) statt des gemeinsamen /tmp;
+/// macOS/Windows haben ohnehin ein Temp je Nutzer.
+pub fn panel_dir() -> PathBuf {
+    #[cfg(target_os = "linux")]
+    if let Some(d) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|d| d.is_absolute() && d.is_dir()) {
+        return d.join("open-claude-panel");
+    }
+    std::env::temp_dir().join("open-claude-panel")
+}
+
+/// Legt panel_dir() an. Unix: 0700 und eigener Besitzer, sonst koennte ein anderer Nutzer (Fallback /tmp) dort
+/// Befehle ablegen, die die Mod in unserer Sitzung ausfuehrt, oder per Symlink Dateien ueberschreiben lassen.
+pub fn ensure_panel_dir() -> Result<PathBuf, String> {
+    let d = panel_dir();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        match fs::DirBuilder::new().mode(0o700).create(&d) {
+            Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(e.to_string()),
+            _ => {}
+        }
+        let m = fs::symlink_metadata(&d).map_err(|e| e.to_string())?;
+        if !m.is_dir() || m.uid() != unsafe { libc::getuid() } {
+            return Err(format!("{} gehört einem anderen Nutzer", d.display()));
+        }
+        if m.mode() & 0o077 != 0 {
+            fs::set_permissions(&d, fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
+        }
+    }
+    #[cfg(not(unix))]
+    fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d)
+}
+
 /// Datei, in die die Mod im Terminal `id` ihr Panel-Atom schreibt (Env OPEN_CLAUDE_PANEL).
 pub fn panel_file(id: &str) -> PathBuf {
-    std::env::temp_dir().join("open-claude-panel").join(format!("{id}.json"))
+    panel_dir().join(format!("{id}.json"))
 }
 
 /// Limits gelten fuers ganze Konto, kommen aber erst mit einer API-Antwort: neueste Panel-Datei mit Limits nehmen,
@@ -880,8 +914,8 @@ pub fn claude_command(id: String, command: String, args: String) -> Result<u64, 
     if !crate::pty::valid_id(&id) {
         return Err(format!("Ungueltige Sitzung: {id}"));
     }
+    ensure_panel_dir()?;
     let f = panel_file(&id).with_extension("cmd");
-    fs::create_dir_all(f.parent().unwrap()).map_err(|e| e.to_string())?;
     let at = now_ms();
     fs::write(f, serde_json::json!({ "at": at, "command": command, "args": args }).to_string()).map_err(|e| e.to_string())?;
     Ok(at)
@@ -896,7 +930,7 @@ pub async fn claude_activity(cwd: String, id: String) -> Result<Activity, String
         if crate::pty::valid_id(&id) {
             a.panel = fs::read_to_string(panel_file(&id)).ok().and_then(|t| serde_json::from_str(&t).ok());
         }
-        a.limits = newest_limits(&std::env::temp_dir().join("open-claude-panel"));
+        a.limits = newest_limits(&panel_dir());
         Ok(a)
     })
     .await

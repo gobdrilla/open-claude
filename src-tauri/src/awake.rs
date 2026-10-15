@@ -132,7 +132,7 @@ pub fn stop(app: &AppHandle) {
 }
 
 fn working(app: &AppHandle, now: SystemTime) -> bool {
-    let panels = std::env::temp_dir().join("open-claude-panel");
+    let panels = crate::activity::panel_dir();
     busy_panel(&panels, now) || animating(Instant::now()) || app.state::<crate::ide::Ides>().repos().iter().any(|r| agents_recent(r, now))
 }
 
