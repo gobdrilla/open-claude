@@ -2,6 +2,7 @@
 //! Formen und Namen wie in src/lib/unity.ts.
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -98,6 +99,7 @@ fn find_cli(
     env("PATH")
         .unwrap_or_default()
         .split(sep)
+        .map(|d| d.trim_matches('"'))
         .filter(|d| !d.trim().is_empty())
         .map(|d| join(d, exe))
         .chain(home)
@@ -106,9 +108,15 @@ fn find_cli(
 
 fn cli() -> Result<String, String> {
     find_cli(cfg!(windows), |k| std::env::var(k).ok(), |p| Path::new(p).is_file()).ok_or_else(|| {
-        "Unity-CLI nicht gefunden (weder im PATH noch in ~/.unity/bin). Installieren: \
-         https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh"
-            .to_string()
+        if cfg!(windows) {
+            "Unity-CLI nicht gefunden (weder im PATH noch in %USERPROFILE%\\.unity\\bin). Installieren: \
+             Windows-Installer der Unity-CLI (PowerShell, siehe Unity-Doku), danach App neu starten."
+                .to_string()
+        } else {
+            "Unity-CLI nicht gefunden (weder im PATH noch in ~/.unity/bin). Installieren: \
+             https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh"
+                .to_string()
+        }
     })
 }
 
@@ -132,28 +140,49 @@ pub(crate) fn kill_all() {
 }
 
 fn unity(cli: &str, dir: &Path, args: &[&str], limit: Duration) -> Result<Output, String> {
+    // Ausgabe in Temp-Dateien statt Pipes: unter Windows erbt der von `open` gestartete Editor die Handles. Eine Pipe
+    // bliebe bis zum Editor-Ende offen, und kill_tree traefe nach `limit` den gerade geoeffneten Editor.
+    static N: AtomicU64 = AtomicU64::new(0);
+    let base = std::env::temp_dir().join(format!("ocui-unity-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let (out_p, err_p) = (base.with_extension("out"), base.with_extension("err"));
+    let read = |p: &Path| {
+        let b = std::fs::read(p).unwrap_or_default();
+        let _ = std::fs::remove_file(p);
+        b
+    };
+    let file = |p: &Path| std::fs::File::create(p).map_err(|e| format!("Unity-CLI: Ausgabedatei: {e}"));
     let mut cmd = crate::quiet(cli);
     cmd.args(["--no-banner", "--no-pager", "--non-interactive"])
         .args(args)
         .current_dir(dir)
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stdout(file(&out_p)?)
+        .stderr(file(&err_p)?);
     // Eigene Gruppe: crate::kill_tree trifft so die CLI und den von ihr gestarteten Unity-Prozess, nicht uns.
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
-    let child = cmd.spawn().map_err(|e| format!("Unity-CLI konnte nicht gestartet werden: {e}"))?;
+    let spawned = cmd.spawn();
+    drop(cmd);
+    let mut child = match spawned {
+        Ok(c) => c,
+        Err(e) => {
+            read(&out_p);
+            read(&err_p);
+            return Err(format!("Unity-CLI konnte nicht gestartet werden: {e}"));
+        }
+    };
     let pid = child.id();
     lock(&RUNNING).push(pid);
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || tx.send(child.wait_with_output()));
+    std::thread::spawn(move || tx.send(child.wait()));
     let res = rx.recv_timeout(limit);
     if res.is_err() {
         crate::kill_tree(pid);
     }
     lock(&RUNNING).retain(|p| *p != pid);
+    let (stdout, stderr) = (read(&out_p), read(&err_p));
     match res {
-        Ok(o) => o.map_err(|e| format!("Unity-CLI: {e}")),
+        Ok(s) => s.map(|status| Output { status, stdout, stderr }).map_err(|e| format!("Unity-CLI: {e}")),
         Err(_) => Err(format!("Unity-CLI hing bei `{}` und wurde nach {} s beendet", args.join(" "), limit.as_secs())),
     }
 }
@@ -558,7 +587,18 @@ fn editor_test(cli: &str, dir: &Path, mode: &str) -> Result<TestReport, String> 
     // PlayMode laedt die Domain neu und kappt dabei jede Verbindung — die Statusdatei ueberlebt das.
     // Selbst vorher loeschen: ein "completed" eines frueheren Laufs darf nie als dieses Ergebnis gelten.
     let status = dir.join("Temp").join("pipeline_test_status.json");
-    match std::fs::remove_file(&status) {
+    // Windows: haelt Unity die Datei gerade offen, scheitert das Loeschen kurz; leer gilt ebenso als "kein Ergebnis".
+    let mut gone = std::fs::remove_file(&status);
+    for _ in 0..5 {
+        match &gone {
+            Err(e) if cfg!(windows) && e.kind() == std::io::ErrorKind::PermissionDenied => {
+                std::thread::sleep(Duration::from_millis(50));
+                gone = std::fs::remove_file(&status).or_else(|_| std::fs::write(&status, ""));
+            }
+            _ => break,
+        }
+    }
+    match gone {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
             return Err(format!("Alte Test-Statusdatei nicht löschbar: {e}"));
         }
@@ -902,6 +942,20 @@ mod tests {
         let alive = std::process::Command::new("kill").args(["-0", enkel.trim()]).status().unwrap().success();
         assert!(!alive, "Enkelprozess laeuft noch");
         assert!(lock(&RUNNING).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Wie `unity open` unter Windows: der Editor erbt die Ausgabe-Handles und laeuft weiter — die CLI ist trotzdem fertig.
+    #[cfg(windows)]
+    #[test]
+    fn enkel_mit_geerbter_ausgabe_blockiert_nicht() {
+        let dir = tmp("enkel-win");
+        let f = dir.join("open.cmd");
+        std::fs::write(&f, "@echo off\r\nstart \"\" /b ping -n 6 127.0.0.1\r\necho {\"success\":true,\"data\":7}\r\n").unwrap();
+        let t = Instant::now();
+        let o = unity(&f.to_string_lossy(), &dir, &[], Duration::from_secs(30)).unwrap();
+        assert!(t.elapsed() < Duration::from_secs(4), "{:?}", t.elapsed());
+        assert!(String::from_utf8_lossy(&o.stdout).contains("\"data\":7"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
