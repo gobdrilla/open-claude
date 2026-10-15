@@ -15,7 +15,7 @@
   import SquareIcon from "@lucide/svelte/icons/square";
   import { ptyResize } from "$lib/files";
   import { MOD } from "$lib/editor.logic";
-  import { DARK, LIGHT, LINKS } from "$lib/termtheme";
+  import { DARK, LIGHT, LINKS, clipboardKey } from "$lib/termtheme";
   import { theme } from "$lib/theme.svelte";
   import { attach, clearOutput, run, runRestart, runStart, runStop, runWrite, tailOutput } from "$lib/run.svelte";
   import { sendToClaude } from "$lib/ide.svelte";
@@ -80,8 +80,9 @@
     t.loadAddon(new Unicode11Addon());
     t.unicode.activeVersion = "11";
     t.open(el);
-    // F5 & Co. gehoeren der Run-Leiste (EditorView), nicht dem Prozess.
-    t.attachCustomKeyEventHandler((e) => e.key !== "F5");
+    // F5 & Co. gehoeren der Run-Leiste (EditorView), nicht dem Prozess. Kopieren/Einfuegen wie im Terminal,
+    // ohne Auswahl bleibt Strg+C der Abbruch fuer den Prozess.
+    t.attachCustomKeyEventHandler((e) => e.key !== "F5" && !clipboardKey(t, e, navigator.userAgent.includes("Mac")));
     for (const c of attach(repo, (b) => {
       t.write(b);
       // Ein neuer PTY startet mit 120x30: beim ersten Output (dann gibt es ihn sicher) die echte Groesse melden.

@@ -17,7 +17,7 @@
   import ClaudeLoader from "./ClaudeLoader.svelte";
   import { evenCell } from "$lib/termcell";
   import { theme } from "$lib/theme.svelte";
-  import { DARK, LIGHT, LINKS } from "$lib/termtheme";
+  import { DARK, LIGHT, LINKS, clipboardKey } from "$lib/termtheme";
   import { modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
   import { keep, pathHits } from "$lib/termlinks";
@@ -154,26 +154,7 @@
     const key = e.key.toLowerCase();
     // false = xterm ignoriert das Event, es blubbert zum App-Handler am window.
     if (e.shiftKey && key === "w") return false;
-    // Ctrl+Umschalt+C nie als ^C durchlassen (bricht claude ab); Ctrl+C mit Auswahl kopiert wie im Windows-Terminal.
-    if (key === "c" && (e.shiftKey || (!mac && term!.hasSelection()))) {
-      const text = term!.getSelection();
-      if (text) navigator.clipboard.writeText(text);
-      term!.clearSelection();
-    } else if (key === "v") {
-      // readText kann unter WebKitGTK/WebView2 abgelehnt werden: dann wenigstens ein Bild versuchen.
-      navigator.clipboard.readText().then(
-        async (t) => {
-          if (!t) await grabClipboard();
-          term?.paste(t);
-        },
-        () => grabClipboard(),
-      );
-    } else {
-      return true;
-    }
-    // Sonst feuert zusaetzlich das native paste-Event und es kommt doppelt an.
-    e.preventDefault();
-    return false;
+    return !clipboardKey(term!, e, mac, grabClipboard);
   }
 
   onMount(() => {

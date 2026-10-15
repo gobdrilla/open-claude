@@ -60,3 +60,30 @@ export const LIGHT = {
   brightWhite: "#5e636f", // --muted-foreground
 };
 
+
+/** Strg+Umschalt+C, Strg+C mit Auswahl (nicht macOS: dort ist Cmd+C nativ) und Strg+V fuer Terminal und RunPane.
+ *  true = erledigt, xterm soll das Event schlucken; sonst nicht zustaendig. `noText`: Zwischenablage ohne Text. */
+export function clipboardKey(term: { hasSelection(): boolean; getSelection(): string; clearSelection(): void; paste(t: string): void }, e: KeyboardEvent, mac: boolean, noText?: () => unknown): boolean {
+  if (e.type !== "keydown" || !e.ctrlKey) return false;
+  const key = e.key.toLowerCase();
+  // Ctrl+Umschalt+C nie als ^C durchlassen (bricht den Prozess ab); Ctrl+C mit Auswahl kopiert wie im Windows-Terminal.
+  if (key === "c" && (e.shiftKey || (!mac && term.hasSelection()))) {
+    const text = term.getSelection();
+    if (text) navigator.clipboard.writeText(text);
+    term.clearSelection();
+  } else if (key === "v") {
+    // readText kann unter WebKitGTK/WebView2 abgelehnt werden: dann wenigstens den Fallback (Bild) versuchen.
+    navigator.clipboard.readText().then(
+      async (t) => {
+        if (!t) await noText?.();
+        term.paste(t);
+      },
+      () => noText?.(),
+    );
+  } else {
+    return false;
+  }
+  // Sonst feuert zusaetzlich das native paste-Event und es kommt doppelt an.
+  e.preventDefault();
+  return true;
+}
