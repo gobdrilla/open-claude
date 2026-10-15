@@ -240,6 +240,20 @@ fn test_command(fw: Fw, scope: &Scope, prog: &str, reporters: &Path, windows: bo
 }
 
 /// Lokales JS-Tool: node_modules/.bin/<tool> ab cwd aufwaerts bis zum Projektordner. Kein npx: kein Netz, kein Overhead.
+/// Unix: cargo/dotnet aus ~/.cargo/bin bzw. ~/.dotnet, wenn die Login-Shell sie nicht in den PATH legt
+/// (rustup --no-modify-path, dotnet-install); die Run-Leiste macht das in pty::setup_unix genauso.
+fn sdk(tool: &str) -> String {
+    if cfg!(windows) || crate::deps::which(tool).is_some() {
+        return tool.into();
+    }
+    let home = crate::skills::home();
+    let local = match tool {
+        "cargo" => std::env::var_os("CARGO_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".cargo")).join("bin").join("cargo"),
+        _ => home.join(".dotnet").join(tool),
+    };
+    if local.is_file() { local.to_string_lossy().into_owned() } else { tool.into() }
+}
+
 pub(crate) fn local_bin(repo: &Path, cwd: &Path, tool: &str, windows: bool, exists: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     let exe = if windows { format!("{tool}.cmd") } else { tool.into() };
     cwd.ancestors()
@@ -313,14 +327,22 @@ fn start(app: AppHandle, id: String, repo: &str, dir: &str, fw: Fw, scope: &Scop
                 .into_owned()
         }
         Fw::Node => "node".into(),
-        Fw::Cargo => "cargo".into(),
-        Fw::Dotnet => "dotnet".into(),
+        Fw::Cargo => sdk("cargo"),
+        Fw::Dotnet => sdk("dotnet"),
         Fw::Pytest => String::new(),
     };
     let (prog, args) = test_command(fw, scope, &prog, &reporters(&app)?, cfg!(windows))?;
 
     let mut cmd = crate::quiet(&prog);
     cmd.args(&args).current_dir(&cwd).envs(ENV);
+    // Nutzerlokales SDK: seinen Ordner vorn in den PATH (rustc neben cargo), dotnet braucht zudem DOTNET_ROOT.
+    if let Some(dir) = Path::new(&prog).parent().filter(|d| d.is_absolute() && matches!(fw, Fw::Cargo | Fw::Dotnet)) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        cmd.env("PATH", std::env::join_paths(std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&path))).map_err(|e| e.to_string())?);
+        if fw == Fw::Dotnet {
+            cmd.env("DOTNET_ROOT", dir);
+        }
+    }
     // Lock haelt den Waiter auf, bis die pid eingetragen ist: ein sofort endender Prozess hinterliesse sonst einen Eintrag.
     let state = app.state::<Runs>();
     let mut runs = state.inner().lock();
