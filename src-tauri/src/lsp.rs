@@ -103,7 +103,9 @@ fn severity(n: Option<u64>) -> &'static str {
 
 /// file-URI -> Pfad, damit unterschiedliche Kodierungen (c%3A, Leerzeichen) gleich vergleichen.
 fn norm(uri: &str) -> Option<PathBuf> {
-    tauri::Url::parse(uri).ok()?.to_file_path().ok()
+    let p = tauri::Url::parse(uri).ok()?.to_file_path().ok()?;
+    // Windows: Server melden teils "c:/dev/x" statt "C:/Dev/x" — dieselbe Datei.
+    Some(if cfg!(windows) { p.to_string_lossy().to_lowercase().into() } else { p })
 }
 
 /// Naechste vollstaendige Nachricht aus buf entnehmen. None = noch unvollstaendig, Err = Header ohne Content-Length.
@@ -154,7 +156,9 @@ fn resolve(root: &Path, cmd: &str, npm: bool, own: &Path) -> Option<PathBuf> {
     let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
     let gobin = env("GOBIN").unwrap_or_else(|| env("GOPATH").unwrap_or_else(|| home.join("go")).join("bin"));
     let cargo = env("CARGO_HOME").unwrap_or_else(|| home.join(".cargo")).join("bin");
-    let dirs = [own.join("node_modules").join(".bin"), cargo, gobin, home.join(".dotnet").join("tools")];
+    // LLVM-Installer (Windows) traegt clangd nur optional in den PATH ein.
+    let llvm = env("ProgramFiles").unwrap_or_default().join("LLVM").join("bin");
+    let dirs = [own.join("node_modules").join(".bin"), cargo, gobin, home.join(".dotnet").join("tools"), llvm];
     let exts: &[&str] = if cfg!(windows) { &[".cmd", ".exe"] } else { &[""] };
     local
         .or_else(|| crate::deps::which(cmd))
@@ -272,9 +276,9 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
     }
     let mut c = crate::quiet(&plain(prog).to_string_lossy());
     c.args(args).current_dir(plain(root.clone())).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    // dotnet-Tools (csharp-ls) suchen die Runtime nur am Standardort; bei ~/.dotnet oder Homebrew braucht es DOTNET_ROOT.
-    if key == "csharp" && !cfg!(windows) && std::env::var_os("DOTNET_ROOT").is_none() {
-        if let Some(d) = crate::deps::which("dotnet").and_then(|p| p.canonicalize().ok()).and_then(|p| p.parent().map(Path::to_path_buf)) {
+    // dotnet-Tools (csharp-ls) suchen die Runtime nur am Standardort; bei ~/.dotnet, %LOCALAPPDATA% oder Homebrew braucht es DOTNET_ROOT.
+    if key == "csharp" && std::env::var_os("DOTNET_ROOT").is_none() {
+        if let Some(d) = crate::deps::which("dotnet").and_then(|p| p.canonicalize().ok()).and_then(|p| p.parent().map(|d| plain(d.to_path_buf()))) {
             c.env("DOTNET_ROOT", d);
         }
     }
