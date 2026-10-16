@@ -27,6 +27,8 @@ mod ide;
 mod lsp;
 // Wach-Halt bei zugeklapptem Laptop, nur solange Claude arbeitet.
 mod awake;
+#[cfg(target_os = "macos")]
+pub use awake::lid_guard;
 // Vorschau des Editors: preview-Schema, WPF-Helfer, Rueckfrage vor dem Beenden.
 mod preview;
 mod deps;

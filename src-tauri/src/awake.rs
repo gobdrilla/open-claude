@@ -4,9 +4,8 @@
 //!   Subagents/Workflows wurden in den letzten 90 s geschrieben, oder die TUI einer Session zeichnet laufend
 //!   (Spinner, auch waehrend ein genehmigtes Tool laeuft; wartend steht sie still). Unter 20 % Akku: nie.
 //! - Linux: logind-Inhibitor (systemd-inhibit) als Kindprozess; endet mit uns, auch beim Absturz.
-//! - macOS: nur mit Root moeglich (Deckel-Schlaf ignoriert normale Assertions). Einmal pro App-Start Admin-Passwort
-//!   fuer einen Root-Waechter, der eine Markerdatei auf `pmset -a disablesleep` spiegelt, beim Freigeben mit
-//!   geschlossenem Deckel `pmset sleepnow` ruft und beim Ende der App immer 0 setzt.
+//! - macOS: Deckel-Schlaf ignoriert normale Assertions; stattdessen der Clamshell-Schalter von IOPMrootDomain (ohne
+//!   Root, ohne `pmset disablesleep`), gehalten von einem Waechter-Prozess, der ihn beim Ende der App zuruecksetzt.
 //! - Windows: Deckel-Aktion des Energieplans voruebergehend "Nichts unternehmen"; alter Wert in einer Markerdatei,
 //!   nach Absturz beim naechsten Start zurueckgeschrieben.
 
@@ -24,7 +23,7 @@ static HELD: Mutex<Option<Hold>> = Mutex::new(None);
 /// Wie frisch Panel-Datei bzw. Agent-Transkript sein muessen, um als "arbeitet" zu gelten.
 const FRESH: Duration = Duration::from_secs(90);
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(windows, allow(dead_code))]
 struct Hold(Option<std::process::Child>);
 
 /// Meldung aus recover() beim Start: das Frontend lauscht da noch nicht, es holt sie mit set_awake ab.
@@ -33,11 +32,6 @@ static PENDING_ERR: Mutex<Option<String>> = Mutex::new(None);
 #[tauri::command]
 pub fn set_awake(on: bool) -> Option<String> {
     ON.store(on, Ordering::Relaxed);
-    #[cfg(target_os = "macos")]
-    if on {
-        // Abgebrochene Passwortabfrage: erst nach erneutem Einschalten wieder fragen.
-        mac::DENIED.store(false, Ordering::Relaxed);
-    }
     PENDING_ERR.lock().unwrap_or_else(|e| e.into_inner()).take()
 }
 
@@ -283,113 +277,109 @@ fn recover(_: &Path) -> Result<(), String> {
 // ---------- macOS ----------
 
 #[cfg(target_os = "macos")]
-mod mac {
-    use std::sync::atomic::AtomicBool;
-    /// Waechter laeuft (pro App-Start einmal), bzw. Passwortabfrage abgebrochen.
-    pub static RUNNING: AtomicBool = AtomicBool::new(false);
-    pub static DENIED: AtomicBool = AtomicBool::new(false);
+#[link(name = "IOKit", kind = "framework")]
+extern "C" {
+    fn IOServiceMatching(name: *const std::ffi::c_char) -> *mut std::ffi::c_void;
+    fn IOServiceGetMatchingService(main: u32, matching: *mut std::ffi::c_void) -> u32;
+    fn IOServiceOpen(service: u32, task: u32, kind: u32, conn: *mut u32) -> i32;
+    fn IOConnectCallScalarMethod(conn: u32, sel: u32, input: *const u64, n: u32, out: *mut u64, out_n: *mut u32) -> i32;
+    fn IOServiceClose(conn: u32) -> i32;
+    fn IOObjectRelease(obj: u32) -> i32;
+    static mach_task_self_: u32;
 }
 
-/// Root-Waechter: spiegelt die Markerdatei auf disablesleep, bis die App (pid) endet; dann immer 0.
-/// Gibt er frei und der Deckel ist zu, legt er schlafen (macOS prueft den Deckel nach disablesleep 0 nicht neu).
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const WATCH: &str = r#"p=$1; m=$2; a=$3; s=x
-# Abmelden/Herunterfahren beendet uns per Signal: disablesleep ueberlebt sonst den Neustart.
-trap '/usr/bin/pmset -a disablesleep 0; /bin/rm -f "$a"; exit 0' TERM HUP INT
-while kill -0 "$p" 2>/dev/null; do
-  if [ -e "$m" ]; then w=1; else w=0; fi
-  if [ "$w" != "$s" ]; then
-    /usr/bin/pmset -a disablesleep "$w"
-    # Nur zugeklappt (State) und ohne externen Monitor (CausesSleep); CausesSleep allein ist auch bei offenem Deckel Yes.
-    if [ "$w" = 0 ] && [ "$s" = 1 ] && [ "$(/usr/sbin/ioreg -r -k AppleClamshellState -d 1 | /usr/bin/grep -cE '"AppleClamshell(State|CausesSleep)" = Yes')" = 2 ]; then /usr/bin/pmset sleepnow; fi
-    s=$w
-  fi
-  sleep 2
-done
-/usr/bin/pmset -a disablesleep 0
-/bin/rm -f "$a""#;
-
-/// Fuer `sh -c`: in einfache Anfuehrungszeichen, ' als '\''.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn sq(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
+/// Deckel-Schlaf im Kernel aus-/einschalten: IOPMrootDomain, kPMSetClamshellSleepState (12), ohne Root
+/// (wie Clamshell u. a.; xnu RootDomainUserClient prueft hier keine Rechte). Gilt auch auf Akku und laesst den
+/// normalen Schlaf unangetastet. Wieder eingeschaltet bei geschlossenem Deckel prueft der Kernel neu und schlaeft.
+#[cfg(target_os = "macos")]
+fn clamshell_sleep_disabled(on: bool) -> Result<(), String> {
+    unsafe {
+        let s = IOServiceGetMatchingService(0, IOServiceMatching(c"IOPMrootDomain".as_ptr()));
+        if s == 0 {
+            return Err("IOPMrootDomain nicht gefunden".into());
+        }
+        let mut c = 0;
+        let mut r = IOServiceOpen(s, mach_task_self_, 0, &mut c);
+        if r == 0 {
+            r = IOConnectCallScalarMethod(c, 12, &(on as u64), 1, std::ptr::null_mut(), std::ptr::null_mut());
+            IOServiceClose(c);
+        }
+        IOObjectRelease(s);
+        if r == 0 { Ok(()) } else { Err(format!("Deckel-Schlaf nicht steuerbar (IOKit {r:#x})")) }
+    }
 }
 
-/// AppleScript fuer osascript: Waechter als Root im Hintergrund starten (kehrt sofort zurueck).
-/// pid und Pfad kommen von der App selbst, trotzdem vollstaendig gequotet.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn mac_script(pid: u32, marker: &Path) -> String {
-    let sh = format!(
-        "/bin/sh -c {} sh {pid} {} {} >/dev/null 2>&1 &",
-        sq(WATCH),
-        sq(&marker.to_string_lossy()),
-        sq(&armed(marker).to_string_lossy())
-    );
-    let lit = sh.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("do shell script \"{lit}\" with administrator privileges")
-}
-
-/// Liegt, solange ein Waechter laeuft; er loescht sie erst nach dem Zuruecksetzen. Bleibt sie liegen
-/// (Waechter hart beendet), stellt recover beim naechsten Start zurueck.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn armed(m: &Path) -> PathBuf {
-    m.with_extension("armed")
+/// Hilfsprozess (`--lid-guard`, aus main.rs): der Kernel-Schalter ist global und ueberlebt unseren Prozess. Der Waechter
+/// haelt ihn, bis seine stdin endet (Freigabe oder App-Absturz), und schaltet dann zurueck. caffeinate -i verhindert
+/// solange auch den Leerlauf-Schlaf und endet mit dem Waechter.
+#[cfg(target_os = "macos")]
+pub fn lid_guard() {
+    let _idle = std::process::Command::new("/usr/bin/caffeinate").args(["-i", "-w", &std::process::id().to_string()]).spawn();
+    if let Err(e) = clamshell_sleep_disabled(true) {
+        eprintln!("{e}");
+        std::process::exit(1);
+    }
+    // Ohne echten Clamshell-Modus (externer Monitor) laesst macOS das Display zugeklappt an: selbst abschalten.
+    // Wiederholt, falls es zwischendurch aufwacht; schlafend ist displaysleepnow wirkungslos.
+    std::thread::spawn(|| loop {
+        if lid_closed() {
+            let _ = std::process::Command::new("/usr/bin/pmset").arg("displaysleepnow").status();
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    });
+    let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
+    let _ = clamshell_sleep_disabled(false);
 }
 
 #[cfg(target_os = "macos")]
-fn watcher(m: &Path) -> Result<(), String> {
-    if mac::RUNNING.load(Ordering::Relaxed) {
-        return Ok(());
-    }
-    if mac::DENIED.load(Ordering::Relaxed) {
-        return Err("Admin-Passwort nicht eingegeben".into());
-    }
-    std::fs::create_dir_all(m.parent().ok_or("kein Datenordner")?).map_err(|e| e.to_string())?;
-    std::fs::write(armed(m), b"").map_err(|e| e.to_string())?;
-    let o = crate::quiet("osascript").args(["-e", &mac_script(std::process::id(), m)]).output().map_err(|e| e.to_string())?;
-    if !o.status.success() {
-        let _ = std::fs::remove_file(armed(m));
-        mac::DENIED.store(true, Ordering::Relaxed);
-        return Err(format!(
-            "Wach-Halt bei zugeklapptem Mac braucht das Admin-Passwort ({}). Einstellung ausgeschaltet.",
-            String::from_utf8_lossy(&o.stderr).trim()
-        ));
-    }
-    mac::RUNNING.store(true, Ordering::Relaxed);
-    Ok(())
+fn lid_closed() -> bool {
+    std::process::Command::new("/usr/sbin/ioreg")
+        .args(["-r", "-k", "AppleClamshellState", "-d", "1"])
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("\"AppleClamshellState\" = Yes"))
 }
 
 #[cfg(target_os = "macos")]
-fn hold(m: &Path) -> Result<Hold, String> {
-    std::fs::create_dir_all(m.parent().ok_or("kein Datenordner")?).map_err(|e| e.to_string())?;
-    // Marker zuerst: der Waechter sieht ihn beim ersten Durchlauf.
-    std::fs::write(m, b"").map_err(|e| e.to_string())?;
-    if let Err(e) = watcher(m) {
-        let _ = std::fs::remove_file(m);
-        return Err(e);
+fn hold(_: &Path) -> Result<Hold, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut c = std::process::Command::new(exe)
+        .arg("--lid-guard")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Wach-Halt nicht möglich: {e}"))?;
+    std::thread::sleep(Duration::from_millis(300));
+    if let Ok(Some(_)) = c.try_wait() {
+        let mut err = String::new();
+        let _ = std::io::Read::read_to_string(c.stderr.as_mut().expect("piped"), &mut err);
+        return Err(format!("Wach-Halt nicht möglich: {}", err.trim()));
     }
-    Ok(Hold(None))
+    Ok(Hold(Some(c)))
 }
 
 #[cfg(target_os = "macos")]
-fn release(_: Hold, m: &Path) {
-    let _ = std::fs::remove_file(m);
+fn release(h: Hold, _: &Path) {
+    if let Hold(Some(mut c)) = h {
+        drop(c.stdin.take());
+        let _ = c.wait();
+    }
 }
 
-/// Waechter beim letzten Lauf nicht sauber beendet (armed liegt noch): steht SleepDisabled noch auf 1, gleich einen
-/// Waechter starten; ohne Marker setzt er sofort 0. Sonst nur aufraeumen.
+/// Waechter hart beendet (kill -9, Abmelden): Schalter beim naechsten Start zuruecksetzen. Bis Version 1.4.3 lief
+/// stattdessen ein Root-Waechter mit `pmset disablesleep`; liegt dessen armed-Datei noch, ggf. Reset-Hinweis.
 #[cfg(target_os = "macos")]
 fn recover(m: &Path) -> Result<(), String> {
-    let _ = std::fs::remove_file(m);
-    if !armed(m).exists() {
+    let _ = clamshell_sleep_disabled(false);
+    let armed = m.with_extension("armed");
+    if std::fs::remove_file(&armed).is_err() {
         return Ok(());
     }
     let o = crate::quiet("pmset").arg("-g").output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
-    if !o.lines().any(|l| l.split_whitespace().eq(["SleepDisabled", "1"])) {
-        let _ = std::fs::remove_file(armed(m));
-        return Ok(());
+    if o.lines().any(|l| l.split_whitespace().eq(["SleepDisabled", "1"])) {
+        return Err("Schlaf ist noch deaktiviert (ältere Version). Zurücksetzen im Terminal: sudo pmset -a disablesleep 0".into());
     }
-    watcher(m).map_err(|e| format!("Schlaf ist noch deaktiviert. Zurücksetzen im Terminal: sudo pmset -a disablesleep 0 ({e})"))
+    Ok(())
 }
 
 // ---------- Windows ----------
@@ -526,23 +516,5 @@ mod tests {
         let en = "    Current AC Power Setting Index: 0x00000000\n    Current DC Power Setting Index: 0x00000001\n";
         assert_eq!(parse_lidaction(en), Some((0, 1)));
         assert_eq!(parse_lidaction("nichts"), None);
-    }
-
-    #[test]
-    fn waechter_skript_gequotet() {
-        let m = Path::new("/Users/a b/Library/Application Support/x'y/awake.marker");
-        let s = mac_script(42, m);
-        assert!(s.starts_with("do shell script \"") && s.ends_with("\" with administrator privileges"));
-        // AppleScript-Literal zurueckwandeln und die Shell-Zeile ohne Ausfuehren auf Syntax pruefen.
-        let lit = &s["do shell script \"".len()..s.len() - "\" with administrator privileges".len()];
-        let sh = lit.replace("\\\"", "\"").replace("\\\\", "\\");
-        assert!(sh.contains(" sh 42 '/Users/a b/Library/Application Support/x'\\''y/awake.marker' '/Users/a b/Library/Application Support/x'\\''y/awake.armed'"));
-        if cfg!(windows) {
-            return;
-        }
-        let ok = std::process::Command::new("sh").args(["-n", "-c", &sh]).status().unwrap();
-        assert!(ok.success());
-        let inner = std::process::Command::new("sh").args(["-n", "-c", WATCH]).status().unwrap();
-        assert!(inner.success());
     }
 }

@@ -237,7 +237,7 @@
 
   const lidNote = () =>
     mac
-    ? "macOS fragt dafür einmal pro App-Start nach dem Admin-Passwort."
+    ? "Kein Admin-Passwort nötig; der normale Ruhezustand bleibt unverändert."
     : navigator.userAgent.includes("Windows")
       ? "Ändert solange die Deckel-Aktion des Energieplans. Auf Geräten mit Modern Standby unzuverlässig; danach schläft er erst nach der normalen Leerlaufzeit."
       : "Braucht systemd-logind; ob GNOME/KDE die Sperre beachten, ist nicht geprüft.";
