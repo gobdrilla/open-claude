@@ -2,6 +2,7 @@
   import { age, altKey, cn } from "$lib/utils";
   import { onMount, tick, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { getVersion } from "@tauri-apps/api/app";
   import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { homeDir } from "@tauri-apps/api/path";
@@ -438,6 +439,8 @@
 
   // Neue Version aus GitHub-Releases, beim Start und alle 4 h; Fehler (offline, Dev-Build) still ignorieren.
   let update = $state<Update | null>(null);
+  let version = $state("");
+  getVersion().then((v) => (version = v));
   let updating = $state(false);
   let checking = $state(false);
   async function checkUpdate(manual = false) {
@@ -1482,6 +1485,7 @@
               >
                 <DownloadIcon class="text-muted-foreground size-3.5 {checking ? 'animate-pulse' : ''}" />
                 <span class="flex-1">Nach Updates suchen</span>
+                {#if version}<span class="text-muted-foreground font-mono text-[10px]">v{version}</span>{/if}
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 class={cn(menuItem, "py-1.5")}
