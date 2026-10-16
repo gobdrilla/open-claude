@@ -1356,7 +1356,8 @@
             <DropdownMenu.Content
               align="end"
               sideOffset={4}
-              class={cn(menuContent, "min-w-56 rounded-lg shadow-lg")}
+              collisionPadding={8}
+              class={cn(menuContent, "max-h-[var(--bits-dropdown-menu-content-available-height)] min-w-56 overflow-y-auto rounded-lg shadow-lg")}
             >
               <!-- macOS: Autostart ueber die Systemeinstellungen. -->
               {#if !mac}
