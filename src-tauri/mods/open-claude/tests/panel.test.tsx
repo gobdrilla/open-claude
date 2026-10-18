@@ -88,6 +88,7 @@ test('busy fuer den wach-halt', async ($, on) => {
   let agents = [{ status: 'running' }]
   on('agent.list', () => ({ value: agents }) as never)
   on('tool.check', () => ({ decision: 'ask' }) as never)
+  on('classic.PermissionRequest', () => ({}) as never)
   on('tool.call', () => ({ result: '' }) as never)
   const done = { turnId: 't1', reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false } as const
   await $.turn.start({ text: 'los', turnId: 't1' })
@@ -100,13 +101,16 @@ test('busy fuer den wach-halt', async ($, on) => {
   expect(busy()).toBe(false)
   // Rechte-Dialog: wartet auf den User, Turn-Ende loest das
   await $.turn.start({ text: 'los', turnId: 't1' })
+  // ask allein (Auto-Modus entscheidet ohne Dialog): kein Warten
   await $.tool.check({ tool: 'Bash', input: { command: 'ls' } } as never)
+  expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: true, waiting: false })
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'ls' } } as never)
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: false, waiting: true, waitingFor: { tool: 'Bash', summary: 'ls' } })
   await $.turn.complete(done)
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ waiting: false, waitingFor: null })
   // Freigabe: Tool laeuft, waitingFor leer
   await $.turn.start({ text: 'los', turnId: 't1' })
-  await $.tool.check({ tool: 'Bash', input: { command: 'npm i' } } as never)
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'npm i' } } as never)
   expect(JSON.parse(w.at(-1)!.text).waitingFor).toEqual({ tool: 'Bash', summary: 'npm i' })
   await $.tool.call({ tool: 'Bash', command: 'npm i' } as never)
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: true, waiting: false, waitingFor: null })
@@ -315,9 +319,11 @@ test('guardrail: ask + banner, normales push frei', async ($, on) => {
   mock.env(on, { OPEN_CLAUDE_PANEL: '/tmp/x/p.json', PWD: '/repo' })
   const w: { path: string; text: string }[] = []
   on('fs.write', (_$, e) => (w.push(e), { value: undefined }))
+  on('classic.PermissionRequest', () => ({}) as never)
   on('tool.check', (_$, e) => ({ decision: (e.input as { command: string }).command === 'git reset --hard' ? 'deny' : 'allow' }) as never)
   const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push --force origin x' } } as never)
   expect(r).toMatchObject({ decision: 'ask', reason: expect.stringContaining('Force-Push') })
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'git push --force origin x' } } as never)
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ waiting: true, waitingFor: { tool: 'Bash', summary: 'git push --force origin x' } })
   w.length = 0
   expect(await $.tool.check({ tool: 'Bash', input: { command: 'git push origin x' } } as never)).toMatchObject({ decision: 'allow' })

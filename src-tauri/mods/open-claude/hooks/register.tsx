@@ -349,13 +349,17 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Rechte-Dialog: Claude wartet auf den User.
   on('tool.check', async ($, e, next) => {
-    let v = await next(e)
+    const v = await next(e)
     const risk = guard(e.tool, e.input, (e as { cwd?: string }).cwd || cwd || (await $.env.get('PWD')))
-    if (risk && v.decision !== 'deny') v = { decision: 'ask', reason: `Riskant: ${risk.why}. Wirklich ausführen?` }
-    if (v.decision === 'ask') await setBusy($, false, true, { tool: e.tool, summary: risk ? summarize('Bash', { command: risk.text }) : summarize(e.tool, e.input) })
-    return v
+    return risk && v.decision !== 'deny' ? { decision: 'ask', reason: `Riskant: ${risk.why}. Wirklich ausführen?` } : v
+  })
+
+  // Rechte-Dialog: Claude wartet auf den User. Nicht schon bei tool.check 'ask': das entscheidet im Auto-Modus der Classifier ohne Dialog.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    const risk = guard(e.tool_name, e.tool_input, e.cwd || cwd || (await $.env.get('PWD')))
+    await setBusy($, false, true, { tool: e.tool_name, summary: risk ? summarize('Bash', { command: risk.text }) : summarize(e.tool_name, e.tool_input) })
+    return next(e)
   })
 
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
