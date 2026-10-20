@@ -16,6 +16,7 @@
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import Markdown from "$lib/components/Markdown.svelte";
   import ZoomImage from "$lib/components/ZoomImage.svelte";
+  import BtwPanel from "$lib/components/BtwPanel.svelte";
   import { Empty, Segmented, Tabs } from "$lib/components/kit";
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
@@ -88,7 +89,7 @@
   // Fehler einer Aktion (Springen, Verlauf, Bild): eigene Zeile, error ersetzt den ganzen Inhalt und blitzt nur auf.
   let actionError = $state("");
   let tplError = $state("");
-  let tab = $state<"session" | "wf" | "agents" | "img" | "prompts">("session");
+  let tab = $state<"session" | "wf" | "agents" | "img" | "prompts" | "btw">("session");
   // Session-Daten der Mod im Terminal; Countdowns rechnen gegen now.
   let panel = $state<Panel | null>(null);
   let now = $state(Date.now());
@@ -481,6 +482,7 @@
       { id: "agents", label: "Agents", count: data?.agents.length, live: runningAgents },
       { id: "img", label: "Bilder", count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
+      { id: "btw", label: "btw" },
     ]}
   />
 
@@ -494,6 +496,9 @@
     </div>
   {/if}
 
+  {#if tab === "btw"}
+    <BtwPanel {cwd} {id} sid={data?.alive ? data.session : null} />
+  {:else}
   <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-xs">
     {#if tab === "wf" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
@@ -702,6 +707,7 @@
       <Empty>Noch keine Bilder in dieser Session.</Empty>
     {/if}
   </div>
+  {/if}
 
   <!-- Status unten statt in der Tab-Leiste: dort nahm er den Tabs bei schmalem Panel den Platz. -->
   {#if claudeState || live}

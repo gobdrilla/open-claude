@@ -23,6 +23,8 @@ struct Session {
     // Run-Leiste (unter Windows jede Session): pid der Shell, um beim Stoppen den ganzen Prozessbaum zu treffen
     // (npm -> node; claude -> MCP-Server mit eigener versteckter Konsole, die ClosePseudoConsole nicht erreicht).
     tree: Option<u32>,
+    // Eigene Env beim Start; /btw-Fork (claude_btw) braucht dieselbe, sonst trifft er den Prompt-Cache nicht.
+    env: Vec<(String, String)>,
 }
 
 impl Session {
@@ -820,6 +822,7 @@ fn spawn(
             master: pair.master,
             killer: child.clone_killer(),
             tree: child.process_id().filter(|_| tree || cfg!(windows)),
+            env: env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
         },
     );
 
@@ -925,6 +928,60 @@ pub fn pty_resize(ptys: State<'_, Ptys>, id: String, cols: u16, rows: u16) -> Re
         .map_err(|e| format!("Resize fehlgeschlagen: {e}"))
 }
 
+/// Nebenfrage wie /btw, aber mit Antwort im Panel: claude -p als Fork der Session `sid`, ohne eigenes Transkript.
+/// Gleiche Env und Settings wie das Terminal `id`, damit der Fork den Prompt-Cache der Session trifft (sonst
+/// ~0,35 $ statt ~0,03 $ je Frage). Nur Lesen per PreToolUse-Hook: --tools, --disallowedTools und deny-Regeln
+/// aendern die Tool-Liste und damit den Cache-Praefix.
+#[tauri::command]
+pub async fn claude_btw(ptys: State<'_, Ptys>, id: String, cwd: String, sid: String, question: String) -> Result<String, String> {
+    if !valid_id(&sid) {
+        return Err(format!("Ungueltige Session-id: {sid}"));
+    }
+    let env = ptys.lock().get(&id).map(|s| s.env.clone()).ok_or("Sitzung laeuft nicht")?;
+    let bin = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    crate::git::blocking(move || {
+        let get = |k: &str| env.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
+        let mut settings: serde_json::Value = get("OPEN_CLAUDE_SETTINGS")
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({}));
+        settings["hooks"] = serde_json::json!({ "PreToolUse": [{
+            "matcher": "^(?!(Read|Grep|Glob|ToolSearch|WebFetch|WebSearch)$).*",
+            "hooks": [{ "type": "command", "command": "echo \"btw: nur lesen\" >&2; exit 2" }]
+        }]});
+        // Datei statt JSON-Argument: claude.cmd laeuft unter Windows ueber cmd.exe, das Anfuehrungszeichen zerlegt.
+        let file = crate::activity::panel_file(&id).with_extension("btw");
+        std::fs::write(&file, settings.to_string()).map_err(|e| format!("btw-Settings: {e}"))?;
+        let mut cmd = crate::quiet(&bin.to_string_lossy());
+        cmd.args(["-p", "--resume", &sid, "--fork-session", "--no-session-persistence"])
+            .args(["--permission-mode", "dontAsk", "--output-format", "json", "--settings"])
+            .arg(&file)
+            .arg("--")
+            .arg(&question)
+            .current_dir(&cwd)
+            .stdin(std::process::Stdio::null());
+        for key in MARKERS {
+            cmd.env_remove(key);
+        }
+        // Ohne Panel-Datei: die Mod schriebe sonst die Werte des Forks ins Panel der Session.
+        for (k, v) in env.iter().filter(|(k, _)| k != "OPEN_CLAUDE_PANEL") {
+            cmd.env(k, v);
+        }
+        let o = cmd.output().map_err(|e| format!("claude konnte nicht gestartet werden: {e}"))?;
+        let out: serde_json::Value = serde_json::from_slice(&o.stdout).map_err(|_| {
+            let err = String::from_utf8_lossy(&o.stderr);
+            format!("claude: {}", if err.trim().is_empty() { "keine Antwort" } else { err.trim() })
+        })?;
+        let text = out.get("result").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+        if out.get("is_error").and_then(serde_json::Value::as_bool) == Some(true) {
+            return Err(if text.is_empty() { "claude meldet einen Fehler".into() } else { text });
+        }
+        Ok(text)
+    })
+    .await
+}
+
 /// Async: kill() wartet bis zu 1 s, ein Sync-Command liefe auf dem Main-Thread und froere die UI ein.
 #[tauri::command]
 pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>, id: String) -> Result<(), String> {
@@ -934,6 +991,7 @@ pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>,
     if valid_id(&id) {
         let _ = std::fs::remove_file(crate::activity::panel_file(&id));
         let _ = std::fs::remove_file(crate::activity::panel_file(&id).with_extension("cmd"));
+        let _ = std::fs::remove_file(crate::activity::panel_file(&id).with_extension("btw"));
     }
     let Some(mut s) = ptys.lock().remove(&id) else { return Ok(()) };
     crate::git::blocking(move || {
@@ -986,7 +1044,7 @@ mod tests {
             drop(pair.slave);
             let reader = pair.master.try_clone_reader().unwrap();
             let input = spawn_writer(pair.master.take_writer().unwrap());
-            (Session { gen: 0, input, master: pair.master, killer: child.clone_killer(), tree: None }, reader)
+            (Session { gen: 0, input, master: pair.master, killer: child.clone_killer(), tree: None, env: vec![] }, reader)
         };
         let ptys = Ptys::default();
         // Roh wie claude: sonst verwirft die Zeilendisziplin ueberzaehlige Bytes, statt zu blockieren.

@@ -744,6 +744,7 @@ pub fn run() {
             pty::run_start,
             pty::run_missing,
             pty::claude_login,
+            pty::claude_btw,
             accounts::claude_accounts,
             accounts::claude_account_save,
             accounts::claude_account_switch,
