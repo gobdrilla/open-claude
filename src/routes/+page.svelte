@@ -89,8 +89,6 @@
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
   import PaletteIcon from "@lucide/svelte/icons/palette";
   import PackageIcon from "@lucide/svelte/icons/package";
-  import BrainIcon from "@lucide/svelte/icons/brain";
-  import GaugeIcon from "@lucide/svelte/icons/gauge";
   import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
 
   type Repo = {
@@ -1417,22 +1415,6 @@
                     onchange={(v) => setClaudeCfg("theme", v || undefined)}
                   />
                 </div>
-                <div class="flex items-center gap-2 px-2 py-1.5">
-                  <GaugeIcon class="text-muted-foreground size-3.5" />
-                  <span class="flex-1">Effort</span>
-                  <!-- Segmented statt Select: dessen Popup ausserhalb wuerde das Menue schliessen -->
-                  <Segmented
-                    value={claudeCfg.effortLevel ?? ""}
-                    options={[["Std", "", "Standard"], ["Low", "low"], ["Mid", "medium"], ["High", "high"], ["XH", "xhigh", "Sehr hoch"], ["Max", "max"]] as const}
-                    onchange={(v) => setClaudeCfg("effortLevel", v || undefined)}
-                  />
-                </div>
-                {@render setting(
-                  "Thinking-Modus",
-                  claudeCfg.alwaysThinkingEnabled ?? true,
-                  () => setClaudeCfg("alwaysThinkingEnabled", claudeCfg?.alwaysThinkingEnabled === false ? undefined : false),
-                  BrainIcon,
-                )}
               {/if}
               <DropdownMenu.Separator class={menuSeparator} />
               {@render setting("Among-Us-Easteregg", amongUs.on, () => ((amongUs.on = !amongUs.on), saveAmongUs()), GhostIcon)}
