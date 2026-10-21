@@ -27,6 +27,15 @@
     oncancel: () => void;
     children?: Snippet;
   } = $props();
+
+  function keydown(e: KeyboardEvent) {
+    if (e.key === "Enter") onsubmit();
+    // Tab im leeren Feld uebernimmt einen Platzhalter wie "feature/…" ohne die Auslassungspunkte.
+    else if (e.key === "Tab" && !e.shiftKey && !value && placeholder?.endsWith("…")) {
+      e.preventDefault();
+      value = placeholder.slice(0, -1);
+    }
+  }
 </script>
 
 <Dialog.Root {open} onOpenChange={(o) => !o && oncancel()}>
@@ -35,7 +44,7 @@
       <Dialog.Title>{title}</Dialog.Title>
       {#if description}<Dialog.Description>{description}</Dialog.Description>{/if}
     </Dialog.Header>
-    <Input bind:value {placeholder} class={mono ? "font-mono" : ""} onkeydown={(e) => e.key === "Enter" && onsubmit()} autofocus />
+    <Input bind:value {placeholder} class={mono ? "font-mono" : ""} onkeydown={keydown} autofocus />
     {@render children?.()}
     <div class="flex justify-end gap-2">
       <Button variant="ghost" size="sm" onclick={oncancel}>Abbrechen</Button>
