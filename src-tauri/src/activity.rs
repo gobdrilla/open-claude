@@ -806,7 +806,8 @@ fn live(st: &mut State, dir: &Path, scripts: &[PathBuf], id: &str, alive: Option
 /// (sid, startedAt der lebenden Session, SIDs der anderen lebenden Sessions im cwd) — sessions/*.json mit passendem
 /// cwd, sonst neueste Transkript-Datei.
 // ponytail: zwei claude im selben cwd -> neueste gewinnt; exakt waere Kindprozess der PTY-PID
-fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>, Vec<String>)> {
+/// want: SID der Sitzung laut Mod-Panel; mehrere claude im selben cwd sonst nicht unterscheidbar (nimmt die neueste).
+fn session(c: &Path, cwd: &str, p: &Path, want: Option<&str>) -> Option<(String, Option<u64>, Vec<String>)> {
     let mut all: Vec<Value> = fs::read_dir(c.join("sessions"))
         .into_iter()
         .flatten()
@@ -817,7 +818,10 @@ fn session(c: &Path, cwd: &str, p: &Path) -> Option<(String, Option<u64>, Vec<St
         .filter(|v| if cfg!(windows) { str_of(v, "cwd").eq_ignore_ascii_case(cwd) } else { str_of(v, "cwd") == cwd })
         .collect();
     all.sort_by_key(|v| u64_of(v, "updatedAt"));
-    let live = all.pop();
+    let live = match want.and_then(|w| all.iter().position(|v| str_of(v, "sessionId") == w)) {
+        Some(i) => Some(all.remove(i)),
+        None => all.pop(),
+    };
     let others = all.iter().map(|v| str_of(v, "sessionId").to_string()).collect();
     let (sid, alive) = match live {
         Some(v) => (str_of(&v, "sessionId").to_string(), Some(u64_of(&v, "startedAt"))),
@@ -863,9 +867,9 @@ fn merge(old: &mut Agent, mut new: Agent) {
     *old = new;
 }
 
-fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, now: u64) -> Activity {
+fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, want: Option<&str>, now: u64) -> Activity {
     let p = c.join("projects").join(slug(cwd));
-    let Some((sid, alive, others)) = session(c, cwd, &p) else {
+    let Some((sid, alive, others)) = session(c, cwd, &p, want) else {
         return Activity { session: None, alive: false, runs: vec![], agents: vec![], images: vec![], prompts: vec![], panel: None, limits: None, modes: vec![] };
     };
     // Max. 4 Sessions im Cache; nur die am laengsten unbenutzte faellt raus, die anderen muessten sonst alles neu lesen.
@@ -985,12 +989,13 @@ pub fn claude_command(id: String, command: String, args: String) -> Result<u64, 
 #[tauri::command]
 pub async fn claude_activity(cwd: String, id: String) -> Result<Activity, String> {
     blocking(move || {
-        let mut a = activity_in(&mut *CACHE.lock().map_err(|e| e.to_string())?, &config_dir(), &real(&cwd), now_ms());
         // Halb geschriebene Datei: None, das Frontend behaelt den letzten Wert.
+        let panel: Option<Value> =
+            crate::pty::valid_id(&id).then(|| fs::read_to_string(panel_file(&id)).ok().and_then(|t| serde_json::from_str(&t).ok())).flatten();
+        let want = panel.as_ref().map(|v| str_of(v, "sid")).filter(|s| !s.is_empty());
+        let mut a = activity_in(&mut *CACHE.lock().map_err(|e| e.to_string())?, &config_dir(), &real(&cwd), want, now_ms());
         a.modes = modes(&config_dir());
-        if crate::pty::valid_id(&id) {
-            a.panel = fs::read_to_string(panel_file(&id)).ok().and_then(|t| serde_json::from_str(&t).ok());
-        }
+        a.panel = panel;
         a.limits = newest_limits(&panel_dir());
         Ok(a)
     })
@@ -1075,6 +1080,19 @@ mod tests {
     }
 
     #[test]
+    fn zwei_sitzungen_im_selben_cwd() {
+        let c = tmp("zwei");
+        put(&c.join("sessions/1.json"), r#"{"sessionId":"aa","cwd":"/w/p","startedAt":0,"updatedAt":1}"#);
+        put(&c.join("sessions/2.json"), r#"{"sessionId":"bb","cwd":"/w/p","startedAt":0,"updatedAt":2}"#);
+        let p = c.join("projects/-w-p");
+        assert_eq!(session(&c, "/w/p", &p, None).unwrap().0, "bb");
+        let (sid, _, others) = session(&c, "/w/p", &p, Some("aa")).unwrap();
+        assert_eq!((sid.as_str(), others), ("aa", vec!["bb".to_string()]));
+        // Unbekannte SID (sessions/*.json noch nicht geschrieben): neueste
+        assert_eq!(session(&c, "/w/p", &p, Some("cc")).unwrap().0, "bb");
+    }
+
+    #[test]
     fn slug_ersetzt() {
         assert_eq!(slug("/Users/x/dev/a.b"), "-Users-x-dev-a-b");
         assert_eq!(iso_ms("1970-01-01T00:00:01.5Z"), 1500);
@@ -1102,7 +1120,7 @@ mod tests {
             let (c, base) = setup(&format!("j{alive}"), alive);
             put(&base.join("subagents/workflows/wf_1/journal.jsonl"), JOURNAL);
             put(&base.join("workflows/scripts/mein-flow-wf_1.js"), "export const meta = {\n  phases: [{ title: 'Research' }],\n}\n");
-            let a = activity_in(&mut Cache::new(), &c, "/w/p", now_ms());
+            let a = activity_in(&mut Cache::new(), &c, "/w/p", None, now_ms());
             let r = &a.runs[0];
             assert_eq!(r.name, "mein-flow");
             assert_eq!(r.phases, ["Research", "Extra"]);
@@ -1130,7 +1148,7 @@ mod tests {
                  {"type":"workflow_agent","label":"zwei","agentId":"a2","promptPreview":"nur Vorschau"}]}"#,
         );
         put(&base.join("subagents/workflows/wf_2/agent-a1.jsonl"), "{\"type\":\"user\",\"message\":{\"content\":\"voller Auftrag\"}}\n{kaputt");
-        let a = activity_in(&mut Cache::new(), &c, "/w/p", 0);
+        let a = activity_in(&mut Cache::new(), &c, "/w/p", None, 0);
         let r = &a.runs[0];
         assert_eq!((r.status.as_str(), r.tokens, r.name.as_str()), ("completed", 575163, "x"));
         assert_eq!(r.agents.len(), 2);
@@ -1263,12 +1281,12 @@ mod tests {
                 + &format!(r#"{{"type":"user","message":{{"content":[{{"type":"tool_result","tool_use_id":"t1","content":[{}]}}]}}}}"#, img("REVG"))),
         );
         let mut cache = Cache::new();
-        let a = activity_in(&mut cache, &c, "/w/p", 0);
+        let a = activity_in(&mut cache, &c, "/w/p", None, 0);
         assert_eq!(a.images.len(), 1, "halbe letzte Zeile noch nicht");
         assert_eq!((a.images[0].kind.as_str(), a.images[0].label.as_str(), a.images[0].at), ("paste", "Eingefügt #2", 1000));
         assert_eq!(a.prompts.iter().map(|p| (p.at, p.text.as_str())).collect::<Vec<_>>(), [(2000, "hallo")]);
         append(&agent, "\n");
-        let a = activity_in(&mut cache, &c, "/w/p", 0);
+        let a = activity_in(&mut cache, &c, "/w/p", None, 0);
         assert_eq!(a.images.len(), 2);
         assert_eq!((a.images[1].kind.as_str(), a.images[1].label.as_str()), ("read", "/x/shot.png"));
         let st = &cache[SID];
@@ -1307,13 +1325,13 @@ mod tests {
             ),
         );
         let mut cache = Cache::new();
-        let a = activity_in(&mut cache, &c, "/w/p", 0);
+        let a = activity_in(&mut cache, &c, "/w/p", None, 0);
         let st: Vec<_> = a.agents.iter().map(|a| (a.id.as_str(), a.state.as_str())).collect();
         assert_eq!(st, [("a2", "running"), ("a1", "done")]);
         assert_eq!((a.agents[1].label.as_str(), a.agents[1].phase.as_str()), ("Suche", "Explore"));
         // fortgesetzt: schreibt nach der Meldung weiter
         append(&base.join("subagents/agent-a1.jsonl"), &t(9));
-        let a = activity_in(&mut cache, &c, "/w/p", 0);
+        let a = activity_in(&mut cache, &c, "/w/p", None, 0);
         assert!(a.agents.iter().all(|a| a.state == "running"));
     }
 
@@ -1339,7 +1357,7 @@ mod tests {
         // andere lebende Session im selben cwd bleibt draussen
         put(&proj.join(other).join("subagents/agent-a7.jsonl"), &t);
 
-        let a = activity_in(&mut Cache::new(), &c, "/w/p", now_ms());
+        let a = activity_in(&mut Cache::new(), &c, "/w/p", None, now_ms());
         assert_eq!(a.session.as_deref(), Some(SID));
         let mut ids: Vec<_> = a.agents.iter().map(|a| a.id.as_str()).collect();
         ids.sort();
@@ -1360,7 +1378,7 @@ mod tests {
                  {"type":"workflow_agent","label":"a","state":"progress"},{"type":"workflow_agent","label":"b","state":"start"},
                  {"type":"workflow_agent","label":"c","state":"done"},{"type":"workflow_agent","label":"d","state":"error"}]}"#,
         );
-        let r = &activity_in(&mut Cache::new(), &c, "/w/p", now_ms()).runs[0];
+        let r = &activity_in(&mut Cache::new(), &c, "/w/p", None, now_ms()).runs[0];
         let st: Vec<(&str, &str)> = ["a", "b", "c", "d"].map(|l| (l, r.agents.iter().find(|a| a.label == l).unwrap().state.as_str())).to_vec();
         assert_eq!((r.status.as_str(), st), ("killed", vec![("a", "aborted"), ("b", "aborted"), ("c", "done"), ("d", "error")]));
     }
@@ -1382,7 +1400,7 @@ mod tests {
         };
         let stop = r#"{"type":"user","timestamp":"2026-10-15T14:01:00.000Z","toolUseResult":{"message":"Successfully stopped task: t1 (x)","task_id":"t1","task_type":"local_workflow"}}"#;
         put(&c.join(format!("projects/-w-p/{SID}.jsonl")), &([started("wf_a", "t1"), stop.into(), started("wf_b", "t2")].join("\n") + "\n"));
-        let runs = activity_in(&mut Cache::new(), &c, "/w/p", now_ms()).runs;
+        let runs = activity_in(&mut Cache::new(), &c, "/w/p", None, now_ms()).runs;
         let run = |id: &str| runs.iter().find(|r| r.id == id).unwrap();
         let (a, b) = (run("wf_a"), run("wf_b"));
         assert_eq!((a.status.as_str(), a.agents.iter().find(|x| x.label == "drei").unwrap().state.as_str()), ("aborted", "aborted"));
@@ -1404,7 +1422,7 @@ mod tests {
         put(&c.join(format!("projects/-w-p/{SID}.jsonl")), &(lines.join("\n") + "\n"));
         std::thread::sleep(std::time::Duration::from_millis(20));
         append(&journal, "{\"type\":\"result\",\"key\":\"k3\",\"agentId\":\"a3\",\"result\":\"spaet\"}\n");
-        let r = &activity_in(&mut Cache::new(), &c, "/w/p", now_ms()).runs[0];
+        let r = &activity_in(&mut Cache::new(), &c, "/w/p", None, now_ms()).runs[0];
         assert_eq!((r.status.as_str(), r.agents[0].state.as_str()), ("killed", "aborted"));
     }
 
@@ -1416,10 +1434,10 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         put(&base.join("workflows/wf_3.json"), r#"{"status":"completed","workflowProgress":[]}"#);
         let mut cache = Cache::new();
-        assert_eq!(activity_in(&mut cache, &c, "/w/p", now_ms()).runs[0].status, "completed");
+        assert_eq!(activity_in(&mut cache, &c, "/w/p", None, now_ms()).runs[0].status, "completed");
         std::thread::sleep(std::time::Duration::from_millis(20));
         append(&journal, "{\"type\":\"started\",\"key\":\"k4\",\"agentId\":\"a4\",\"label\":\"vier\"}\n");
-        let r = &activity_in(&mut cache, &c, "/w/p", now_ms()).runs[0];
+        let r = &activity_in(&mut cache, &c, "/w/p", None, now_ms()).runs[0];
         assert_eq!(r.status, "running");
         assert!(r.agents.iter().any(|a| a.label == "vier" && a.state == "running"));
     }
@@ -1459,7 +1477,7 @@ mod tests {
         for (i, k) in ["s1", "s2", "s3", "s4"].iter().enumerate() {
             cache.insert(k.to_string(), State { used: [5, 1, 7, 3][i], ..Default::default() });
         }
-        assert!(activity_in(&mut cache, &c, "/w/p", 10).alive);
+        assert!(activity_in(&mut cache, &c, "/w/p", None, 10).alive);
         let mut keys: Vec<_> = cache.keys().cloned().collect();
         keys.sort();
         assert_eq!(keys, [SID, "s1", "s3", "s4"]);

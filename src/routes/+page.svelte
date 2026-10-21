@@ -83,6 +83,7 @@
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import UsersIcon from "@lucide/svelte/icons/users";
   import KeyRoundIcon from "@lucide/svelte/icons/key-round";
@@ -156,11 +157,16 @@
   let amongUs = $state({ on: true, rate: 1, volume: 1 });
   const RATES: [string, number][] = [["Selten", 3], ["Normal", 1], ["Oft", 0.4]];
   let input = $state<HTMLInputElement | null>(null);
-  // Eine Session pro Projekt; die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
+  // Sessions (auch mehrere pro Projekt); die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
   // group/dirs: Sitzung einer Repo-Gruppe, startet in repo und kennt dirs als weitere Arbeitsordner
   let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[] }[]>([]);
-  // sendToClaude (Kontextmenues "An Claude") schreibt in die Projekt-Sitzung, nie in eine Gruppen-Sitzung.
-  claudeTarget.find = (p) => sessions.find((s) => !s.group && s.repo.path === p)?.id;
+  // Projekt-Sitzung, bei mehreren die aktive. Nie eine Gruppen-Sitzung.
+  const sessionOf = (p: string) => {
+    const own = sessions.filter((s) => !s.group && s.repo.path === p);
+    return own.find((s) => s.id === active) ?? own[0];
+  };
+  // sendToClaude (Kontextmenues "An Claude") schreibt in die Projekt-Sitzung.
+  claudeTarget.find = (p) => sessionOf(p)?.id;
   let repoGroups = $state<RepoGroup[]>([]);
   // Gruppe im Dialog; orig = bisheriger Name (null = neu)
   let groupEdit = $state<{ orig: string | null; g: RepoGroup } | null>(null);
@@ -664,7 +670,7 @@
       const s = sessions.find((s) => s.id === pendingFocus);
       pendingFocus = null;
       // Nicht activate: in Editor/Git-Ansicht oeffnete openTab das Repo dort statt das Terminal mit der Rueckfrage.
-      if (s && tabs[s.id] === "ask") s.group ? openGroupTab(s.id) : launch(s.repo);
+      if (s && tabs[s.id] === "ask") openSessionTab(s.id);
     };
     window.addEventListener("focus", onFocus);
     // Ein langsamer Durchlauf (viele Sitzungen) darf sich nicht mit dem naechsten ueberlappen.
@@ -713,7 +719,8 @@
   });
 
   /** Offene Session des Projekts zeigen, sonst eine neue starten. */
-  async function launch(repo?: Repo) {
+  /** neu: weitere Sitzung im selben Projekt statt zur offenen zu wechseln. */
+  async function launch(repo?: Repo, neu = false) {
     if (!repo) return;
     if (gitRepo && gitView && !(await gitView.canLeave())) return;
     // Vor dem Start schreiben, damit claude die Skills schon sieht; ein Fehler haelt den Start nicht auf.
@@ -721,7 +728,7 @@
     if (!isFree(repo) && !running.has(repo.path) && managed(skillStore, repo.path, repo.kind)) await syncSkills([repo.path]);
     leaveGit();
     editRepo = null;
-    let s = sessions.find((s) => !s.group && s.repo.path === repo.path);
+    let s = neu ? undefined : sessionOf(repo.path);
     // Eindeutig pro Seitenladung: nach einem Neuladen laufen alte PTYs evtl. noch unter "t1"
     if (!s) sessions.push((s = { id: crypto.randomUUID(), repo }));
     active = s.id;
@@ -782,16 +789,22 @@
     openGit(repo);
   }
 
-  /** Tab einer Gruppen-Sitzung: wie launchGroup, ohne die Gruppe neu aufzuloesen. */
-  async function openGroupTab(id: string) {
+  /** Genau diese Sitzung im Terminal zeigen: wie launch, ohne nach Projekt oder Gruppe aufzuloesen. */
+  async function openSessionTab(id: string) {
     if (gitRepo && gitView && !(await gitView.canLeave())) return;
     leaveGit();
     editRepo = null;
     active = id;
   }
 
-  const activate = (s: (typeof sessions)[number]) => (s.group ? openGroupTab(s.id) : openTab(s.repo));
-  const label = (s: (typeof sessions)[number]) => s.group ?? split(s.repo.rel)[1];
+  // Im Terminal per id: bei mehreren Sitzungen eines Projekts fuehrte openTab sonst zur ersten
+  const activate = (s: (typeof sessions)[number]) => (s.group || view === "term" ? openSessionTab(s.id) : openTab(s.repo));
+  // Ab der zweiten Sitzung im selben Projekt durchnummeriert
+  const label = (s: (typeof sessions)[number]) => {
+    if (s.group) return s.group;
+    const n = sessions.filter((o) => !o.group && o.repo.path === s.repo.path).indexOf(s);
+    return split(s.repo.rel)[1] + (n > 0 ? ` ${n + 1}` : "");
+  };
 
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
   async function openEdit(repo?: Repo) {
@@ -1193,6 +1206,15 @@
         onclick={toggleSide}
         title="Session, Workflows und Bilder"><WorkflowIcon class="size-3.5" /> Aktivität</Button
       >
+      {#if !activeSession.group}
+        <Button
+          variant="ghost"
+          size="sm"
+          class="text-muted-foreground h-6 gap-1.5 text-[11px]"
+          onclick={() => launch(activeSession.repo, true)}
+          title="Weitere Claude-Sitzung im selben Projekt"><PlusIcon class="size-3.5" /> Sitzung</Button
+        >
+      {/if}
       <Button
         variant="ghost"
         size="sm"
@@ -1586,7 +1608,7 @@
                             onpointerdown={(e) => e.stopPropagation()}
                             onclick={(e) => {
                               e.stopPropagation();
-                              const s = sessions.find((s) => !s.group && s.repo.path === item.repo.path);
+                              const s = sessionOf(item.repo.path);
                               if (s) endSession(s.id);
                             }}
                             aria-label="Sitzung beenden"
@@ -1654,6 +1676,9 @@
                     {@render repoItem("Git-Ansicht", `${mod}+G`, () => openGit(item.repo))}
                     {@render repoItem("Editor", `${mod}+⇧+E`, () => openEdit(item.repo))}
                     {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", `${mod}+⏎`, () => launch(item.repo))}
+                    {#if running.has(item.repo.path)}
+                      {@render repoItem("Weitere Claude-Sitzung", "", () => launch(item.repo, true))}
+                    {/if}
                     <ContextMenu.Separator class={menuSeparator} />
                     {@render repoItem(`Im ${FILES_APP} zeigen`, `${mod}+E`, () => reveal(item.repo))}
                     {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
@@ -1698,7 +1723,7 @@
           >
             {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
                 class="text-primary mr-1 inline size-3"
-              />{s.group}{:else}{split(s.repo.rel)[1]}{/if}{#if banners[s.id]}<span
+              />{/if}{label(s)}{#if banners[s.id]}<span
                 class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
                 title={banners[s.id]}>{banners[s.id]}</span
               >{/if}

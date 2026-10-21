@@ -4,6 +4,7 @@ export type Todo = { content: string; status: string }
 
 export type Panel = {
   startedAt: number
+  sid?: string
   context: { tokens: number | null; window: number; percent: number | null }
   // autoCompactThreshold - totalTokens; null ohne Auto-Compact
   compactLeft: number | null

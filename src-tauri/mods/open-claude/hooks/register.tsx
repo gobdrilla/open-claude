@@ -279,6 +279,8 @@ export const register: Register = on => {
     const [usage, model] = await Promise.all([$.session.usage(), $.session.model()])
     await put($, s => ({
       ...(s.startedAt === usage.startedAt ? s : fresh(usage.startedAt)),
+      // App ordnet das Aktivitaets-Panel per SID zu (mehrere Sitzungen im selben Projekt)
+      sid: id,
       context: { tokens: usage.context.tokens ?? null, window: usage.context.window, percent: usage.context.percent ?? null },
       limits: limitsOf(usage.rateLimits),
       cost: usage.cost?.usd ?? null,
