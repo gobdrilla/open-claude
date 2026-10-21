@@ -416,11 +416,21 @@ export function setText(repo: string, path: string, text: string): void {
 }
 
 /** Zeilenumbruch (Alt+Z), global fuer alle Projekte; localStorage "editor:wrap". */
-export const prefs = $state({ wrap: false });
+export const prefs = $state({ wrap: false, ai: true });
 try {
   prefs.wrap = localStorage.getItem("editor:wrap") === "1";
+  prefs.ai = localStorage.getItem("editor:ai") !== "0";
 } catch {
-  // Ohne localStorage: kein Umbruch.
+  // Ohne localStorage: kein Umbruch, KI-Vorschlaege an.
+}
+
+export function toggleAi(): void {
+  prefs.ai = !prefs.ai;
+  try {
+    localStorage.setItem("editor:ai", prefs.ai ? "1" : "0");
+  } catch {
+    // Gilt dann nur fuer diese Sitzung.
+  }
 }
 
 export function toggleWrap(): void {

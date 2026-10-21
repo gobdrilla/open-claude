@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abs, rel, ancestors, atRef, cite, devUrl, gutterMarks, huge, moved, packageManager, pasteFrame, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
+import { abs, rel, ancestors, atRef, cite, devUrl, ghostText, gutterMarks, huge, moved, packageManager, pasteFrame, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
 import { parseDiff } from "./diff.ts";
 
 test("unveraenderte Platte: nichts tun, egal ob lokal geaendert", () => {
@@ -161,4 +161,19 @@ test("atRef und cite", () => {
   assert.equal(atRef("src/a.ts", "#L2-4"), "@src/a.ts#L2-4 ");
   assert.equal(atRef("my dir/a.ts"), '@"my dir/a.ts" ');
   assert.equal(cite("\neins   \r\nzwei  \n\n"), "> eins\n> zwei\n");
+});
+
+test("ghostText: Markdown weg, <NONE> und Leeres sind kein Vorschlag", () => {
+  assert.equal(ghostText("```ts\na + b\n```", ""), "a + b");
+  assert.equal(ghostText("<NONE>", ""), "");
+  assert.equal(ghostText("  \n", ""), "");
+});
+
+test("ghostText: was hinter dem Cursor schon steht, faellt hinten weg", () => {
+  assert.equal(ghostText("a + b }", " }"), "a + b");
+  assert.equal(ghostText("name)", ")"), "name");
+  // Nur der Rest der Zeile: sonst bleibt alles, auch fuehrende Leerzeichen
+  assert.equal(ghostText(" + 1", ""), " + 1");
+  assert.equal(ghostText("}", "}"), "");
+  assert.equal(ghostText("i++) {", ""), "i++) {");
 });

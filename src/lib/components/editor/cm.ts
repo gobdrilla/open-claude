@@ -58,6 +58,7 @@ const chrome = EditorView.theme(
       boxShadow: "0 8px 24px rgb(0 0 0 / 0.12)",
       overflow: "hidden",
     },
+    ".cm-ghost": { color: "var(--muted-foreground)", opacity: "0.7", whiteSpace: "pre" },
     ".cm-lsp-actions": { margin: 0, padding: "4px", listStyle: "none", maxHeight: "16rem", overflowY: "auto", fontSize: "12px" },
     ".cm-lsp-actions > li": { padding: "3px 8px", borderRadius: "4px", cursor: "pointer", whiteSpace: "nowrap" },
     ".cm-lsp-actions > li[aria-selected], .cm-tooltip-autocomplete > ul > li[aria-selected]": {

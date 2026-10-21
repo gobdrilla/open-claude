@@ -10,6 +10,7 @@ use walkdir::WalkDir;
 
 // Terminal in der App (ersetzt das externe wt.exe-Fenster).
 mod pty;
+mod complete;
 // GitHub/GitLab: Konten, Repos, PRs, Klonen.
 mod forge;
 // Neue Repos anlegen (Scaffold, git init, erster Commit).
@@ -718,6 +719,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         .manage(pty::Ptys::default())
+        .manage(complete::Completer::default())
         .manage(preview::PreviewRoots::default())
         .manage(runner::Runs::default())
         .manage(ide::Ides::<tauri::Wry>::default())
@@ -745,6 +747,7 @@ pub fn run() {
             pty::run_missing,
             pty::claude_login,
             pty::claude_btw,
+            complete::ai_complete,
             accounts::claude_accounts,
             accounts::claude_account_save,
             accounts::claude_account_switch,

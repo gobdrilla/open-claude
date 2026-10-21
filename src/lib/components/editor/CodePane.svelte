@@ -11,6 +11,7 @@
   import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
   import { gutterMarks, huge, span } from "$lib/editor.logic";
   import { gitGutter, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
+  import { ghost } from "./ghost";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -57,6 +58,7 @@
         wrap.of(prefs.wrap ? EditorView.lineWrapping : []),
         testGutter((id) => void testRun(repo, id)),
         gitGutter,
+        ghost(path, () => prefs.ai),
         EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
         EditorView.updateListener.of((u) => {
           if (!u.selectionSet && !(u.focusChanged && u.view.hasFocus)) return;

@@ -179,3 +179,15 @@ export const cite = (text: string) =>
     .split("\n")
     .map((l) => "> " + l.trimEnd())
     .join("\n") + "\n";
+
+/**
+ * Antwort der KI-Vervollstaendigung -> Grautext; "" = nichts zeigen. `rest` = Text hinter dem Cursor bis Zeilenende.
+ * Das Modell haengt oft an, was schon hinter dem Cursor steht ("a + b }" vor " }"), das faellt weg.
+ */
+export function ghostText(raw: string, rest: string): string {
+  let t = raw.replace(/^```[\w-]*\n?|\n?```\s*$/g, "");
+  if (t.trim() === "<NONE>" || !t.trim()) return "";
+  const r = rest.trim();
+  if (r && t.trimEnd().endsWith(r)) t = t.trimEnd().slice(0, -r.length).trimEnd();
+  return t.trim() ? t : "";
+}

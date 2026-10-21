@@ -62,7 +62,7 @@
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
-  import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
+  import { drop, isDirty, open as openFile, prefs, toggleAi } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
   import { claudeTarget, ide, listenIde } from "$lib/ide.svelte";
   import { testCancel } from "$lib/testing.svelte";
@@ -1365,6 +1365,7 @@
               {/if}
               {@render setting(mac ? "Schließen legt in die Menüleiste" : "Schließen legt ins Tray", tray, toggleTray, InboxIcon)}
               {@render setting("Zugeklappt wach, solange Claude arbeitet", lidAwake, toggleLidAwake, LaptopIcon)}
+              {@render setting("KI-Vorschläge im Editor", prefs.ai, toggleAi, SparklesIcon)}
               <DropdownMenu.Separator class={menuSeparator} />
               <div class="flex items-center gap-2 px-2 py-1.5">
                 <ZoomInIcon class="text-muted-foreground size-3.5" />
