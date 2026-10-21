@@ -98,7 +98,7 @@ export function editsOf(r: { changes?: Record<string, TextEdit[]>; documentChang
   if (r.documentChanges) {
     return r.documentChanges.map((c) => {
       const d = c as { kind?: string; textDocument?: { uri: string }; edits?: TextEdit[] };
-      if (d.kind || !d.textDocument || !d.edits) throw new Error("Umbenennen mit Dateioperationen nicht unterstützt");
+      if (d.kind || !d.textDocument || !d.edits) throw new Error("Dateioperationen (anlegen, umbenennen, löschen) werden nicht unterstützt");
       return { uri: d.textDocument.uri, edits: d.edits };
     });
   }

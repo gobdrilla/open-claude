@@ -3,8 +3,8 @@
 // beim Server geoeffnete Dokumente bleiben. didClose erst, wenn der Tab zugeht (closed) oder das Projekt (stop).
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
-import { ChangeSet, Text, type Extension } from "@codemirror/state";
-import { EditorView, keymap, showDialog, type Command } from "@codemirror/view";
+import { ChangeSet, Prec, StateEffect, StateField, Text, type Extension } from "@codemirror/state";
+import { EditorView, keymap, showDialog, showTooltip, type Command } from "@codemirror/view";
 import { forEachDiagnostic, type Diagnostic } from "@codemirror/lint";
 import {
   LSPClient,
@@ -200,6 +200,7 @@ const INIT = /^\{"jsonrpc":"2\.0","id":\d+,"method":"initialize",/;
 function connect(repo: string, server: string): Promise<Conn | null> {
   const key = k(repo, server);
   const handlers = new Set<(m: string) => void>();
+  let conn: Conn | null = null;
   // Tauri garantiert keine Reihenfolge zwischen einzelnen invokes: didChange muss in Reihenfolge ankommen.
   let q: Promise<unknown> = Promise.resolve();
   const transport: Transport = {
@@ -214,13 +215,17 @@ function connect(repo: string, server: string): Promise<Conn | null> {
     subscribe: (h) => void handlers.add(h),
     unsubscribe: (h) => void handlers.delete(h),
   };
-  let conn: Conn | null = null;
   const ch = new Channel<Out>();
   const mine = () => clients.get(key) === p;
   const dropped = () => aborted.has(p);
   const p: Promise<Conn | null> = (async () => {
     ch.onmessage = (o) => {
       if (o.t === "msg") {
+        // Server-Anfrage, die lsp-client mit MethodNotFound beantworten wuerde (Quick-Fixes ueber Commands).
+        if (conn && o.m.includes('"workspace/applyEdit"')) {
+          const r = JSON.parse(o.m);
+          if (r.method === "workspace/applyEdit" && "id" in r) return void serverEdit(conn, transport, r.id, r.params.edit);
+        }
         for (const h of handlers) h(o.m);
         return;
       }
@@ -267,7 +272,11 @@ function connect(repo: string, server: string): Promise<Conn | null> {
           ...jumpToDefinitionKeymap,
           ...findReferencesKeymap,
           { key: "F2", run: renameCmd, preventDefault: true },
+          { key: "Alt-Enter", run: actionsCmd, preventDefault: true },
+          { key: "Mod-.", run: actionsCmd, preventDefault: true },
         ]),
+        actionsMenu,
+        { clientCapabilities: ACTION_CAPS },
       ],
     });
     const ws = (): StoreWorkspace => client.workspace as StoreWorkspace;
@@ -496,6 +505,9 @@ export function lspDiagnostics(repo: string, path: string, view: EditorView): Di
       message: d.message,
       source: d.source,
     };
+    if (plugin?.client.serverCapabilities?.codeActionProvider) {
+      x.actions = [{ name: "Beheben …", apply: (v, from) => (v.dispatch({ selection: { anchor: from } }), void actionsCmd(v)) }];
+    }
     ours.add(x);
     return x;
   });
@@ -573,7 +585,7 @@ const renameCmd: Command = (view) => {
           position: plugin.toPosition(word.from),
           textDocument: { uri: plugin.uri },
         });
-        return applyRename(ws, editsOf(res), m);
+        return applyWorkspaceEdit(ws, editsOf(res), m);
       });
       showDialog(view, { label: `In ${n} ${n === 1 ? "Datei" : "Dateien"} umbenannt`, top: true });
     } catch (e) {
@@ -584,7 +596,7 @@ const renameCmd: Command = (view) => {
 };
 
 /** Offene Editoren per Transaktion (Undo), Puffer ohne Editor im Store, alles andere direkt auf der Platte. */
-async function applyRename(ws: StoreWorkspace, all: Edit[], m: WorkspaceMapping): Promise<number> {
+async function applyWorkspaceEdit(ws: StoreWorkspace, all: Edit[], m: WorkspaceMapping): Promise<number> {
   const repo = ws.repo;
   // Erst pruefen und umrechnen, dann aendern: nie halb umbenennen, nie ausserhalb des Projekts schreiben.
   const items = all
@@ -625,4 +637,125 @@ async function applyRename(ws: StoreWorkspace, all: Edit[], m: WorkspaceMapping)
   }
   ws.client.sync();
   return items.length;
+}
+
+// ---------- Quick-Fixes (Alt+Enter wie Rider, Mod-. wie VS/VS Code) ----------
+
+type Cmd = { title: string; command: string; arguments?: unknown[] };
+type Action = { title: string; isPreferred?: boolean; edit?: Parameters<typeof editsOf>[0]; command?: Cmd; data?: unknown };
+type Menu = { pos: number; items: Action[]; sel: number } | null;
+
+const ACTION_CAPS = {
+  textDocument: {
+    codeAction: {
+      // Ohne Literal-Support liefern viele Server nur Commands statt fertiger Edits.
+      codeActionLiteralSupport: {
+        codeActionKind: { valueSet: ["", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"] },
+      },
+      isPreferredSupport: true,
+      dataSupport: true,
+      resolveSupport: { properties: ["edit"] },
+    },
+  },
+  workspace: { applyEdit: true, workspaceEdit: { documentChanges: true } },
+};
+
+const setMenu = StateEffect.define<Menu>();
+const menuField = StateField.define<Menu>({
+  create: () => null,
+  update(m, tr) {
+    for (const e of tr.effects) if (e.is(setMenu)) return e.value;
+    return m && (tr.docChanged || tr.selection) ? null : m;
+  },
+  provide: (f) => showTooltip.from(f, (m) => m && { pos: m.pos, create: (view) => ({ dom: menuDom(view, m) }) }),
+});
+
+function menuDom(view: EditorView, m: NonNullable<Menu>) {
+  const dom = document.createElement("ul");
+  dom.className = "cm-lsp-actions";
+  dom.setAttribute("role", "listbox");
+  m.items.forEach((a, i) => {
+    const li = dom.appendChild(document.createElement("li"));
+    li.textContent = a.title;
+    li.setAttribute("role", "option");
+    if (i === m.sel) li.setAttribute("aria-selected", "true");
+    li.onmousedown = (e) => (e.preventDefault(), pick(view, i));
+  });
+  return dom;
+}
+
+function pick(view: EditorView, i: number) {
+  const m = view.state.field(menuField);
+  const plugin = LSPPlugin.get(view);
+  view.dispatch({ effects: setMenu.of(null) });
+  if (m && plugin) void runAction(plugin, m.items[i]).catch((e) => plugin.reportError("Quick-Fix fehlgeschlagen", e));
+}
+
+const menuKeys = (f: (view: EditorView, m: NonNullable<Menu>) => void): Command => (view) => {
+  const m = view.state.field(menuField, false);
+  if (!m) return false;
+  f(view, m);
+  return true;
+};
+const move = (d: number) => menuKeys((v, m) => v.dispatch({ effects: setMenu.of({ ...m, sel: (m.sel + d + m.items.length) % m.items.length }) }));
+
+const actionsMenu: Extension = [
+  menuField,
+  Prec.highest(
+    keymap.of([
+      { key: "ArrowDown", run: move(1) },
+      { key: "ArrowUp", run: move(-1) },
+      { key: "Enter", run: menuKeys((v, m) => pick(v, m.sel)) },
+      { key: "Escape", run: menuKeys((v) => v.dispatch({ effects: setMenu.of(null) })) },
+    ]),
+  ),
+];
+
+const actionsCmd: Command = (view) => {
+  const plugin = LSPPlugin.get(view);
+  if (!plugin?.client.serverCapabilities?.codeActionProvider) return false;
+  const { from, to, head } = view.state.selection.main;
+  const ws = plugin.client.workspace as StoreWorkspace;
+  const path = ws.getFile(plugin.uri)?.path;
+  void (async () => {
+    plugin.client.sync();
+    const start = plugin.toPosition(from);
+    const end = plugin.toPosition(to);
+    // Befunde der betroffenen Zeilen: daraus bauen die Server ihre Quick-Fixes.
+    const diagnostics = (path ? (lsp.diags[k(ws.repo, path)]?.list ?? []) : []).filter((d) => d.range.start.line <= end.line && d.range.end.line >= start.line);
+    const res = await plugin.client.request<unknown, (Action | Cmd)[] | null>("textDocument/codeAction", {
+      textDocument: { uri: plugin.uri },
+      range: { start, end },
+      context: { diagnostics: $state.snapshot(diagnostics), triggerKind: 1 },
+    });
+    // Inzwischen weitergetippt oder Cursor bewegt: Menue gehoerte zur alten Stelle.
+    if (view.state.selection.main.head !== head) return;
+    const items = (res ?? [])
+      .map((a): Action => (typeof a.command === "string" ? { title: a.title, command: a as Cmd } : (a as Action)))
+      .sort((a, b) => Number(!!b.isPreferred) - Number(!!a.isPreferred));
+    if (!items.length) return void showDialog(view, { label: "Keine Quick-Fixes an dieser Stelle", top: true });
+    view.dispatch({ effects: setMenu.of({ pos: head, items, sel: 0 }) });
+  })().catch((e) => plugin.reportError("Quick-Fixes konnten nicht geladen werden", e));
+  return true;
+};
+
+async function runAction(plugin: LSPPlugin, a: Action) {
+  const client = plugin.client;
+  const caps = client.serverCapabilities?.codeActionProvider;
+  if (!a.edit && !a.command && typeof caps === "object" && caps.resolveProvider) a = await client.request<Action, Action>("codeAction/resolve", a);
+  const edit = a.edit;
+  if (edit) await client.withMapping((m) => applyWorkspaceEdit(client.workspace as StoreWorkspace, editsOf(edit), m));
+  // Der Server schickt die Aenderungen dann per workspace/applyEdit (serverEdit).
+  if (a.command) await client.request("workspace/executeCommand", { command: a.command.command, arguments: a.command.arguments });
+}
+
+async function serverEdit(conn: Conn, transport: Transport, id: number | string, edit: Parameters<typeof editsOf>[0]) {
+  let result: { applied: boolean; failureReason?: string };
+  try {
+    await conn.client.withMapping((m) => applyWorkspaceEdit(conn.ws, editsOf(edit), m));
+    result = { applied: true };
+  } catch (e) {
+    result = { applied: false, failureReason: e instanceof Error ? e.message : String(e) };
+  }
+  transport.send(JSON.stringify({ jsonrpc: "2.0", id, result }));
 }
