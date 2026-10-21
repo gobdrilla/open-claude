@@ -129,7 +129,15 @@
   body {
     @apply h-full overflow-hidden bg-background text-foreground;
     font-family: var(--font-sans);
+    /* WKWebView (macOS) wertet nur die Variante mit Praefix aus: sonst markiert Doppelklick die halbe Oberflaeche. */
+    -webkit-user-select: none;
     user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
   }
   ::-webkit-scrollbar {
     width: 10px;
