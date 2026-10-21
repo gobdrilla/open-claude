@@ -17,7 +17,7 @@
   import ClaudeLoader from "./ClaudeLoader.svelte";
   import { evenCell } from "$lib/termcell";
   import { theme } from "$lib/theme.svelte";
-  import { DARK, LIGHT, LINKS, clipboardKey, windowsPty } from "$lib/termtheme";
+  import { DARK, LIGHT, LINKS, clipboardKey, contrast, windowsPty } from "$lib/termtheme";
   import { modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
   import { keep, pathHits } from "$lib/termlinks";
@@ -83,8 +83,10 @@
   // Trennlinien mit Zacken (Windows). WebGL zeichnet sie selbst, zellfuellend.
   // WebKit haelt nur 16 WebGL-Kontexte je Seite; bei vielen Sitzungen verliert die aelteste ihren,
   // darum holt ein Terminal ihn beim Sichtbarwerden zurueck.
+  // Linux (WebKitGTK): der WebGL-Canvas wird skaliert, Text verpixelt; DOM-Text bleibt scharf, Logo dafuer mit Luecken.
+  const linux = !navigator.userAgent.includes("Windows") && !navigator.userAgent.includes("Mac");
   function loadGl() {
-    if (!term || webgl) return;
+    if (!term || webgl || linux) return;
     const t = term;
     try {
       const gl = new WebglAddon();
@@ -194,6 +196,7 @@
       drawBoldTextInBrightColors: false,
       // Live-Wechsel nur, wenn claude mitzieht (notify), sonst bliebe sein Text in den alten Farben unlesbar.
       theme: theme.dark ? DARK : LIGHT,
+      minimumContrastRatio: contrast(theme.dark),
     });
     term = t;
     windowsPty().then((p) => p && (t.options.windowsPty = p));
@@ -346,6 +349,7 @@
     const dark = theme.dark;
     if (!term || !notify) return;
     term.options.theme = dark ? DARK : LIGHT;
+    term.options.minimumContrastRatio = contrast(dark);
     invoke("pty_write", { id, data: `\x1b[?997;${dark ? 1 : 2}n` }).catch(() => {});
   });
 

@@ -61,6 +61,9 @@ export const LIGHT = {
   brightWhite: "#5e636f", // --muted-foreground
 };
 
+// Hell: Mindestkontrast (WCAG AA) fuer Fremdfarben, die fuer dunkle Terminals gedacht sind (Statuszeile, Hooks,
+// claudes Truecolor). xterm dunkelt sie dann nach; dunkel bleiben die Farben exakt.
+export const contrast = (dark: boolean) => (dark ? 1 : 4.5);
 
 let pty: Promise<{ backend: "conpty"; buildNumber: number } | undefined> | undefined;
 /** Windows: ConPTY samt Build fuer xterm (Reflow erst ab Build 21376, sonst doppelte Zeilen nach Resize); sonst undefined. */
