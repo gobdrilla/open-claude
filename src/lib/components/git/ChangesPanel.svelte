@@ -351,6 +351,13 @@
                   e.preventDefault();
                   pick = { staged: isStaged, paths: paths(files) };
                   if (sel?.staged !== isStaged) sel = { path: f.path, staged: isStaged };
+                } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                  // Ueber beide Listen hinweg wie ein Klick; Umschalt erweitert die Auswahl (nur innerhalb einer Liste).
+                  e.preventDefault();
+                  const all = [...document.querySelectorAll<HTMLElement>("[data-file-list]")];
+                  const next = all[all.indexOf(e.currentTarget) + (e.key === "ArrowDown" ? 1 : -1)];
+                  next?.dispatchEvent(new MouseEvent("click", { shiftKey: e.shiftKey }));
+                  next?.scrollIntoView({ block: "nearest" });
                 } else if (e.key === "Escape" && picked.length > 1) {
                   // Nur die Mehrfachauswahl aufheben (Diff bleibt stehen) und die Ansicht nicht verlassen;
                   // ohne Mehrfachauswahl geht Esc wie bisher ans Fenster (+page.svelte: zurueck).

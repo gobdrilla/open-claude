@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join, dirname, rows } from "./tree.ts";
+import { join, dirname, rows, treeKey } from "./tree.ts";
 
 const e = (name: string, dir = false, ignored = false) => ({ name, dir, ignored });
 
@@ -32,4 +32,20 @@ test("rows zeigt nur aufgeklappte Ordner und vererbt ignored", () => {
   // Aufgeklappt, aber noch nicht gelistet: keine Kinder, kein Fehler.
   assert.deepEqual(rows({ "": [e("src", true)] }, ["src"]).map((r) => r.path), ["src"]);
   assert.deepEqual(rows({}, []), []);
+});
+
+test("treeKey navigiert wie im Explorer", () => {
+  const lists = { "": [e("src", true), e("a.md")], src: [e("x.ts")] };
+  const open = rows(lists, ["src"]); // src, src/x.ts, a.md
+  const shut = rows(lists, []); // src, a.md
+  assert.deepEqual(treeKey(open, 0, "ArrowDown"), { focus: 1 });
+  assert.deepEqual(treeKey(open, 2, "ArrowDown"), { focus: 2 });
+  assert.deepEqual(treeKey(open, 0, "ArrowUp"), { focus: 0 });
+  assert.deepEqual(treeKey(shut, 0, "ArrowRight"), { toggle: "src" });
+  assert.deepEqual(treeKey(open, 0, "ArrowRight"), { focus: 1 });
+  assert.deepEqual(treeKey(open, 0, "ArrowLeft"), { toggle: "src" });
+  assert.deepEqual(treeKey(open, 1, "ArrowLeft"), { focus: 0 });
+  assert.deepEqual(treeKey(open, 2, "ArrowLeft"), {});
+  assert.deepEqual(treeKey(open, 2, "End"), { focus: 2 });
+  assert.equal(treeKey(open, 0, "x"), null);
 });

@@ -16,3 +16,21 @@ export function rows(lists: Record<string, Entry[]>, expanded: string[], dir = "
     return open ? [row, ...rows(lists, expanded, path, depth + 1, row.ignored)] : [row];
   });
 }
+
+/** Pfeiltaste im Baum wie im Explorer: Auf/Ab wandern, Rechts klappt auf bzw. geht zum ersten Kind,
+ *  Links klappt zu bzw. geht zum Elternordner. Ergebnis: Zeile zum Fokussieren und/oder Ordner zum Umschalten. */
+export function treeKey(rs: Row[], i: number, key: string): { focus?: number; toggle?: string } | null {
+  const r = rs[i];
+  if (!r) return null;
+  if (key === "ArrowDown") return { focus: Math.min(rs.length - 1, i + 1) };
+  if (key === "ArrowUp") return { focus: Math.max(0, i - 1) };
+  if (key === "Home") return { focus: 0 };
+  if (key === "End") return { focus: rs.length - 1 };
+  if (key === "ArrowRight") return !r.dir ? {} : r.open ? (rs[i + 1]?.depth > r.depth ? { focus: i + 1 } : {}) : { toggle: r.path };
+  if (key === "ArrowLeft") {
+    if (r.open) return { toggle: r.path };
+    const parent = dirname(r.path);
+    return parent ? { focus: rs.findIndex((x) => x.path === parent) } : {};
+  }
+  return null;
+}

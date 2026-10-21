@@ -9,7 +9,7 @@
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import { fs, type Entry } from "$lib/files";
   import { editor, open, setExpanded, renamed, removed, poll } from "$lib/editor.svelte";
-  import { rows, join, dirname, type Row } from "$lib/tree";
+  import { rows, join, dirname, treeKey, type Row } from "$lib/tree";
   import { FILES_APP, atRef, under } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
 
@@ -55,6 +55,17 @@
   function click(r: Row) {
     if (r.dir) setExpanded(repo, r.path, !r.open);
     else open(repo, r.path);
+  }
+
+  let box = $state<HTMLElement>();
+  function onKey(e: KeyboardEvent) {
+    const btns = [...(box?.querySelectorAll<HTMLElement>("[data-tree-row]") ?? [])];
+    const i = btns.indexOf(document.activeElement as HTMLElement);
+    const k = i < 0 || e.altKey || e.ctrlKey || e.metaKey ? null : treeKey(visible, i, e.key);
+    if (!k) return;
+    e.preventDefault();
+    if (k.toggle) setExpanded(repo, k.toggle, !s.expanded.includes(k.toggle));
+    if (k.focus !== undefined) btns[k.focus]?.focus();
   }
 
   async function run(action: () => Promise<void>) {
@@ -152,7 +163,7 @@
   {:else if !lists[""].length}
     <Empty>Ordner leer</Empty>
   {:else}
-  <div class="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+  <div class="min-h-0 flex-1 overflow-y-auto px-1.5 py-1" bind:this={box} onkeydown={onKey} role="tree" tabindex="-1">
     {#each visible as r (r.path)}
       <!-- Neues landet im Ordner selbst bzw. neben der Datei. -->
       {@const dir = r.dir ? r.path : dirname(r.path)}
@@ -163,7 +174,8 @@
               ? 'opacity-50'
               : ''} {r.path === s.active ? 'bg-accent text-foreground' : 'hover:bg-accent/50'}"
             style="padding-left:{4 + r.depth * 12}px"
-            onclick={() => click(r)}
+            onclick={(e) => ((e.currentTarget as HTMLElement).focus(), click(r))}
+            data-tree-row
             aria-expanded={r.dir ? r.open : undefined}
             title={r.path}
           >
