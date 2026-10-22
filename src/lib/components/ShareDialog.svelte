@@ -57,9 +57,9 @@
     {:else if !share}
       <p class="text-muted-foreground text-xs">Einladung wird erstellt …</p>
     {:else}
-      <div class="grid gap-3">
-        <div class="flex items-center gap-2">
-          <code class="bg-muted min-w-0 flex-1 truncate rounded px-2 py-1.5 text-[11px]" title={share.ticket}>{share.ticket}</code>
+      <div class="grid min-w-0 gap-3">
+        <div class="flex min-w-0 items-start gap-2">
+          <code class="bg-muted max-h-20 min-w-0 flex-1 overflow-y-auto rounded px-2 py-1.5 text-[11px] leading-snug break-all select-all">{share.ticket}</code>
           <Button size="sm" variant="secondary" onclick={copy}>
             {#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if} Kopieren
           </Button>
