@@ -828,6 +828,7 @@ fn spawn(
 
     // Nur Claude-Terminals (nicht die Run-Leiste): laufendes Zeichnen zaehlt fuer den Wach-Halt als "arbeitet".
     let claude = (!tree).then(|| id.clone());
+    let shared = id.clone();
     let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
@@ -849,6 +850,7 @@ fn spawn(
     std::thread::spawn(move || {
         let mut last = std::time::Instant::now();
         while let Some(chunk) = batch(&rx, last) {
+            crate::share::output(&shared, &chunk);
             let _ = out.send(InvokeResponseBody::Raw(chunk));
             last = std::time::Instant::now();
         }
@@ -908,9 +910,13 @@ fn spawn_writer(mut w: Box<dyn Write + Send>) -> Sender<Vec<u8>> {
     tx
 }
 
-fn write(ptys: &Ptys, id: &str, data: String) -> Result<(), String> {
+pub(crate) fn write(ptys: &Ptys, id: &str, data: String) -> Result<(), String> {
     let map = ptys.lock();
-    let s = map.get(id).ok_or_else(|| format!("Kein Terminal: {id}"))?;
+    let Some(s) = map.get(id) else {
+        drop(map);
+        // Gast-Sitzung: Tasten gehen an den Host (share.rs).
+        return crate::share::input(id, data).unwrap_or_else(|| Err(format!("Kein Terminal: {id}")));
+    };
     s.input.send(data.into_bytes()).map_err(|_| "Schreiben fehlgeschlagen: Terminal nimmt keine Eingabe mehr an".into())
 }
 
@@ -925,7 +931,15 @@ pub fn pty_resize(ptys: State<'_, Ptys>, id: String, cols: u16, rows: u16) -> Re
     let s = map.get(&id).ok_or_else(|| format!("Kein Terminal: {id}"))?;
     s.master
         .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
-        .map_err(|e| format!("Resize fehlgeschlagen: {e}"))
+        .map_err(|e| format!("Resize fehlgeschlagen: {e}"))?;
+    crate::share::resized(&id, cols, rows);
+    Ok(())
+}
+
+/// Aktuelle Groesse (cols, rows), fuer Gaeste einer geteilten Sitzung.
+pub(crate) fn size(ptys: &Ptys, id: &str) -> Option<(u16, u16)> {
+    let s = ptys.lock().get(id)?.master.get_size().ok()?;
+    Some((s.cols, s.rows))
 }
 
 /// Nebenfrage wie /btw, aber mit Antwort im Panel: claude -p als Fork der Session `sid`, ohne eigenes Transkript.
@@ -987,6 +1001,7 @@ pub async fn claude_btw(ptys: State<'_, Ptys>, id: String, cwd: String, sid: Str
 pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>, id: String) -> Result<(), String> {
     ides.stop(&id);
     crate::awake::forget(&id);
+    crate::share::stop(&id);
     // Auch wenn der Prozess schon selbst endete (dann fehlt der Eintrag).
     if valid_id(&id) {
         let _ = std::fs::remove_file(crate::activity::panel_file(&id));

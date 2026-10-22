@@ -16,7 +16,7 @@ use crate::git::blocking;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct Activity {
-    session: Option<String>,
+    pub(crate) session: Option<String>,
     /// claude laeuft in diesem cwd (sessions/*.json); sonst ist session nur das neueste Transkript
     alive: bool,
     runs: Vec<Run>,

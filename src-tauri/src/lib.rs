@@ -39,6 +39,8 @@ mod accounts;
 mod workflows;
 // Test-Explorer: Testlaeufe ohne PTY, Output zeilenweise ueber einen Channel.
 mod runner;
+// Sitzung teilen: PTY und Aktivitaets-Panel per iroh an Gaeste.
+mod share;
 
 #[derive(Serialize)]
 struct Repo {
@@ -747,6 +749,13 @@ pub fn run() {
             pty::run_missing,
             pty::claude_login,
             pty::claude_btw,
+            share::share_start,
+            share::share_stop,
+            share::share_write,
+            share::share_snapshot,
+            share::share_join,
+            share::share_call,
+            share::share_image,
             complete::ai_complete,
             accounts::claude_accounts,
             accounts::claude_account_save,

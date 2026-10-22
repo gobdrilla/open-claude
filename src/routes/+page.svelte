@@ -90,6 +90,11 @@
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
   import PaletteIcon from "@lucide/svelte/icons/palette";
   import PackageIcon from "@lucide/svelte/icons/package";
+  import Share2Icon from "@lucide/svelte/icons/share-2";
+  import UserPlusIcon from "@lucide/svelte/icons/user-plus";
+  import ShareDialog from "$lib/components/ShareDialog.svelte";
+  import JoinDialog from "$lib/components/JoinDialog.svelte";
+  import { shares } from "$lib/share.svelte";
   import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
 
   type Repo = {
@@ -159,7 +164,9 @@
   let input = $state<HTMLInputElement | null>(null);
   // Sessions (auch mehrere pro Projekt); die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
   // group/dirs: Sitzung einer Repo-Gruppe, startet in repo und kennt dirs als weitere Arbeitsordner
-  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[] }[]>([]);
+  // guest: Einladung einer geteilten Sitzung, claude laeuft beim Host; host = dessen cwd (nach dem Verbinden).
+  // repo bleibt dann leer (frei), sonst hielte die App den Host-Ordner fuer ein eigenes Projekt.
+  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[]; guest?: string; host?: string }[]>([]);
   // Projekt-Sitzung, bei mehreren die aktive. Nie eine Gruppen-Sitzung.
   const sessionOf = (p: string) => {
     const own = sessions.filter((s) => !s.group && s.repo.path === p);
@@ -213,6 +220,8 @@
   let cloneOpen = $state(false);
   let createOpen = $state(false);
   let accountsOpen = $state(false);
+  let shareOpen = $state(false);
+  let joinOpen = $state(false);
   let accounts = $state<Account[]>([]);
   let skillStore = $state<SkillStore>({ profiles: {}, kindProfiles: {}, projects: {} });
   let profilesOpen = $state(false);
@@ -774,7 +783,8 @@
 
   /** Git-Ansicht fuer das Projekt; ein laufendes Terminal bleibt im Hintergrund. */
   function openGit(repo?: Repo) {
-    if (!repo) return;
+    // Gast-Sitzung: kein Ordner auf diesem Rechner
+    if (!repo?.path) return;
     active = null;
     editRepo = null;
     gitRepo = repo;
@@ -798,10 +808,11 @@
   }
 
   // Im Terminal per id: bei mehreren Sitzungen eines Projekts fuehrte openTab sonst zur ersten
-  const activate = (s: (typeof sessions)[number]) => (s.group || view === "term" ? openSessionTab(s.id) : openTab(s.repo));
+  const activate = (s: (typeof sessions)[number]) => (s.group || s.guest || view === "term" ? openSessionTab(s.id) : openTab(s.repo));
   // Ab der zweiten Sitzung im selben Projekt durchnummeriert
   const label = (s: (typeof sessions)[number]) => {
     if (s.group) return s.group;
+    if (s.guest) return `Gast: ${s.host ? split(s.host)[1] : "verbinde …"}`;
     const n = sessions.filter((o) => !o.group && o.repo.path === s.repo.path).indexOf(s);
     return split(s.repo.rel)[1] + (n > 0 ? ` ${n + 1}` : "");
   };
@@ -1018,7 +1029,17 @@
     if (await confirm("Sitzung beenden? Ein laufender claude-Prozess wird abgebrochen.", "Beenden")) closeSession(id);
   }
 
-  const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id]);
+  const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id], delete shares[id]);
+
+  /** Geteilter Sitzung beitreten: eigener Tab, das Terminal verbindet sich zum Host. */
+  async function join(ticket: string) {
+    if (gitRepo && gitView && !(await gitView.canLeave())) return;
+    leaveGit();
+    editRepo = null;
+    const id = crypto.randomUUID();
+    sessions.push({ id, repo: { path: "", rel: "~", branch: "", last_commit: "", langs: [] }, guest: ticket });
+    active = id;
+  }
 
   /** Aus der Liste nehmen; der Terminal-Unmount schliesst die PTY. */
   function closeSession(id: string) {
@@ -1053,7 +1074,7 @@
 
   // Alle Dialoge ausser der Hilfe (F1 schaltet sie um)
   const anyDialog = $derived(
-    cloneOpen || createOpen || accountsOpen || claudeOpen || setup || rootOpen || !!doomed || profilesOpen || !!groupEdit ||
+    cloneOpen || createOpen || accountsOpen || shareOpen || joinOpen || claudeOpen || setup || rootOpen || !!doomed || profilesOpen || !!groupEdit ||
       claudeAccountsOpen || !!confirming.q || !!unityClosePath || ide.diffs.length > 0,
   );
 
@@ -1206,7 +1227,17 @@
         onclick={toggleSide}
         title="Session, Workflows und Bilder"><WorkflowIcon class="size-3.5" /> Aktivität</Button
       >
-      {#if !activeSession.group}
+      {#if !activeSession.guest}
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-6 gap-1.5 text-[11px] {shares[activeSession.id] ? 'text-primary' : 'text-muted-foreground'}"
+          onclick={() => (shareOpen = true)}
+          title="Sitzung mit anderen teilen"
+          ><Share2Icon class="size-3.5" /> Teilen{#if shares[activeSession.id]?.guests}&nbsp;({shares[activeSession.id].guests}){/if}</Button
+        >
+      {/if}
+      {#if !activeSession.group && !activeSession.guest}
         <Button
           variant="ghost"
           size="sm"
@@ -1226,7 +1257,7 @@
     <!-- Feste Reihenfolge in jeder Ansicht, damit beim Wechseln nichts springt; die wechselnden Extras stehen links davon. -->
     {@render viewButton("term", "Claude im Projekt öffnen", () => launch(viewRepo), TerminalIcon, "Claude")}
     {#if !isFree(viewRepo)}{@render viewButton("edit", `Editor (${mod}+Umschalt+E)`, () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
-    {@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}
+    {#if viewRepo?.path}{@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}{/if}
   {:else}
     <img
       src="/logo.png"
@@ -1343,6 +1374,16 @@
           aria-label="Claude ohne Projekt starten"
         >
           <TerminalIcon class="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class={sessions.some((s) => s.guest) ? "text-primary" : ""}
+          onclick={() => (joinOpen = true)}
+          title="Geteilter Sitzung beitreten"
+          aria-label="Geteilter Sitzung beitreten"
+        >
+          <UserPlusIcon class="size-4" />
         </Button>
         <Button variant="ghost" size="icon" onclick={addProject} title="Projektordner hinzufügen" aria-label="Projektordner hinzufügen">
           <FolderInputIcon class="size-4" />
@@ -1742,13 +1783,15 @@
   {/if}
   <div class="flex min-h-0 flex-1 {view === 'term' ? '' : 'hidden'}">
     <div class="flex min-w-0 flex-1 flex-col">
-      {#if activeSession}<ClaudeBar id={activeSession.id} mode={modes[activeSession.id]} onsettings={() => (claudeOpen = true)} />{/if}
+      {#if activeSession && !activeSession.guest}<ClaudeBar id={activeSession.id} mode={modes[activeSession.id]} onsettings={() => (claudeOpen = true)} />{/if}
       <div class="min-h-0 flex-1">
       {#each sessions as s (s.id)}
         <Terminal
           id={s.id}
           cwd={s.repo.path}
           dirs={s.dirs}
+          guest={s.guest}
+          onguest={(cwd) => (s.host = cwd)}
           visible={s.id === active}
           onexit={() => closeSession(s.id)}
           onmode={(m) => (modes[s.id] = m)}
@@ -1763,7 +1806,7 @@
     {#if side && activeSession && view === "term"}
       <Splitter bind:size={sideW} invert min={260} max={720} key="term.side" />
       <div class="min-h-0 shrink-0 py-2 pr-2" style="width:{sideW}px; max-width:50%">
-        <ActivityPanel cwd={activeSession.repo.path} id={activeSession.id} />
+        <ActivityPanel cwd={activeSession.host ?? activeSession.repo.path} id={activeSession.id} guest={!!activeSession.guest} />
       </div>
     {/if}
   </div>
@@ -1965,6 +2008,8 @@
 
 <ClaudeSettingsDialog bind:open={claudeOpen} />
 <ClaudeAccountsDialog bind:open={claudeAccountsOpen} running={sessions.length} />
+{#if activeSession && !activeSession.guest}<ShareDialog bind:open={shareOpen} id={activeSession.id} cwd={activeSession.repo.path} />{/if}
+<JoinDialog bind:open={joinOpen} onjoin={join} />
 <GroupDialog
   group={groupEdit?.g ?? null}
   {repos}

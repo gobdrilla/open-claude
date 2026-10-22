@@ -82,7 +82,9 @@
   type Mode = { name: string; level: string };
   type Activity = { session: string | null; alive: boolean; runs: Run[]; agents: Agent[]; images: Img[]; prompts: Prompt[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
 
-  let { cwd, id }: { cwd: string; id: string } = $props();
+  // guest: Gast-Sitzung, Daten kommen vom Host (share_call), Vorlagen bearbeiten und btw nur dort.
+  let { cwd, id, guest = false }: { cwd: string; id: string; guest?: boolean } = $props();
+  const call = <T,>(cmd: string, args: Record<string, unknown>) => (guest ? invoke<T>("share_call", { id, cmd, args }) : invoke<T>(cmd, args));
 
   let data = $state<Activity | null>(null);
   let error = $state("");
@@ -168,7 +170,7 @@
     const c = cwd,
       i = id;
     try {
-      const d = await invoke<Activity>("claude_activity", { cwd: c, id: i });
+      const d = await call<Activity>("claude_activity", { cwd: c, id: i });
       // Halb geschriebene Datei liefert null: letzten Wert behalten.
       if (c === cwd && i === id) (data = d), (panel = d.panel ?? panel), (now = Date.now()), (error = "");
       // Uebernommene Einfuegungen freigeben, sonst sammeln sich Blob-URLs bis zum Schliessen des Terminals.
@@ -210,7 +212,7 @@
   async function loadTemplates() {
     const c = cwd;
     try {
-      const l = await invoke<WfFile[]>("workflows_list", { cwd: c });
+      const l = await call<WfFile[]>("workflows_list", { cwd: c });
       if (c === cwd) (templates = l), (tplError = "");
     } catch (e) {
       if (c === cwd) tplError = String(e);
@@ -264,7 +266,7 @@
       sid = data?.session;
     if (!f || !sid) return;
     try {
-      const l = await invoke<Entry[]>("claude_agent_log", { cwd, sid, run: f.run, agent: f.agent });
+      const l = await call<Entry[]>("claude_agent_log", { cwd, sid, run: f.run, agent: f.agent });
       if (f !== focus) return;
       // Nur mitscrollen, wenn man schon unten war; sonst springt es beim Lesen weg.
       const el = big ? bigScroller : scroller;
@@ -330,7 +332,7 @@
     const k = `${sid}:${id}`;
     let url = cache.get(k);
     if (url) cache.delete(k);
-    else url = await invoke<string>("claude_image", { sid, id }).catch(() => undefined);
+    else url = await call<string>("claude_image", { sid, id }).catch(() => undefined);
     if (!url) return;
     // Zuletzt benutzt ans Ende, aelteste fallen raus
     cache.set(k, url);
@@ -344,7 +346,7 @@
     const sid = data?.session;
     let url = id < 0 ? local[-id]?.url : thumbCache.get(k);
     if (!url && sid) {
-      url = await invoke<string>("claude_thumb", { sid, id }).catch(() => undefined);
+      url = await call<string>("claude_thumb", { sid, id }).catch(() => undefined);
       if (url) thumbCache.set(k, url);
       else if (k === key(id)) noThumb[k] = true;
     }
@@ -482,7 +484,7 @@
       { id: "agents", label: "Agents", count: data?.agents.length, live: runningAgents },
       { id: "img", label: "Bilder", count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
-      { id: "btw", label: "btw" },
+      ...(guest ? [] : [{ id: "btw", label: "btw" }]),
     ]}
   />
 
@@ -505,7 +507,7 @@
       <section class="border-border/60 mb-2 rounded-lg border">
         <div class="flex items-center justify-between px-2 py-1">
           <span class="text-muted-foreground">Vorlagen</span>
-          <button class="text-muted-foreground hover:text-foreground" onclick={() => editTemplate(null)}>+ Neu</button>
+          {#if !guest}<button class="text-muted-foreground hover:text-foreground" onclick={() => editTemplate(null)}>+ Neu</button>{/if}
         </div>
         {#each tpls as x (x.f.path)}
           <div class="border-border/60 flex items-center gap-1.5 border-t px-2 py-1">
@@ -524,6 +526,7 @@
               aria-label="Starten"
               onclick={() => startTemplate(x.f)}><PlayIcon class="size-3.5" /></button
             >
+            {#if !guest}
             <button
               class="hover:text-foreground text-muted-foreground shrink-0 disabled:opacity-40"
               disabled={!x.builder}
@@ -538,6 +541,7 @@
               aria-label="Löschen"
               onclick={() => deleteTemplate(x.f, x.name)}><Trash2Icon class="size-3.5" /></button
             >
+            {/if}
           </div>
         {:else}
           {#if !tplError}<p class="text-muted-foreground border-border/60 border-t px-2 py-1">Noch keine. Oder Claude sagen: „erstell einen Workflow für … und speicher ihn als Vorlage“.</p>{/if}

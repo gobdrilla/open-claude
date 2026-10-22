@@ -37,11 +37,13 @@ base64 = "0.23.1"
 # Vorschaubilder fuers Aktivitaets-Panel (nur die Formate, die claude einbettet)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 trash = "5.2.9"
-tokio = { version = "1.53.2", features = ["net", "io-util", "sync", "macros", "rt"] }
+tokio = { version = "1.53.2", features = ["net", "io-util", "sync", "macros", "rt", "time"] }
 # IDE-Protokoll von Claude Code (WebSocket-MCP) und MCP-Server der Session, src/ide.rs
 tokio-tungstenite = "0.30"
 getrandom = { version = "0.3", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+# Sitzung teilen (src/share.rs): QUIC mit Hole-Punching, Relay als Rueckfall
+iroh = "1.4"
 
 # keyring ohne Plattform-Feature haelt den Token nur im RAM, darum je Ziel ein echter Speicher
 [target.'cfg(windows)'.dependencies]

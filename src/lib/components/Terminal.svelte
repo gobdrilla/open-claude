@@ -13,6 +13,7 @@
   import { FitAddon } from "@xterm/addon-fit";
   import { Unicode11Addon } from "@xterm/addon-unicode11";
   import { WebglAddon } from "@xterm/addon-webgl";
+  import { SerializeAddon } from "@xterm/addon-serialize";
   import "@xterm/xterm/css/xterm.css";
   import ClaudeLoader from "./ClaudeLoader.svelte";
   import { evenCell } from "$lib/termcell";
@@ -25,6 +26,7 @@
   import { sendTo } from "$lib/ide.svelte";
   import { ContextMenu } from "bits-ui";
   import { ContextItem, menuContent } from "$lib/components/kit";
+  import { shares } from "$lib/share.svelte";
 
   let {
     id,
@@ -34,6 +36,8 @@
     onexit,
     onmode,
     onfile,
+    guest,
+    onguest,
   }: {
     id: string;
     cwd: string;
@@ -43,6 +47,10 @@
     onmode?: (mode: string) => void;
     /** Klick auf einen Dateipfad im Output; path relativ zu cwd, line/col ab 1. */
     onfile?: (path: string, line?: number, col?: number) => void;
+    /** Einladung: Gast-Sitzung, claude laeuft beim Host (share.rs). */
+    guest?: string;
+    /** Gast verbunden; cwd des Hosts. */
+    onguest?: (cwd: string) => void;
   } = $props();
 
   let el: HTMLDivElement;
@@ -50,6 +58,10 @@
   let cited = $state("");
   let term: Terminal | undefined;
   const fit = new FitAddon();
+  // Host: Bildschirm fuer neu beigetretene Gaeste
+  const ser = new SerializeAddon();
+  // Gast: darf beim Host tippen
+  let writable = $state(false);
   // Zuletzt an die PTY gemeldete Groesse; leer bis pty_open durch ist.
   let sent = "";
   let unlisten: Promise<UnlistenFn>[] = [];
@@ -106,6 +118,8 @@
     // Versteckt liefert der Container 0x0 und wuerde die PTY auf 0 Spalten setzen.
     if (!term || !visible || !el.clientWidth || !el.clientHeight) return;
     snap();
+    // Gast: Groesse gibt der Host vor (share-size), das PTY hat nur eine.
+    if (guest) return;
     fit.fit();
     const size = `${term.cols}x${term.rows}`;
     if (!sent || size === sent) return;
@@ -123,7 +137,11 @@
   let pend: { url: string; at: number } | null = null;
   const dec = new TextDecoder();
   function grab(img: Blob | null | undefined) {
-    if (img?.type.startsWith("image/")) pend = { url: URL.createObjectURL(img), at: Date.now() };
+    if (!img?.type.startsWith("image/")) return;
+    pend = { url: URL.createObjectURL(img), at: Date.now() };
+    // Gast: claude beim Host kaeme nur an dessen Zwischenablage, darum das Bild selbst hinschicken.
+    if (guest)
+      img.arrayBuffer().then((b) => invoke("share_image", new Uint8Array(b), { headers: { id } })).catch((e) => term?.write(`\r\n\x1b[31m${e}\x1b[0m\r\n`));
   }
   function claim(bytes: Uint8Array) {
     if (!pend) return;
@@ -156,7 +174,10 @@
     const key = e.key.toLowerCase();
     // false = xterm ignoriert das Event, es blubbert zum App-Handler am window.
     if (e.shiftKey && key === "w") return false;
-    return !clipboardKey(term!, e, mac, grabClipboard);
+    // Gast: leeres Einfuegen liesse claude beim Host dessen Zwischenablage lesen.
+    const t = term!;
+    const target = guest ? { hasSelection: () => t.hasSelection(), getSelection: () => t.getSelection(), clearSelection: () => t.clearSelection(), paste: (s: string) => s && t.paste(s) } : t;
+    return !clipboardKey(target, e, mac, grabClipboard);
   }
 
   onMount(() => {
@@ -169,9 +190,17 @@
     // Exit-Listener vor pty_open, damit ein sofortiges Ende nicht verloren geht.
     unlisten = [
       listen(`pty-exit:${id}`, () => onexit()),
+      // Host: ein Gast kam dazu, er bekommt den aktuellen Bildschirm (Reset vorn, siehe share_snapshot).
+      listen<{ guests: number; joined: boolean }>(`share:${id}`, (e) => {
+        if (shares[id]) shares[id].guests = e.payload.guests;
+        if (e.payload.joined && term) invoke("share_snapshot", { id, data: "\x1bc" + ser.serialize({ scrollback: 1000 }) }).catch(() => {});
+      }),
+      listen<{ cols: number; rows: number }>(`share-size:${id}`, (e) => term?.resize(e.payload.cols, e.payload.rows)),
+      listen<boolean>(`share-write:${id}`, (e) => (writable = e.payload)),
       getCurrentWebview().onDragDropEvent((e) => {
         // visible kennt nur den aktiven Tab; in Editor-/Git-Ansicht ist ein Elternteil hidden (offsetParent null).
-        if (e.payload.type !== "drop" || !visible || !el.offsetParent || !e.payload.paths.length) return;
+        // Gast: Pfade gibt es beim Host nicht.
+        if (guest || e.payload.type !== "drop" || !visible || !el.offsetParent || !e.payload.paths.length) return;
         term?.paste(e.payload.paths.map(quote).join(" ") + " ");
         term?.focus();
       }),
@@ -205,6 +234,7 @@
       return Array.from({ length: t.rows }, (_, i) => b.getLine(b.viewportY + i)?.translateToString(true) ?? "").join("\n");
     });
     t.loadAddon(fit);
+    t.loadAddon(ser);
     // Zeichenbreiten wie claude (Emoji = 2 Zellen); mit dem Standard (Unicode 6) verrutschen Teil-Neuzeichnungen
     // nach einem Emoji um eine Spalte und lassen alte Zeichen stehen ("💡nAAktivitaet").
     t.loadAddon(new Unicode11Addon());
@@ -227,7 +257,7 @@
     t.registerLinkProvider({
       provideLinks: (y, cb) => {
         const line = t.buffer.active.getLine(y - 1)?.translateToString(true) ?? "";
-        const hits = pathHits(line);
+        const hits = guest ? [] : pathHits(line);
         if (!hits.length) return cb(undefined);
         const paths = hits.map((h) => (/^([\\/~]|[A-Za-z]:)/.test(h.path) ? h.path : abs(cwd, h.path)));
         invoke<([string, boolean] | null)[]>("path_kinds", { paths })
@@ -249,7 +279,15 @@
     });
     t.open(el);
     // Cmd+V: Bilddaten liegen nur im paste-Event, claude holt sich das Bild selbst aus der Zwischenablage.
-    el.addEventListener("paste", (e) => grab([...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"))?.getAsFile()), true);
+    el.addEventListener(
+      "paste",
+      (e) => {
+        grab([...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"))?.getAsFile());
+        // Gast: ohne Text nichts an xterm, siehe onKeyEvent.
+        if (guest && !e.clipboardData?.getData("text/plain")) e.stopPropagation(), e.preventDefault();
+      },
+      true,
+    );
     loadGl();
     snap();
     fit.fit();
@@ -321,8 +359,14 @@
     t.focus();
 
     const { cols, rows } = t;
+    const join = (ticket: string) =>
+      invoke<{ cwd: string; cols: number; rows: number; write: boolean }>("share_join", { id, ticket, out }).then((h) => {
+        t.resize(h.cols, h.rows);
+        writable = h.write;
+        onguest?.(h.cwd);
+      });
     Promise.all(unlisten)
-      .then(() => (dead ? undefined : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, out })))
+      .then(() => (dead ? undefined : guest ? join(guest) : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, out })))
       .then(() => {
         if (dead) return invoke("pty_close", { id });
         sent = `${cols}x${rows}`;
@@ -347,7 +391,8 @@
   // OSC 11 den neuen Hintergrund ab und faerbt um. Ohne notify (eigenes Theme) bleibt die Sitzung wie gestartet.
   $effect(() => {
     const dark = theme.dark;
-    if (!term || !notify) return;
+    // Gast: der Host bestimmt claudes Farben.
+    if (!term || !notify || guest) return;
     term.options.theme = dark ? DARK : LIGHT;
     term.options.minimumContrastRatio = contrast(dark);
     invoke("pty_write", { id, data: `\x1b[?997;${dark ? 1 : 2}n` }).catch(() => {});
@@ -373,12 +418,15 @@
   >
     <!-- Auswahl beim Rechtsklick merken: das Menue nimmt den Fokus, danach waere sie evtl. weg. -->
     <ContextMenu.Root>
-      <ContextMenu.Trigger class="relative block h-full" oncontextmenu={() => (cited = term?.getSelection() ?? "")}>
+      <ContextMenu.Trigger class="relative block h-full {guest ? 'overflow-auto' : ''}" oncontextmenu={() => (cited = term?.getSelection() ?? "")}>
         <div bind:this={el} class="h-full"></div>
         {#if booting}<ClaudeLoader />{/if}
+        {#if guest && !booting && !writable}
+          <span class="bg-muted text-muted-foreground pointer-events-none absolute top-1 right-1 rounded px-1.5 py-0.5 text-[10px]">Nur zuschauen</span>
+        {/if}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        {#if cited.trim()}
+        {#if cited.trim() && !guest}
           <ContextMenu.Content class={menuContent}>
             <ContextItem label="An Claude" onSelect={() => sendTo(id, cite(cited)).then(() => term?.focus())} />
           </ContextMenu.Content>
