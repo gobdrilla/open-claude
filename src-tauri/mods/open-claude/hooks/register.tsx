@@ -211,6 +211,12 @@ export const NARRATE =
 export const withNarrate = <T extends { command?: unknown; context?: readonly string[] }>(e: T): T =>
   e.command ? e : { ...e, context: [...(e.context ?? []), NARRATE] }
 
+// Variable Redirect-Ziele und lange ;-Ketten mit rm loesen Claude Codes Sicherheitsabfrage aus, auch im Auto Mode.
+const SHELL_RULE =
+  'Shell: Dateien mit dem Write-Tool schreiben, nicht per `cat > "$VAR/..."` oder Heredoc. ' +
+  'Keine Shell-Variablen in Redirect-Zielen oder `rm`-Pfaden, Pfade ausschreiben. ' +
+  'Keine langen `;`-Ketten: Schreiben, Kopieren und Löschen als getrennte Befehle.'
+
 type BrainTurn = { recall: boolean; remember: boolean; hinted: Set<string> }
 const brainTurn = (): BrainTurn => ({ recall: false, remember: false, hinted: new Set() })
 let brainOn = false
@@ -430,6 +436,7 @@ export const register: Register = on => {
     const r = await next(e)
     brainOn = e.tools.includes('mcp__brain__recall')
     const sections = [...r.sections]
+    sections.push({ id: 'open-claude:shell', text: SHELL_RULE, scope: 'session' as const })
     if (brainOn) sections.push({ id: 'open-claude:brain', text: BRAIN_RULE, scope: 'session' as const })
     if (e.tools.includes(`${ATELIER_TOOL}editor_state`)) sections.push({ id: 'open-claude:atelier', text: ATELIER_RULE, scope: 'session' as const })
     return { sections }

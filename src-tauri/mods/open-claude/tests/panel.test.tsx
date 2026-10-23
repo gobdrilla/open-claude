@@ -332,9 +332,9 @@ test('guardrail: ask + banner, normales push frei', async ($, on) => {
   expect(await $.tool.check({ tool: 'Bash', input: { command: 'git reset --hard' } } as never)).toMatchObject({ decision: 'deny' })
 })
 
-test('atelier-regel nur mit editor_state', async ($, on) => {
+test('shell-regel immer, atelier-regel nur mit editor_state', async ($, on) => {
   on('prompt.compose', () => ({ sections: [] }))
   const ids = async (tools: string[]) => (await $.prompt.compose({ tools, model: 'm', promptModel: 'm', surfaces: [], outputStyle: null, traits: [] })).sections.map(s => s.id)
-  expect(await ids(['mcp__plugin_open-claude_open-claude__editor_state'])).toEqual(['open-claude:atelier'])
-  expect(await ids(['Bash'])).toEqual([])
+  expect(await ids(['mcp__plugin_open-claude_open-claude__editor_state'])).toEqual(['open-claude:shell', 'open-claude:atelier'])
+  expect(await ids(['Bash'])).toEqual(['open-claude:shell'])
 })
