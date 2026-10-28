@@ -64,6 +64,8 @@
   let writable = $state(false);
   // Zuletzt an die PTY gemeldete Groesse; leer bis pty_open durch ist.
   let sent = "";
+  // Gast: Rastergroesse des Hosts (PTY hat nur eine)
+  let host: { cols: number; rows: number } | undefined;
   let unlisten: Promise<UnlistenFn>[] = [];
   const out = new Channel<ArrayBuffer>();
   // Unmount vor pty_open-Antwort: sonst bliebe eine PTY ohne UI zurueck.
@@ -118,13 +120,30 @@
     // Versteckt liefert der Container 0x0 und wuerde die PTY auf 0 Spalten setzen.
     if (!term || !visible || !el.clientWidth || !el.clientHeight) return;
     snap();
-    // Gast: Groesse gibt der Host vor (share-size), das PTY hat nur eine.
-    if (guest) return;
+    // Gast: Groesse gibt der Host vor (share-size), das PTY hat nur eine. Schrift so skalieren, dass sein Raster passt.
+    if (guest) return fitGuest();
     fit.fit();
     const size = `${term.cols}x${term.rows}`;
     if (!sent || size === sent) return;
     sent = size;
     invoke("pty_resize", { id, cols: term.cols, rows: term.rows }).catch(() => {});
+  }
+
+  function fitGuest() {
+    if (!term || !host || !visible || !el.clientWidth) return;
+    const t = term;
+    const { cols, rows } = host;
+    const size = (px: number) => {
+      t.options.fontSize = px;
+      snap();
+      return fit.proposeDimensions();
+    };
+    let p = size(13);
+    let px = 13;
+    if (p && (p.cols < cols || p.rows < rows)) p = size((px = Math.max(6, Math.floor(26 * Math.min(p.cols / cols, p.rows / rows)) / 2)));
+    // letterSpacing und gerade Zellen skalieren nicht mit: Rest in halben Punkten
+    while (p && (p.cols < cols || p.rows < rows) && px > 6) p = size((px -= 0.5));
+    t.resize(cols, rows);
   }
 
   // Tauri faengt Datei-Drops ab (kein HTML-drop), darum der Webview-Event. Pfade fuer die Shell quoten.
@@ -195,7 +214,7 @@
         if (shares[id]) shares[id].guests = e.payload.guests;
         if (e.payload.joined && term) invoke("share_snapshot", { id, data: "\x1bc" + ser.serialize({ scrollback: 1000 }) }).catch(() => {});
       }),
-      listen<{ cols: number; rows: number }>(`share-size:${id}`, (e) => term?.resize(e.payload.cols, e.payload.rows)),
+      listen<{ cols: number; rows: number }>(`share-size:${id}`, (e) => ((host = e.payload), fitGuest())),
       listen<boolean>(`share-write:${id}`, (e) => (writable = e.payload)),
       getCurrentWebview().onDragDropEvent((e) => {
         // visible kennt nur den aktiven Tab; in Editor-/Git-Ansicht ist ein Elternteil hidden (offsetParent null).
@@ -361,7 +380,8 @@
     const { cols, rows } = t;
     const join = (ticket: string) =>
       invoke<{ cwd: string; cols: number; rows: number; write: boolean }>("share_join", { id, ticket, out }).then((h) => {
-        t.resize(h.cols, h.rows);
+        host = { cols: h.cols, rows: h.rows };
+        fitGuest();
         writable = h.write;
         onguest?.(h.cwd);
       });
