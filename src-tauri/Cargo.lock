@@ -4017,7 +4017,7 @@ dependencies = [
 
 [[package]]
 name = "ocui"
-version = "1.4.16"
+version = "1.4.17"
 dependencies = [
  "base64 0.23.1",
  "ctrlc",
