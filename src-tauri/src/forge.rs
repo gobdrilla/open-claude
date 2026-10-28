@@ -1159,7 +1159,7 @@ fn clone_blocking(
     }
 
     let mut cmd = crate::quiet("git");
-    cmd.args(["clone", "--progress", "--", &url, &dest])
+    cmd.args(["clone", "--progress", "--recurse-submodules", "--", &url, &dest])
         .envs(crate::git::ssh_batch(None))
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("LC_ALL", "C")

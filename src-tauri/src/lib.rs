@@ -807,6 +807,8 @@ pub fn run() {
             git::git_push,
             git::git_remotes,
             git::git_stashes,
+            git::git_submodules,
+            git::git_submodule_update,
             git::git_stash_push,
             git::git_stash_apply,
             git::git_stash_drop,

@@ -51,6 +51,21 @@
 
   const isUnity = $derived(unity);
 
+  // Geoeffnete Submodule, je Ebene relativ zur vorigen; alle Git-Aufrufe laufen auf cur.
+  let trail = $state<string[]>([]);
+  const cur = $derived(trail.length ? `${repo}/${trail.join("/")}` : repo);
+  $effect(() => {
+    repo;
+    trail = [];
+  });
+  /** Ebene wechseln (ins Submodul oder per Pfadleiste zurueck). */
+  async function goto(next: string[]) {
+    if (!(await canLeave())) return;
+    conflictPath = null;
+    status = null;
+    trail = next;
+  }
+
   let status = $state<Status | null>(null);
   let refreshKey = $state(0);
   // Forge-Panels kosten API-Calls: nur nachziehen, wenn sich HEAD/Branch bewegt oder das Remote angefasst wurde.
@@ -85,7 +100,7 @@
   async function refresh(force = true, remote = false) {
     const before = `${status?.head}|${status?.branch}`;
     try {
-      status = await git.status(repo);
+      status = await git.status(cur);
       loadError = false;
       // Nach Abbrechen/Fortsetzen (auch extern) steht die Datei nicht mehr im Konflikt: Editor zu, sonst zeigt er Altes.
       if (conflictPath && !status.files.some((f) => f.conflict && f.path === conflictPath)) conflictPath = null;
@@ -111,7 +126,7 @@
   }
 
   $effect(() => {
-    repo;
+    cur;
     untrack(refresh); // refresh liest status, sonst laedt jeder neue Status erneut: Endlosschleife
   });
 
@@ -121,17 +136,17 @@
   const hostAccounts = $derived(accounts.filter((a) => a.host === acct?.host));
 
   async function loadAccount() {
-    const r = repo;
+    const r = cur;
     try {
       const res = await forge.repoAccount(r);
-      if (r === repo) acct = res;
+      if (r === cur) acct = res;
     } catch (e) {
-      if (r === repo) error = `Konto: ${e}`;
+      if (r === cur) error = `Konto: ${e}`;
     }
   }
 
   $effect(() => {
-    repo;
+    cur;
     acct = null;
     loadAccount();
   });
@@ -151,7 +166,7 @@
   async function setAccount(id: string | null) {
     error = "";
     try {
-      acct = await forge.setRepoAccount(repo, id);
+      acct = await forge.setRepoAccount(cur, id);
     } catch (e) {
       error = String(e);
     }
@@ -184,15 +199,15 @@
     }
   }
 
-  const doFetch = () => run("Fetch", () => git.fetch(repo));
-  const pull = (rebase = false) => run("Pull", () => git.pull(repo, rebase));
-  const push = () => run("Push", () => git.push(repo, false));
+  const doFetch = () => run("Fetch", () => git.fetch(cur));
+  const pull = (rebase = false) => run("Pull", () => git.pull(cur, rebase));
+  const push = () => run("Push", () => git.push(cur, false));
   const forcePush = () =>
     (confirm = {
       title: "Force-Push",
       message: "Remote-Branch mit dem lokalen Stand überschreiben (--force-with-lease)? Fremde Commits, die du schon kennst, gehen dort verloren.",
       label: "Force-Push",
-      run: () => git.push(repo, true),
+      run: () => git.push(cur, true),
     });
 
   async function doConfirm() {
@@ -205,14 +220,14 @@
     if (!branchOpen) return; // doppeltes Enter
     const name = branchName.trim();
     branchOpen = false;
-    if (name) await run("Branch", () => git.checkout(repo, name, true, null));
+    if (name) await run("Branch", () => git.checkout(cur, name, true, null));
   }
 
   async function doStash() {
     if (!stashOpen) return; // doppeltes Enter
     const s = stash;
     stashOpen = false;
-    await run("Stash", () => git.stashPush(repo, s.message.trim() || null, s.untracked));
+    await run("Stash", () => git.stashPush(cur, s.message.trim() || null, s.untracked));
   }
 
   /** Gleiche Ref zweimal anklicken soll erneut springen, daher kurz auf null. */
@@ -297,7 +312,16 @@
           {/if}
         </div>
         <div class="flex min-w-0 flex-col leading-tight">
-          <span class="text-muted-foreground truncate text-[10px]">{repo.split(/[\\/]/).filter(Boolean).pop()}</span>
+          <span class="text-muted-foreground flex min-w-0 items-center gap-1 truncate text-[10px]">
+            {#each [repo.split(/[\\/]/).filter(Boolean).pop(), ...trail] as name, i (i)}
+              {#if i}<span class="opacity-60">›</span>{/if}
+              {#if i < trail.length}
+                <button class="hover:text-foreground truncate hover:underline" title="Zurück zu {name}" onclick={() => goto(trail.slice(0, i))}>{name}</button>
+              {:else}
+                <span class="truncate">{name}</span>
+              {/if}
+            {/each}
+          </span>
           <span class="flex items-center gap-1.5">
             <span class="truncate font-mono text-[12px] font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
             {#if status.ahead}<span class="bg-primary/15 text-primary rounded-full px-1.5 font-mono text-[10px]">↑{status.ahead}</span>{/if}
@@ -411,7 +435,7 @@
     <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex min-h-0 flex-1 overflow-hidden">
       <div class="border-border/60 shrink-0 border-r" style="width:{side}px; max-width:40%">
         <Sidebar
-          {repo}
+          repo={cur}
           {status}
           {refreshKey}
           {forgeKey}
@@ -420,13 +444,14 @@
           onchange={refresh}
           onselectref={selectRef}
           onshowdiff={(title, diff) => (shown = { title, diff })}
+          onsubmodule={(p) => goto([...trail, p])}
         />
       </div>
       <Splitter bind:size={side} min={160} max={480} key="git.side" />
       <div class="flex min-w-0 flex-1 flex-col">
         {#if conflictPath}
           <MergeEditor
-            {repo}
+            repo={cur}
             path={conflictPath}
             bind:dirty={mergeDirty}
             onclose={() => {
@@ -450,19 +475,24 @@
           <div class="min-h-0 flex-1">
             <!-- Einmal geoeffnet bleiben alle gemountet: Auswahl und Scrollstand ueberleben den Tabwechsel. -->
             <div class="h-full {tab === 'changes' ? '' : 'hidden'}">
-              <ChangesPanel {repo} {status} {onedit} onchange={(remote = false) => refresh(remote, remote)} onconflict={(p) => (conflictPath = p)} />
+              <ChangesPanel
+                repo={cur}
+                {status}
+                onedit={onedit && ((p) => onedit([...trail, p].join("/")))}
+                onsubmodule={(p) => goto([...trail, p])}
+                onchange={(remote = false) => refresh(remote, remote)} onconflict={(p) => (conflictPath = p)} />
             </div>
             <div class="h-full {tab === 'history' ? '' : 'hidden'}">
-              <HistoryPanel {repo} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} />
+              <HistoryPanel repo={cur} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} />
             </div>
             {#if seen.releases}
               <div class="h-full {tab === 'releases' ? '' : 'hidden'}">
-                <ReleasesPanel {repo} refreshKey={forgeKey} />
+                <ReleasesPanel repo={cur} refreshKey={forgeKey} />
               </div>
             {/if}
             {#if seen.ci}
               <div class="h-full {tab === 'ci' ? '' : 'hidden'}">
-                <PipelinesPanel {repo} refreshKey={forgeKey} visible={tab === "ci"} bind:kind={ciKind} />
+                <PipelinesPanel repo={cur} refreshKey={forgeKey} visible={tab === "ci"} bind:kind={ciKind} />
               </div>
             {/if}
             {#if seen.unity}

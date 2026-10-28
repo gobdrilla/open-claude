@@ -56,6 +56,8 @@ export type Branch = {
 };
 
 export type Stash = { index: number; message: string; date: string; branch: string };
+/** state: "-" nicht geladen, "+" anderer Commit als eingetragen, "U" Konflikt, " " passt. */
+export type Submodule = { path: string; sha: string; state: "-" | "+" | "U" | " " };
 export type Tag = { name: string; sha: string; date: string; message: string };
 export type Remote = { name: string; url: string };
 
@@ -116,6 +118,8 @@ export const git = {
   remotes: (repo: string) => call<Remote[]>("git_remotes", { repo }),
 
   stashes: (repo: string) => call<Stash[]>("git_stashes", { repo }),
+  submodules: (repo: string) => call<Submodule[]>("git_submodules", { repo }),
+  submoduleUpdate: (repo: string, path: string | null) => call<string>("git_submodule_update", { repo, path }),
   stashPush: (repo: string, message: string | null, untracked: boolean) =>
     call<string>("git_stash_push", { repo, message, untracked }),
   stashApply: (repo: string, index: number, pop: boolean) =>

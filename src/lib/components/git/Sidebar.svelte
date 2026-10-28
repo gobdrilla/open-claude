@@ -6,7 +6,7 @@
   import SettingsIcon from "@lucide/svelte/icons/settings-2";
   import CheckIcon from "@lucide/svelte/icons/check";
   import { Badge } from "$lib/components/ui/badge/index.js";
-  import { git, forge, type Branch, type Tag, type Stash, type PullRequest, type Status } from "$lib/git";
+  import { git, forge, type Branch, type Tag, type Stash, type Submodule, type PullRequest, type Status } from "$lib/git";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import CloudIcon from "@lucide/svelte/icons/cloud";
   import TagIcon from "@lucide/svelte/icons/tag";
@@ -16,6 +16,7 @@
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import GitMergeIcon from "@lucide/svelte/icons/git-merge";
+  import BoxesIcon from "@lucide/svelte/icons/boxes";
   import { age, cn } from "$lib/utils";
   import { ask } from "$lib/ask.svelte";
 
@@ -29,6 +30,7 @@
     onchange,
     onselectref,
     onshowdiff,
+    onsubmodule,
   }: {
     repo: string;
     status: Status;
@@ -41,11 +43,13 @@
     onchange: () => void;
     onselectref: (ref: string) => void;
     onshowdiff: (title: string, diff: string) => void;
+    onsubmodule: (path: string) => void;
   } = $props();
 
   let branches = $state<Branch[]>([]);
   let tags = $state<Tag[]>([]);
   let stashes = $state<Stash[]>([]);
+  let subs = $state<Submodule[]>([]);
   let originUrl = $state<string | null>(null);
   let pulls = $state<PullRequest[]>([]);
   let error = $state("");
@@ -146,13 +150,15 @@
   async function load() {
     error = "";
     try {
-      const [b, t, s, remotes, fixed] = await Promise.all([
+      const [b, t, s, remotes, fixed, m] = await Promise.all([
         git.branches(repo),
         git.tags(repo),
         git.stashes(repo),
         git.remotes(repo),
         git.getBase(repo),
+        git.submodules(repo),
       ]);
+      subs = m;
       branches = b;
       fixedBase = fixed;
       tags = t;
@@ -225,6 +231,11 @@
       run("Branch-Wechsel", () => git.checkout(repo, b.name, false, null)),
     );
   }
+
+  const SUB_STATE = { "-": "nicht geladen", "+": "anderer Commit", U: "Konflikt", " ": "" };
+  const updateSub = (path: string | null) => run("Submodule", () => git.submoduleUpdate(repo, path));
+  // Nicht geladen: leerer Ordner, erst holen
+  const openSub = (m: Submodule) => (m.state === "-" ? updateSub(m.path).then(() => onsubmodule(m.path)) : onsubmodule(m.path));
 
   async function showStash(s: Stash) {
     try {
@@ -537,6 +548,65 @@
       </div>
     {/if}
   </div>
+
+  <!-- Submodule (nur wenn vorhanden) -->
+  {#if subs.length}
+    <div class="border-border border-b py-1.5 last:border-b-0">
+      <div class="flex items-center">
+        <button
+          class="hover:bg-accent/40 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold"
+          onclick={() => (expanded.subs = !expanded.subs)}
+          aria-expanded={expanded.subs}
+        >
+          <ChevronRightIcon class="size-3 shrink-0 transition-transform {expanded.subs ? 'rotate-90' : ''}" />
+          <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><BoxesIcon class="size-3" /></span>
+          <span class="flex-1">Submodule</span>
+          <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{subs.length}</span>
+        </button>
+        <!-- Nur fuer ungeladene: "+" kann auch ein neuer, noch nicht eingetragener Commit im Submodul sein -->
+        {#if subs.some((m) => m.state === "-")}
+          <button
+            class="text-primary hover:bg-accent/60 mr-1 rounded-md px-1.5 py-0.5 text-[10px] disabled:opacity-50"
+            disabled={busy}
+            title="git submodule update --init --recursive"
+            onclick={() => updateSub(null)}>Alle laden</button
+          >
+        {/if}
+      </div>
+      {#if expanded.subs}
+        <div class="px-1 pb-1">
+          {#each subs as m (m.path)}
+            <ContextMenu.Root>
+              <ContextMenu.Trigger>
+                <button
+                  class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 pl-6 text-left text-[11px] disabled:opacity-50"
+                  disabled={busy}
+                  title="{m.path} @ {m.sha.slice(0, 7)} – öffnen"
+                  onclick={() => openSub(m)}
+                >
+                  <span class="min-w-0 flex-1 truncate font-mono">{m.path}</span>
+                  {#if m.state !== " "}
+                    <span class="rounded-full px-1.5 text-[10px] {m.state === 'U' ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning'}"
+                      >{SUB_STATE[m.state]}</span
+                    >
+                  {:else}
+                    <span class="text-muted-foreground font-mono text-[10px]">{m.sha.slice(0, 7)}</span>
+                  {/if}
+                </button>
+              </ContextMenu.Trigger>
+              <ContextMenu.Portal>
+                <ContextMenu.Content class={menuContent}>
+                  <ContextItem label="Öffnen" onSelect={() => openSub(m)} />
+                  <ContextItem label={m.state === "-" ? "Laden" : "Auf eingetragenen Commit setzen"} onSelect={() => updateSub(m.path)} />
+                  <ContextItem label="Pfad kopieren" onSelect={() => navigator.clipboard.writeText(m.path)} />
+                </ContextMenu.Content>
+              </ContextMenu.Portal>
+            </ContextMenu.Root>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Stashes -->
   <div class="border-border border-b py-1.5 last:border-b-0">

@@ -79,6 +79,14 @@ pub struct Stash {
 }
 
 #[derive(Serialize, Debug, PartialEq)]
+pub struct Submodule {
+    path: String,
+    sha: String,
+    /// "-" nicht geladen, "+" anderer Commit als eingetragen, "U" Konflikt, " " passt.
+    state: String,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
 pub struct Tag {
     name: String,
     sha: String,
@@ -590,7 +598,8 @@ fn diff(repo: &str, path: Option<&str>, staged: bool) -> Result<String, String> 
         }
     }
     let mut cmd = lit(repo);
-    cmd.args(OPTS);
+    // Submodule als Commit-Liste ("Submodule x a..b:" plus "> Betreff") statt nackter "Subproject commit"-Zeilen
+    cmd.args(OPTS).arg("--submodule=log");
     if staged {
         cmd.arg("--cached");
     }
@@ -952,6 +961,25 @@ fn stash_ref(index: u32) -> String {
     format!("stash@{{{index}}}")
 }
 
+/// `git submodule status`: "<state><sha> <pfad>[ (<describe>)]".
+fn parse_submodules(raw: &str) -> Vec<Submodule> {
+    raw.lines()
+        .filter_map(|line| {
+            let state = line.get(..1)?;
+            let (sha, rest) = line[1..].split_once(' ')?;
+            let path = match rest.rfind(" (") {
+                Some(i) if rest.ends_with(')') => &rest[..i],
+                _ => rest,
+            };
+            Some(Submodule { path: path.to_string(), sha: sha.to_string(), state: state.to_string() })
+        })
+        .collect()
+}
+
+fn submodules(repo: &str) -> Result<Vec<Submodule>, String> {
+    Ok(parse_submodules(&out(git(repo).args(["submodule", "status"]))?))
+}
+
 fn stashes(repo: &str) -> Result<Vec<Stash>, String> {
     let raw = out(git(repo).args(["stash", "list", "--format=%gd%x1f%gs%x1f%aI"]))?;
     Ok(parse_stashes(&raw))
@@ -1250,7 +1278,7 @@ pub async fn git_fetch(repo: String) -> Result<String, String> {
 pub async fn git_pull(repo: String, rebase: bool) -> Result<String, String> {
     blocking(move || {
         let mode = if rebase { "--rebase" } else { "--no-rebase" };
-        tolerate(&repo, net(&repo).args(["pull", mode]))
+        tolerate(&repo, net(&repo).args(["pull", mode, "--recurse-submodules"]))
     })
     .await
 }
@@ -1263,6 +1291,17 @@ pub async fn git_push(repo: String, force: bool) -> Result<String, String> {
 #[tauri::command]
 pub async fn git_remotes(repo: String) -> Result<Vec<Remote>, String> {
     blocking(move || remotes(&repo)).await
+}
+
+#[tauri::command]
+pub async fn git_submodules(repo: String) -> Result<Vec<Submodule>, String> {
+    blocking(move || submodules(&repo)).await
+}
+
+/// Laden bzw. auf den eingetragenen Commit bringen; ohne path alle.
+#[tauri::command]
+pub async fn git_submodule_update(repo: String, path: Option<String>) -> Result<String, String> {
+    blocking(move || talk(net(&repo).args(["submodule", "update", "--init", "--recursive", "--"]).args(path))).await
 }
 
 #[tauri::command]
@@ -1408,6 +1447,14 @@ pub async fn git_resolve_side(repo: String, path: String, theirs: bool) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn submodul_status_parsen() {
+        let raw = " 1111 libs/a (heads/main)\n-2222 libs/mit leer\n+3333 c (v1.0-2-g3333)\nU4444 d\n";
+        let s = parse_submodules(raw);
+        let got: Vec<_> = s.iter().map(|m| (m.state.as_str(), m.sha.as_str(), m.path.as_str())).collect();
+        assert_eq!(got, [(" ", "1111", "libs/a"), ("-", "2222", "libs/mit leer"), ("+", "3333", "c"), ("U", "4444", "d")]);
+    }
 
     #[test]
     fn status_porcelain_v2() {
@@ -2058,7 +2105,9 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         ci(&inner, "s.txt", "neu\n", "neu");
         let st = status(&r).unwrap();
         assert_eq!(file(&st, "libs/sub").unwrap().worktree, "M");
-        assert!(diff(&r, Some("libs/sub"), false).unwrap().contains("Subproject commit"));
+        assert!(diff(&r, Some("libs/sub"), false).unwrap().contains("> neu"), "Commit-Liste statt Subproject commit");
+        let subs = submodules(&r).unwrap();
+        assert_eq!((subs.len(), subs[0].path.as_str(), subs[0].state.as_str()), (1, "libs/sub", "+"));
         stage(&r, &v(&["libs/sub"])).unwrap();
         assert_eq!(file(&status(&r).unwrap(), "libs/sub").unwrap().index, "M");
         unstage(&r, &v(&["libs/sub"])).unwrap();

@@ -20,6 +20,7 @@
     onchange,
     onconflict,
     onedit,
+    onsubmodule,
   }: {
     repo: string;
     status: Status;
@@ -27,6 +28,7 @@
     onchange: (remote?: boolean) => void;
     onconflict: (path: string) => void;
     onedit?: (path: string) => void;
+    onsubmodule: (path: string) => void;
   } = $props();
 
   const conflicts = $derived(status.files.filter((f) => f.conflict));
@@ -493,6 +495,12 @@
       {/if}
       {#if sel && diff === null}
         <p class="text-muted-foreground p-3">Lädt …</p>
+      {:else if sel && diff?.startsWith("Submodule ")}
+        <!-- git diff --submodule=log: Commits seit dem eingetragenen Stand, "<" fallen weg, ">" kommen dazu -->
+        <div class="flex flex-col gap-2 p-3">
+          <pre class="font-mono text-[11px] whitespace-pre-wrap">{diff}</pre>
+          <Button size="xs" variant="outline" class="self-start" onclick={() => onsubmodule(sel!.path)}>Submodul öffnen</Button>
+        </div>
       {:else if sel}
         <DiffView diff={diff ?? ""} {actions} {busy} {repo} />
       {:else}
