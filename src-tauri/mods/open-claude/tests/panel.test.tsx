@@ -286,6 +286,12 @@ test('guardrails', () => {
   expect(g("rm -rf '~/x'")).toMatch(/rm -rf/)
   expect(g('rm -rf "$HOME"')).toMatch(/rm -rf/)
   expect(g('git push origin +main')).toMatch(/Force-Push/)
+  expect(g('rm -rf /tmp/claude-501/../../etc', '/repo')).toMatch(/rm -rf/)
+  expect(g('rm -rf /tmp/claude-501', '/repo')).toMatch(/rm -rf/)
+  // Negativ: Scratchpad von Claude Code
+  expect(g('rm -rf /private/tmp/claude-501/-Users-x/abc/scratchpad/binfinal && cp -R a b', '/repo')).toBe(undefined)
+  expect(g('rm -rf /tmp/claude-1000/x/scratchpad', '/repo')).toBe(undefined)
+  expect(g('rm -rf C:\\Users\\m\\AppData\\Local\\Temp\\claude-m\\x', '/repo')).toBe(undefined)
   // Negativ: normales push, rm im Repo, rm ohne -r
   expect(g('git push origin feature')).toBe(undefined)
   expect(g('git push -u origin feature')).toBe(undefined)

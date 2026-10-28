@@ -118,9 +118,12 @@ const RM_RF = /\brm\s+((?:-\S+\s+)+)([^;&|]*)/g
 const WIN_DEL = /\b(?:Remove-Item|ri|rd|rmdir|del|erase)\s+([^;&|]*)/gi
 // Pfade vergleichbar machen: Backslash zu /, Git-Bash /c/... zu c:/..., Windows-Pfade ganz ohne Gross/Klein.
 const norm = (p: string) => p.replace(/\\/g, '/').replace(/^\/([a-z])(\/|$)/i, '$1:/').replace(/^[a-z]:.*/i, d => d.toLowerCase()).replace(/\/+$/, '')
+// Scratchpad von Claude Code (/tmp/claude-<uid>/…, macOS /private/tmp, Windows …/Temp/claude-…): Wegwerfdateien, Rueckfrage nervt nur.
+const SCRATCH = /^(\/private)?\/tmp\/claude-[^/]+\/.|^[a-z]:\/.*\/temp\/claude-[^/]+\/./i
 // Ziel ausserhalb: ~, $VAR, '..' oder absolut ausserhalb des Repos (ohne cwd: jeder absolute Pfad).
 const outside = (target: string, cwd?: string) => {
   const t = norm(target.replace(/^['"]|['"]$/g, '')), c = cwd && norm(cwd)
+  if (SCRATCH.test(t) && !/(^|\/)\.\.(\/|$)/.test(t)) return false
   return /^(~|\$)|(^|\/)\.\.(\/|$)/.test(t) || (/^(\/|[a-z]:\/)/i.test(t) && !(c && (t === c || t.startsWith(`${c}/`))))
 }
 const rmOutside = (cmd: string, cwd?: string) => {
