@@ -100,6 +100,27 @@ jobs:
         if: matrix.name == 'windows'
         run: dotnet publish src-tauri/xaml-preview -c Release -o src-tauri/xaml-preview/publish
 
+      # Festes selbstsigniertes Zertifikat statt ad-hoc: sonst vergisst macOS Freigaben (Bildschirmaufnahme usw.)
+      # bei jedem Update. codesign nimmt es nur vertraut an, darum add-trusted-cert statt APPLE_CERTIFICATE.
+      - name: Signier-Zertifikat
+        if: runner.os == 'macOS'
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/sign.keychain-db"
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$kc"
+          security set-keychain-settings "$kc"
+          security unlock-keychain -p ci "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-certificate -c "Atelier Self-Signed" -p "$kc" > "$RUNNER_TEMP/cert.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
+          security find-identity -v -p codesigning "$kc" | grep -q "Atelier Self-Signed"
+          echo "APPLE_SIGNING_IDENTITY=Atelier Self-Signed" >> "$GITHUB_ENV"
+
       - uses: tauri-apps/tauri-action@v0
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         env:
