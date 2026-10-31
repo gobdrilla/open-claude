@@ -112,59 +112,6 @@ export const summarize = (tool: string, input: unknown) => {
 }
 // Shell-Tools von Claude Code: Bash (auch Git-Bash unter Windows) und das PowerShell-Tool unter Windows.
 const SHELLS = new Set(['Bash', 'PowerShell'])
-// Guardrails: riskante Aufrufe -> 'ask' (nie deny). Regex auf Klartext, nur Erinnerung: Umgehung (Skript, Variablen) faengt das nicht.
-const RM_RF = /\brm\s+((?:-\S+\s+)+)([^;&|]*)/g
-// PowerShell (Remove-Item -Recurse -Force, Alias ri) und cmd (rd/rmdir/del /s /q).
-const WIN_DEL = /\b(?:Remove-Item|ri|rd|rmdir|del|erase)\s+([^;&|]*)/gi
-// Pfade vergleichbar machen: Backslash zu /, Git-Bash /c/... zu c:/..., Windows-Pfade ganz ohne Gross/Klein.
-const norm = (p: string) => p.replace(/\\/g, '/').replace(/^\/([a-z])(\/|$)/i, '$1:/').replace(/^[a-z]:.*/i, d => d.toLowerCase()).replace(/\/+$/, '')
-// Scratchpad von Claude Code (/tmp/claude-<uid>/…, macOS /private/tmp, Windows …/Temp/claude-…): Wegwerfdateien, Rueckfrage nervt nur.
-const SCRATCH = /^(\/private)?\/tmp\/claude-[^/]+\/.|^[a-z]:\/.*\/temp\/claude-[^/]+\/./i
-// Ziel ausserhalb: ~, $VAR, '..' oder absolut ausserhalb des Repos (ohne cwd: jeder absolute Pfad).
-const outside = (target: string, cwd?: string) => {
-  const t = norm(target.replace(/^['"]|['"]$/g, '')), c = cwd && norm(cwd)
-  if (SCRATCH.test(t) && !/(^|\/)\.\.(\/|$)/.test(t)) return false
-  return /^(~|\$)|(^|\/)\.\.(\/|$)/.test(t) || (/^(\/|[a-z]:\/)/i.test(t) && !(c && (t === c || t.startsWith(`${c}/`))))
-}
-const rmOutside = (cmd: string, cwd?: string) => {
-  for (const [, flags, targets] of cmd.matchAll(RM_RF)) {
-    const f = flags.trim().split(/\s+/)
-    const rec = f.some(x => /^-[a-z]*[rR]/.test(x) || x === '--recursive')
-    const force = f.some(x => /^-[a-z]*f/.test(x) || x === '--force')
-    if (rec && force && targets.split(/\s+/).some(t => outside(t, cwd))) return true
-  }
-  for (const [, rest] of cmd.matchAll(WIN_DEL)) {
-    const toks = rest.trim().split(/\s+/)
-    const flag = (t: string) => /^-|^\/[a-z]$/i.test(t)
-    const rec = toks.some(t => /^(-r(ecurse)?|\/s)$/i.test(t))
-    const force = toks.some(t => /^(-fo(rce)?|\/q)$/i.test(t))
-    if (rec && force && toks.filter(t => t && !flag(t)).some(t => outside(t, cwd))) return true
-  }
-  return false
-}
-// shortcut: Regex fängt nur direkte Aufrufe (keine Skripte/Variablen, keine Flags nach dem Ziel wie `rm dir -rf`); unter bypassPermissions ist 'ask' laut Issues nur Hinweis – für hartes Blockieren deny-Regel nötig.
-export const guard = (tool: string, input: unknown, cwd?: string) => {
-  const i = (input ?? {}) as Record<string, unknown>
-  const atelier = (n: string) => tool === `${ATELIER_TOOL}${n}`
-  if (atelier('forge_write')) {
-    const m = String(i.method ?? '').toUpperCase(), p = String(i.path ?? '').split('?')[0], b = (i.body ?? {}) as Record<string, unknown>
-    const why =
-      m === 'DELETE' ? 'Forge-Ressource löschen (DELETE)'
-      : m === 'POST' && /\/(pulls|merge_requests)\/?$/.test(p) ? 'PR/MR anlegen'
-      : m === 'PUT' && /\/merge\/?$/.test(p) ? 'PR/MR mergen'
-      : b.state === 'closed' || b.state_event === 'close' ? 'PR/MR/Issue schließen'
-      : undefined
-    return why && { text: `${m} ${i.path ?? ''}`.trim(), why }
-  }
-  const cmd = SHELLS.has(tool) ? i.command : atelier('git') && Array.isArray(i.args) ? `git ${i.args.join(' ')}` : undefined
-  if (typeof cmd !== 'string') return
-  const why =
-    /\bpush\b[^;&|]*(\s--force\b|\s--force-with-lease\b|\s-[a-zA-Z]*f|\s\+\S)/.test(cmd) ? 'Force-Push überschreibt den Remote-Verlauf'
-    : /\breset\s+--hard\b/.test(cmd) ? 'reset --hard verwirft lokale Änderungen'
-    : rmOutside(cmd, cwd) ? 'rm -rf außerhalb des Repos löscht unwiederbringlich'
-    : undefined
-  return why && { text: cmd, why }
-}
 // Laeuft gerade ein Haupt-Turn? Sonst haengt busy nur an laufenden Agents (Heartbeat rechnet nach).
 let mainTurn = false
 // Haupt-Turn fertig: weiter busy, solange Subagents/Teammates laufen.
@@ -175,8 +122,6 @@ const agentsRunning = async ($: EngineInterface) =>
 // gemerkt und aus der Env genommen, damit verschachtelte `claude -p` nicht dieselbe Datei ueberschreiben.
 // Hot-Reload leert die Modul-Variablen und die Env: der Pfad liegt zusaetzlich im Store, je Sitzungs-ID (Store ist pro Plugin global).
 let file: string | undefined
-// Sitzungs-cwd fuer guard: PWD fehlt unter Windows meist (Explorer-Start, ocui-sh setzt es nicht).
-let cwd: string | undefined
 // Timer einmalig; ein Reload bricht die alten ab und setzt auch dieses Flag zurueck
 // (Plugin-Doku: Reload startet register in frischer Umgebung, "the previous environment's timers are dropped").
 let timers = false
@@ -268,7 +213,6 @@ const pollCmd = async ($: EngineInterface) => {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    cwd = (e as { cwd?: string }).cwd || cwd
     const env = await $.env.get('OPEN_CLAUDE_PANEL')
     const id = await $.session.id().catch(() => '')
     const saved = (await $.store.get('panelFiles').catch(() => undefined)) as Record<string, string> | undefined
@@ -360,16 +304,9 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('tool.check', async ($, e, next) => {
-    const v = await next(e)
-    const risk = guard(e.tool, e.input, (e as { cwd?: string }).cwd || cwd || (await $.env.get('PWD')))
-    return risk && v.decision !== 'deny' ? { decision: 'ask', reason: `Riskant: ${risk.why}. Wirklich ausführen?` } : v
-  })
-
   // Rechte-Dialog: Claude wartet auf den User. Nicht schon bei tool.check 'ask': das entscheidet im Auto-Modus der Classifier ohne Dialog.
   on('classic.PermissionRequest', async ($, e, next) => {
-    const risk = guard(e.tool_name, e.tool_input, e.cwd || cwd || (await $.env.get('PWD')))
-    await setBusy($, false, true, { tool: e.tool_name, summary: risk ? summarize('Bash', { command: risk.text }) : summarize(e.tool_name, e.tool_input) })
+    await setBusy($, false, true, { tool: e.tool_name, summary: summarize(e.tool_name, e.tool_input) })
     return next(e)
   })
 

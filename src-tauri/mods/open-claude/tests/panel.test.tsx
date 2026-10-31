@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { NARRATE, bar, brainHint, guard, level, pace, summarize, withNarrate } from '../hooks/register'
+import { NARRATE, bar, brainHint, level, pace, summarize, withNarrate } from '../hooks/register'
 
 const HOUR = 3_600_000
 // Testharness macht /tmp/x unter Windows zu C:\tmp\x
@@ -270,72 +270,19 @@ test('summarize', () => {
   expect(summarize('Agent', {})).toBe('')
 })
 
-test('guardrails', () => {
-  const A = 'mcp__plugin_open-claude_open-claude__'
-  const g = (c: string, cwd?: string) => guard('Bash', { command: c }, cwd)?.why
-  expect(guard(`${A}forge_write`, { method: 'delete', path: '/repos/a/b' })?.why).toMatch(/DELETE/)
-  expect(guard(`${A}git`, { args: ['push', '--force', 'origin', 'x'] })?.why).toMatch(/Force-Push/)
-  expect(g('git push -f origin x')).toMatch(/Force-Push/)
-  expect(g('git push --force-with-lease')).toMatch(/Force-Push/)
-  expect(g('git reset --hard HEAD~1')).toMatch(/reset --hard/)
-  expect(guard(`${A}git`, { args: ['reset', '--hard'] })?.why).toMatch(/reset --hard/)
-  expect(g('rm -rf ~/x')).toMatch(/rm -rf/)
-  expect(g('cd a && rm -fr /tmp/x', '/repo')).toMatch(/rm -rf/)
-  expect(g('rm -rf ../x', '/repo')).toMatch(/rm -rf/)
-  expect(g('rm -rf "/etc/x"', '/repo')).toMatch(/rm -rf/)
-  expect(g("rm -rf '~/x'")).toMatch(/rm -rf/)
-  expect(g('rm -rf "$HOME"')).toMatch(/rm -rf/)
-  expect(g('git push origin +main')).toMatch(/Force-Push/)
-  expect(g('rm -rf /tmp/claude-501/../../etc', '/repo')).toMatch(/rm -rf/)
-  expect(g('rm -rf /tmp/claude-501', '/repo')).toMatch(/rm -rf/)
-  // Negativ: Scratchpad von Claude Code
-  expect(g('rm -rf /private/tmp/claude-501/-Users-x/abc/scratchpad/binfinal && cp -R a b', '/repo')).toBe(undefined)
-  expect(g('rm -rf /tmp/claude-1000/x/scratchpad', '/repo')).toBe(undefined)
-  expect(g('rm -rf C:\\Users\\m\\AppData\\Local\\Temp\\claude-m\\x', '/repo')).toBe(undefined)
-  // Negativ: normales push, rm im Repo, rm ohne -r
-  expect(g('git push origin feature')).toBe(undefined)
-  expect(g('git push -u origin feature')).toBe(undefined)
-  expect(g('git push origin x && rm -f build.log')).toBe(undefined)
-  expect(g('git push origin x; ls -f')).toBe(undefined)
-  expect(guard(`${A}git`, { args: ['push', 'origin', 'x'] })).toBe(undefined)
-  expect(guard(`${A}forge_write`, { method: 'POST', path: '/x' })).toBe(undefined)
-  expect(guard(`${A}forge_write`, { method: 'POST', path: '/repos/a/b/pulls' })?.why).toMatch(/anlegen/)
-  expect(guard(`${A}forge_write`, { method: 'POST', path: '/projects/a%2Fb/merge_requests' })?.why).toMatch(/anlegen/)
-  expect(guard(`${A}forge_write`, { method: 'PUT', path: '/repos/a/b/pulls/3/merge' })?.why).toMatch(/mergen/)
-  expect(guard(`${A}forge_write`, { method: 'PATCH', path: '/repos/a/b/pulls/3', body: { state: 'closed' } })?.why).toMatch(/schließen/)
-  expect(guard(`${A}forge_write`, { method: 'PUT', path: '/projects/1/merge_requests/3', body: { state_event: 'close' } })?.why).toMatch(/schließen/)
-  expect(guard(`${A}forge_write`, { method: 'POST', path: '/repos/a/b/pulls/3/comments' })).toBe(undefined)
-  expect(g('rm -rf build', '/repo')).toBe(undefined)
-  expect(g('rm -rf /repo/build', '/repo')).toBe(undefined)
-  // Windows: PowerShell/cmd, Laufwerke, Backslash, Git-Bash-Pfade
-  const w = (c: string) => guard('PowerShell', { command: c }, 'C:\\repo')?.why
-  expect(w('Remove-Item -Recurse -Force C:\\Users\\x')).toMatch(/rm -rf/)
-  expect(w('rd /s /q ..\\other')).toMatch(/rm -rf/)
-  expect(w('Remove-Item -Recurse -Force build')).toBe(undefined)
-  expect(w('Remove-Item -Recurse -Force c:\\repo\\dist')).toBe(undefined)
-  expect(w('Remove-Item -Recurse -Force C:\\Repo\\dist')).toBe(undefined)
-  expect(w('Remove-Item -Recurse -Force C:\\Repo2\\dist')).toMatch(/rm -rf/)
-  expect(w('Remove-Item -Recurse C:\\x')).toBe(undefined)
-  expect(g('rm -rf /c/repo/dist', 'C:\\repo')).toBe(undefined)
-  expect(g('rm -rf /c/other', 'C:\\repo')).toMatch(/rm -rf/)
-  expect(g('rm -f /tmp/x')).toBe(undefined)
-})
-
-test('guardrail: ask + banner, normales push frei', async ($, on) => {
+// Kein eigenes 'ask' mehr: im Auto Mode landete es beim Classifier, der PR anlegen/mergen ablehnte.
+test('tool.check unveraendert, banner beim rechte-dialog', async ($, on) => {
   mock.env(on, { OPEN_CLAUDE_PANEL: '/tmp/x/p.json', PWD: '/repo' })
   const w: { path: string; text: string }[] = []
   on('fs.write', (_$, e) => (w.push(e), { value: undefined }))
   on('classic.PermissionRequest', () => ({}) as never)
-  on('tool.check', (_$, e) => ({ decision: (e.input as { command: string }).command === 'git reset --hard' ? 'deny' : 'allow' }) as never)
-  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push --force origin x' } } as never)
-  expect(r).toMatchObject({ decision: 'ask', reason: expect.stringContaining('Force-Push') })
+  on('tool.check', () => ({ decision: 'allow' }) as never)
+  const pr = { method: 'POST', path: '/repos/a/b/pulls', body: { title: 't' } }
+  expect(await $.tool.check({ tool: 'mcp__plugin_open-claude_open-claude__forge_write', input: pr } as never)).toMatchObject({ decision: 'allow' })
+  expect(await $.tool.check({ tool: 'Bash', input: { command: 'git push --force origin x' } } as never)).toMatchObject({ decision: 'allow' })
+  expect(w).toHaveLength(0)
   await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'git push --force origin x' } } as never)
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ waiting: true, waitingFor: { tool: 'Bash', summary: 'git push --force origin x' } })
-  w.length = 0
-  expect(await $.tool.check({ tool: 'Bash', input: { command: 'git push origin x' } } as never)).toMatchObject({ decision: 'allow' })
-  expect(w).toHaveLength(0)
-  // deny aus next() bleibt deny
-  expect(await $.tool.check({ tool: 'Bash', input: { command: 'git reset --hard' } } as never)).toMatchObject({ decision: 'deny' })
 })
 
 test('shell-regel immer, atelier-regel nur mit editor_state', async ($, on) => {
