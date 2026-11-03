@@ -2,7 +2,7 @@
   // Vorschau der aktiven oder angehefteten Datei. Der Renderer kommt aus files.PREVIEW_KINDS (nach Endung).
   // Haelt nur Anzeigezustand; pin und url liegen im Store und ueberleben das Umdocken.
   import Markdown from "$lib/components/Markdown.svelte";
-  import { Button, Empty, Input, TextButton, paneBar } from "$lib/atelier-ui";
+  import { Button, Empty, IconButton, Input, TextButton, paneBar } from "$lib/atelier-ui";
   import PinIcon from "@lucide/svelte/icons/pin";
   import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import PlayIcon from "@lucide/svelte/icons/play";
@@ -109,7 +109,7 @@
     />
     <Button
       variant="quiet"
-      size="icon-xs"
+      size="xs"
       class={running ? "text-foreground" : ""}
       disabled={!running && (!dev || busy)}
       title={running
@@ -121,21 +121,19 @@
           : "Kein dev-, start- oder serve-Script in package.json gefunden"}
       onclick={toggleDev}
     >
-      {#if running}<SquareIcon />{:else}<PlayIcon />{/if}
+      {#if running}<SquareIcon class="fill-current" />{:else}<PlayIcon />{/if} Dev-Server
     </Button>
     <Button
       variant="quiet"
-      size="icon-xs"
+      size="xs"
       disabled={!target}
       aria-pressed={!!s.pin}
       title={s.pin ? `Angeheftet: ${s.pin} – lösen, um der aktiven Datei zu folgen` : "Vorschau an diese Datei heften"}
       onclick={() => setPin(repo, s.pin ? null : target)}
     >
-      {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if}
+      {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if} Anheften
     </Button>
-    <Button variant="quiet" size="icon-xs" title="Neu laden" onclick={() => n++}>
-      <RefreshCwIcon />
-    </Button>
+    <IconButton size="md" label="Neu laden" onclick={() => n++}><RefreshCwIcon class="size-3.5" /></IconButton>
   </div>
   {#if bad}
     <div class="text-destructive border-border border-b px-2 py-1" role="alert">Nur http://- oder https://-Adressen.</div>

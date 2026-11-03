@@ -489,8 +489,12 @@ export function togglePanel(repo: string, panel: "files" | "preview" | "tests" |
   const s = editor(repo);
   const files = groupOf(s.layout, FILES)?.id;
   const run = groupOf(s.layout, RUN)?.id;
-  s.layout = groupOf(s.layout, panel)
-    ? closePanel(s.layout, panel)
+  const g = groupOf(s.layout, panel);
+  // A panel hidden behind another tab comes to the front instead of closing.
+  s.layout = g
+    ? g.active === panel
+      ? closePanel(s.layout, panel)
+      : activate(s.layout, panel)
     : (panel === TESTS || panel === SEARCH) && files
       ? openPanel(s.layout, panel, files)
       : panel === PROBLEMS

@@ -51,6 +51,9 @@
   let quickInit = $state("");
   let profilesOpen = $state(false);
   let customOpen = $state(false);
+  // Action entries at the end of the run selects; bumping `pick` remounts them so they keep showing the real value.
+  const EDIT = "__edit__";
+  let pick = $state(0);
 
   // Aenderungen von aussen (claude im Terminal) nur verfolgen, solange die Ansicht sichtbar ist.
   $effect(() => watch(repo));
@@ -86,7 +89,9 @@
 
   // Output docks at the bottom like runStart does; closing asks first while something runs.
   function toggleRun() {
-    if (groupOf(s.layout, RUN)) void closeTab(repo, RUN);
+    const g = groupOf(s.layout, RUN);
+    if (g && g.active !== RUN) setLayout(repo, activate(s.layout, RUN));
+    else if (g) void closeTab(repo, RUN);
     else setLayout(repo, splitAt(s.layout, RUN, mainGroup(s.layout).id, "bottom"));
   }
 
@@ -157,7 +162,8 @@
 {/snippet}
 
 {#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems" | "run", label: string, Icon: typeof SaveIcon, title = label)}
-  {@const on = !!groupOf(s.layout, id)}
+  <!-- Pressed only while visible: a tab behind another one in its group is not -->
+  {@const on = groupOf(s.layout, id)?.active === id}
   <!-- Narrow window: icon only, the tooltip keeps the name. -->
   <Button
     variant="toggle"
@@ -165,7 +171,7 @@
     aria-pressed={on}
     title="{title} {on ? 'ausblenden' : 'einblenden'}"
     onclick={() => (id === "run" ? toggleRun() : togglePanel(repo, id))}
-    ><Icon /> <span class="max-lg:hidden">{label}</span>
+    ><Icon /> <span class="max-xl:hidden">{label}</span>
     {#if id === "problems" && found.length}
       <span
         class="text-meta rounded-full px-1.5 tabular-nums {worst === 1
@@ -196,34 +202,38 @@
     <span class="bg-background/60 ring-foreground/10 ml-3 flex items-center gap-0.5 rounded-md p-0.5 ring-1">
       {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title="Läuft"></span>{/if}
       <span class="text-muted-foreground pl-1.5 text-meta max-xl:hidden">Startziel</span>
-      <Select
-        class="h-5 max-w-60 border-0 bg-transparent font-mono text-meta"
-        value={cfg?.label ?? ""}
-        groups={kinds.map(([kind, label]) => ({
-          label,
-          options: cfgs.filter((c) => c.target.kind === kind).map((c) => [c.label, c.label] as const),
-        }))}
-        placeholder="Nichts zum Starten"
-        disabled={!cfgs.length}
-        aria-label="Startziel"
-        title="Startziel (F5 startet)"
-        onchange={(v) => setRun(repo, v)}
-      />
-      <Select
-        class="h-5 max-w-32 border-0 bg-transparent text-meta"
-        value={s.profile}
-        options={[...BUILTIN, ...s.profiles].map((p) => [p.name, p.name] as const)}
-        aria-label="Build-Profil"
-        title="Build-Profil"
-        onchange={(v) => setProfile(repo, v)}
-      />
+      {#key pick}
+        <Select
+          class="h-5 max-w-60 border-0 bg-transparent font-mono text-meta"
+          value={cfg?.label ?? ""}
+          groups={[
+            ...kinds.map(([kind, label]) => ({
+              label,
+              options: cfgs.filter((c) => c.target.kind === kind).map((c) => [c.label, c.label] as const),
+            })),
+            { options: [["Eigene Startziele …", EDIT] as const] },
+          ]}
+          placeholder="Nichts zum Starten"
+          aria-label="Startziel"
+          title="Startziel (F5 startet)"
+          onchange={(v) => (v === EDIT ? ((customOpen = true), pick++) : setRun(repo, v))}
+        />
+        <Select
+          class="h-5 max-w-32 border-0 bg-transparent text-meta"
+          value={s.profile}
+          options={[...[...BUILTIN, ...s.profiles].map((p) => [p.name, p.name] as const), ["Profile verwalten …", EDIT]]}
+          aria-label="Build-Profil"
+          title="Build-Profil"
+          onchange={(v) => (v === EDIT ? ((profilesOpen = true), pick++) : setProfile(repo, v))}
+        />
+      {/key}
       <Button
         variant="quiet"
         size="xs"
         class={cfg && !running ? "text-success hover:text-success" : ""}
         disabled={!cfg || running}
         title={cfg ? `${cfg.label} starten (F5) – führt Code aus dem Projekt aus` : "Nichts zum Starten"}
-        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> Starten</Button
+        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> <span class="max-lg:hidden">Starten</span></Button
       >
       <Button
         variant="quiet"
@@ -231,14 +241,14 @@
         class={running ? "text-destructive hover:text-destructive" : ""}
         disabled={!running}
         title="Stoppen (Umschalt+F5)"
-        onclick={() => runStop(repo)}><SquareIcon /> <span class="max-xl:hidden">Stoppen</span></Button
+        onclick={() => runStop(repo)}><SquareIcon class="fill-current" /> <span class="max-lg:hidden">Stoppen</span></Button
       >
       <Button
         variant="quiet"
         size="xs"
         disabled={!r.current}
         title="Neu starten ({MOD}+Umschalt+F5)"
-        onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="max-xl:hidden">Neu starten</span></Button
+        onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="max-lg:hidden">Neu starten</span></Button
       >
     </span>
     <span class="flex-1"></span>

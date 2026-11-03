@@ -18,7 +18,6 @@
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
   import PlayIcon from "@lucide/svelte/icons/play";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
-  import RotateCwIcon from "@lucide/svelte/icons/rotate-cw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { open } from "$lib/editor.svelte";
   import { failedItems, failure, rescan, setExpanded, testCancel, testRun, tests, title, where } from "$lib/testing.svelte";
@@ -130,18 +129,13 @@
       size="xs"
       disabled={!!t.run || !counts.failed}
       title="Fehlgeschlagene erneut ausführen"
-      onclick={() => run("failed")}><RotateCwIcon /> Fehlgeschlagene</Button
+      onclick={() => run("failed")}><CircleXIcon /> Fehlgeschlagene</Button
     >
     <Button variant="ghost" size="xs" disabled={!t.run} title="Lauf abbrechen" onclick={() => testCancel(repo)}
-      ><SquareIcon /> Abbrechen</Button
+      ><SquareIcon class="fill-current" /> Abbrechen</Button
     >
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      disabled={!!t.run || t.scanning}
-      title="Tests neu suchen"
-      aria-label="Tests neu suchen"
-      onclick={() => rescan(repo)}><RefreshCwIcon class={t.scanning ? "animate-spin" : ""} /></Button
+    <IconButton size="md" label="Tests neu suchen" disabled={!!t.run || t.scanning} onclick={() => rescan(repo)}
+      ><RefreshCwIcon class="size-3 {t.scanning ? 'animate-spin' : ''}" /></IconButton
     >
     {#if counts.failed}
       <Button
