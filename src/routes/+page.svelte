@@ -1000,9 +1000,12 @@
     if (editRepo && !(await drop(editRepo.path))) return;
     // Aus Terminal oder Git heraus bleibt der Editor-Zustand, aber kein Prozess ohne sichtbaren Stopp-Knopf.
     if (viewRepo) void runStop(viewRepo.path);
+    // Back on the list the project just left is selected, so Strg+D/Enter act on it and not on a stale hover.
+    const from = viewRepo?.path;
     editRepo = null;
     active = null;
     leaveGit();
+    if (from && flat.some((h) => h.repo.path === from)) selected = from;
     await tick();
     input?.focus();
   }
