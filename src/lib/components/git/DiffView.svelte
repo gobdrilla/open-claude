@@ -106,23 +106,22 @@
   const sign = { add: "+", del: "-", ctx: " ", meta: "" };
 </script>
 
-<div class="h-full overflow-auto font-mono text-meta leading-[1.45]">
+<div class="h-full overflow-x-hidden overflow-y-auto font-mono text-meta leading-[1.45]">
   {#if files.length === 0}
     <p class="text-muted-foreground p-3 font-sans text-ui">{empty}</p>
   {/if}
   {#each files as file, fi (fi)}
     {@const fic = fileIcon(file.newPath)}
     {@const dir = dirname(file.newPath)}
-    <!-- w-max: lange Zeilen verbreitern die Karte, gescrollt wird aussen -->
+    <!-- Karte so breit wie der Platz: Kopf und Hunk-Leiste bleiben stehen, nur die Zeilen scrollen waagerecht -->
     <!-- Abstand per Margin statt Container-Padding, sonst scrollt der Inhalt ueber dem sticky Kopf durch -->
-    <div class="bg-background/40 ring-foreground/5 mx-2 mt-2 w-max min-w-[calc(100%-1rem)] rounded-xl ring-1 last:mb-2">
+    <div class="bg-background/40 ring-foreground/5 mx-2 mt-2 min-w-0 rounded-xl ring-1 last:mb-2">
       <div class="bg-card/95 border-border/60 sticky top-0 z-10 flex items-center gap-2 rounded-t-xl border-b px-2.5 py-1.5 font-sans backdrop-blur">
         <fic.icon class="size-3.5 shrink-0 {fic.tint}" />
-        <span class="font-semibold">{file.newPath.slice(dir ? dir.length + 1 : 0)}</span>
-        <span class="text-muted-foreground text-meta"
+        <span class="min-w-0 truncate font-semibold">{file.newPath.slice(dir ? dir.length + 1 : 0)}</span>
+        <span class="text-muted-foreground min-w-0 flex-1 truncate text-meta"
           >{file.oldPath !== file.newPath ? `${file.oldPath} →` : dir}</span
         >
-        <span class="flex-1"></span>
         {#if onopen && file.status !== "deleted"}
           <IconButton
             size="md"
@@ -132,8 +131,8 @@
           >
         {/if}
         {#if !file.binary}
-          <span class="bg-success/15 text-success rounded-full px-1.5 font-mono text-[10px]">+{count(file, "add")}</span>
-          <span class="bg-destructive/15 text-destructive rounded-full px-1.5 font-mono text-[10px]">−{count(file, "del")}</span>
+          <span class="bg-success/15 text-success shrink-0 rounded-full px-1.5 font-mono text-[10px]">+{count(file, "add")}</span>
+          <span class="bg-destructive/15 text-destructive shrink-0 rounded-full px-1.5 font-mono text-[10px]">−{count(file, "del")}</span>
         {/if}
       </div>
       {#if file.binary}
@@ -167,6 +166,7 @@
             </Button>
           {/each}
         </div>
+        <div class="overflow-x-auto"><div class="w-max min-w-full">
         {#each hunk.lines as line, li (li)}
           {@const change = line.kind === "add" || line.kind === "del"}
           {@const noted = repo && change ? review[repo]?.[noteKey(file, line)] : undefined}
@@ -192,6 +192,7 @@
             <span class="pr-2 whitespace-pre">{line.text}</span>
           </div>
         {/each}
+        </div></div>
       {/each}
     </div>
   {/each}
