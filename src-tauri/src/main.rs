@@ -21,7 +21,34 @@ fn main() {
     // und erscheinen dann als weiteres "L'Atelier de Claude" im Dock.
     #[cfg(target_os = "macos")]
     std::env::remove_var("__CFBundleIdentifier");
+    // AppImage: der GTK-Hook in AppRun fragt das Portal einmal beim Start und setzt
+    // GTK_THEME=Adwaita:light|dark fest; antwortet das Portal noch nicht (Autostart),
+    // bleibt es hell. Ohne Variante entscheidet prefer-dark, das tao aus dem Portal
+    // setzt und bei Wechseln nachzieht. Vor GTK-Init und vor allen Threads.
+    #[cfg(target_os = "linux")]
+    if let (Ok(theme), Some(_)) = (std::env::var("GTK_THEME"), std::env::var_os("APPDIR")) {
+        if let Some(name) = strip_variant(&theme) {
+            std::env::set_var("GTK_THEME", name);
+        }
+    }
     ocui_lib::run()
+}
+
+/// "Adwaita:dark" -> Some("Adwaita"); ohne Variante None.
+#[cfg(target_os = "linux")]
+fn strip_variant(theme: &str) -> Option<&str> {
+    theme.split_once(':').map(|(name, _)| name).filter(|n| !n.is_empty())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    #[test]
+    fn gtk_theme_ohne_variante() {
+        assert_eq!(super::strip_variant("Adwaita:light"), Some("Adwaita"));
+        assert_eq!(super::strip_variant("Adwaita:dark"), Some("Adwaita"));
+        assert_eq!(super::strip_variant("Adwaita"), None);
+        assert_eq!(super::strip_variant(":dark"), None);
+    }
 }
 
 /// Updates behalten den Bundle-Ordner aus der Zeit vor 1.4.0: einmal umbenennen, Autostart mitziehen, neu starten.
