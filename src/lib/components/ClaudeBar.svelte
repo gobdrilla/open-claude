@@ -3,12 +3,35 @@
   import { onMount } from "svelte";
   import PlugIcon from "@lucide/svelte/icons/plug";
   import SettingsIcon from "@lucide/svelte/icons/settings";
+  import Share2Icon from "@lucide/svelte/icons/share-2";
+  import WorkflowIcon from "@lucide/svelte/icons/workflow";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import { Button, Select } from "$lib/atelier-ui";
   import { MODES } from "$lib/claudemode";
 
   // Steuert claude im Terminal: Slash-Commands gehen ueber die open-claude-Mod (claude_command), der Modus per Umschalt+Tab.
   // mode: aus der Terminal-Fusszeile (Terminal.svelte), undefined bis claude sie zeigt
-  let { id, mode, onsettings }: { id: string; mode?: string; onsettings: () => void } = $props();
+  // guest: claude runs at the host, so only the view actions on the right are shown.
+  // share/onnew: missing = not offered for this session (guest, group).
+  let {
+    id,
+    mode,
+    guest = false,
+    side,
+    ontoggleside,
+    share,
+    onnew,
+    onsettings,
+  }: {
+    id: string;
+    mode?: string;
+    guest?: boolean;
+    side: boolean;
+    ontoggleside: () => void;
+    share?: { on: boolean; guests: number; open: () => void };
+    onnew?: () => void;
+    onsettings: () => void;
+  } = $props();
 
   const MODELS = [
     ["Fable", "fable"],
@@ -31,6 +54,7 @@
   // Aktueller Stand aus dem Session-Panel der Mod; Modell kommt als voller Name (claude-opus-5-5[1m]).
   async function poll() {
     const i = id;
+    if (guest) return;
     const p = await invoke<{ model: string; effort: string | null } | null>("claude_panel", { id: i }).catch(() => null);
     // Tab inzwischen gewechselt: Antwort gehoert zur alten Sitzung.
     if (!p || i !== id) return;
@@ -93,6 +117,7 @@
   <div class="bg-card glow ring-foreground/5 flex items-center gap-3 rounded-xl px-3 py-1.5 shadow-lg ring-1 shadow-black/10">
   <img src="/logo.svg" alt="Logo" class="h-8 shrink-0 select-none @3xl:h-10" draggable="false" />
   <div class="text-muted-foreground ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs">
+    {#if !guest}
     <Select
       value={mode ?? ""}
       options={MODES}
@@ -124,6 +149,26 @@
     <Button variant="outline" size="xs" class="px-1.5 font-normal" title="Claude-Einstellungen" onclick={onsettings}
       ><SettingsIcon class="size-3" /><span class="hidden @3xl:inline">Einstellungen</span></Button
     >
+    {/if}
+    <div class="bg-border mx-1 h-4 w-px"></div>
+    {#if share}
+      <Button
+        variant="quiet"
+        size="xs"
+        class="gap-1.5 {share.on ? 'text-primary hover:text-primary' : ''}"
+        onclick={share.open}
+        title="Sitzung mit anderen teilen"
+        ><Share2Icon class="size-3.5" /> Teilen{#if share.guests}&nbsp;({share.guests}){/if}</Button
+      >
+    {/if}
+    <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title="Sitzung, Workflows und Bilder"
+      ><WorkflowIcon class="size-3.5" /> Aktivität</Button
+    >
+    {#if onnew}
+      <Button variant="quiet" size="xs" class="gap-1.5" onclick={onnew} title="Weitere Claude-Sitzung im selben Projekt"
+        ><PlusIcon class="size-3.5" /> Sitzung</Button
+      >
+    {/if}
     {#if error}<span class="text-destructive truncate" title={error}>{error}</span>{/if}
   </div>
   </div>

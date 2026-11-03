@@ -14,7 +14,7 @@
   import { relaunch } from "@tauri-apps/plugin-process";
   import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
-  import { Badge, Button, Command, ConfirmDialog, Dialog, IconButton, Input, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
+  import { Badge, Button, Command, ConfirmDialog, ContextItem, Dialog, IconButton, Input, Segmented, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import { answer, confirm, confirming } from "$lib/confirm.svelte";
   import { pasted } from "$lib/pasteimg.svelte";
@@ -34,7 +34,6 @@
   import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
-  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import { fuzzy } from "$lib/fuzzy";
   import { clampZoom, zoomKey, zoomStep } from "$lib/zoom";
   import IdleAmongUs from "$lib/components/IdleAmongUs.svelte";
@@ -43,7 +42,6 @@
   import { bannerText, tabState, type TabState } from "$lib/claudemode";
   import ActivityPanel from "$lib/components/ActivityPanel.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
-  import WorkflowIcon from "@lucide/svelte/icons/workflow";
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
   import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
@@ -67,12 +65,10 @@
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
-  import PlusIcon from "@lucide/svelte/icons/plus";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import KeyRoundIcon from "@lucide/svelte/icons/key-round";
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
   import PackageIcon from "@lucide/svelte/icons/package";
-  import Share2Icon from "@lucide/svelte/icons/share-2";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import ShareDialog from "$lib/components/ShareDialog.svelte";
   import JoinDialog from "$lib/components/JoinDialog.svelte";
@@ -170,8 +166,6 @@
     done: ["✓", "text-success", "Claude ist fertig"],
   };
   const activeSession = $derived(sessions.find((s) => s.id === active));
-  // Tab hervorheben: im Terminal die aktive Sitzung, sonst das Projekt der Ansicht (Gruppen nur im Terminal)
-  const tabOn = (s: (typeof sessions)[number]) => (view === "term" ? s.id === active : !s.group && s.repo.path === viewRepo?.path);
   // Aktivitaets-Panel rechts neben dem Terminal: Breite und offen/zu ueberleben den Neustart.
   let sideW = $state(stored("term.side", 360));
   let side = $state(stored("term.side.open", 1) === 1);
@@ -762,15 +756,6 @@
     gitRepo = repo;
   }
 
-  /** Tab-Klick: gleiche Ansicht fuer das Projekt; ohne Repo (freie Session) zu Claude. */
-  async function openTab(repo: Repo) {
-    if (view === "term" || isFree(repo)) return launch(repo);
-    if (view === "edit") return openEdit(repo);
-    if (gitView && !(await gitView.canLeave())) return;
-    leaveGit();
-    openGit(repo);
-  }
-
   /** Genau diese Sitzung im Terminal zeigen: wie launch, ohne nach Projekt oder Gruppe aufzuloesen. */
   async function openSessionTab(id: string) {
     if (gitRepo && gitView && !(await gitView.canLeave())) return;
@@ -779,8 +764,16 @@
     active = id;
   }
 
-  // Im Terminal per id: bei mehreren Sitzungen eines Projekts fuehrte openTab sonst zur ersten
-  const activate = (s: (typeof sessions)[number]) => (s.group || s.guest || view === "term" ? openSessionTab(s.id) : openTab(s.repo));
+  // Title bar view switcher: fixed order, Editor/Git only where the project has a folder here.
+  const VIEW_OPEN = { term: (r?: Repo) => launch(r), edit: openEdit, git: openGit } as const;
+  type ViewKey = keyof typeof VIEW_OPEN;
+  const views = $derived(
+    [
+      ["Claude", "term", "Claude im Projekt öffnen", TerminalIcon],
+      ...(isFree(viewRepo) ? [] : [["Editor", "edit", `Editor (${mod}+Umschalt+E)`, FileCodeIcon] as const]),
+      ...(viewRepo?.path ? [["Git", "git", "Git-Ansicht (Alt+G)", GitBranchIcon] as const] : []),
+    ] as const satisfies readonly (readonly [string, ViewKey, string, typeof TerminalIcon])[],
+  );
   // Ab der zweiten Sitzung im selben Projekt durchnummeriert
   const label = (s: (typeof sessions)[number]) => {
     if (s.group) return s.group;
@@ -1140,94 +1133,40 @@
   data-tauri-drag-region
 >
   {#if viewRepo}
-    <IconButton
-      size="window"
-      class="{lights ? '' : '-ml-3.5'} mr-1"
+    <!-- Global only: navigation, project context, view switcher. View actions live in each view's header. -->
+    <Button
+      variant="quiet"
+      size="xs"
+      class="{lights ? '' : '-ml-1.5'} mr-2 gap-1.5"
       onclick={back}
-      label="Zurück zur Liste ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /></IconButton
+      title="Zurück zu den Projekten ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /> Projekte</Button
     >
     <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
-      <span class="truncate text-xs font-semibold" data-tauri-drag-region>
+      <span class="text-ui truncate font-semibold" data-tauri-drag-region>
         {split(viewRepo.rel)[1]}
       </span>
       {#if split(viewRepo.rel)[0]}
         <span
-          class="text-muted-foreground hidden truncate font-mono text-[11px] sm:block"
+          class="text-muted-foreground text-meta hidden truncate font-mono sm:block"
           data-tauri-drag-region
         >
           {split(viewRepo.rel)[0]}
         </span>
       {/if}
-      {#if view === "term" && viewRepo.branch}
-        <Badge variant="outline" class="text-muted-foreground shrink-0 gap-1 font-mono text-[11px]">
+      {#if viewRepo.branch}
+        <Badge variant="outline" class="text-muted-foreground text-meta shrink-0 gap-1 font-mono">
           <GitBranchIcon class="size-3" />
           {viewRepo.branch}
         </Badge>
       {/if}
-      {#each tags(viewRepo) as lang (lang)}
-        <Badge variant="outline" class="text-muted-foreground shrink-0 gap-1.5 text-[11px]">
-          <span
-            class="size-2 rounded-full"
-            style="background:{LANG_COLOR[lang] ?? 'var(--muted-foreground)'}"
-          ></span>
-          {lang}
-        </Badge>
-      {/each}
     </div>
-    {#if view === "git" && gitRepo}
-      <Button
-        variant="quiet"
-        size="xs"
-        class="gap-1.5"
-        onclick={() => reveal(gitRepo!)}
-        title="Ordner im {FILES_APP} öffnen (Alt+E)"><FolderOpenIcon class="size-3.5" /> {FILES_APP}</Button
-      >
-      <Button
-        variant="quiet"
-        size="xs"
-        onclick={() => gitView?.reload()}
-        title="Aktualisieren (F5)"
-        aria-label="Aktualisieren"><RefreshIcon class="size-3.5" /></Button
-      >
-    {:else if view === "term" && activeSession}
-      <Button
-        variant="quiet"
-        size="xs"
-        class="gap-1.5"
-        aria-pressed={side}
-        onclick={toggleSide}
-        title="Session, Workflows und Bilder"><WorkflowIcon class="size-3.5" /> Aktivität</Button
-      >
-      {#if !activeSession.guest}
-        <Button
-          variant="quiet"
-          size="xs"
-          class="gap-1.5 {shares[activeSession.id] ? 'text-primary hover:text-primary' : ''}"
-          onclick={() => (shareOpen = true)}
-          title="Sitzung mit anderen teilen"
-          ><Share2Icon class="size-3.5" /> Teilen{#if shares[activeSession.id]?.guests}&nbsp;({shares[activeSession.id].guests}){/if}</Button
-        >
-      {/if}
-      {#if !activeSession.group && !activeSession.guest}
-        <Button
-          variant="quiet"
-          size="xs"
-          class="gap-1.5"
-          onclick={() => launch(activeSession.repo, true)}
-          title="Weitere Claude-Sitzung im selben Projekt"><PlusIcon class="size-3.5" /> Sitzung</Button
-        >
-      {/if}
-      <Button
-        variant="quiet"
-        size="xs"
-        onclick={() => endSession(activeSession.id)}>Sitzung beenden</Button
-      >
-    {/if}
-    <div class="bg-border mx-1 h-4 w-px"></div>
-    <!-- Feste Reihenfolge in jeder Ansicht, damit beim Wechseln nichts springt; die wechselnden Extras stehen links davon. -->
-    {@render viewButton("term", "Claude im Projekt öffnen", () => launch(viewRepo), TerminalIcon, "Claude")}
-    {#if !isFree(viewRepo)}{@render viewButton("edit", `Editor (${mod}+Umschalt+E)`, () => openEdit(viewRepo), FileCodeIcon, "Editor")}{/if}
-    {#if viewRepo?.path}{@render viewButton("git", "Git-Ansicht (Alt+G)", () => openGit(viewRepo), GitBranchIcon, "Git")}{/if}
+    <Segmented
+      variant="nav"
+      label="Ansicht"
+      value={view as ViewKey}
+      options={views}
+      onchange={(v) => v !== view && VIEW_OPEN[v](viewRepo)}
+    />
   {:else}
     <img
       src="/logo.png"
@@ -1590,11 +1529,14 @@
   </Command.Root>
 
   <!-- Alle Terminals bleiben gemountet, sonst stirbt claude beim Zurueckgehen. -->
-  {#if view !== "list" && sessions.length > 1}
-    <div class="bg-chrome border-border flex shrink-0 gap-px overflow-x-auto border-b px-1 text-[11px]" role="tablist">
+  <!-- Session tabs belong to the Claude view; shown from the first session so × stays visible. -->
+  {#if view === "term"}
+    <div class="bg-chrome border-border text-ui flex shrink-0 gap-px overflow-x-auto border-b px-1" role="tablist" aria-label="Sitzungen">
       {#each sessions as s (s.id)}
-        <div
-          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {tabOn(s)
+        {@const on = s.id === active}
+        <ContextMenu.Root>
+        <ContextMenu.Trigger
+          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {on
             ? 'bg-background text-foreground'
             : 'text-muted-foreground hover:text-foreground'}"
         >
@@ -1602,8 +1544,8 @@
             tone="plain"
             class="inline"
             role="tab"
-            aria-selected={tabOn(s)}
-            onclick={() => activate(s)}
+            aria-selected={on}
+            onclick={() => openSessionTab(s.id)}
           >
             {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
                 class="text-primary mr-1 inline size-3"
@@ -1615,17 +1557,35 @@
           <IconButton
             size="xs"
             tone="danger"
-            reveal={!tabOn(s)}
+            reveal={!on}
             onclick={() => endSession(s.id)}
             label="Sitzung beenden"><XIcon class="size-3" /></IconButton
           >
-        </div>
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content class={cn(menuContent, "min-w-44 rounded-lg shadow-lg")}>
+            <ContextItem label="Sitzung beenden …" destructive onSelect={() => endSession(s.id)} />
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+        </ContextMenu.Root>
       {/each}
     </div>
   {/if}
   <div class="flex min-h-0 flex-1 {view === 'term' ? '' : 'hidden'}">
     <div class="flex min-w-0 flex-1 flex-col">
-      {#if activeSession && !activeSession.guest}<ClaudeBar id={activeSession.id} mode={modes[activeSession.id]} onsettings={() => (claudeOpen = true)} />{/if}
+      {#if activeSession}
+        {@const s = activeSession}
+        <ClaudeBar
+          id={s.id}
+          mode={modes[s.id]}
+          guest={!!s.guest}
+          {side}
+          ontoggleside={toggleSide}
+          share={s.guest ? undefined : { on: !!shares[s.id], guests: shares[s.id]?.guests ?? 0, open: () => (shareOpen = true) }}
+          onnew={s.group || s.guest ? undefined : () => launch(s.repo, true)}
+          onsettings={() => (claudeOpen = true)}
+        />
+      {/if}
       <div class="min-h-0 flex-1">
       {#each sessions as s (s.id)}
         <Terminal
@@ -1702,17 +1662,6 @@
     </TextButton>
   </footer>
 </div>
-
-{#snippet viewButton(target: string, title: string, onclick: () => void, Icon: typeof TerminalIcon, label: string)}
-  <Button
-    variant="quiet"
-    size="xs"
-    class="gap-1.5"
-    aria-pressed={view === target}
-    onclick={() => view !== target && onclick()}
-    {title}><Icon class="size-3.5" /> {label}</Button
-  >
-{/snippet}
 
 {#snippet repoItem(label: string, key: string, onSelect: () => void, destructive = false)}
   <ContextMenu.Item
