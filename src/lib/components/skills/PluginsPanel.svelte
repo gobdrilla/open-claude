@@ -108,7 +108,7 @@
   >
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <Notice bind:text={error} />
   <Notice bind:text={note} kind="note" />
 
@@ -141,15 +141,15 @@
           <li class="flex items-center gap-3 px-3 py-1.5">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="truncate font-mono text-[11px] font-semibold">{g.id}</span>
-                <span class="text-muted-foreground shrink-0 font-mono text-[10px]"
+                <span class="truncate font-mono text-meta font-semibold">{g.id}</span>
+                <span class="text-muted-foreground shrink-0 font-mono text-meta"
                   >{p.version}{#if m?.update && m.latest}&nbsp;→ <span class="text-primary">{m.latest}</span>{/if}</span
                 >
-                {#if g.main}<span class="text-muted-foreground border-border rounded border px-1 text-[10px]">{SCOPE[g.main.scope]}</span>{/if}
+                {#if g.main}<span class="text-muted-foreground border-border rounded border px-1 text-meta">{SCOPE[g.main.scope]}</span>{/if}
               </div>
-              {#if m?.description}<div class="text-muted-foreground truncate text-[11px]" title={m.description}>{m.description}</div>{/if}
+              {#if m?.description}<div class="text-muted-foreground truncate text-meta" title={m.description}>{m.description}</div>{/if}
               {#if g.locals.length}
-                <div class="text-muted-foreground truncate text-[10px]" title={g.locals.map((l) => l.projectPath).join("\n")}>
+                <div class="text-muted-foreground truncate text-meta" title={g.locals.map((l) => l.projectPath).join("\n")}>
                   {g.main ? "auch " : ""}lokal in: {g.locals.map((l) => folder(l.projectPath)).join(", ")}
                 </div>
               {/if}
@@ -177,14 +177,14 @@
                 onclick={() => remove(main)}><Trash2Icon class="size-3.5" /></IconButton
               >
             {:else}
-              <span class="text-muted-foreground w-24 shrink-0 text-right text-[10px]">pro Projekt im Skills-Modus</span>
+              <span class="text-muted-foreground w-24 shrink-0 text-right text-meta">pro Projekt im Skills-Modus</span>
             {/if}
           </li>
         {/each}
       </ul>
 
       <SectionHead title={`Verfügbar (${avail.items.length} von ${avail.total})`}>
-        <span class="text-muted-foreground text-[10px]">Scope</span>
+        <span class="text-muted-foreground text-meta">Scope</span>
         <Segmented
           value={scopeChoice}
           options={[
@@ -203,12 +203,12 @@
           <li class="flex items-center gap-3 px-3 py-1.5">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="truncate font-mono text-[11px] font-semibold">{a.name}</span>
-                <span class="text-muted-foreground truncate text-[10px]">{a.marketplaceName}</span>
-                {#if a.version}<span class="text-muted-foreground shrink-0 font-mono text-[10px]">v{a.version}</span>{/if}
-                {#if a.installCount}<span class="text-muted-foreground shrink-0 text-[10px]">↓{a.installCount}</span>{/if}
+                <span class="truncate font-mono text-meta font-semibold">{a.name}</span>
+                <span class="text-muted-foreground truncate text-meta">{a.marketplaceName}</span>
+                {#if a.version}<span class="text-muted-foreground shrink-0 font-mono text-meta">v{a.version}</span>{/if}
+                {#if a.installCount}<span class="text-muted-foreground shrink-0 text-meta">↓{a.installCount}</span>{/if}
               </div>
-              {#if a.description}<div class="text-muted-foreground truncate text-[11px]" title={a.description}>{a.description}</div>{/if}
+              {#if a.description}<div class="text-muted-foreground truncate text-meta" title={a.description}>{a.description}</div>{/if}
             </div>
             {@render action("Installieren", a.pluginId, () => run("install", a.pluginId, scopeChoice))}
           </li>
@@ -224,8 +224,8 @@
       <ul>
         {#each mps as [name, mp] (name)}
           <li class="flex items-center gap-3 px-3 py-1.5">
-            <span class="w-48 shrink-0 truncate font-mono text-[11px] font-semibold">{name}</span>
-            <span class="text-muted-foreground min-w-0 flex-1 truncate text-[11px]" title={mp.installLocation}>{mpSource(mp.source)}</span>
+            <span class="w-48 shrink-0 truncate font-mono text-meta font-semibold">{name}</span>
+            <span class="text-muted-foreground min-w-0 flex-1 truncate text-meta" title={mp.installLocation}>{mpSource(mp.source)}</span>
             {@render action("Aktualisieren", name, () => run("mp-update", name))}
             {@render action("Entfernen", name, async () => {
               if (await confirm(`Marketplace ${name} entfernen? Seine Plugins sind danach nicht mehr installierbar.`, "Entfernen")) run("mp-remove", name);

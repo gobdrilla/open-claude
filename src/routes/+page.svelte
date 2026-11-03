@@ -1201,7 +1201,7 @@
       class="mr-2 size-4 [image-rendering:pixelated]"
       data-tauri-drag-region
     />
-    <span class="text-muted-foreground flex-1 text-xs font-semibold" data-tauri-drag-region>
+    <span class="text-muted-foreground flex-1 text-ui font-semibold" data-tauri-drag-region>
       L'Atelier de Claude
     </span>
   {/if}
@@ -1287,7 +1287,7 @@
           bind:value={query}
           placeholder="Projekt suchen"
           autofocus
-          class="h-12! text-base!"
+          class="h-12! text-body!"
         />
       </div>
       <!-- At most three actions, all labelled except the gear; the rest lives in the + Projekt menu and the settings. -->
@@ -1332,11 +1332,11 @@
 
     <Command.List class="max-h-none flex-1 overflow-y-auto">
       {#if error}
-        <p class="text-destructive px-4 py-6 text-sm">{error}</p>
+        <p class="text-destructive px-4 py-6 text-body">{error}</p>
       {:else if scanning && repos.length === 0}
-        <p class="text-muted-foreground px-4 py-6 text-sm">Lese Git-Repos …</p>
+        <p class="text-muted-foreground px-4 py-6 text-body">Lese Git-Repos …</p>
       {:else}
-        <Command.Empty class="px-4 py-6 text-left text-sm">
+        <Command.Empty class="px-4 py-6 text-left text-body">
           {repos.length
             ? `Kein Projekt passt zu „${query.trim()}“.`
             : root
@@ -1363,16 +1363,16 @@
                     <Command.Item {...props} value={`group:${g.name}`} onSelect={() => launchGroup(g)} class="gap-3 px-3 py-2">
                       <span class="bg-primary/15 text-primary grid size-6 place-items-center rounded-md"><LayersIcon class="size-3.5" /></span>
                       <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm font-semibold" title={g.name}>{g.name}</div>
-                        <div class="text-muted-foreground truncate text-[11px]" title={members}>{members}</div>
+                        <div class="truncate text-body font-semibold" title={g.name}>{g.name}</div>
+                        <div class="text-muted-foreground truncate text-meta" title={members}>{members}</div>
                       </div>
                       {#if live}
-                        <Badge variant="outline" class="text-primary gap-1.5 text-[11px]">
+                        <Badge variant="outline" class="text-primary gap-1.5 text-meta">
                           <span class="size-2 animate-pulse rounded-full bg-current"></span>
                           läuft
                         </Badge>
                       {/if}
-                      <Badge variant="outline" class="text-muted-foreground text-[11px]">{g.paths.length} Repos</Badge>
+                      <Badge variant="outline" class="text-muted-foreground text-meta">{g.paths.length} Repos</Badge>
                     </Command.Item>
                   {/snippet}
                 </ContextMenu.Trigger>
@@ -1421,20 +1421,20 @@
                       </IconButton>
 
                       <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm font-semibold" title={item.name}>
+                        <div class="truncate text-body font-semibold" title={item.name}>
                           {#each item.name.split("") as ch, i}<span
                               class={item.marks.includes(i) ? "text-primary" : ""}>{ch}</span
                             >{/each}
                         </div>
                         {#if item.dir}
-                          <div class="text-muted-foreground truncate font-mono text-[11px]" title={item.dir}>
+                          <div class="text-muted-foreground truncate font-mono text-meta" title={item.dir}>
                             {item.dir}
                           </div>
                         {/if}
                       </div>
 
                       {#if running.has(item.repo.path)}
-                        <Badge variant="outline" class="text-primary gap-1.5 pr-0.5 text-[11px]">
+                        <Badge variant="outline" class="text-primary gap-1.5 pr-0.5 text-meta">
                           <span class="size-2 animate-pulse rounded-full bg-current"></span>
                           läuft
                           <IconButton
@@ -1453,7 +1453,7 @@
 
                       {@const prof = profileName(item.repo)}
                       {#if prof}
-                        <Badge variant="outline" class="text-muted-foreground gap-1 text-[11px]" title="Skill-Profil">
+                        <Badge variant="outline" class="text-muted-foreground gap-1 text-meta" title="Skill-Profil">
                           <SparklesIcon class="size-3" />
                           {prof}
                         </Badge>
@@ -1463,7 +1463,7 @@
                         {#if lang === "Unity"}
                           {@const uinfo = unityInfo[item.repo.path]}
                           <span use:onVisible={() => loadUnityInfo(item.repo.path)}>
-                            <Badge variant="outline" class="text-muted-foreground gap-1.5 text-[11px]">
+                            <Badge variant="outline" class="text-muted-foreground gap-1.5 text-meta">
                               <span
                                 class="size-2 rounded-full {uinfo?.editorOpen ? 'bg-success' : ''}"
                                 style={uinfo?.editorOpen ? "" : `background:${LANG_COLOR.Unity}`}
@@ -1473,7 +1473,7 @@
                             </Badge>
                           </span>
                         {:else}
-                          <Badge variant="outline" class="text-muted-foreground gap-1.5 text-[11px]">
+                          <Badge variant="outline" class="text-muted-foreground gap-1.5 text-meta">
                             <span
                               class="size-2 rounded-full"
                               style="background:{LANG_COLOR[lang] ?? 'var(--muted-foreground)'}"
@@ -1484,7 +1484,7 @@
                       {/each}
 
                       {#if item.repo.branch}
-                        <Badge variant="outline" class="text-muted-foreground gap-1 font-mono text-[11px]">
+                        <Badge variant="outline" class="text-muted-foreground gap-1 font-mono text-meta">
                           <GitBranchIcon class="size-3" />
                           {item.repo.branch}
                         </Badge>
@@ -1495,7 +1495,7 @@
                           >{mac ? `⌥${nr}` : `Alt+${nr}`}</kbd
                         >
                       {:else}
-                        <span class="text-muted-foreground w-12 text-right font-mono text-[11px] tabular-nums">
+                        <span class="text-muted-foreground w-12 text-right font-mono text-meta tabular-nums">
                           {age(item.repo.last_commit)}
                         </span>
                       {/if}
@@ -1671,7 +1671,7 @@
 
   <!-- Nur Status und Tastenhinweise; Aktionen und Einstellungen sitzen oben in der Suchleiste -->
   <footer
-    class="bg-chrome border-border text-muted-foreground flex items-center gap-4 border-t px-3.5 py-1.5 text-[11px] whitespace-nowrap {view !== 'list'
+    class="bg-chrome border-border text-muted-foreground flex items-center gap-4 border-t px-3.5 py-1.5 text-meta whitespace-nowrap {view !== 'list'
       ? 'hidden'
       : ''}"
   >
@@ -1788,9 +1788,9 @@
         Der Ordner wandert in den Papierkorb, auf dem Server bleibt alles. Eine laufende Claude-Sitzung wird beendet.
       </Dialog.Description>
     </Dialog.Header>
-    <p class="text-muted-foreground truncate font-mono text-[11px]" title={doomed?.repo.path}>{doomed?.repo.path}</p>
+    <p class="text-muted-foreground truncate font-mono text-meta" title={doomed?.repo.path}>{doomed?.repo.path}</p>
     {#if doomed?.risks.length}
-      <ul class="bg-destructive/10 text-destructive list-disc rounded-md py-2 pr-3 pl-7 text-xs">
+      <ul class="bg-destructive/10 text-destructive list-disc rounded-md py-2 pr-3 pl-7 text-ui">
         {#each doomed.risks as r (r)}<li>{r}</li>{/each}
       </ul>
     {/if}
@@ -1894,7 +1894,7 @@
   oncancel={() => answer(false)}
 >
   {#if confirming.q?.message}
-    <p class="text-muted-foreground text-sm break-words whitespace-pre-line">{confirming.q.message}</p>
+    <p class="text-muted-foreground text-body break-words whitespace-pre-line">{confirming.q.message}</p>
   {/if}
   {#if confirming.q?.items}
     <ul class="border-border/60 divide-border/60 divide-y rounded-lg border">
@@ -1902,8 +1902,8 @@
         <li class="flex items-start gap-2.5 px-3 py-2">
           <PackageIcon class="text-primary mt-0.5 size-4 shrink-0" />
           <div class="min-w-0">
-            <div class="text-sm font-medium">{it.name}</div>
-            <div class="text-muted-foreground text-xs break-words">{it.detail}</div>
+            <div class="text-body font-medium">{it.name}</div>
+            <div class="text-muted-foreground text-ui break-words">{it.detail}</div>
           </div>
         </li>
       {/each}

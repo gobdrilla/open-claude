@@ -190,11 +190,11 @@
   }
 </script>
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <Notice bind:text={error} />
 
   {#if (!originUrl && !loading) || noAccount}
-    <p class="text-muted-foreground flex items-center justify-center gap-2 px-2 py-4 text-[11px]">
+    <p class="text-muted-foreground flex items-center justify-center gap-2 px-2 py-4 text-meta">
       {#if !originUrl}Kein Remote origin.{:else}Kein GitHub-/GitLab-Konto für {host} — unter Git-Konten anmelden.{/if}
       <RefreshButton {loading} onclick={() => reload()} />
     </p>
@@ -219,21 +219,21 @@
               onclick={() => (selected = r)}
             >
               <span class="min-w-0 flex-1">
-                <span class="block truncate text-[11px]" title={r.name || r.tag}>{r.name || r.tag}</span>
+                <span class="block truncate text-meta" title={r.name || r.tag}>{r.name || r.tag}</span>
                 {#if r.name && r.name !== r.tag}
-                  <span class="text-muted-foreground block truncate font-mono text-[10px]">{r.tag}</span>
+                  <span class="text-muted-foreground block truncate font-mono text-meta">{r.tag}</span>
                 {/if}
               </span>
-              {#if r.draft}<Badge variant="outline" class="shrink-0 text-[10px]">Draft</Badge>{/if}
-              {#if r.prerelease}<Badge variant="outline" class="shrink-0 text-[10px] text-warning border-warning/40">Pre-Release</Badge>{/if}
-              {#if r.id === latestId}<Badge variant="outline" class="text-primary border-primary/50 shrink-0 text-[10px]">Latest</Badge>{/if}
-              <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[10px] tabular-nums">
+              {#if r.draft}<Badge variant="outline" class="shrink-0 text-meta">Draft</Badge>{/if}
+              {#if r.prerelease}<Badge variant="outline" class="shrink-0 text-meta text-warning border-warning/40">Pre-Release</Badge>{/if}
+              {#if r.id === latestId}<Badge variant="outline" class="text-primary border-primary/50 shrink-0 text-meta">Latest</Badge>{/if}
+              <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-meta tabular-nums">
                 {age(r.published_at ?? r.created_at)}
               </span>
             </Row>
           {/each}
           {#if loading}
-            <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
+            <p class="text-muted-foreground px-2 py-2 text-center text-meta">Lädt …</p>
           {:else if items.length && !done}
             <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
           {/if}
@@ -245,7 +245,7 @@
           {@const r = selected}
           <div class="space-y-2 px-3 py-2">
             <div class="flex flex-wrap items-center gap-2">
-              <h2 class="min-w-0 flex-1 truncate text-sm font-semibold">{r.name || r.tag}</h2>
+              <h2 class="min-w-0 flex-1 truncate text-body font-semibold">{r.name || r.tag}</h2>
               <Button size="xs" variant="ghost" onclick={() => forge.openUrl(r.web_url).catch((e) => (error = String(e)))}>
                 <ExternalLinkIcon class="size-3" />Im Browser
               </Button>
@@ -255,13 +255,13 @@
               <Button size="xs" variant="outline" disabled={busy} onclick={() => openForm(r)}>Bearbeiten</Button>
               <Button size="xs" variant="destructive" disabled={busy} onclick={() => (confirmDelete = r)}>Löschen</Button>
             </div>
-            <p class="text-muted-foreground text-[10px]">
+            <p class="text-muted-foreground text-meta">
               {#if r.name && r.name !== r.tag}<span class="font-mono">{r.tag}</span> · {/if}{r.author} · {new Date(r.published_at ?? r.created_at).toLocaleString("de-DE")}
             </p>
             {#if r.body}
               <Markdown text={r.body} base={r.web_url} onerror={(e) => (error = e)} />
             {:else}
-              <p class="text-muted-foreground text-[11px] italic">Keine Beschreibung.</p>
+              <p class="text-muted-foreground text-meta italic">Keine Beschreibung.</p>
             {/if}
             {#if r.assets.length}
               <ul class="border-border space-y-0.5 border-t pt-2">
@@ -283,9 +283,9 @@
                         <DownloadIcon class="text-muted-foreground hidden size-3 shrink-0 group-hover:block" />
                       {/if}
                       <span class="min-w-0 flex-1 truncate">{a.name}</span>
-                      <span class="text-muted-foreground shrink-0 font-mono text-[10px]">{size(a.size)}</span>
+                      <span class="text-muted-foreground shrink-0 font-mono text-meta">{size(a.size)}</span>
                       {#if kind === "github"}
-                        <span class="text-muted-foreground w-16 shrink-0 text-right font-mono text-[10px]">{a.downloads} ↓</span>
+                        <span class="text-muted-foreground w-16 shrink-0 text-right font-mono text-meta">{a.downloads} ↓</span>
                       {/if}
                     </Row>
                   </li>
@@ -316,7 +316,7 @@
       <Dialog.Header>
         <Dialog.Title>{form.id ? "Release bearbeiten" : "Neues Release"}</Dialog.Title>
       </Dialog.Header>
-      <div class="space-y-2 text-xs">
+      <div class="space-y-2 text-ui">
         <label class="block space-y-1">
           <span class="text-muted-foreground">Tag</span>
           <Input bind:value={form.tag} placeholder="v1.0.0" disabled={lockTag} autofocus />
@@ -341,7 +341,7 @@
               {#if form.body.trim()}
                 <Markdown text={form.body} onerror={(e) => (error = e)} />
               {:else}
-                <p class="text-muted-foreground text-[11px] italic">Keine Beschreibung.</p>
+                <p class="text-muted-foreground text-meta italic">Keine Beschreibung.</p>
               {/if}
             </div>
           {:else}
@@ -355,7 +355,7 @@
           </div>
         {/if}
       </div>
-      {#if formError}<p class="text-destructive text-xs whitespace-pre-wrap">{formError}</p>{/if}
+      {#if formError}<p class="text-destructive text-ui whitespace-pre-wrap">{formError}</p>{/if}
       <div class="flex justify-end gap-2">
         <Button variant="ghost" size="sm" disabled={busy} onclick={() => (form = null)}>Abbrechen</Button>
         <Button size="sm" disabled={busy || !form.tag.trim()} onclick={save}>{busy ? "Speichert …" : "Speichern"}</Button>

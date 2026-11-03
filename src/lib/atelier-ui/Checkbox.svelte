@@ -3,7 +3,7 @@
   import { cn } from "$lib/utils.js";
 
   // With children: checkbox plus clickable label text. Without children it needs an aria-label.
-  // size: sm = 11px (pane bars), md = text-xs (dialogs), inherit = surrounding font size.
+  // size: sm = text-meta (pane bars), md = text-ui (dialogs), inherit = surrounding font size.
   let {
     checked = $bindable(false),
     size = "inherit",
@@ -17,7 +17,7 @@
     muted?: boolean;
   } = $props();
 
-  const SIZE = { inherit: "gap-2", sm: "gap-1 text-[11px]", md: "gap-2 text-xs" };
+  const SIZE = { inherit: "gap-2", sm: "gap-1 text-meta", md: "gap-2 text-ui" };
 </script>
 
 {#if children}

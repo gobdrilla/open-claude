@@ -16,7 +16,7 @@
     base,
     root,
     onerror,
-    size = "text-[11px]",
+    size = "text-meta",
   }: { text: string; base?: string; root?: string; onerror?: (e: string) => void; size?: string } = $props();
 
   // Fremdes Markdown: ohne DOMPurify waere {@html} XSS mit Zugriff auf alle Tauri-Commands.

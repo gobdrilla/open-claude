@@ -91,15 +91,15 @@
     </Dialog.Header>
 
     {#if accounts.length}
-      <ul class="border-border divide-border divide-y rounded border text-sm">
+      <ul class="border-border divide-border divide-y rounded border text-body">
         {#each accounts as a (a.kind + a.host + a.user)}
           <li class="flex items-center gap-2 px-2.5 py-1.5">
             <GlobeIcon class="size-3.5 shrink-0" />
             <span class="min-w-0 flex-1 truncate" title="{a.user}@{a.host}">
               <span class="font-medium">{a.user}</span>
-              <span class="text-muted-foreground font-mono text-[11px]">@{a.host}</span>
+              <span class="text-muted-foreground font-mono text-meta">@{a.host}</span>
             </span>
-            <Badge variant="outline" class="text-muted-foreground shrink-0 text-[10px]"
+            <Badge variant="outline" class="text-muted-foreground shrink-0 text-meta"
               >{a.kind === "github" ? "GitHub" : "GitLab"}</Badge
             >
             <IconButton
@@ -135,7 +135,7 @@
           ? "repo, read:org"
           : "api, read_repository, write_repository"})
       </TextButton>
-      {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
+      {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
     </div>
 
     <div class="flex justify-end gap-1.5">

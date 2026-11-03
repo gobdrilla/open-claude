@@ -38,11 +38,11 @@
       <Dialog.Title>Unity-Editor schließen</Dialog.Title>
       <Dialog.Description>Schließt ohne zu speichern. Ungesicherte Änderungen im Editor gehen verloren.</Dialog.Description>
     </Dialog.Header>
-    <label class="flex items-center gap-2 text-xs">
+    <label class="flex items-center gap-2 text-ui">
       <Switch on={force} label="Erzwingen" onclick={() => (force = !force)} />
       Erzwingen (Prozess hart beenden, falls nötig)
     </label>
-    {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
+    {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
     <div class="flex justify-end gap-2">
       <Button variant="ghost" size="sm" disabled={closing} onclick={dismiss}>Abbrechen</Button>
       <Button variant="destructive" size="sm" disabled={closing} onclick={run}>

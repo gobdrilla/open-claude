@@ -94,7 +94,7 @@
   });
 </script>
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class={paneBar}>
     <Input
       bind:value={draft}
@@ -184,7 +184,7 @@
       </Empty>
     {:else}
       {#if error}
-        <pre class="text-destructive border-border border-b px-2 py-1 font-mono text-[11px] whitespace-pre-wrap select-text" role="alert">{error}</pre>
+        <pre class="text-destructive border-border border-b px-2 py-1 font-mono text-meta whitespace-pre-wrap select-text" role="alert">{error}</pre>
       {/if}
       {#if png}
         <div class="grid place-items-center p-3">

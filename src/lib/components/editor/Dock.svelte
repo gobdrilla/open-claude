@@ -257,7 +257,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={root}
-  class="relative flex h-full min-h-0 w-full text-xs {drag?.on ? 'cursor-grabbing select-none' : ''}"
+  class="relative flex h-full min-h-0 w-full text-ui {drag?.on ? 'cursor-grabbing select-none' : ''}"
   onpointerdown={(e) => (sizing = !!(e.target as Element).closest('[role="separator"]'))}
   onlostpointercapture={() => {
     drag = hint = null;

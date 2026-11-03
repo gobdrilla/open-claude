@@ -94,10 +94,10 @@
     {#each symHits as s, i (i)}
       <Command.Item value={`${i}:${s.path}:${s.line}:${s.name}`} onSelect={() => pickSym(s)}>
         <span class="truncate">{s.name}</span>
-        <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+        <span class="text-muted-foreground min-w-0 flex-1 truncate text-ui">
           {[s.container, mode === "#" ? s.path : ""].filter(Boolean).join(" · ")}
         </span>
-        <span class="text-muted-foreground text-xs tabular-nums">{s.line}</span>
+        <span class="text-muted-foreground text-ui tabular-nums">{s.line}</span>
       </Command.Item>
     {/each}
     {#each hits as path (path)}
@@ -106,7 +106,7 @@
       <Command.Item value={path} onSelect={() => pick(path)}>
         <ic.icon class="size-3.5 {ic.tint}" />
         <span class="truncate">{path.slice(cut)}</span>
-        <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs">{path.slice(0, cut)}</span>
+        <span class="text-muted-foreground min-w-0 flex-1 truncate text-ui">{path.slice(0, cut)}</span>
       </Command.Item>
     {/each}
   </Command.List>

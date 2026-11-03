@@ -11,7 +11,7 @@
 		"data-slot": dataSlot = "textarea",
 		...restProps
 	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> & {
-		/** Atelier: sm = text-xs, xs = 11px like pane fields. */
+		/** Atelier: sm = text-ui, xs = text-meta like pane fields. */
 		density?: "default" | "sm" | "xs";
 		/** Atelier: borderless, fixed size, fills its space (editor surfaces). */
 		bare?: boolean;
@@ -19,8 +19,8 @@
 
 	const DENSITY = {
 		default: "",
-		sm: "text-xs md:text-xs",
-		xs: "px-2 py-1 text-[11px] md:text-[11px]",
+		sm: "text-ui md:text-ui",
+		xs: "px-2 py-1 text-meta md:text-meta",
 	};
 	const BARE = "bg-background dark:bg-background field-sizing-fixed min-h-0 resize-none rounded-none border-0 focus-visible:ring-0";
 </script>

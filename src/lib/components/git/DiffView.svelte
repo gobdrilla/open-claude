@@ -92,9 +92,9 @@
   const sign = { add: "+", del: "-", ctx: " ", meta: "" };
 </script>
 
-<div class="h-full overflow-auto font-mono text-[11px] leading-[1.45]">
+<div class="h-full overflow-auto font-mono text-meta leading-[1.45]">
   {#if files.length === 0}
-    <p class="text-muted-foreground p-3 font-sans text-xs">{empty}</p>
+    <p class="text-muted-foreground p-3 font-sans text-ui">{empty}</p>
   {/if}
   {#each files as file, fi (fi)}
     {@const fic = fileIcon(file.newPath)}
@@ -105,7 +105,7 @@
       <div class="bg-card/95 border-border/60 sticky top-0 z-10 flex items-center gap-2 rounded-t-xl border-b px-2.5 py-1.5 font-sans backdrop-blur">
         <fic.icon class="size-3.5 shrink-0 {fic.tint}" />
         <span class="font-semibold">{file.newPath.slice(dir ? dir.length + 1 : 0)}</span>
-        <span class="text-muted-foreground text-[10px]"
+        <span class="text-muted-foreground text-meta"
           >{file.oldPath !== file.newPath ? `${file.oldPath} →` : dir}</span
         >
         <span class="flex-1"></span>

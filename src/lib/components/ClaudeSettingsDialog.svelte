@@ -245,7 +245,7 @@
       <Dialog.Description>Wie /config im Terminal. Gilt für neue Sitzungen; Umschalt+Tab im Terminal wechselt den Modus sofort.</Dialog.Description>
     </Dialog.Header>
 
-    <div class="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 text-xs">
+    <div class="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 text-ui">
       {#each SECTIONS as s (s.title)}
         <SettingsSection title={s.title}>
           {#if s.title === "Berechtigungen"}
@@ -265,7 +265,7 @@
                 </div>
                 <div class="flex flex-wrap gap-1">
                   {#each rules(k) as r (r)}
-                    <span class="bg-secondary flex items-center gap-1 rounded py-0.5 pr-0.5 pl-1.5 font-mono text-[11px]"
+                    <span class="bg-secondary flex items-center gap-1 rounded py-0.5 pr-0.5 pl-1.5 font-mono text-meta"
                       >{r}<IconButton size="bare" tone="danger" label="{r} entfernen" disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
                         ><XIcon class="size-3" /></IconButton
                       ></span
@@ -287,13 +287,13 @@
       {/each}
 
       <details>
-        <summary class="text-muted-foreground cursor-pointer text-[11px] font-medium tracking-wide uppercase">settings.json direkt bearbeiten</summary>
+        <summary class="text-muted-foreground cursor-pointer text-meta font-medium tracking-wide uppercase">settings.json direkt bearbeiten</summary>
         <Textarea bind:value={text} spellcheck={false} density="xs" class="mt-1.5 h-64 font-mono" placeholder={"{}"} />
       </details>
     </div>
 
-    {#if !parsed}<p class="text-destructive text-xs">settings.json ist kein gültiges JSON-Objekt</p>{/if}
-    {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
+    {#if !parsed}<p class="text-destructive text-ui">settings.json ist kein gültiges JSON-Objekt</p>{/if}
+    {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
 
     <div class="flex justify-end gap-2">
       <Button variant="ghost" size="sm" class="mr-auto" disabled={busy} onclick={reload}>Neu laden</Button>

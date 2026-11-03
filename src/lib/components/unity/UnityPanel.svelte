@@ -115,7 +115,7 @@
   </span>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col overflow-y-auto text-xs">
+<div class="flex h-full min-h-0 flex-col overflow-y-auto text-ui">
   <Notice bind:text={error} />
 
   {#if loading && !info}
@@ -146,7 +146,7 @@
 
     {#if setupLog}
       <pre
-        class="border-border text-muted-foreground max-h-32 overflow-y-auto border-b px-3 py-2 font-mono text-[11px] whitespace-pre-wrap"
+        class="border-border text-muted-foreground max-h-32 overflow-y-auto border-b px-3 py-2 font-mono text-meta whitespace-pre-wrap"
       >{setupLog}</pre>
     {/if}
 
@@ -161,7 +161,7 @@
         {#if t.running}<LoaderCircleIcon class="text-muted-foreground size-3.5 animate-spin" />{/if}
       </div>
 
-      {#if t.error}<p class="text-destructive text-[11px]">{t.error}</p>{/if}
+      {#if t.error}<p class="text-destructive text-meta">{t.error}</p>{/if}
 
       {#if t.report}
         {@const report = t.report}
@@ -190,8 +190,8 @@
             <ul class="border-border mt-2 space-y-1.5 border-t pt-2">
               {#each report.failures as f, i (i)}
                 <li>
-                  <div class="font-mono text-[11px] font-semibold">{f.name}</div>
-                  <div class="text-muted-foreground text-[11px] whitespace-pre-wrap select-text">{f.message}</div>
+                  <div class="font-mono text-meta font-semibold">{f.name}</div>
+                  <div class="text-muted-foreground text-meta whitespace-pre-wrap select-text">{f.message}</div>
                 </li>
               {/each}
             </ul>
@@ -201,10 +201,8 @@
     </div>
   {:else}
     <Empty>
-      <div class="space-y-2">
-        <p class="whitespace-pre-wrap select-text">{failed || "Unity-Status nicht lesbar."}</p>
-        <RefreshButton {loading} onclick={reload} />
-      </div>
+      <p class="whitespace-pre-wrap select-text">{failed || "Unity-Status nicht lesbar."}</p>
+      {#snippet action()}<RefreshButton {loading} onclick={reload} />{/snippet}
     </Empty>
   {/if}
 </div>

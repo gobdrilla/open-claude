@@ -61,7 +61,7 @@
   >
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class={paneBar}>
     <TextInput
       density="xs"
@@ -79,7 +79,7 @@
   {#if !s.q || !hits.length}
     <Empty icon={SearchIcon} hint={s.q ? undefined : `${MOD}+Umschalt+F`}>{busy ? "Suche …" : s.q ? "Keine Treffer." : "Suchbegriff eingeben."}</Empty>
   {:else}
-    <div class="text-muted-foreground px-2 py-0.5 text-[10px]" role="status">
+    <div class="text-muted-foreground px-2 py-0.5 text-meta" role="status">
       {hits.length >= 2000 ? "Über 2000" : hits.length} Treffer in {groups.length} Dateien
     </div>
     <ul class="min-h-0 flex-1 overflow-y-auto pb-1" aria-label="Suchergebnisse">
@@ -89,14 +89,14 @@
           <div class="flex items-center gap-1.5 px-2 py-0.5 font-medium" title={path}>
             <ic.icon class="size-3.5 shrink-0 {ic.tint}" />
             <span class="truncate">{path}</span>
-            <span class="text-muted-foreground ml-auto text-[10px]">{list.length}</span>
+            <span class="text-muted-foreground ml-auto text-meta">{list.length}</span>
           </div>
           {#each list as h (h.line)}
             <ContextMenu.Root>
               <ContextMenu.Trigger>
                 <Row flush density="compact" text="md" class="items-baseline gap-2 pr-2 pl-7" onclick={() => open(repo, path, h.line, h.col)}>
-                  <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-[10px]">{h.line}</span>
-                  <span class="truncate font-mono text-[11px]">{h.text}</span>
+                  <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-meta">{h.line}</span>
+                  <span class="truncate font-mono text-meta">{h.text}</span>
                 </Row>
               </ContextMenu.Trigger>
               <ContextMenu.Portal>

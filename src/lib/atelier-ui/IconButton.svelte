@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import { tv } from "tailwind-variants";
+  import { twMergeConfig } from "$lib/utils.js";
 
   // Compact icon-only button (or a short glyph like "Aa") for dense panels and the title bar.
   export const iconButton = tv({
@@ -13,7 +14,7 @@
         // Title bar: window controls and back.
         window: "h-9 w-11 rounded-none",
         // Short text instead of an icon ("Aa", ".*", "−").
-        text: "h-5 min-w-5 px-1 font-mono text-[11px]",
+        text: "h-5 min-w-5 px-1 font-mono text-meta",
       },
       tone: {
         muted: "text-muted-foreground hover:text-foreground",
@@ -35,7 +36,7 @@
       { size: ["xs", "sm", "md", "text"], tone: "danger", class: "hover:bg-destructive/20" },
     ],
     defaultVariants: { size: "sm", tone: "muted" },
-  });
+  }, { twMergeConfig });
 </script>
 
 <script lang="ts">

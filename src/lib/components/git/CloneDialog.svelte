@@ -214,7 +214,7 @@
           size="sm"
           onclick={() => selectAccount(a)}
         >
-          {a.user}<span class="text-muted-foreground ml-1 font-mono text-[10px]">@{a.host}</span>
+          {a.user}<span class="text-muted-foreground ml-1 font-mono text-meta">@{a.host}</span>
         </Button>
       {/each}
       <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
@@ -232,7 +232,7 @@
     {#if mode === "url"}
       <Input bind:value={url} placeholder="https://… oder git@…" density="sm" class="font-mono" />
     {:else if !account}
-      <p class="text-muted-foreground px-1 py-6 text-center text-sm">
+      <p class="text-muted-foreground px-1 py-6 text-center text-body">
         {accounts.length ? "Konto oben wählen." : "Noch kein Konto verbunden."}
       </p>
     {:else}
@@ -254,9 +254,9 @@
 
       <div class="border-border min-h-0 flex-1 overflow-y-auto rounded border">
         {#if loading && !results.length}
-          <p class="text-muted-foreground px-3 py-6 text-center text-xs">Lade…</p>
+          <p class="text-muted-foreground px-3 py-6 text-center text-ui">Lade…</p>
         {:else if !results.length}
-          <p class="text-muted-foreground px-3 py-6 text-center text-xs">Keine Treffer.</p>
+          <p class="text-muted-foreground px-3 py-6 text-center text-ui">Keine Treffer.</p>
         {:else}
           {#each results as r (r.full_name)}
             {@const isExisting = existingNames.has(r.name.toLowerCase())}
@@ -268,23 +268,23 @@
               onclick={() => pick(r)}
             >
               <div class="min-w-0 flex-1">
-                <div class="truncate text-xs font-medium">{r.full_name}</div>
+                <div class="truncate text-ui font-medium">{r.full_name}</div>
                 {#if r.description}
-                  <div class="text-muted-foreground truncate text-[11px]">{r.description}</div>
+                  <div class="text-muted-foreground truncate text-meta">{r.description}</div>
                 {/if}
               </div>
-              {#if r.lang}<Badge variant="outline" class="text-muted-foreground text-[10px]">{r.lang}</Badge>{/if}
+              {#if r.lang}<Badge variant="outline" class="text-muted-foreground text-meta">{r.lang}</Badge>{/if}
               {#if r.stars}
-                <span class="text-muted-foreground flex items-center gap-0.5 text-[11px]"
+                <span class="text-muted-foreground flex items-center gap-0.5 text-meta"
                   ><StarIcon class="size-3" />{r.stars}</span
                 >
               {/if}
               {#if r.private}<LockIcon class="text-muted-foreground size-3" />{/if}
               {#if r.fork}<GitForkIcon class="text-muted-foreground size-3" />{/if}
               {#if r.archived}<ArchiveIcon class="text-muted-foreground size-3" />{/if}
-              <span class="text-muted-foreground w-8 text-right font-mono text-[10px]">{age(r.updated_at)}</span>
+              <span class="text-muted-foreground w-8 text-right font-mono text-meta">{age(r.updated_at)}</span>
               {#if isExisting}
-                <Badge variant="outline" class="text-primary gap-0.5 text-[10px]"><CheckIcon class="size-3" />lokal</Badge>
+                <Badge variant="outline" class="text-primary gap-0.5 text-meta"><CheckIcon class="size-3" />lokal</Badge>
               {/if}
             </Row>
           {/each}
@@ -315,10 +315,10 @@
         <div class="bg-secondary h-1.5 overflow-hidden rounded">
           <div class="bg-primary h-full transition-all" style="width:{progress.percent ?? 0}%"></div>
         </div>
-        <div class="truncate font-mono text-[11px]">{progress.line}</div>
+        <div class="truncate font-mono text-meta">{progress.line}</div>
       </div>
     {/if}
-    {#if error}<p class="text-destructive text-xs whitespace-pre-wrap">{error}</p>{/if}
+    {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-1.5">
       <Button variant="outline" size="sm" onclick={() => (open = false)} disabled={cloning}>Abbrechen</Button>

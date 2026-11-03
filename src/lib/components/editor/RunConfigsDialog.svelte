@@ -38,11 +38,11 @@
     </Dialog.Header>
 
     {#if s.custom.length}
-      <ul class="border-border divide-border divide-y rounded border text-xs">
+      <ul class="border-border divide-border divide-y rounded border text-ui">
         {#each s.custom as c (c.name)}
           <li class="flex items-center gap-2 px-2.5 py-1.5">
             <span class="font-medium">{c.name}</span>
-            <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]" title={c.command}
+            <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-meta" title={c.command}
               >{c.dir ? `${c.dir}: ` : ""}{c.command}</span
             >
             <IconButton
@@ -60,7 +60,7 @@
       <Input bind:value={name} placeholder="Name, z. B. App starten" density="sm" onkeydown={enter} />
       <Input bind:value={command} placeholder="Befehl, z. B. npm run tauri dev" density="sm" class="font-mono" onkeydown={enter} />
       <Input bind:value={dir} placeholder="Ordner (optional, relativ zum Projekt)" density="sm" class="font-mono" onkeydown={enter} />
-      {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
+      {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
       <Button size="sm" disabled={!name.trim() || !command.trim() || !!error} onclick={add}>Startziel anlegen</Button>
     </div>
   </Dialog.Content>

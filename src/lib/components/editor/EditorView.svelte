@@ -178,7 +178,7 @@
   >
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class="bg-chrome border-border flex items-center gap-0.5 border-b px-2 py-1">
     <Button
       variant="quiet"
@@ -188,16 +188,16 @@
       onclick={() => save(repo)}><SaveIcon /> Speichern</Button
     >
     {#if dirty}
-      <span class="text-muted-foreground ml-1 flex items-center gap-1.5 text-[11px]" role="status">
+      <span class="text-muted-foreground ml-1 flex items-center gap-1.5 text-meta" role="status">
         <span class="bg-primary size-1.5 rounded-full"></span>
         {dirty} ungespeichert
       </span>
     {/if}
     <span class="bg-background/60 ring-foreground/10 ml-3 flex items-center gap-0.5 rounded-md p-0.5 ring-1">
       {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title="Läuft"></span>{/if}
-      <span class="text-muted-foreground pl-1.5 text-[11px] max-xl:hidden">Startziel</span>
+      <span class="text-muted-foreground pl-1.5 text-meta max-xl:hidden">Startziel</span>
       <Select
-        class="h-5 max-w-60 border-0 bg-transparent font-mono text-[11px]"
+        class="h-5 max-w-60 border-0 bg-transparent font-mono text-meta"
         value={cfg?.label ?? ""}
         groups={kinds.map(([kind, label]) => ({
           label,
@@ -210,7 +210,7 @@
         onchange={(v) => setRun(repo, v)}
       />
       <Select
-        class="h-5 max-w-32 border-0 bg-transparent text-[11px]"
+        class="h-5 max-w-32 border-0 bg-transparent text-meta"
         value={s.profile}
         options={[...BUILTIN, ...s.profiles].map((p) => [p.name, p.name] as const)}
         aria-label="Build-Profil"

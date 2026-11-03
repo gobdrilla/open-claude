@@ -255,7 +255,7 @@
   </DropdownMenu.Item>
 {/snippet}
 
-<div class="flex h-full flex-col overflow-y-auto p-1.5 text-xs {busy ? 'pointer-events-none opacity-60' : ''}" aria-busy={busy}>
+<div class="flex h-full flex-col overflow-y-auto p-1.5 text-ui {busy ? 'pointer-events-none opacity-60' : ''}" aria-busy={busy}>
   <Notice bind:text={error} />
 
   <!-- Noch nicht in die Basis gemergt: Ueberblick ueber alle offenen Branches -->
@@ -272,7 +272,7 @@
         >
           <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><GitMergeIcon class="size-3" /></span>
           <span class="min-w-0 flex-1 truncate">Nicht in <span class="font-mono">{base}</span></span>
-          <span class="font-mono text-[10px] {open.length ? 'text-warning' : 'text-muted-foreground'}"
+          <span class="font-mono text-meta {open.length ? 'text-warning' : 'text-muted-foreground'}"
             >{open.length}</span
           >
         </SectionToggle>
@@ -293,7 +293,7 @@
               align="end"
               class={cn(menuContent, "min-w-52")}
             >
-              <p class="text-muted-foreground px-2 py-1 text-[10px]">Production-Branch</p>
+              <p class="text-muted-foreground px-2 py-1 text-meta">Production-Branch</p>
               {@render choice("Automatisch erkennen", null)}
               {#each candidates as c (c)}
                 {@render choice(c, c)}
@@ -301,7 +301,7 @@
               {#if fixedBase && !candidates.includes(fixedBase)}
                 {@render choice(fixedBase, fixedBase)}
               {/if}
-              <p class="text-muted-foreground px-2 pt-1.5 pb-1 text-[10px]">Andere: Rechtsklick auf einen Branch.</p>
+              <p class="text-muted-foreground px-2 pt-1.5 pb-1 text-meta">Andere: Rechtsklick auf einen Branch.</p>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
@@ -309,7 +309,7 @@
       {#if expanded.open}
         <div class="px-1 pb-1">
           {#if open.length === 0}
-            <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">
+            <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">
               {allOpen.length ? "Nichts aus den letzten 6 Monaten." : "Alles gemergt."}
             </p>
           {/if}
@@ -330,12 +330,12 @@
                   ? 'text-primary font-semibold'
                   : ''}">{b.remote ? b.name.slice(b.name.indexOf("/") + 1) : b.name}</span
               >
-              <span class="shrink-0 font-mono text-[10px] text-warning">+{b.unmerged}</span>
-              <span class="text-muted-foreground w-9 shrink-0 text-right font-mono text-[10px]">{age(b.date)}</span>
+              <span class="shrink-0 font-mono text-meta text-warning">+{b.unmerged}</span>
+              <span class="text-muted-foreground w-9 shrink-0 text-right font-mono text-meta">{age(b.date)}</span>
             </Row>
           {/each}
           {#if staleCount}
-            <TextButton size="xs" class="px-2 py-1 pl-6" onclick={() => (showStale = !showStale)}>
+            <TextButton size="sm" class="px-2 py-1 pl-6" onclick={() => (showStale = !showStale)}>
               {showStale ? "Ältere ausblenden" : `${staleCount} ältere (über 6 Monate) anzeigen`}
             </TextButton>
           {/if}
@@ -354,7 +354,7 @@
     {#if expanded.branches}
       <div class="px-1 pb-1">
         {#if locals.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
         {#each locals as b (b.name)}
           <ContextMenu.Root>
@@ -369,12 +369,12 @@
               >
                 <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{b.name}</span>
                 {#if b.ahead}
-                  <span class="text-primary flex items-center font-mono text-[10px]"
+                  <span class="text-primary flex items-center font-mono text-meta"
                     ><ArrowUpIcon class="size-2.5" />{b.ahead}</span
                   >
                 {/if}
                 {#if b.behind}
-                  <span class="text-muted-foreground flex items-center font-mono text-[10px]"
+                  <span class="text-muted-foreground flex items-center font-mono text-meta"
                     ><ArrowDownIcon class="size-2.5" />{b.behind}</span
                   >
                 {/if}
@@ -451,10 +451,10 @@
     {#if expanded.remotes}
       <div class="px-1 pb-1">
         {#if remoteGroups.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
         {#each remoteGroups as [remote, list] (remote)}
-          <p class="text-muted-foreground px-2 pt-1 pl-6 font-mono text-[10px]">{remote}</p>
+          <p class="text-muted-foreground px-2 pt-1 pl-6 font-mono text-meta">{remote}</p>
           {#each list as b (b.name)}
             <ContextMenu.Root>
               <ContextMenu.Trigger>
@@ -501,7 +501,7 @@
     {#if expanded.tags}
       <div class="px-1 pb-1">
         {#if tags.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
         {#each tags as t (t.name)}
           <ContextMenu.Root>
@@ -563,7 +563,7 @@
                       >{SUB_STATE[m.state]}</span
                     >
                   {:else}
-                    <span class="text-muted-foreground font-mono text-[10px]">{m.sha.slice(0, 7)}</span>
+                    <span class="text-muted-foreground font-mono text-meta">{m.sha.slice(0, 7)}</span>
                   {/if}
                 </Row>
               </ContextMenu.Trigger>
@@ -591,7 +591,7 @@
     {#if expanded.stashes}
       <div class="px-1 pb-1">
         {#if stashes.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
         {#each stashes as s (s.index)}
           <ContextMenu.Root>
@@ -642,7 +642,7 @@
       {#if expanded.pulls}
         <div class="px-1 pb-1">
           {#if pulls.length === 0}
-            <p class="text-muted-foreground px-2 py-1 pl-6 text-[11px]">Keine offenen.</p>
+            <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine offenen.</p>
           {/if}
           {#each pulls as p (p.number)}
             <Row
@@ -652,7 +652,7 @@
             >
               <span class="text-muted-foreground font-mono">#{p.number}</span>
               <span class="min-w-0 flex-1 truncate">{p.title}</span>
-              {#if p.draft}<Badge variant="outline" class="text-muted-foreground text-[10px]">Entwurf</Badge>{/if}
+              {#if p.draft}<Badge variant="outline" class="text-muted-foreground text-meta">Entwurf</Badge>{/if}
             </Row>
           {/each}
         </div>

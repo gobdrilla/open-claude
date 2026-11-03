@@ -206,7 +206,7 @@
 {:else}
   <div class="flex h-full min-h-0 flex-col">
     {#if f.conflict}
-      <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-xs">
+      <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-ui">
         <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
         <span class="text-warning mr-auto">Datei wurde außerhalb {f.conflict === "deleted" ? "gelöscht" : "geändert"}.</span>
         <Button size="xs" variant="outline" onclick={() => reload(repo, path)}>Neu laden</Button>
@@ -215,13 +215,13 @@
       </div>
     {/if}
     {#if sv && lspKey && !s.lsp && !s.noLsp}
-      <div class="text-muted-foreground border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1 text-xs">
+      <div class="text-muted-foreground border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1 text-ui">
         <span class="mr-auto">Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.</span>
         <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>
         <Button size="xs" variant="ghost" onclick={() => allowLsp(repo, false)}>Nicht für dieses Projekt</Button>
       </div>
     {:else if lspKey && lsp.status[lspKey]}
-      <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-xs">
+      <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-ui">
         <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
         <span class="text-warning mr-auto line-clamp-3 break-words whitespace-pre-line">{lsp.status[lspKey]}</span>
         <Button size="xs" variant="outline" onclick={() => retry(repo, sv!.server)}>Erneut versuchen</Button>
@@ -229,7 +229,7 @@
       </div>
     {/if}
     {#if plain}
-      <div class="text-muted-foreground border-border/60 shrink-0 border-b px-3 py-1 text-xs">Große Datei: ohne Highlighting</div>
+      <div class="text-muted-foreground border-border/60 shrink-0 border-b px-3 py-1 text-ui">Große Datei: ohne Highlighting</div>
     {/if}
     <div bind:this={host} class="min-h-0 flex-1 overflow-hidden"></div>
   </div>

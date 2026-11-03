@@ -112,7 +112,7 @@
       <Dialog.Description>Lokal anlegen, optional auf GitHub/GitLab.</Dialog.Description>
     </Dialog.Header>
 
-    <fieldset disabled={busy} class="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2.5 text-xs">
+    <fieldset disabled={busy} class="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2.5 text-ui">
       <span class="text-muted-foreground pt-2">Name</span>
       <div>
         <Input
@@ -122,7 +122,7 @@
           onkeydown={(e) => e.key === "Enter" && doCreate()}
         />
         {#if name && !NAME.test(name)}
-          <p class="text-destructive mt-1 text-[11px]">Nur Buchstaben, Ziffern, . _ -</p>
+          <p class="text-destructive mt-1 text-meta">Nur Buchstaben, Ziffern, . _ -</p>
         {/if}
       </div>
 
@@ -138,7 +138,7 @@
           onchange={(v) => (lang = v)}
         />
         {#if missing}
-          <p class="text-muted-foreground mt-1 text-[11px]">{missing.tool} nicht gefunden: nur .gitignore + README</p>
+          <p class="text-muted-foreground mt-1 text-meta">{missing.tool} nicht gefunden: nur .gitignore + README</p>
         {/if}
       </div>
 
@@ -168,11 +168,11 @@
     </fieldset>
 
     {#if status}
-      <p class="text-muted-foreground flex items-center gap-1.5 text-xs">
+      <p class="text-muted-foreground flex items-center gap-1.5 text-ui">
         <LoaderCircleIcon class="size-3.5 animate-spin" />{status}
       </p>
     {/if}
-    {#if error}<p class="text-destructive text-xs whitespace-pre-wrap">{error}</p>{/if}
+    {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-1.5">
       <Button

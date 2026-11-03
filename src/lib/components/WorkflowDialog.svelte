@@ -109,7 +109,7 @@
       </Dialog.Description>
     </Dialog.Header>
 
-    <fieldset disabled={busy} class="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 text-xs">
+    <fieldset disabled={busy} class="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 text-ui">
       <div class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2">
         <span class="text-muted-foreground">Name</span>
         <div class="flex items-center gap-2">
@@ -172,19 +172,19 @@
 
       <details>
         <summary class="text-muted-foreground cursor-pointer">Skript-Vorschau</summary>
-        <pre class="bg-background/60 mt-1 max-h-64 overflow-auto rounded p-2 font-mono text-[11px]">{script}</pre>
+        <pre class="bg-background/60 mt-1 max-h-64 overflow-auto rounded p-2 font-mono text-meta">{script}</pre>
       </details>
     </fieldset>
 
     {#if tried && issues.length}
-      <ul class="text-warning max-h-24 list-inside list-disc overflow-y-auto text-xs">
+      <ul class="text-warning max-h-24 list-inside list-disc overflow-y-auto text-ui">
         {#each issues as m, i (i)}<li>{m}</li>{/each}
       </ul>
     {/if}
     {#if outdated}
-      <p class="text-muted-foreground text-xs">Das Skript wurde außerhalb geändert – Speichern erzeugt es neu.</p>
+      <p class="text-muted-foreground text-ui">Das Skript wurde außerhalb geändert – Speichern erzeugt es neu.</p>
     {/if}
-    {#if error}<p class="text-destructive text-xs whitespace-pre-wrap">{error}</p>{/if}
+    {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-2">
       <Button variant="ghost" size="sm" disabled={busy} onclick={() => (open = false)}>Abbrechen</Button>

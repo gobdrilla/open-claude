@@ -12,8 +12,8 @@
 
 	const DENSITY = {
 		default: "",
-		sm: "h-7 text-xs md:text-xs",
-		xs: "h-6 rounded px-1.5 py-0.5 text-[11px] md:text-[11px]",
+		sm: "h-7 text-ui md:text-ui",
+		xs: "h-6 rounded px-1.5 py-0.5 text-meta md:text-meta",
 	};
 
 	let {

@@ -130,11 +130,11 @@
 
     {#if login}
       <div class="flex flex-col gap-2">
-        <p class="text-sm">Anmeldung läuft – bitte im Browser bestätigen.</p>
+        <p class="text-body">Anmeldung läuft – bitte im Browser bestätigen.</p>
         {#if url}
           <Button variant="outline" size="sm" onclick={() => forge.openUrl(url)}>Anmeldeseite öffnen</Button>
         {/if}
-        <pre class="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded-lg p-2 font-mono text-[10px] whitespace-pre-wrap">{login.out.trim().split("\n").slice(-12).join("\n") || "Starte …"}</pre>
+        <pre class="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded-lg p-2 font-mono text-meta whitespace-pre-wrap">{login.out.trim().split("\n").slice(-12).join("\n") || "Starte …"}</pre>
         <div class="flex gap-2">
           <Input bind:value={code} placeholder="Code aus dem Browser (falls verlangt)" density="sm" class="font-mono" onkeydown={(e) => e.key === "Enter" && sendCode()} />
           <Button size="sm" variant="outline" disabled={!code.trim()} onclick={sendCode}>Senden</Button>
@@ -150,8 +150,8 @@
               {#if on}<CheckIcon class="size-3.5" />{:else}<UserIcon class="size-3.5" />{/if}
             </span>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-medium" title={a.email}>{a.email}</div>
-              <div class="text-muted-foreground truncate text-xs">{on ? "Aktiv" : a.org}</div>
+              <div class="truncate text-body font-medium" title={a.email}>{a.email}</div>
+              <div class="text-muted-foreground truncate text-ui">{on ? "Aktiv" : a.org}</div>
             </div>
             {#if on}
               <Button variant="ghost" size="sm" class="text-destructive" disabled={busy} onclick={logout}>Abmelden</Button>
@@ -161,11 +161,11 @@
             {/if}
           </li>
         {:else}
-          <li class="text-muted-foreground px-3 py-3 text-sm">{loading ? "Lese Konten …" : "Nicht angemeldet."}</li>
+          <li class="text-muted-foreground px-3 py-3 text-body">{loading ? "Lese Konten …" : "Nicht angemeldet."}</li>
         {/each}
       </ul>
     {/if}
-    {#if error}<p class="text-destructive text-xs whitespace-pre-line">{error}</p>{/if}
+    {#if error}<p class="text-destructive text-ui whitespace-pre-line">{error}</p>{/if}
     <div class="flex justify-end gap-2">
       {#if !login}
         <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={startLogin}>{current ? "Weiteres Konto anmelden" : "Anmelden"}</Button>

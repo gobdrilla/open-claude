@@ -47,7 +47,7 @@
         role="tab"
         aria-selected={value === t.id}
         title={t.title}
-        class="shrink-0 border-b-2 px-2 whitespace-nowrap {dense ? 'py-1 text-[11px]' : 'py-1.5'} {value === t.id
+        class="shrink-0 border-b-2 px-2 whitespace-nowrap {dense ? 'py-1 text-meta' : 'py-1.5'} {value === t.id
           ? 'border-primary text-foreground'
           : 'text-muted-foreground hover:text-foreground border-transparent'}"
         onclick={() => (value = t.id)}

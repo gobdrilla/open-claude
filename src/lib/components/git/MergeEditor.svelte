@@ -214,12 +214,12 @@
   </div>
 {/snippet}
 
-<div class="@container flex h-full min-h-0 flex-col text-xs">
+<div class="@container flex h-full min-h-0 flex-col text-ui">
   <!-- Immer einzeilig: Pfad kuerzt sich, bei wenig Platz (Containerbreite, nicht Fenster) nur Icons -->
   <div class="bg-chrome border-border flex items-center gap-1 border-b px-3 py-1.5">
-    <span class="mr-1 min-w-0 flex-1 truncate font-mono text-[11px]" title={path}>{path}</span>
+    <span class="mr-1 min-w-0 flex-1 truncate font-mono text-meta" title={path}>{path}</span>
     <span
-      class="shrink-0 font-mono text-[11px] whitespace-nowrap tabular-nums {open.length ? 'text-destructive' : 'text-primary'}"
+      class="shrink-0 font-mono text-meta whitespace-nowrap tabular-nums {open.length ? 'text-destructive' : 'text-primary'}"
       title={total ? `${total - open.length} von ${total} Konflikten gelöst` : undefined}
     >
       {#if total}{total - open.length}/{total}{:else}keine Konfliktmarker{/if}
@@ -234,7 +234,7 @@
     <!-- Ganze Datei von einer Seite: selten gebraucht, darum im Menue statt zwei breiter Knoepfe -->
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
-        class="hover:bg-accent flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] font-medium whitespace-nowrap disabled:opacity-50"
+        class="hover:bg-accent flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-meta font-medium whitespace-nowrap disabled:opacity-50"
         disabled={!conflict}
         >Ganze Datei <ChevronDownIcon class="size-3" /></DropdownMenu.Trigger
       >
@@ -311,7 +311,7 @@
             class="my-1 grid grid-cols-1 border-l-4 @3xl:grid-cols-3 {c ? 'border-primary/60' : 'border-destructive'} {n === current ? 'ring-primary/50 ring-1' : ''}"
           >
             <div class="min-w-0">
-              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-success/10 pr-1 pl-3 font-sans text-[11px]">
+              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-success/10 pr-1 pl-3 font-sans text-meta">
                 <span class="min-w-0 flex-1 truncate" title={sides.ours}>{sides.ours}</span>
                 <Button
                   variant="ghost"
@@ -327,7 +327,7 @@
             </div>
             <div class="border-border min-w-0 border-y @3xl:border-x @3xl:border-y-0">
               <div class="bg-secondary/60 flex h-6 items-center gap-1 px-2 font-sans">
-                <span class="min-w-0 flex-1 truncate text-[11px] font-semibold {c ? 'text-primary' : 'text-destructive'}">
+                <span class="min-w-0 flex-1 truncate text-meta font-semibold {c ? 'text-primary' : 'text-destructive'}">
                   Konflikt {n + 1}{c ? ` · ${label(c)}` : ""}
                 </span>
                 {#if c}
@@ -343,18 +343,18 @@
               {:else if c}
                 <div class="text-muted-foreground bg-primary/5 px-3">(leer)</div>
               {:else if p.base}
-                <div class="text-muted-foreground px-3 font-sans text-[11px]">Basis</div>
+                <div class="text-muted-foreground px-3 font-sans text-meta">Basis</div>
                 {#if p.base.length}
                   <pre class="text-muted-foreground min-h-5 overflow-x-auto px-3 opacity-60">{p.base.join("\n")}</pre>
                 {:else}
                   <div class="text-muted-foreground px-3 opacity-60">(leer)</div>
                 {/if}
               {:else}
-                <div class="text-muted-foreground px-3 font-sans text-[11px] italic">offen – Seite wählen</div>
+                <div class="text-muted-foreground px-3 font-sans text-meta italic">offen – Seite wählen</div>
               {/if}
             </div>
             <div class="min-w-0">
-              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-info/10 pr-3 pl-1 font-sans text-[11px]">
+              <div class="text-muted-foreground flex h-6 items-center gap-1 bg-info/10 pr-3 pl-1 font-sans text-meta">
                 <Button
                   variant="ghost"
                   size="2xs"
@@ -375,7 +375,7 @@
   {/if}
 
   <div class="bg-chrome border-border flex items-center justify-end gap-2 border-t px-3 py-1.5">
-    <span class="text-muted-foreground mr-auto min-w-0 truncate text-[11px] whitespace-nowrap">F7 / Umschalt+F7 navigieren · Strg+S speichern</span>
+    <span class="text-muted-foreground mr-auto min-w-0 truncate text-meta whitespace-nowrap">F7 / Umschalt+F7 navigieren · Strg+S speichern</span>
     <Button variant="ghost" size="sm" onclick={cancel}>Schließen</Button>
     <Button size="sm" disabled={!conflict || busy || (!editing && open.length > 0)} onclick={save}>
       Speichern &amp; als gelöst markieren

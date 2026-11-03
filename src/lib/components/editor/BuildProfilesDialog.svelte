@@ -40,11 +40,11 @@
       >
     </Dialog.Header>
 
-    <ul class="border-border divide-border divide-y rounded border text-xs">
+    <ul class="border-border divide-border divide-y rounded border text-ui">
       {#each [...BUILTIN, ...s.profiles] as p, i (p.name)}
         <li class="flex items-center gap-2 px-2.5 py-1.5">
           <span class="font-medium">{p.name}</span>
-          <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]" title={describe(p)}>{describe(p)}</span>
+          <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-meta" title={describe(p)}>{describe(p)}</span>
           {#if i >= BUILTIN.length}
             <IconButton
               size="md"
@@ -59,12 +59,12 @@
 
     <div class="flex flex-col gap-2">
       <Input bind:value={name} placeholder="Name, z. B. Profiling" density="sm" onkeydown={enter} />
-      <label class="flex items-center gap-2 text-xs">
+      <label class="flex items-center gap-2 text-ui">
         <Switch on={release} label="Release" onclick={() => (release = !release)} />
         Release
       </label>
       <Input bind:value={args} placeholder="Zusatzargumente (optional)" density="sm" class="font-mono" onkeydown={enter} />
-      {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
+      {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
       <Button size="sm" disabled={!name.trim() || !!error} onclick={add}>Profil anlegen</Button>
     </div>
   </Dialog.Content>

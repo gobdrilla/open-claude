@@ -277,7 +277,7 @@
 {#snippet refBadge(b: { label: string; kind: string })}
   <Badge
     variant="outline"
-    class="shrink-0 text-[10px] {b.kind === 'head'
+    class="shrink-0 text-meta {b.kind === 'head'
       ? 'text-primary border-primary/50 font-semibold'
       : b.kind === 'tag'
         ? 'text-warning border-warning/40'
@@ -325,15 +325,15 @@
         {#each refBadges(c.refs) as b (b.label + b.kind)}
           {@render refBadge(b)}
         {/each}
-        <span class="min-w-0 flex-1 truncate text-[11px]" title={c.subject}>{c.subject}</span>
+        <span class="min-w-0 flex-1 truncate text-meta" title={c.subject}>{c.subject}</span>
         <span
-          class="grid size-4 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white"
+          class="grid size-4 shrink-0 place-items-center rounded-full text-meta font-bold text-white"
           style="background:{PALETTE[hash(c.author) % PALETTE.length]}"
           title={c.author}>{initials(c.author)}</span
         >
-        <span class="text-muted-foreground hidden max-w-28 shrink-0 truncate text-[11px] sm:block">{c.author}</span>
+        <span class="text-muted-foreground hidden max-w-28 shrink-0 truncate text-meta sm:block">{c.author}</span>
         <span class="text-muted-foreground bg-secondary/60 shrink-0 rounded px-1 font-mono text-[10px]">{c.sha.slice(0, 7)}</span>
-        <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[10px] tabular-nums">{age(c.date)}</span>
+        <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-meta tabular-nums">{age(c.date)}</span>
       </Row>
     </ContextMenu.Trigger>
     <ContextMenu.Portal>
@@ -382,7 +382,7 @@
   </ContextMenu.Root>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class="flex items-center gap-2 px-2 py-1.5">
     <SearchIcon class="text-muted-foreground size-3.5 shrink-0" />
     <Input bind:value={query} placeholder="Verlauf durchsuchen" density="sm" class="rounded-full" />
@@ -407,7 +407,7 @@
           {@render commitRow(c, null)}
         {/each}
         {#if loading}
-          <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Durchsucht {skip} Commits …</p>
+          <p class="text-muted-foreground px-2 py-2 text-center text-meta">Durchsucht {skip} Commits …</p>
         {:else if !done}
           <TextButton
             size="sm"
@@ -417,16 +417,16 @@
             {filtered.length ? "" : "Keine Treffer. "}Nur die letzten {skip} Commits durchsucht – weiter suchen
           </TextButton>
         {:else if filtered.length === 0}
-          <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Keine Treffer.</p>
+          <p class="text-muted-foreground px-2 py-4 text-center text-meta">Keine Treffer.</p>
         {/if}
       {:else}
         {#each commits as c, i (c.sha)}
           {@render commitRow(c, rows[i])}
         {/each}
         {#if loading}
-          <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
+          <p class="text-muted-foreground px-2 py-2 text-center text-meta">Lädt …</p>
         {:else if done && !commits.length}
-          <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Noch keine Commits.</p>
+          <p class="text-muted-foreground px-2 py-4 text-center text-meta">Noch keine Commits.</p>
         {/if}
       {/if}
     </div>
@@ -435,13 +435,13 @@
   <Splitter bind:size={detailH} axis="y" min={80} invert key="git.detail" />
   <div class="border-border min-h-0 overflow-y-auto border-t" style="height:{detailH}px">
     {#if detailLoading}
-      <p class="text-muted-foreground px-2 py-2 text-[11px]">Lädt …</p>
+      <p class="text-muted-foreground px-2 py-2 text-meta">Lädt …</p>
     {:else if detailError}
-      <p class="text-destructive px-2 py-2 text-[11px]">{detailError}</p>
+      <p class="text-destructive px-2 py-2 text-meta">{detailError}</p>
     {:else if detail}
       <div class="space-y-1 px-3 pt-2 pb-1.5">
-        <p class="truncate text-xs font-medium" title={detail.commit.subject}>{detail.commit.subject}</p>
-        <div class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px]">
+        <p class="truncate text-ui font-medium" title={detail.commit.subject}>{detail.commit.subject}</p>
+        <div class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta">
           <TextButton class="font-mono" title="SHA kopieren" onclick={() => copySha(detail!.commit.sha)}
             >{detail.commit.sha.slice(0, 8)}<CopyIcon class="size-2.5" /></TextButton
           >
@@ -483,10 +483,10 @@
             >
               <span class="flex min-w-0 items-center gap-1.5">
                 <ic.icon class="size-3.5 shrink-0 {ic.tint}" />
-                <span class="min-w-0 flex-1 truncate text-[11px] font-medium">{base(f.newPath)}</span>
-                <span class="shrink-0 font-mono text-[10px] font-semibold {tone}">{label}</span>
+                <span class="min-w-0 flex-1 truncate text-meta font-medium">{base(f.newPath)}</span>
+                <span class="shrink-0 font-mono text-meta font-semibold {tone}">{label}</span>
               </span>
-              <span class="flex min-w-0 items-center gap-2 pl-5 text-[10px]">
+              <span class="flex min-w-0 items-center gap-2 pl-5 text-meta">
                 <span class="text-muted-foreground min-w-0 flex-1 truncate">{dirname(f.newPath)}</span>
                 {#if f.binary}<span class="text-muted-foreground shrink-0">binär</span>
                 {:else}<span class="shrink-0 font-mono tabular-nums"
@@ -499,7 +499,7 @@
         </div>
       {/if}
     {:else}
-      <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Commit wählen.</p>
+      <p class="text-muted-foreground px-2 py-4 text-center text-meta">Commit wählen.</p>
     {/if}
   </div>
 </div>
@@ -535,12 +535,12 @@
 >
   {#if cur && shown !== null}
     {@const [label, tone] = STATUS[cur.status]}
-    <span class="shrink-0 font-mono text-xs font-semibold {tone}">{label}</span>
-    <span class="shrink-0 font-mono text-xs tabular-nums">
+    <span class="shrink-0 font-mono text-ui font-semibold {tone}">{label}</span>
+    <span class="shrink-0 font-mono text-ui tabular-nums">
       {#if stats[shown].a}<span class="text-success">+{stats[shown].a}</span>{/if}
       {#if stats[shown].d}<span class="text-destructive">−{stats[shown].d}</span>{/if}
     </span>
-    <span class="text-muted-foreground shrink-0 text-xs font-normal tabular-nums">{shown + 1} / {files.length}</span>
+    <span class="text-muted-foreground shrink-0 text-ui font-normal tabular-nums">{shown + 1} / {files.length}</span>
   {/if}
   {#if reviewCount(repo)}
     <Button size="xs" class="shrink-0" onclick={() => sendReview(repo)}>Review an Claude ({reviewCount(repo)})</Button>

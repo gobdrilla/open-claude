@@ -482,7 +482,7 @@
   }
 </script>
 
-<div class="bg-card glow flex h-full flex-col overflow-hidden rounded-xl text-xs ring-1 ring-foreground/5">
+<div class="bg-card glow flex h-full flex-col overflow-hidden rounded-xl text-ui ring-1 ring-foreground/5">
   <Tabs
     bind:value={tab}
     tabs={[
@@ -495,7 +495,7 @@
 
   {#if inFocus}
     <!-- Ausserhalb des Scrollbereichs: sticky lag dort ueber breitem Inhalt. -->
-    <div class="border-border shrink-0 border-b px-2 py-1.5 text-xs">
+    <div class="border-border shrink-0 border-b px-2 py-1.5 text-ui">
       <TextButton class="flex max-w-full gap-0.5" onclick={() => (focus = null)}>
         <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate" title={focused?.r.name}>{focused?.r.name ?? "Zurück"}</span>
       </TextButton>
@@ -503,7 +503,7 @@
     </div>
   {/if}
 
-  <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-xs">
+  <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-ui">
     {#if tab === "work" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
       <section class="border-border/60 mb-2 rounded-lg border">
@@ -516,9 +516,9 @@
             <span class="max-w-32 min-w-10 truncate font-medium" title={x.f.path}>{x.name}</span>
             <!-- Badges werden bei Platzmangel abgeschnitten, die Knoepfe rechts nie. -->
             <span class="flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
-              <span class="text-muted-foreground shrink-0 text-[10px]">{x.f.scope === "user" ? "Global" : "Projekt"}</span>
+              <span class="text-muted-foreground shrink-0 text-meta">{x.f.scope === "user" ? "Global" : "Projekt"}</span>
               {#if !x.builder}<span class="bg-secondary shrink-0 rounded px-1 text-[10px]" title="Freies Skript: nur starten und löschen">Skript</span>{/if}
-              {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-[10px]" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
+              {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-meta" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
             </span>
             <span class="text-muted-foreground min-w-0 flex-1 truncate" title={x.description}>{x.description}</span>
             <Button
@@ -639,7 +639,7 @@
               <div class="flex items-center gap-2">
                 <span class={color} title={text}>{icon}</span>
                 <span class="max-w-24 min-w-10 shrink-0 truncate" title={a.tool}>{a.tool.replace(/^mcp__.*?__/, "")}</span>
-                <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]" title={a.target}>{a.target}</span>
+                <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-meta" title={a.target}>{a.target}</span>
               </div>
             {/each}
           </section>
@@ -671,7 +671,7 @@
       {#each [...(data.prompts ?? [])].reverse() as p, i (i)}
         <Row density="roomy" text="md" class="block" title={p.text} aria-label="In claudes Transkript springen: {p.text.slice(0, 80)}" onclick={() => jump(p)}>
           <div class="line-clamp-2 break-words">{p.text}</div>
-          <div class="text-muted-foreground text-[10px]">{ago(p.at)}</div>
+          <div class="text-muted-foreground text-meta">{ago(p.at)}</div>
         </Row>
       {:else}
         <Empty>Noch keine Prompts in dieser Session.</Empty>
@@ -723,7 +723,7 @@
 
   <!-- Status unten statt in der Tab-Leiste: dort nahm er den Tabs bei schmalem Panel den Platz. -->
   {#if claudeState || live}
-    <div class="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 truncate border-t px-2.5 py-1 text-[11px] whitespace-nowrap">
+    <div class="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 truncate border-t px-2.5 py-1 text-meta whitespace-nowrap">
       {#if claudeState}
         {@const [i, c, t] = claudeState}
         <span class={c}>{i}</span><span class="text-foreground truncate">{t}</span>
@@ -783,7 +783,7 @@
             {#if e.kind === "prompt"}
               <details class="bg-secondary/50 rounded-md px-2 py-1">
                 <summary class="text-muted-foreground cursor-pointer">Auftrag</summary>
-                <pre class="mt-1 max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
+                <pre class="mt-1 max-h-64 overflow-auto font-mono text-meta whitespace-pre-wrap">{e.body}</pre>
               </details>
             {:else}
               {#if i === fin}<div class="{resultHead} mt-2">Ergebnis</div>{/if}
@@ -802,7 +802,7 @@
                   ev.preventDefault();
                   openGroups[i] = !op;
                 }}
-                class="text-muted-foreground hover:bg-accent/40 flex cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px]">
+                class="text-muted-foreground hover:bg-accent/40 flex cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-meta">
                 <ChevronRightIcon class="size-3 shrink-0 group-open/tools:rotate-90" />
                 <span class="text-foreground shrink-0 tabular-nums">{c.tools.length} Tools</span>
                 {#if err}<span class="text-destructive shrink-0">{err} ✕</span>{/if}
@@ -837,17 +837,17 @@
         ? ["◐", "text-primary animate-pulse", "läuft"]
         : ["⊘", "text-muted-foreground", "ohne Ergebnis"]}
   <details class="hover:bg-accent/40 open:bg-accent/30 rounded-md">
-    <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-[11px]">
+    <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-meta">
       <span class="text-muted-foreground shrink-0 tabular-nums">{e.at ? clock(e.at) : ""}</span>
       <span class="shrink-0 {sc}" title={st}>{si}</span>
       <span class="text-foreground shrink-0">{e.tool}</span>
       <span class="text-muted-foreground min-w-0 truncate" title={e.summary}>{e.summary}</span>
     </summary>
     <div class="space-y-1 px-1 pb-1.5">
-      <pre class="bg-background/60 max-h-48 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
+      <pre class="bg-background/60 max-h-48 overflow-auto rounded p-1.5 font-mono text-meta whitespace-pre-wrap">{e.body}</pre>
       {#if e.output !== null}
         <pre
-          class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap {e.error
+          class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-meta whitespace-pre-wrap {e.error
             ? 'text-destructive'
             : ''}">{e.output || "(leer)"}</pre>
       {/if}
@@ -908,13 +908,13 @@
                 {#if a.id}<ChevronRightIcon class="text-muted-foreground size-3.5 shrink-0 opacity-0 group-hover/agent:opacity-100" />{/if}
               </div>
               {#if last}
-                <div class="text-muted-foreground truncate pl-5 font-mono text-[11px]" title="{last.tool} {last.summary}">{last.tool} {last.summary}</div>
+                <div class="text-muted-foreground truncate pl-5 font-mono text-meta" title="{last.tool} {last.summary}">{last.tool} {last.summary}</div>
               {/if}
             </Row>
             {#if a.prompt}
               <!-- Eigener Button neben dem Agent-Button (nicht darin): klappt nur den Prompt -->
               <TextButton
-                size="xs"
+                size="sm"
                 class="shrink-0 gap-0.5 px-1.5 py-1"
                 aria-expanded={!!openPrompts[pk]}
                 onclick={() => (openPrompts[pk] = !openPrompts[pk])}
@@ -945,13 +945,13 @@
 <WorkflowDialog bind:open={wfOpen} {cwd} entry={wfEntry} taken={templates} onsaved={loadTemplates} />
 
 <Dialog.Root open={!!bigRun} onOpenChange={(o) => !o && ((big = null), (focus = null), (log = null))}>
-  <Dialog.Content class="flex h-[85vh] flex-col gap-3 text-xs sm:max-w-[min(92vw,1400px)]">
+  <Dialog.Content class="flex h-[85vh] flex-col gap-3 text-ui sm:max-w-[min(92vw,1400px)]">
     {#if bigRun}
       {@const r = bigRun}
       {@const [icon, color, text] = status(r.status)}
       {@const cnt = (k: string) => r.agents.filter((a) => (k === "error" ? failed(a) : a.state === k)).length}
       <div class="pr-8">
-        <Dialog.Title class="flex items-center gap-2 text-sm">
+        <Dialog.Title class="flex items-center gap-2 text-title">
           <span class={color} title={text}>{icon}</span><span class="min-w-0 truncate" title={r.name}>{r.name}</span>
         </Dialog.Title>
         <div class="text-muted-foreground mt-0.5 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)} · {cnt("done")}/{r.agents.length} Agents fertig</div>
@@ -1011,7 +1011,7 @@
           ><ChevronRightIcon class="size-5" /></Button
         >
       </div>
-      <div class="text-muted-foreground flex items-center gap-2 text-xs">
+      <div class="text-muted-foreground flex items-center gap-2 text-ui">
         <span class="min-w-0 flex-1 truncate tabular-nums"
           >{index + 1} / {ordered.length} · {current.label} · {current.at ? clock(current.at) : ""}</span
         >

@@ -105,7 +105,7 @@
     style="transform: translate({x}px, {y}px) scale({scale})"
   />
   {#if scale > 1}
-    <span class="bg-background/80 text-muted-foreground pointer-events-none absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-[11px] tabular-nums"
+    <span class="bg-background/80 text-muted-foreground pointer-events-none absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-meta tabular-nums"
       >{Math.round(scale * 100)}%</span
     >
   {/if}

@@ -31,7 +31,7 @@
   <div
     transition:slide={{ duration: 120 }}
     role="status"
-    class="flex items-start gap-2 border-b px-3 py-1 text-[11px] {kind === 'error'
+    class="flex items-start gap-2 border-b px-3 py-1 text-meta {kind === 'error'
       ? 'bg-destructive/10 text-destructive border-destructive/20'
       : kind === 'ok'
         ? 'bg-success/10 text-success border-success/20'

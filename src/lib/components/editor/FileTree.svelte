@@ -131,9 +131,9 @@
   }
 </script>
 
-<div class="flex h-full flex-col text-xs">
+<div class="flex h-full flex-col text-ui">
   <div class="{paneBar} pl-2.5">
-    <span class="text-foreground min-w-0 flex-1 truncate text-[11px] font-semibold" title={repo}
+    <span class="text-foreground min-w-0 flex-1 truncate text-meta font-semibold" title={repo}
       >{repo.split(/[\\/]/).pop()}</span
     >
     <IconButton label="Neue Datei" title="Neue Datei im Projektordner" onclick={() => create("", false)}

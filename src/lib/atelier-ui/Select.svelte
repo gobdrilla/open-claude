@@ -50,7 +50,7 @@
 >
   <Select.Trigger
     class={cn(
-      "bg-secondary border-border hover:bg-accent/50 focus-visible:ring-ring/50 flex h-6 min-w-0 items-center gap-1 rounded border px-1.5 text-xs outline-none focus-visible:ring-2 disabled:opacity-50",
+      "bg-secondary border-border hover:bg-accent/50 focus-visible:ring-ring/50 flex h-6 min-w-0 items-center gap-1 rounded border px-1.5 text-ui outline-none focus-visible:ring-2 disabled:opacity-50",
       className,
     )}
     {title}
@@ -65,7 +65,7 @@
       {#each all as g, i (i)}
         {#if g.options.length}
           <Select.Group>
-            {#if g.label}<Select.GroupHeading class="text-muted-foreground px-2 pt-1.5 pb-0.5 text-[10px] uppercase">{g.label}</Select.GroupHeading>{/if}
+            {#if g.label}<Select.GroupHeading class="text-muted-foreground px-2 pt-1.5 pb-0.5 text-meta uppercase">{g.label}</Select.GroupHeading>{/if}
             {#each g.options as [label, v] (v)}
               <Select.Item value={key(v)} {label} class={menuItem}>
                 {#snippet children({ selected })}

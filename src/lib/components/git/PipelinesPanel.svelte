@@ -229,7 +229,7 @@
   </IconButton>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class="border-border flex items-center gap-2 border-b px-2 py-1.5">
     <!-- Ohne ausgecheckten Branch filtert "Aktueller Branch" nichts (filter()), darum dann "Alle" markiert -->
     <Segmented
@@ -240,7 +240,7 @@
       ]}
       onchange={(v) => (onlyBranch = v)}
     />
-    <span class="text-muted-foreground min-w-0 flex-1 truncate text-[11px]">
+    <span class="text-muted-foreground min-w-0 flex-1 truncate text-meta">
       {kind ? label : ""}{active && visible ? " · aktualisiert alle 10 s" : ""}
     </span>
     <RefreshButton {loading} onclick={reload} />
@@ -250,9 +250,9 @@
 
   <div class="min-h-0 flex-1 overflow-y-auto">
     {#if !loading && !originUrl && !error}
-      <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Kein Remote „origin“.</p>
+      <p class="text-muted-foreground px-2 py-4 text-center text-meta">Kein Remote „origin“.</p>
     {:else if noAccount && originUrl}
-      <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">
+      <p class="text-muted-foreground px-2 py-4 text-center text-meta">
         Kein GitHub-/GitLab-Konto für {hostOf(originUrl)} – unter Git-Konten anmelden.
       </p>
     {:else}
@@ -269,15 +269,15 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="shrink-0 font-medium">{r.name}</span>
-              <span class="min-w-0 truncate text-[11px]" title={r.title}>{r.title}</span>
+              <span class="min-w-0 truncate text-meta" title={r.title}>{r.title}</span>
             </div>
-            <div class="text-muted-foreground flex gap-2 truncate text-[10px]">
+            <div class="text-muted-foreground flex gap-2 truncate text-meta">
               <span class="truncate" title={r.branch}>{r.branch}</span>
               <span>{r.event}</span>
               <span class="font-mono">{r.sha.slice(0, 7)}</span>
             </div>
           </div>
-          <span class="text-muted-foreground shrink-0 text-right text-[10px] tabular-nums" title={new Date(r.created_at).toLocaleString("de-DE")}>
+          <span class="text-muted-foreground shrink-0 text-right text-meta tabular-nums" title={new Date(r.created_at).toLocaleString("de-DE")}>
             {#if r.duration_s != null}Dauer {duration(r.duration_s)} · {/if}{ago(r.created_at)}
           </span>
           {#if pending(r.status)}
@@ -295,15 +295,15 @@
         {#if open[r.id]}
           <div class="border-border ml-5 border-l py-0.5">
             {#if jobErr[r.id]}
-              <p class="text-destructive px-2 py-1 text-[11px]">{jobErr[r.id]}</p>
+              <p class="text-destructive px-2 py-1 text-meta">{jobErr[r.id]}</p>
             {/if}
             {#if jobs[r.id]}
               {#each jobs[r.id] as j (j.id)}
                 <div class="flex items-center gap-2 px-2 py-0.5">
                   {@render statusIcon(j.status)}
-                  {#if j.stage}<span class="text-muted-foreground shrink-0 text-[10px]">{j.stage}</span>{/if}
-                  <span class="min-w-0 flex-1 truncate text-[11px]" title={j.name}>{j.name}</span>
-                  <span class="text-muted-foreground shrink-0 text-[10px] tabular-nums">{#if j.duration_s != null}Dauer {duration(j.duration_s)}{/if}</span>
+                  {#if j.stage}<span class="text-muted-foreground shrink-0 text-meta">{j.stage}</span>{/if}
+                  <span class="min-w-0 flex-1 truncate text-meta" title={j.name}>{j.name}</span>
+                  <span class="text-muted-foreground shrink-0 text-meta tabular-nums">{#if j.duration_s != null}Dauer {duration(j.duration_s)}{/if}</span>
                   {#if pending(j.status)}
                     {#if kind === "gitlab"}
                       {@render action("Job abbrechen", () => act(r.id, j.id, true, "cancel"), SquareIcon, `true:${j.id}`)}
@@ -314,20 +314,20 @@
                   {@render browser(j.web_url)}
                 </div>
               {:else}
-                <p class="text-muted-foreground px-2 py-1 text-[11px]">Keine Jobs.</p>
+                <p class="text-muted-foreground px-2 py-1 text-meta">Keine Jobs.</p>
               {/each}
             {:else if !jobErr[r.id]}
-              <p class="text-muted-foreground px-2 py-1 text-[11px]">Lädt …</p>
+              <p class="text-muted-foreground px-2 py-1 text-meta">Lädt …</p>
             {/if}
           </div>
         {/if}
       {/each}
       {#if loading}
-        <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
+        <p class="text-muted-foreground px-2 py-2 text-center text-meta">Lädt …</p>
       {:else if !done && runs.length}
         <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
       {:else if !runs.length && !error}
-        <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Keine {label}.</p>
+        <p class="text-muted-foreground px-2 py-4 text-center text-meta">Keine {label}.</p>
       {/if}
     {/if}
   </div>

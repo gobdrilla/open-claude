@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import { tv } from "tailwind-variants";
+  import { twMergeConfig } from "$lib/utils.js";
 
   // Unobtrusive text action inline or in headers ("+ Neu", "Alle anzeigen", links).
   export const textButton = tv({
@@ -15,13 +16,13 @@
         // Keep the surrounding color (e.g. an error notice).
         inherit: "text-inherit hover:opacity-80",
       },
-      size: { inherit: "", xs: "text-[10px]", sm: "text-[11px]" },
+      size: { inherit: "", sm: "text-meta" },
       underline: { true: "underline-offset-2 hover:underline" },
       // Full width, centered: "load more" below lists.
       block: { true: "w-full justify-center px-2 py-2" },
     },
     defaultVariants: { tone: "muted", size: "inherit" },
-  });
+  }, { twMergeConfig });
 </script>
 
 <script lang="ts">
@@ -39,7 +40,7 @@
     ...rest
   }: HTMLButtonAttributes & {
     tone?: "muted" | "primary" | "link" | "danger" | "plain" | "inherit";
-    size?: "inherit" | "xs" | "sm";
+    size?: "inherit" | "sm";
     underline?: boolean;
     block?: boolean;
     ref?: HTMLButtonElement | null;

@@ -26,7 +26,7 @@
 
 <div class="flex h-full min-h-0 flex-col">
 {#if scan?.busy || scan?.capped}
-  <p class="text-muted-foreground flex items-center gap-1.5 px-2 py-1 text-[11px]" role="status">
+  <p class="text-muted-foreground flex items-center gap-1.5 px-2 py-1 text-meta" role="status">
     {#if scan.busy}<LoaderIcon class="size-3 animate-spin" /> Prüfe das ganze Projekt …
     {:else}Nur die ersten {SCAN_MAX} Dateien geprüft, {scan.capped} weitere nicht.{/if}
   </p>
@@ -41,7 +41,7 @@
 {:else if !list.length}
   <Empty icon={CircleAlertIcon}>{scan?.busy ? "Noch keine Probleme gefunden." : "Keine Probleme im Projekt."}</Empty>
 {:else}
-  <ul class="min-h-0 flex-1 overflow-y-auto py-0.5 text-xs" aria-label="Probleme">
+  <ul class="min-h-0 flex-1 overflow-y-auto py-0.5 text-ui" aria-label="Probleme">
     {#each list as { path, d }, i (i)}
       {@const line = d.range.start.line}
       <li class="group hover:bg-accent flex items-center gap-1.5 pr-1 pl-2">
@@ -50,7 +50,7 @@
         {:else}<InfoIcon class="text-muted-foreground size-3.5 shrink-0" />{/if}
         <TextButton tone="plain" class="min-w-0 flex-1 items-baseline gap-2 py-0.5" title={d.message} onclick={() => open(repo, path, line + 1)}>
           <span class="truncate">{d.message}</span>
-          <span class="text-muted-foreground shrink-0 font-mono text-[10px]">{path}:{line + 1}</span>
+          <span class="text-muted-foreground shrink-0 font-mono text-meta">{path}:{line + 1}</span>
         </TextButton>
         <Button
           variant="quiet"

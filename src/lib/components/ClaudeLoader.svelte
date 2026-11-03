@@ -12,7 +12,7 @@
 </script>
 
 <div out:fade={{ duration: 250 }} class="pointer-events-none absolute inset-0 grid place-items-center">
-  <p class="text-muted-foreground font-mono text-xs">
+  <p class="text-muted-foreground font-mono text-ui">
     Claude startet<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
   </p>
   <div class="absolute inset-x-6 bottom-8 h-10 overflow-hidden">

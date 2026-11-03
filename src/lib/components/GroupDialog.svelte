@@ -65,10 +65,10 @@
       {#each missing as p (p)}
         <li class="flex items-center gap-2.5 px-3 py-1.5">
           <div class="min-w-0 flex-1">
-            <div class="text-destructive truncate text-sm">nicht gefunden{paths[0] === p ? " (Haupt-Repo)" : ""}</div>
-            <div class="text-muted-foreground truncate font-mono text-[10px]" title={p}>{p}</div>
+            <div class="text-destructive truncate text-body">nicht gefunden{paths[0] === p ? " (Haupt-Repo)" : ""}</div>
+            <div class="text-muted-foreground truncate font-mono text-meta" title={p}>{p}</div>
           </div>
-          <TextButton tone="danger" size="xs" onclick={() => toggle(p)}>Entfernen</TextButton>
+          <TextButton tone="danger" size="sm" onclick={() => toggle(p)}>Entfernen</TextButton>
         </li>
       {/each}
       {#each repos as r (r.path)}
@@ -76,19 +76,19 @@
         <li class="flex items-center gap-2.5 px-3 py-1.5">
           <Checkbox checked={on} onchange={() => toggle(r.path)} aria-label="{label(r)} in die Gruppe" />
           <div class="min-w-0 flex-1">
-            <div class="truncate text-sm" title={label(r)}>{label(r)}</div>
-            <div class="text-muted-foreground truncate font-mono text-[10px]" title={r.path}>{r.rel}</div>
+            <div class="truncate text-body" title={label(r)}>{label(r)}</div>
+            <div class="text-muted-foreground truncate font-mono text-meta" title={r.path}>{r.rel}</div>
           </div>
           {#if on && paths[0] === r.path}
             <span class="bg-primary/15 text-primary rounded-full px-2 py-0.5 text-[10px]">Haupt-Repo</span>
           {:else if on}
-            <TextButton size="xs" onclick={() => makeMain(r.path)}>als Haupt-Repo</TextButton>
+            <TextButton size="sm" onclick={() => makeMain(r.path)}>als Haupt-Repo</TextButton>
           {/if}
         </li>
       {/each}
     </ul>
     <div class="flex items-center justify-end gap-2">
-      <span class="text-muted-foreground flex-1 text-xs">{error}</span>
+      <span class="text-muted-foreground flex-1 text-ui">{error}</span>
       <Button variant="ghost" size="sm" onclick={oncancel}>Abbrechen</Button>
       <Button size="sm" disabled={!!error} onclick={save}>Speichern</Button>
     </div>

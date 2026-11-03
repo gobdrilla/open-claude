@@ -58,14 +58,14 @@
   <Row
     variant="card"
     selected={mode === id}
-    class="flex-row items-start gap-3 p-3 text-sm"
+    class="flex-row items-start gap-3 p-3 text-body"
     aria-pressed={mode === id}
     onclick={() => (mode = id)}
   >
     <Icon class="mt-0.5 size-4 shrink-0 {mode === id ? 'text-primary' : 'text-muted-foreground'}" />
     <span class="min-w-0">
-      <span class="block text-sm font-medium">{title}</span>
-      <span class="text-muted-foreground block text-xs">{text}</span>
+      <span class="block text-body font-medium">{title}</span>
+      <span class="text-muted-foreground block text-ui">{text}</span>
     </span>
   </Row>
 {/snippet}
@@ -88,7 +88,7 @@
         <!-- Enter im Pfadfeld uebernimmt; kein form, sonst waere der Ordner-Knopf ein Submit. -->
         <div class="grid gap-1.5 pl-1" role="presentation" onkeydown={(e) => e.key === "Enter" && submit()}>
           <FolderField bind:value={path} oninput={() => {}} onbrowse={browse} />
-          <p class="min-h-4 text-[11px] {error ? 'text-destructive' : 'text-muted-foreground'}">
+          <p class="min-h-4 text-meta {error ? 'text-destructive' : 'text-muted-foreground'}">
             {#if error}{error}
             {:else if !path.trim()}Ordner wählen oder Pfad eingeben.
             {:else if found === null}Suche Repos …

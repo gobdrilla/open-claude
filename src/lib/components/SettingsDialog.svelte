@@ -140,7 +140,7 @@
                 <IconButton size="text" disabled={zoom <= ZOOM_MIN} onclick={() => onzoom(-1)} label="Verkleinern" title="Verkleinern ({mod} −)"
                   >−</IconButton
                 >
-                <TextButton tone="plain" size="xs" class="w-11 justify-center py-0.5 tabular-nums" onclick={() => onzoom(0)} title="Zurücksetzen ({mod} 0)"
+                <TextButton tone="plain" size="sm" class="w-11 justify-center py-0.5 tabular-nums" onclick={() => onzoom(0)} title="Zurücksetzen ({mod} 0)"
                   >{zoom} %</TextButton
                 >
                 <IconButton size="text" disabled={zoom >= ZOOM_MAX} onclick={() => onzoom(1)} label="Vergrößern" title="Vergrößern ({mod} +)"

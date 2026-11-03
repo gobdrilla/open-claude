@@ -299,7 +299,7 @@
   </DropdownMenu.Root>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col gap-2 p-2 text-xs">
+<div class="flex h-full min-h-0 flex-col gap-2 p-2 text-ui">
   <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex items-center gap-0.5 px-2 py-1.5">
     {#if status}
       <div class="mr-3 flex min-w-0 items-center gap-2.5" title={status.upstream ?? "Kein Upstream"}>
@@ -313,7 +313,7 @@
           {/if}
         </div>
         <div class="flex min-w-0 flex-col leading-tight">
-          <span class="text-muted-foreground flex min-w-0 items-center gap-1 truncate text-[10px]">
+          <span class="text-muted-foreground flex min-w-0 items-center gap-1 truncate text-meta">
             {#each [repo.split(/[\\/]/).filter(Boolean).pop(), ...trail] as name, i (i)}
               {#if i}<span class="opacity-60">›</span>{/if}
               {#if i < trail.length}
@@ -324,11 +324,11 @@
             {/each}
           </span>
           <span class="flex items-center gap-1.5">
-            <span class="truncate font-mono text-[12px] font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
+            <span class="truncate font-mono text-ui font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
             {#if status.ahead}<span class="bg-primary/15 text-primary rounded-full px-1.5 font-mono text-[10px]">↑{status.ahead}</span>{/if}
             {#if status.behind}<span class="bg-warning/15 text-warning rounded-full px-1.5 font-mono text-[10px]">↓{status.behind}</span>{/if}
             {#if status.upstream && !status.ahead && !status.behind}
-              <span class="text-success flex items-center gap-1 text-[10px]"><span class="bg-success size-1.5 rounded-full"></span>synchron</span>
+              <span class="text-success flex items-center gap-1 text-meta"><span class="bg-success size-1.5 rounded-full"></span>synchron</span>
             {/if}
           </span>
         </div>
@@ -354,7 +354,7 @@
     {#if acct}
       <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
         <DropdownMenu.Trigger
-          class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px]"
+          class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 items-center gap-1.5 rounded-full px-2.5 text-meta"
           title={acct.name || acct.email ? `Commit als: ${acct.name ?? "?"} <${acct.email ?? "?"}>` : "Keine Commit-Identität gesetzt"}
         >
           {#if acctFor?.avatar}
@@ -381,7 +381,7 @@
                 onSelect={() => setAccount(accountId(a))}
               >
                 <CheckIcon class="size-3 {acct.account === accountId(a) ? '' : 'invisible'}" />
-                {a.user}<span class="text-muted-foreground font-mono text-[10px]">@{a.host}</span>
+                {a.user}<span class="text-muted-foreground font-mono text-meta">@{a.host}</span>
               </DropdownMenu.Item>
             {/each}
             <DropdownMenu.Item
@@ -400,7 +400,7 @@
       </DropdownMenu.Root>
     {/if}
     {#if busy}
-      <span class="text-muted-foreground mr-2 flex items-center gap-1.5 text-[11px]" role="status">
+      <span class="text-muted-foreground mr-2 flex items-center gap-1.5 text-meta" role="status">
         <LoaderCircleIcon class="size-3.5 animate-spin" />{busy} läuft …
       </span>
     {/if}

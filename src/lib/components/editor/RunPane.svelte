@@ -103,7 +103,7 @@
   });
 </script>
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class={paneBar}>
     {#if cur}
       <span
@@ -113,8 +113,8 @@
             ? 'bg-destructive'
             : 'bg-muted-foreground'}"
       ></span>
-      <span class="truncate font-mono text-[11px]" title={cur.cfg.label}>{cur.cfg.label}</span>
-      <span class="text-muted-foreground shrink-0 text-[11px]" role="status">
+      <span class="truncate font-mono text-meta" title={cur.cfg.label}>{cur.cfg.label}</span>
+      <span class="text-muted-foreground shrink-0 text-meta" role="status">
         {#if cur.state === "running"}
           läuft {clock(now - cur.started)}
         {:else if cur.state === "idle"}

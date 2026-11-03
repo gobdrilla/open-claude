@@ -85,7 +85,7 @@
 {/snippet}
 
 {#snippet origin(source: Source, reset: () => void)}
-  <span class="w-16 shrink-0 text-right text-[10px] {source === 'project' ? 'text-primary' : 'text-muted-foreground'}"
+  <span class="w-16 shrink-0 text-right text-meta {source === 'project' ? 'text-primary' : 'text-muted-foreground'}"
     >{ORIGIN[source]}</span
   >
   <IconButton
@@ -102,11 +102,11 @@
   <li class="flex items-center gap-3 px-3 py-1.5 {dim ? 'opacity-50' : ''}">
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
-        <span class="truncate font-mono text-[11px] font-semibold">{sk.plugin ? sk.name : sk.key}</span>
-        <span class="text-muted-foreground border-border rounded border px-1 text-[10px]">{SOURCE[sk.source]}</span>
-        {#if v.value !== "on" && v.value !== "off"}<span class="text-muted-foreground text-[10px]">{v.value}</span>{/if}
+        <span class="truncate font-mono text-meta font-semibold">{sk.plugin ? sk.name : sk.key}</span>
+        <span class="text-muted-foreground border-border rounded border px-1 text-meta">{SOURCE[sk.source]}</span>
+        {#if v.value !== "on" && v.value !== "off"}<span class="text-muted-foreground text-meta">{v.value}</span>{/if}
       </div>
-      {#if sk.description}<div class="text-muted-foreground truncate text-[11px]" title={sk.description}>{sk.description}</div>{/if}
+      {#if sk.description}<div class="text-muted-foreground truncate text-meta" title={sk.description}>{sk.description}</div>{/if}
     </div>
     {@render origin(v.source, () => onproject(adjust(ps, "skill", sk.key)))}
     <Switch on={v.value !== "off"} label={sk.key} onclick={() => onproject(adjust(ps, "skill", sk.key, v.value === "off" ? "on" : "off"))} />
@@ -116,7 +116,7 @@
 {#if mode === "plugins"}
   <PluginsPanel {repo} lead={modeSwitch} bind:busy={pluginsBusy} />
 {:else}
-  <div class="flex h-full min-h-0 flex-col text-xs">
+  <div class="flex h-full min-h-0 flex-col text-ui">
     <Notice bind:text={error} />
 
     <div class="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2">
@@ -160,14 +160,14 @@
               onclick={() => invoke("reveal", { path: mods!.dir }).catch((e) => (error = String(e)))}>Ordner öffnen</TextButton
             >
           </SectionHead>
-          <p class="text-muted-foreground px-3 py-1.5 text-[11px]">
+          <p class="text-muted-foreground px-3 py-1.5 text-meta">
             Mods greifen beim nächsten Claude-Start im Terminal.{mods.mods.length ? "" : " Noch keine Mods installiert."}
           </p>
           <ul>
             {#each mods.mods as m (m.path)}
               <li class="px-3 py-1.5">
-                <div class="truncate font-mono text-[11px] font-semibold">{m.name}</div>
-                {#if m.description}<div class="text-muted-foreground truncate text-[11px]" title={m.description}>{m.description}</div>{/if}
+                <div class="truncate font-mono text-meta font-semibold">{m.name}</div>
+                {#if m.description}<div class="text-muted-foreground truncate text-meta" title={m.description}>{m.description}</div>{/if}
               </li>
             {/each}
           </ul>

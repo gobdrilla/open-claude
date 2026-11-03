@@ -56,7 +56,7 @@
           </span>
         {/if}
       </div>
-      {#if description}<Dialog.Description class="truncate font-mono text-[11px]">{description}</Dialog.Description>{/if}
+      {#if description}<Dialog.Description class="truncate font-mono text-meta">{description}</Dialog.Description>{/if}
     </Dialog.Header>
     <div class="border-border/60 min-h-0 flex-1 overflow-hidden rounded-lg border">
       <DiffView diff={diff ?? ""} {empty} {repo} {rev} />

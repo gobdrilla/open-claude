@@ -4,7 +4,7 @@
   import { cn } from "$lib/utils.js";
 
   // Header of a collapsible section; renders the chevron and aria-expanded.
-  // variant="item": expandable list entry (regular weight, text-xs) instead of a section header.
+  // variant="item": expandable list entry (regular weight, text-ui) instead of a section header.
   let {
     open = $bindable(false),
     variant = "section",
@@ -19,7 +19,7 @@
   type="button"
   class={cn(
     "hover:bg-accent/40 focus-visible:ring-ring/50 flex w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left outline-none focus-visible:ring-2",
-    variant === "section" ? "py-1 text-[11px] font-semibold" : "py-1.5 text-xs",
+    variant === "section" ? "py-1 text-meta font-semibold" : "py-1.5 text-ui",
     className,
   )}
   aria-expanded={open}

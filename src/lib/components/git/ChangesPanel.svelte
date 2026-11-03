@@ -282,7 +282,7 @@
   <div class="bg-background/50 ring-foreground/5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1">
     <div class="flex items-center gap-2 px-2 py-1.5 {isStaged ? 'bg-success/8' : 'bg-warning/8'}">
       <span class="size-2 shrink-0 rounded-full {isStaged ? 'bg-success shadow-success/50' : 'bg-warning shadow-warning/50'} shadow-[0_0_6px]"></span>
-      <span class="flex-1 text-[11px] font-semibold">{title}</span>
+      <span class="flex-1 text-meta font-semibold">{title}</span>
       <span
         class="rounded-full px-1.5 font-mono text-[10px] {isStaged ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}"
         >{files.length}</span
@@ -298,7 +298,7 @@
     </div>
     {#if picked.length > 1}
       <div class="bg-primary/10 mx-1 mt-1 flex flex-wrap items-center gap-1 rounded-md px-2 py-0.5">
-        <span class="text-muted-foreground flex-1 text-[11px] whitespace-nowrap">{picked.length} ausgewählt</span>
+        <span class="text-muted-foreground flex-1 text-meta whitespace-nowrap">{picked.length} ausgewählt</span>
         <Button
           variant="ghost"
           size="2xs"
@@ -364,10 +364,10 @@
               <fi.icon class="size-3.5 shrink-0 {fi.tint}" />
               <span class="min-w-0 flex-1 truncate"
                 ><span class="font-medium">{f.path.slice(dir ? dir.length + 1 : 0)}</span
-                >{#if dir}<span class="text-muted-foreground ml-1.5 text-[10px]">{dir}</span>{/if}</span
+                >{#if dir}<span class="text-muted-foreground ml-1.5 text-meta">{dir}</span>{/if}</span
               >
               <span
-                class="grid size-4 shrink-0 place-items-center rounded font-mono text-[9px] font-bold {color[code] ?? ''} {bg[code] ?? 'bg-secondary'}"
+                class="grid size-4 shrink-0 place-items-center rounded font-mono text-meta font-bold {color[code] ?? ''} {bg[code] ?? 'bg-secondary'}"
                 >{code}</span
               >
             </Row>
@@ -405,13 +405,13 @@
           </ContextMenu.Portal>
         </ContextMenu.Root>
       {:else}
-        <p class="text-muted-foreground px-2 py-1 text-[11px]">Keine.</p>
+        <p class="text-muted-foreground px-2 py-1 text-meta">Keine.</p>
       {/each}
     </div>
   </div>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <Notice bind:text={error} />
   <div class="flex min-h-0 flex-1">
     <!-- Schrumpft mit, damit auch im kleinen Fenster Platz fuer den Diff bleibt -->
@@ -421,7 +421,7 @@
           <div class="bg-destructive/15 text-destructive flex items-center gap-1.5 rounded-md px-2 py-1 font-semibold">
             <TriangleAlertIcon class="size-3.5" />
             <span class="flex-1">Konflikte</span>
-            <span class="font-mono text-[10px]">{conflicts.length}</span>
+            <span class="font-mono text-meta">{conflicts.length}</span>
           </div>
           {#each conflicts as f (f.path)}
             <Row tone="danger" density="compact" title="Im Merge-Editor öffnen" onclick={() => onconflict(f.path)}>
@@ -452,7 +452,7 @@
         <div class="flex items-center gap-2">
           <Checkbox size="sm" bind:checked={amend} onchange={toggleAmend}>Amend</Checkbox>
           <span
-            class="flex-1 font-mono text-[10px] {subjectLen > 72 ? 'text-warning' : 'text-muted-foreground'}"
+            class="flex-1 font-mono text-meta {subjectLen > 72 ? 'text-warning' : 'text-muted-foreground'}"
             title={subjectLen > 72 ? "Betreffzeile länger als 72 Zeichen" : "Länge der Betreffzeile"}
           >
             {subjectLen}/72
@@ -485,7 +485,7 @@
       {:else if sel && diff?.startsWith("Submodule ")}
         <!-- git diff --submodule=log: Commits seit dem eingetragenen Stand, "<" fallen weg, ">" kommen dazu -->
         <div class="flex flex-col gap-2 p-3">
-          <pre class="font-mono text-[11px] whitespace-pre-wrap">{diff}</pre>
+          <pre class="font-mono text-meta whitespace-pre-wrap">{diff}</pre>
           <Button size="xs" variant="outline" class="self-start" onclick={() => onsubmodule(sel!.path)}>Submodul öffnen</Button>
         </div>
       {:else if sel}
@@ -508,7 +508,7 @@
   oncancel={() => (confirm = null)}
 >
   {#if confirm?.files}
-    <ul class="border-border max-h-40 overflow-y-auto rounded-md border py-1 font-mono text-[11px]">
+    <ul class="border-border max-h-40 overflow-y-auto rounded-md border py-1 font-mono text-meta">
       {#each confirm.files as f (f.path)}
         <li class="flex gap-1.5 px-2" title={f.path}>
           <span class="w-3 shrink-0 text-center font-bold {color[f.worktree] ?? ''}">{f.worktree}</span>

@@ -65,25 +65,25 @@
     </Dialog.Header>
 
     {#if error}
-      <p class="text-destructive text-xs">{error}</p>
+      <p class="text-destructive text-ui">{error}</p>
     {:else if !share}
-      <p class="text-muted-foreground text-xs">Einladung wird erstellt …</p>
+      <p class="text-muted-foreground text-ui">Einladung wird erstellt …</p>
     {:else}
       <div class="grid min-w-0 gap-3">
         <div class="flex min-w-0 items-start gap-2">
-          <code oncopy={() => (handedOut[id] = true)} class="bg-muted max-h-20 min-w-0 flex-1 overflow-y-auto rounded px-2 py-1.5 text-[11px] leading-snug break-all select-all">{share.ticket}</code>
+          <code oncopy={() => (handedOut[id] = true)} class="bg-muted max-h-20 min-w-0 flex-1 overflow-y-auto rounded px-2 py-1.5 text-meta leading-snug break-all select-all">{share.ticket}</code>
           <Button size="sm" variant="secondary" onclick={copy}>
             {#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if} Kopieren
           </Button>
         </div>
-        <p class="text-muted-foreground text-xs">
+        <p class="text-muted-foreground text-ui">
           {share.guests === 0 ? "Noch niemand verbunden." : share.guests === 1 ? "1 Gast verbunden." : `${share.guests} Gäste verbunden.`}
         </p>
-        <div class="flex items-start gap-2 text-sm">
+        <div class="flex items-start gap-2 text-body">
           <span class="mt-1"><Switch on={share.write} label="Gäste dürfen tippen" onclick={() => setWrite(!share.write)} /></span>
           <span>
             Gäste dürfen tippen
-            <span class="text-muted-foreground block text-xs">
+            <span class="text-muted-foreground block text-ui">
               Sie steuern dann Claude auf deinem Rechner, inklusive Befehlen, die Claude ausführt. Nur für Leute, denen du vertraust.
             </span>
           </span>

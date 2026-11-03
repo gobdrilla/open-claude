@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import { tv } from "tailwind-variants";
+  import { twMergeConfig } from "$lib/utils.js";
 
   // Clickable list row (branches, files, matches, history) or card (variant="card").
   export const row = tv({
@@ -11,7 +12,7 @@
         card: "bg-card border-border/60 hover:border-border flex-col items-stretch gap-0.5 rounded-lg border px-2 transition-colors",
       },
       density: { compact: "py-0.5", default: "py-1", roomy: "py-1.5" },
-      text: { sm: "text-[11px]", md: "text-xs" },
+      text: { sm: "text-meta", md: "text-ui" },
       // Rows inside framed lists: square corners.
       flush: { true: "rounded-none" },
       indent: { true: "pl-6" },
@@ -27,7 +28,7 @@
       { variant: "card", selected: true, class: "border-primary/60 bg-primary/5 hover:border-primary/60" },
     ],
     defaultVariants: { variant: "list", density: "default", text: "sm" },
-  });
+  }, { twMergeConfig });
 </script>
 
 <script lang="ts">

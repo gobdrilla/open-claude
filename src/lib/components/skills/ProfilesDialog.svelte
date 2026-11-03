@@ -103,7 +103,7 @@
     </Dialog.Header>
     <Notice bind:text={error} />
 
-    <div class="flex min-h-0 flex-1 gap-4 text-xs">
+    <div class="flex min-h-0 flex-1 gap-4 text-ui">
       <div class="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto">
         <div class="flex flex-col gap-0.5">
           {#each names as n (n)}
@@ -172,7 +172,7 @@
             {#if info}
               {#each info.plugins as id (id)}
                 <div class="flex items-center gap-2 py-1">
-                  <span class="flex-1 truncate font-mono text-[11px]">Plugin {id}</span>
+                  <span class="flex-1 truncate font-mono text-meta">Plugin {id}</span>
                   <Segmented
                     value={profile.plugins[id]}
                     options={[
@@ -187,8 +187,8 @@
               {#each list as sk (sk.key)}
                 <div class="flex items-center gap-2 py-1">
                   <div class="min-w-0 flex-1">
-                    <div class="truncate font-mono text-[11px]">{sk.key}</div>
-                    {#if sk.description}<div class="text-muted-foreground truncate text-[11px]" title={sk.description}>{sk.description}</div>{/if}
+                    <div class="truncate font-mono text-meta">{sk.key}</div>
+                    {#if sk.description}<div class="text-muted-foreground truncate text-meta" title={sk.description}>{sk.description}</div>{/if}
                   </div>
                   <Segmented
                     value={profile.overrides[sk.key]}

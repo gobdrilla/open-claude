@@ -115,12 +115,12 @@
 
 {#snippet pre(label: string, text: string)}
   <div class="min-w-0 flex-1">
-    <div class="text-muted-foreground mb-0.5 text-[10px]">{label}</div>
-    <pre class="bg-muted max-h-48 overflow-auto rounded p-1.5 font-mono text-[11px] whitespace-pre-wrap">{text}</pre>
+    <div class="text-muted-foreground mb-0.5 text-meta">{label}</div>
+    <pre class="bg-muted max-h-48 overflow-auto rounded p-1.5 font-mono text-meta whitespace-pre-wrap">{text}</pre>
   </div>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-xs">
+<div class="flex h-full min-h-0 flex-col text-ui">
   <div class="{paneBar} flex-wrap py-0.5">
     <Button variant="ghost" size="xs" disabled={!!t.run || t.scanning} title="Alle Tests ausführen" onclick={() => run("all")}
       ><PlayIcon /> Alle</Button
@@ -216,7 +216,7 @@
                 }}><ChevronRightIcon class="size-3 transition-transform {r.open ? 'rotate-90' : ''}" /></IconButton
               >
               {@render status(st)}
-              <span class="min-w-0 flex-1 truncate {n.kind === 'file' ? 'font-mono text-[11px]' : ''}">{n.name}</span>
+              <span class="min-w-0 flex-1 truncate {n.kind === 'file' ? 'font-mono text-meta' : ''}">{n.name}</span>
               {#if n.kind === "file"}
                 <span
                   class="bg-muted text-muted-foreground shrink-0 rounded px-1 text-[10px]"
@@ -224,7 +224,7 @@
                   >{n.fw}{n.fw === "jest" || n.fw === "pytest" ? "*" : ""}</span
                 >
               {/if}
-              <span class="text-muted-foreground shrink-0 text-[10px] tabular-nums">{ms(t.results[r.id]?.ms)}</span>
+              <span class="text-muted-foreground shrink-0 text-meta tabular-nums">{ms(t.results[r.id]?.ms)}</span>
               <IconButton
                 tabindex={-1}
                 size="xs"
@@ -264,7 +264,7 @@
       bind:value={() => t.tab, (v) => (t.tab = v)}
     />
     {#if t.tab === "output"}
-      <pre bind:this={out} class="min-h-0 flex-1 overflow-auto p-2 font-mono text-[11px] whitespace-pre-wrap">{tail.join("\n")}</pre>
+      <pre bind:this={out} class="min-h-0 flex-1 overflow-auto p-2 font-mono text-meta whitespace-pre-wrap">{tail.join("\n")}</pre>
     {:else if !sel}
       <div class="min-h-0 flex-1"><Empty>Test in der Liste wählen.</Empty></div>
     {:else}
@@ -275,7 +275,7 @@
           {#if sel.line !== null || res?.at}
             {@const at = res?.at ?? { file: sel.file, line: sel.line ?? 1 }}
             <TextButton
-              size="xs"
+              size="sm"
               class="shrink-0 gap-0.5 font-mono"
               title="Im Editor öffnen"
               onclick={() => void open(repo, at.file, at.line)}
@@ -284,9 +284,9 @@
           {/if}
         </div>
         {#if !res}
-          <p class="text-muted-foreground text-[11px]">Noch nicht gelaufen.</p>
+          <p class="text-muted-foreground text-meta">Noch nicht gelaufen.</p>
         {:else}
-          {#if res.msg}<pre class="font-mono text-[11px] whitespace-pre-wrap">{res.msg}</pre>{/if}
+          {#if res.msg}<pre class="font-mono text-meta whitespace-pre-wrap">{res.msg}</pre>{/if}
           {#if res.exp !== undefined || res.act !== undefined}
             <div class="flex gap-2">
               {@render pre(res.labels?.[0] ?? "Erwartet", res.exp ?? "")}
@@ -295,8 +295,8 @@
           {/if}
           {#if res.diff}{@render pre("Diff", res.diff)}{/if}
           {#if res.stack}
-            <div class="text-muted-foreground text-[10px]">Stack</div>
-            <pre class="max-h-48 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{#each stackLinks(res.stack) as p, k (k)}{#if p.loc}{@const loc = p.loc}<TextButton
+            <div class="text-muted-foreground text-meta">Stack</div>
+            <pre class="max-h-48 overflow-auto font-mono text-meta whitespace-pre-wrap">{#each stackLinks(res.stack) as p, k (k)}{#if p.loc}{@const loc = p.loc}<TextButton
                     tone="primary"
                     underline
                     class="inline"

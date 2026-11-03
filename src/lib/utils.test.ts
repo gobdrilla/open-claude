@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { age, altKey, cn } from "./utils.ts";
+import { tv } from "tailwind-variants";
+import { age, altKey, cn, twMergeConfig } from "./utils.ts";
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
@@ -27,6 +28,11 @@ test("cn: type scale tokens are font sizes, not colors", () => {
   assert.equal(cn("text-muted-foreground text-meta"), "text-muted-foreground text-meta");
   assert.equal(cn("text-xs text-body"), "text-body");
   assert.equal(cn("text-title", "text-[10px]"), "text-[10px]");
+});
+
+test("tv with twMergeConfig: token and text color both survive", () => {
+  const v = tv({ base: "text-sm", variants: { size: { sm: "text-meta" }, active: { true: "text-primary" } } }, { twMergeConfig });
+  assert.equal(v({ size: "sm", active: true }), "text-meta text-primary");
 });
 
 const k = (key: string, code: string, m: Partial<KeyboardEvent> = {}) => ({ key, code, altKey: true, ctrlKey: false, metaKey: false, ...m }) as KeyboardEvent;
