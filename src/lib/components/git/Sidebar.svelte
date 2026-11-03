@@ -332,7 +332,7 @@
                   : ''}">{b.remote ? b.name.slice(b.name.indexOf("/") + 1) : b.name}</span
               >
               <span class="shrink-0 font-mono text-meta text-warning">+{b.unmerged}</span>
-              <span class="text-muted-foreground w-9 shrink-0 text-right font-mono text-meta">{age(b.date)}</span>
+              <span class="text-muted-foreground w-12 shrink-0 text-right font-mono text-meta whitespace-nowrap">{age(b.date)}</span>
             </Row>
           {/each}
           {#if staleCount}

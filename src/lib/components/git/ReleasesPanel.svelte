@@ -227,7 +227,7 @@
               {#if r.draft}<Badge variant="outline" class="shrink-0 text-meta">Draft</Badge>{/if}
               {#if r.prerelease}<Badge variant="outline" class="shrink-0 text-meta text-warning border-warning/40">Pre-Release</Badge>{/if}
               {#if r.id === latestId}<Badge variant="outline" class="text-primary border-primary/50 shrink-0 text-meta">Latest</Badge>{/if}
-              <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-meta tabular-nums">
+              <span class="text-muted-foreground w-12 shrink-0 text-right font-mono text-meta whitespace-nowrap tabular-nums">
                 {age(r.published_at ?? r.created_at)}
               </span>
             </Row>

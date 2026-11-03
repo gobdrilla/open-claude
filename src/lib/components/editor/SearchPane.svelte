@@ -95,7 +95,7 @@
             <ContextMenu.Root>
               <ContextMenu.Trigger>
                 <Row flush density="compact" text="md" class="items-baseline gap-2 pr-2 pl-7" onclick={() => open(repo, path, h.line, h.col)}>
-                  <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-meta">{h.line}</span>
+                  <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-meta tabular-nums">{h.line}</span>
                   <span class="truncate font-mono text-meta">{h.text}</span>
                 </Row>
               </ContextMenu.Trigger>

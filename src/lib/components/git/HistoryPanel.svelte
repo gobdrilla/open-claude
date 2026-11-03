@@ -333,7 +333,7 @@
         >
         <span class="text-muted-foreground hidden max-w-28 shrink-0 truncate text-meta sm:block">{c.author}</span>
         <span class="text-muted-foreground bg-secondary/60 shrink-0 rounded px-1 font-mono text-[10px]">{c.sha.slice(0, 7)}</span>
-        <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-meta tabular-nums">{age(c.date)}</span>
+        <span class="text-muted-foreground w-12 shrink-0 text-right font-mono text-meta whitespace-nowrap tabular-nums">{age(c.date)}</span>
       </Row>
     </ContextMenu.Trigger>
     <ContextMenu.Portal>
