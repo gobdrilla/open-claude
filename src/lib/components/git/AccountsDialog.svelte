@@ -142,7 +142,7 @@
       <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={importCli}
         >Von {kind === "github" ? "gh" : "glab"} übernehmen</Button
       >
-      <Button variant="outline" size="sm" onclick={() => (open = false)}>Schließen</Button>
+      <Button variant="ghost" size="sm" onclick={() => (open = false)}>Schließen</Button>
       <Button size="sm" disabled={busy || !host.trim() || !token.trim()} onclick={login}>Anmelden</Button>
     </div>
   </Dialog.Content>

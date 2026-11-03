@@ -210,18 +210,20 @@
     <div class="flex flex-wrap items-center gap-1.5">
       {#each accounts as a (a.kind + a.host + a.user)}
         <Button
-          variant={mode === "browse" && account === a ? "default" : "outline"}
+          variant="toggle"
           size="sm"
+          aria-pressed={mode === "browse" && account === a}
           onclick={() => selectAccount(a)}
         >
-          {a.user}<span class="text-muted-foreground ml-1 font-mono text-meta">@{a.host}</span>
+          {a.user}<span class="ml-1 font-mono text-meta opacity-70">@{a.host}</span>
         </Button>
       {/each}
       <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
       <span class="flex-1"></span>
       <Button
-        variant={mode === "url" ? "default" : "outline"}
+        variant="toggle"
         size="sm"
+        aria-pressed={mode === "url"}
         onclick={() => {
           mode = "url";
           selected = null;
@@ -321,7 +323,7 @@
     {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-1.5">
-      <Button variant="outline" size="sm" onclick={() => (open = false)} disabled={cloning}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={cloning}>Abbrechen</Button>
       <Button
         size="sm"
         class="gap-1.5"

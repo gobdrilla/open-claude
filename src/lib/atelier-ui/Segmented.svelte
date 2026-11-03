@@ -22,7 +22,7 @@
   const nav = $derived(variant === "nav");
 </script>
 
-<div role="group" aria-label={label} class="bg-secondary flex shrink-0 {nav ? 'h-7 gap-0.5 rounded-lg p-0.5' : 'rounded p-0.5'}">
+<div role="group" aria-label={label} class="bg-secondary flex w-fit shrink-0 {nav ? 'h-7 gap-0.5 rounded-lg p-0.5' : 'rounded p-0.5'}">
   {#each options as [text, v, title, Icon] (text)}
     <button
       class={nav

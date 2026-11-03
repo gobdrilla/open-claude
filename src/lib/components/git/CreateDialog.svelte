@@ -147,7 +147,7 @@
 
       <span class="text-muted-foreground pt-2">Remote</span>
       <div class="space-y-1.5">
-        <div class="flex flex-wrap items-center gap-1.5">
+        <div class="flex flex-wrap items-stretch gap-1.5">
           <Segmented
             label="Remote"
             value={account}
@@ -176,7 +176,7 @@
 
     <div class="flex justify-end gap-1.5">
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         onclick={() => (open = false)}
         disabled={busy}>{done ? "Schließen" : "Abbrechen"}</Button
