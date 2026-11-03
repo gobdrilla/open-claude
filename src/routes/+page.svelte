@@ -1504,6 +1504,8 @@
                           </span>
                         {/if}
                       </span>
+                      <!-- Only the selected row renders its actions: 3 buttons per row cost ~24k nodes at 300 projects. -->
+                      {#if selected === item.repo.path}
                       <div class="-my-1 hidden items-center gap-0.5 group-data-selected/command-item:flex">
                         {#each ROW_VIEWS as [name, key, Icon, n] (key)}
                           <Button
@@ -1519,6 +1521,7 @@
                           >
                         {/each}
                       </div>
+                      {/if}
                     </Command.Item>
                   {/snippet}
                 </ContextMenu.Trigger>

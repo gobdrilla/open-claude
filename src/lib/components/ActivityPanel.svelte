@@ -368,18 +368,30 @@
   });
 
   // Vorschau erst laden, wenn die Kachel in die Naehe der Sicht kommt.
+  // One shared observer for all tiles: one per tile cost ~600 observers on every remount of the tab.
+  const lazyImg = new Map<Element, Img>();
+  let lazyIo: IntersectionObserver | undefined;
   function lazy(node: HTMLElement, m: Img) {
-    const io = new IntersectionObserver(
+    lazyIo ??= new IntersectionObserver(
       (es) => {
-        if (es.some((e) => e.isIntersecting)) {
-          show(m);
-          io.disconnect();
+        for (const e of es) {
+          const img = e.isIntersecting && lazyImg.get(e.target);
+          if (!img) continue;
+          show(img);
+          lazyIo?.unobserve(e.target);
+          lazyImg.delete(e.target);
         }
       },
       { rootMargin: "300px" },
     );
-    io.observe(node);
-    return { destroy: () => io.disconnect() };
+    lazyImg.set(node, m);
+    lazyIo.observe(node);
+    return {
+      destroy: () => {
+        lazyIo?.unobserve(node);
+        lazyImg.delete(node);
+      },
+    };
   }
 
   const tokens = (n: number) => (n < 1000 ? String(n) : n < 1e6 ? `${Math.round(n / 1000)}k` : `${(n / 1e6).toFixed(1)}M`);
@@ -747,7 +759,7 @@
           class="text-meta text-muted-foreground grid h-full place-content-center px-1 text-center"
           title="Das Vorschaubild ließ sich nicht erzeugen. Klick öffnet das Original.">Keine Vorschau<span class="opacity-70">Klick zeigt das Original</span></span
         >{/if}
-      {#if m.kind === "file"}<Badge variant="secondary" class="text-meta absolute top-1 left-1 h-4 px-1.5">Datei</Badge>{/if}
+      {#if m.kind === "file"}<span class="bg-secondary text-secondary-foreground text-meta absolute top-1 left-1 rounded px-1.5 leading-4">Datei</span>{/if}
     </div>
     <div class="text-ui mt-1 truncate">{fileName(m)}</div>
     <div class="text-meta text-muted-foreground truncate">{ago(m.at)}</div>
