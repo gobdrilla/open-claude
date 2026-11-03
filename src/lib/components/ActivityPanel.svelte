@@ -392,7 +392,7 @@
 
   // Wie register.tsx der Mod: <50 primary, <80 gelb, sonst rot.
   const HOUR = 3_600_000;
-  const WIN = { five_hour: ["Session 5h", 5 * HOUR], seven_day: ["Woche 7d", 168 * HOUR] } as const;
+  const WIN = { five_hour: ["5 h", 5 * HOUR], seven_day: ["Woche", 168 * HOUR] } as const;
   const DAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const lvl = (p: number) => (p < 50 ? "bg-primary" : p < 80 ? "bg-warning" : "bg-destructive");
   const txt = (p: number) => (p < 50 ? "text-primary" : p < 80 ? "text-warning" : "text-destructive");
@@ -506,21 +506,23 @@
   <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-ui">
     {#if tab === "work" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
-      <section class="border-border/60 mb-2 rounded-lg border">
+      <section class="border-border/60 @container mb-2 rounded-lg border">
         <div class="flex items-center justify-between px-2 py-1">
           <span class="text-muted-foreground">Vorlagen</span>
           {#if !guest}<TextButton onclick={() => editTemplate(null)}>+ Neu</TextButton>{/if}
         </div>
         {#each tpls as x (x.f.path)}
           <div class="border-border/60 flex items-center gap-1.5 border-t px-2 py-1">
-            <span class="max-w-32 min-w-10 truncate font-medium" title={x.f.path}>{x.name}</span>
+            <span class="max-w-32 min-w-10 truncate font-medium" title={[x.f.path, x.description].filter(Boolean).join("\n")}>{x.name}</span>
             <!-- Badges werden bei Platzmangel abgeschnitten, die Knoepfe rechts nie. -->
             <span class="flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
               <span class="text-muted-foreground shrink-0 text-meta">{x.f.scope === "user" ? "Global" : "Projekt"}</span>
               {#if !x.builder}<span class="bg-secondary shrink-0 rounded px-1 text-[10px]" title="Freies Skript: nur starten und löschen">Skript</span>{/if}
               {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-meta" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
             </span>
-            <span class="text-muted-foreground min-w-0 flex-1 truncate" title={x.description}>{x.description}</span>
+            <!-- Only where it fits readably; the name's tooltip carries it otherwise -->
+            <span class="text-muted-foreground hidden min-w-0 flex-1 truncate @sm:block" title={x.description}>{x.description}</span>
+            <span class="flex-1 @sm:hidden"></span>
             <Button
               size="2xs"
               variant="outline"
@@ -575,7 +577,7 @@
       <!-- Limits gelten kontoweit: auch vor der ersten Antwort dieser Session, siehe newest_limits() -->
       {@const lims = (["five_hour", "seven_day"] as const).flatMap((k) => (data!.limits ?? panel?.limits ?? []).filter((l) => l.kind === k).slice(0, 1).map((l) => [k, l] as const))}
       {#if !panel}
-        <p class="text-muted-foreground p-2">Noch keine Session-Daten – wartet auf Claude …</p>
+        <p class="text-muted-foreground p-2">Noch keine Sitzungsdaten – wartet auf Claude …</p>
       {:else}
         {@const ctx = panel.context}
         {#if ctx.window > 0}
@@ -610,27 +612,7 @@
           </section>
         {/if}
       {#if panel}
-        {@const rows = details(panel)}
-        {#if rows.length}
-          <section class="border-border/60 mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-lg border p-2">
-            {#each rows as [k, v] (k)}
-              <span class="text-muted-foreground">{k}</span><span class="truncate font-medium tabular-nums" title={v}>{v}</span>
-            {/each}
-          </section>
-        {/if}
-        {#if data?.modes.length}
-          <!-- Plugin-Modi (caveman, ponytail, ...): eigene kleine Karte unter den Details -->
-          <section class="border-border/60 mb-2 rounded-lg border p-2">
-            <div class="text-muted-foreground mb-1">Modi</div>
-            <div class="flex flex-wrap gap-1">
-              {#each data.modes as m (m.name)}
-                <Badge variant="secondary" class="text-meta font-normal" title="Plugin-Modus {m.name}"
-                  >{m.name}{#if m.level}<span class="text-muted-foreground">· {m.level}</span>{/if}</Badge
-                >
-              {/each}
-            </div>
-          </section>
-        {/if}
+        <!-- Live progress above the static stats -->
         {#if panel.active.length}
           <section class="border-border/60 mb-2 rounded-lg border p-2">
             <div class="text-muted-foreground mb-1">Aktiv</div>
@@ -662,9 +644,30 @@
             {/each}
           </section>
         {/if}
+        {@const rows = details(panel)}
+        {#if rows.length}
+          <section class="border-border/60 mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-lg border p-2">
+            {#each rows as [k, v] (k)}
+              <span class="text-muted-foreground">{k}</span><span class="truncate font-medium tabular-nums" title={v}>{v}</span>
+            {/each}
+          </section>
+        {/if}
+        {#if data?.modes.length}
+          <!-- Plugin-Modi (caveman, ponytail, ...): eigene kleine Karte unter den Details -->
+          <section class="border-border/60 mb-2 rounded-lg border p-2">
+            <div class="text-muted-foreground mb-1">Modi</div>
+            <div class="flex flex-wrap gap-1">
+              {#each data.modes as m (m.name)}
+                <Badge variant="secondary" class="text-meta font-normal" title="Plugin-Modus {m.name}"
+                  >{m.name}{#if m.level}<span class="text-muted-foreground">· {m.level}</span>{/if}</Badge
+                >
+              {/each}
+            </div>
+          </section>
+        {/if}
       {/if}
     {:else if !data.session}
-      <Empty>Keine laufende Claude-Session gefunden.</Empty>
+      <Empty>Keine laufende Claude-Sitzung gefunden.</Empty>
     {:else if inFocus}
       {@render agentLog()}
     {:else if tab === "prompts"}
@@ -674,7 +677,7 @@
           <div class="text-muted-foreground text-meta">{ago(p.at)}</div>
         </Row>
       {:else}
-        <Empty>Noch keine Prompts in dieser Session.</Empty>
+        <Empty>Noch keine Prompts in dieser Sitzung.</Empty>
       {/each}
     {:else if tab === "work"}
       {#each data.runs as r (r.id)}
@@ -684,8 +687,8 @@
           <div class="flex items-center">
             <SectionToggle variant="item" class="flex-1" {open} onclick={() => (openRuns[r.id] = !open)}>
               <span class={color} title={text}>{icon}</span>
-              <span class="min-w-16 flex-1 truncate font-medium" title={r.name}>{r.name}</span>
-              <span class="text-muted-foreground min-w-0 truncate tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
+              <span class="min-w-0 truncate font-medium" title={r.name}>{r.name}</span>
+              <span class="text-muted-foreground min-w-0 flex-1 truncate text-right tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
             </SectionToggle>
             <Button size="2xs" variant="outline" class="mx-1.5" title="Groß anzeigen: alle Agents mit Verlauf und Ergebnis" onclick={() => openBig(r)}
               >Details</Button
@@ -717,7 +720,7 @@
         {/if}
       {/each}
     {:else}
-      <Empty>Noch keine Bilder in dieser Session.</Empty>
+      <Empty>Noch keine Bilder in dieser Sitzung.</Empty>
     {/if}
   </div>
 

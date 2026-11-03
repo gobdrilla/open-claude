@@ -16,14 +16,14 @@
         { k: "model", label: "Modell", type: "text", placeholder: "Standard (empfohlen)", list: ["opus", "opus[1m]", "sonnet", "sonnet[1m]", "haiku", "fable", "opusplan"] },
         {
           k: "effortLevel",
-          label: "Effort",
+          label: "Denken",
           hint: "Wie gründlich Claude nachdenkt",
           type: "enum",
           def: "",
-          opts: [["Standard", ""], ["Niedrig", "low"], ["Mittel", "medium"], ["Hoch", "high"], ["Sehr hoch", "xhigh"], ["Maximal", "max"]],
+          opts: [["Standard", ""], ["Niedrig", "low"], ["Mittel", "medium"], ["Hoch", "high"], ["Sehr hoch", "xhigh"], ["Max", "max"]],
         },
-        { k: "alwaysThinkingEnabled", label: "Thinking-Modus", hint: "Erweitertes Nachdenken standardmäßig an", type: "bool", def: true },
-        { k: "outputStyle", label: "Ausgabestil", type: "text", placeholder: "default", list: ["default", "Explanatory", "Learning"] },
+        { k: "alwaysThinkingEnabled", label: "Erweitertes Denken", hint: "Erweitertes Nachdenken standardmäßig an", type: "bool", def: true },
+        { k: "outputStyle", label: "Ausgabestil", type: "text", placeholder: "Standard", list: ["default", "Explanatory", "Learning"] },
         { k: "language", label: "Sprache", hint: "Antwortsprache, z. B. german oder de", type: "text", placeholder: "Standard (Englisch)" },
       ],
     },
@@ -147,6 +147,7 @@
 
   async function load() {
     error = "";
+    custom = "";
     try {
       [loaded, globLoaded] = await Promise.all([invoke<string>("claude_settings_read"), invoke<Record<string, unknown>>("claude_global_read")]);
       text = loaded;
@@ -172,6 +173,9 @@
     if (f.g) return glob[f.k];
     return f.k.split(".").reduce<any>((o, p) => o?.[p], parsed);
   }
+  const CUSTOM = "__custom__";
+  // List field currently edited as free text
+  let custom = $state("");
   function set(f: Field, v: unknown) {
     const unset = v === "" || v === undefined || ("def" in f && v === f.def);
     if (f.g) {
@@ -324,15 +328,23 @@
         set(f, Number.isFinite(n) && n > 0 ? n : undefined);
       }}
     />
+  {:else if f.list && custom !== f.k}
+    {@const v = String(get(f) ?? "")}
+    <!-- Unknown value stays selectable; the last entry switches to free text -->
+    <Select
+      value={v}
+      options={[[f.placeholder ?? "Standard", ""], ...f.list.map((o) => [o, o] as const), ...(v && !f.list.includes(v) ? [[v, v] as const] : []), ["Eigener Wert …", CUSTOM]]}
+      onchange={(x) => (x === CUSTOM ? (custom = f.k) : set(f, x))}
+      disabled={off}
+      aria-label={f.label}
+    />
   {:else}
     <Input
       value={String(get(f) ?? "")}
-      list={f.list ? `cs-${f.k}` : undefined}
       disabled={off}
       placeholder={f.placeholder}
       density="sm" class="w-48 font-mono"
       onchange={(e) => set(f, e.currentTarget.value.trim())}
     />
-    {#if f.list}<datalist id="cs-{f.k}">{#each f.list as o (o)}<option value={o}></option>{/each}</datalist>{/if}
   {/if}
 {/snippet}

@@ -58,8 +58,8 @@
     </div>
   {/if}
   <div class="mb-1 flex items-center gap-2">
-    <label for="btw-{id}" class="text-meta text-muted-foreground min-w-0 flex-1 truncate" title="Claude kann dabei nur lesen."
-      >Nebenfrage an Claude (läuft parallel, stört die Sitzung nicht)</label
+    <label for="btw-{id}" class="text-meta text-muted-foreground min-w-0 flex-1 truncate" title="Läuft parallel, stört die Sitzung nicht; Claude kann nur lesen."
+      >Nebenfrage an Claude</label
     >
     {#if list.length}<IconButton size="xs" label="Antworten ausblenden" onclick={() => (history[id] = [])}>✕</IconButton>{/if}
   </div>

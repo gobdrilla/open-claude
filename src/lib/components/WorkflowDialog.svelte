@@ -43,8 +43,8 @@
     });
   });
 
-  // Wie im Einstellungsmenue
-  const EFFORT_LABEL: Record<string, string> = { "": "Session", low: "Low", medium: "Mid", high: "High", xhigh: "XH", max: "Max" };
+  // Same words as ClaudeBar
+  const EFFORT_LABEL: Record<string, string> = { "": "Sitzung", low: "Niedrig", medium: "Mittel", high: "Hoch", xhigh: "Sehr hoch", max: "Max" };
 
   const issues = $derived(
     problems(
@@ -149,10 +149,15 @@
               </div>
               <Textarea bind:value={a.prompt} rows={3} placeholder={"Was soll der Agent tun? {{args}} {{prev}}"} density="sm" class="font-mono" />
               <div class="flex flex-wrap items-center gap-1.5">
-                <span class="text-muted-foreground">Modell</span>
-                <Segmented value={a.model} options={MODELS.map((m) => [m ? m[0].toUpperCase() + m.slice(1) : "Session", m] as const)} onchange={(v) => (a.model = v)} />
-                <span class="text-muted-foreground ml-2">Effort</span>
-                <Segmented value={a.effort} options={EFFORTS.map((e) => [EFFORT_LABEL[e] ?? e, e] as const)} onchange={(v) => (a.effort = v)} />
+                <!-- Label and choice wrap as one -->
+                <span class="mr-2 flex items-center gap-1.5">
+                  <span class="text-muted-foreground">Modell</span>
+                  <Segmented value={a.model} options={MODELS.map((m) => [m ? m[0].toUpperCase() + m.slice(1) : "Sitzung", m] as const)} onchange={(v) => (a.model = v)} />
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="text-muted-foreground">Denken</span>
+                  <Segmented value={a.effort} options={EFFORTS.map((e) => [EFFORT_LABEL[e] ?? e, e] as const)} onchange={(v) => (a.effort = v)} />
+                </span>
               </div>
               <details open={!!a.schema}>
                 <summary class="text-muted-foreground cursor-pointer">Strukturierte Ausgabe (JSON-Schema)</summary>

@@ -155,29 +155,31 @@
       >
     {/if}
   {/if}
-  <span class="flex-1"></span>
-  {#if error}<span class="text-destructive min-w-0 truncate" title={error}>{error}</span>{/if}
-  {#if share}
-    <Button
-      variant="quiet"
-      size="xs"
-      class="gap-1.5 {share.on ? 'text-primary hover:text-primary' : ''}"
-      onclick={share.open}
-      title="Sitzung mit anderen teilen"
-      ><Share2Icon class="size-3.5" /> Teilen{#if share.guests}&nbsp;({share.guests}){/if}</Button
+  <!-- ml-auto keeps the view actions right-aligned when the bar wraps -->
+  <div class="ml-auto flex min-w-0 items-center gap-1.5">
+    {#if error}<span class="text-destructive min-w-0 truncate" title={error}>{error}</span>{/if}
+    {#if share}
+      <Button
+        variant="quiet"
+        size="xs"
+        class="gap-1.5 {share.on ? 'text-primary hover:text-primary' : ''}"
+        onclick={share.open}
+        title="Sitzung mit anderen teilen"
+        ><Share2Icon class="size-3.5" /> Teilen{#if share.guests}&nbsp;({share.guests}){/if}</Button
+      >
+    {/if}
+    <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title="Sitzung, Workflows und Bilder"
+      ><WorkflowIcon class="size-3.5" /> Aktivität</Button
     >
-  {/if}
-  <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title="Sitzung, Workflows und Bilder"
-    ><WorkflowIcon class="size-3.5" /> Aktivität</Button
-  >
-  {#if onnew}
-    <Button variant="quiet" size="xs" class="gap-1.5" onclick={onnew} title="Weitere Claude-Sitzung im selben Projekt"
-      ><PlusIcon class="size-3.5" /> Sitzung</Button
-    >
-  {/if}
-  {#if !guest}
-    <Button variant="quiet" size="xs" class="gap-1.5" title="Claude-Einstellungen" onclick={onsettings}
-      ><SettingsIcon class="size-3.5" /> Einstellungen</Button
-    >
-  {/if}
+    {#if onnew}
+      <Button variant="quiet" size="xs" class="gap-1.5" onclick={onnew} title="Weitere Claude-Sitzung im selben Projekt"
+        ><PlusIcon class="size-3.5" /> Sitzung</Button
+      >
+    {/if}
+    {#if !guest}
+      <Button variant="quiet" size="xs" class="gap-1.5" title="Claude-Einstellungen" onclick={onsettings}
+        ><SettingsIcon class="size-3.5" /> Einstellungen</Button
+      >
+    {/if}
+  </div>
 </header>
