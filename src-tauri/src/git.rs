@@ -138,6 +138,10 @@ pub(crate) fn net(repo: &str) -> Command {
 /// sonst am Terminal, aus dem die App gestartet wurde, oder scheitert stumm. ssh-agent funktioniert weiter.
 /// Eigenes GIT_SSH(_COMMAND) oder core.sshCommand des Nutzers bleibt unangetastet.
 pub(crate) fn ssh_batch(repo: Option<&str>) -> Option<(&'static str, &'static str)> {
+    // Windows: Git for Windows fragt Passphrase/Passwort per Fenster (Askpass), BatchMode wuerde das verbieten.
+    if cfg!(windows) {
+        return None;
+    }
     let own = ["GIT_SSH_COMMAND", "GIT_SSH"].iter().any(|k| std::env::var_os(k).is_some_and(|v| !v.is_empty()))
         || out(match repo {
             Some(r) => git(r),
