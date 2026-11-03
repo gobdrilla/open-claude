@@ -44,6 +44,28 @@
     return () => ((stale = true), clearTimeout(t));
   });
 
+  // Treffer in der (getrimmten) Zeile finden und etwas Kontext davor behalten, damit er
+  // im schmalen Panel nicht hinter dem Abschneiden verschwindet.
+  const LEAD = 12;
+  function snippet(text: string): [string, string, string] {
+    let at = -1;
+    let len = 0;
+    try {
+      if (s.regex) {
+        const m = new RegExp(s.q, s.caseSensitive ? "" : "i").exec(text);
+        if (m) [at, len] = [m.index, m[0].length];
+      } else {
+        at = s.caseSensitive ? text.indexOf(s.q) : text.toLowerCase().indexOf(s.q.toLowerCase());
+        len = s.q.length;
+      }
+    } catch {
+      /* ungueltiger Ausdruck: ganze Zeile zeigen */
+    }
+    if (at < 0) return [text, "", ""];
+    const from = at > LEAD ? at - LEAD : 0;
+    return [(from ? "…" : "") + text.slice(from, at), text.slice(at, at + len), text.slice(at + len)];
+  }
+
   // Ohne Object.groupBy: das fehlt in aelteren WebKitGTK (Linux-Distros mit WebKitGTK < 2.44).
   const groups = $derived.by(() => {
     const m = new Map<string, Hit[]>();
@@ -92,11 +114,12 @@
             <span class="text-muted-foreground ml-auto text-meta">{list.length}</span>
           </div>
           {#each list as h (h.line)}
+            {@const [pre, hit, post] = snippet(h.text)}
             <ContextMenu.Root>
               <ContextMenu.Trigger>
                 <Row flush density="compact" text="md" class="items-baseline gap-2 pr-2 pl-7" onclick={() => open(repo, path, h.line, h.col)}>
                   <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-meta tabular-nums">{h.line}</span>
-                  <span class="truncate font-mono text-meta">{h.text}</span>
+                  <span class="truncate font-mono text-meta whitespace-pre">{pre}<mark class="bg-primary/20 text-foreground rounded-sm">{hit}</mark>{post}</span>
                 </Row>
               </ContextMenu.Trigger>
               <ContextMenu.Portal>

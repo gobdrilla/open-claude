@@ -170,8 +170,8 @@
     size="xs"
     aria-pressed={on}
     title="{title} {on ? 'ausblenden' : 'einblenden'}"
-    onclick={() => (id === "run" ? toggleRun() : togglePanel(repo, id))}
-    ><Icon /> <span class="max-xl:hidden">{label}</span>
+    onclick={() => (id === "run" ? toggleRun() : id === "search" && !on ? findInFiles() : togglePanel(repo, id))}
+    ><Icon /> <span class="@max-[72rem]:hidden">{label}</span>
     {#if id === "problems" && found.length}
       <span
         class="text-meta rounded-full px-1.5 tabular-nums {worst === 1
@@ -185,7 +185,7 @@
 {/snippet}
 
 <div class="flex h-full min-h-0 flex-col text-ui">
-  <div class="bg-chrome border-border flex items-center gap-0.5 border-b px-2 py-1">
+  <div class="bg-chrome border-border @container flex items-center gap-0.5 border-b px-2 py-1">
     <Button
       variant="quiet"
       size="xs"
@@ -201,7 +201,7 @@
     {/if}
     <span class="bg-background/60 ring-foreground/10 ml-3 flex items-center gap-0.5 rounded-md p-0.5 ring-1">
       {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title="Läuft"></span>{/if}
-      <span class="text-muted-foreground pl-1.5 text-meta max-xl:hidden">Startziel</span>
+      <span class="text-muted-foreground pl-1.5 text-meta @max-[72rem]:hidden">Startziel</span>
       {#key pick}
         <Select
           class="h-5 max-w-60 border-0 bg-transparent font-mono text-meta"
@@ -233,7 +233,7 @@
         class={cfg && !running ? "text-success hover:text-success" : ""}
         disabled={!cfg || running}
         title={cfg ? `${cfg.label} starten (F5) – führt Code aus dem Projekt aus` : "Nichts zum Starten"}
-        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> <span class="max-lg:hidden">Starten</span></Button
+        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> <span class="@max-[72rem]:hidden">Starten</span></Button
       >
       <Button
         variant="quiet"
@@ -241,14 +241,14 @@
         class={running ? "text-destructive hover:text-destructive" : ""}
         disabled={!running}
         title="Stoppen (Umschalt+F5)"
-        onclick={() => runStop(repo)}><SquareIcon class="fill-current" /> <span class="max-lg:hidden">Stoppen</span></Button
+        onclick={() => runStop(repo)}><SquareIcon class="fill-current" /> <span class="@max-[72rem]:hidden">Stoppen</span></Button
       >
       <Button
         variant="quiet"
         size="xs"
         disabled={!r.current}
         title="Neu starten ({MOD}+Umschalt+F5)"
-        onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="max-lg:hidden">Neu starten</span></Button
+        onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">Neu starten</span></Button
       >
     </span>
     <span class="flex-1"></span>

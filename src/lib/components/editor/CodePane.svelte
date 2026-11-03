@@ -227,24 +227,31 @@
     {#if f.conflict}
       <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-ui">
         <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
-        <span class="text-warning mr-auto">Datei wurde außerhalb {f.conflict === "deleted" ? "gelöscht" : "geändert"}.</span>
-        <Button size="xs" variant="outline" onclick={() => reload(repo, path)}>Neu laden</Button>
-        <Button size="xs" variant="outline" onclick={() => keep(repo, path)}>Meine behalten</Button>
-        <Button size="xs" variant="outline" onclick={showDiff}>Vergleichen</Button>
+        <span class="text-warning min-w-48 flex-1">Datei wurde außerhalb {f.conflict === "deleted" ? "gelöscht" : "geändert"}.</span>
+        <span class="ml-auto flex shrink-0 gap-1.5">
+          <Button size="xs" variant="outline" onclick={() => reload(repo, path)}>Neu laden</Button>
+          <Button size="xs" variant="outline" onclick={() => keep(repo, path)}>Meine behalten</Button>
+          <Button size="xs" variant="outline" onclick={showDiff}>Vergleichen</Button>
+        </span>
       </div>
     {/if}
     {#if sv && lspKey && !s.lsp && !s.noLsp}
       <div class="text-muted-foreground border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1 text-ui">
-        <span class="mr-auto">Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.</span>
-        <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>
-        <Button size="xs" variant="ghost" onclick={() => allowLsp(repo, false)}>Nicht für dieses Projekt</Button>
+        <!-- Knoepfe brechen nur gemeinsam um, nie einzeln -->
+        <span class="min-w-48 flex-1">Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.</span>
+        <span class="ml-auto flex shrink-0 gap-1.5">
+          <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>
+          <Button size="xs" variant="ghost" onclick={() => allowLsp(repo, false)}>Nicht für dieses Projekt</Button>
+        </span>
       </div>
     {:else if lspKey && lsp.status[lspKey]}
       <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-ui">
         <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
-        <span class="text-warning mr-auto line-clamp-3 break-words whitespace-pre-line">{lsp.status[lspKey]}</span>
-        <Button size="xs" variant="outline" onclick={() => retry(repo, sv!.server)}>Erneut versuchen</Button>
-        <Button size="xs" variant="ghost" onclick={() => dismiss(repo, sv!.server)}>Ausblenden</Button>
+        <span class="text-warning line-clamp-3 min-w-48 flex-1 break-words whitespace-pre-line">{lsp.status[lspKey]}</span>
+        <span class="ml-auto flex shrink-0 gap-1.5">
+          <Button size="xs" variant="outline" onclick={() => retry(repo, sv!.server)}>Erneut versuchen</Button>
+          <Button size="xs" variant="ghost" onclick={() => dismiss(repo, sv!.server)}>Ausblenden</Button>
+        </span>
       </div>
     {/if}
     {#if plain}
