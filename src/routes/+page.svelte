@@ -149,8 +149,10 @@
   // Projekt-Sitzung, bei mehreren die aktive. Nie eine Gruppen-Sitzung.
   const sessionOf = (p: string) => {
     const own = sessions.filter((s) => !s.group && s.repo.path === p);
-    return own.find((s) => s.id === active) ?? own[0];
+    return own.find((s) => s.id === active) ?? own.find((s) => s.id === lastShown[p]) ?? own[0];
   };
+  // Zuletzt gezeigte Sitzung je Projekt: nach Editor/Git zurueck zu genau dieser, nicht zur ersten.
+  const lastShown = $state<Record<string, string>>({});
   // sendToClaude (Kontextmenues "An Claude") schreibt in die Projekt-Sitzung.
   claudeTarget.find = (p) => sessionOf(p)?.id;
   let repoGroups = $state<RepoGroup[]>([]);
@@ -171,6 +173,10 @@
     done: ["✓", "text-success", "Claude ist fertig"],
   };
   const activeSession = $derived(sessions.find((s) => s.id === active));
+  $effect(() => {
+    const s = activeSession;
+    if (s && !s.group && !s.guest) lastShown[s.repo.path] = s.id;
+  });
   // Aktivitaets-Panel rechts neben dem Terminal: Breite und offen/zu ueberleben den Neustart.
   let sideW = $state(stored("term.side", 360));
   let side = $state(stored("term.side.open", 1) === 1);
