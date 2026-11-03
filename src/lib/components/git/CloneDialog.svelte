@@ -1,6 +1,7 @@
 <script lang="ts">
   import { age } from "$lib/utils";
-  import { Badge, Button, Dialog, FolderField, Input, Row, TextButton } from "$lib/atelier-ui";
+  import { Badge, Button, Dialog, FolderField, Input, Row, Segmented, TextButton } from "$lib/atelier-ui";
+  import { untrack } from "svelte";
   import { open as pickFolder } from "@tauri-apps/plugin-dialog";
   import { listen } from "@tauri-apps/api/event";
   import { forge, accountId, type Account, type RemoteRepo, type CloneProgress } from "$lib/git";
@@ -70,6 +71,11 @@
     if (destTouched) return;
     const name = mode === "url" ? nameFromUrl(url) : (selected?.name ?? "");
     dest = name ? `${root}${root.includes("\\") ? "\\" : "/"}${name}` : "";
+  });
+
+  // Preselect the first account on open (or once one was added) and list its repos right away.
+  $effect(() => {
+    if (open && !account && mode === "browse" && accounts.length) untrack(() => selectAccount(accounts[0]));
   });
 
   async function selectAccount(a: Account) {
@@ -291,16 +297,12 @@
       </div>
 
       {#if selected}
-        <div class="flex gap-1.5">
-          <Button
-            variant={protocol === "https" ? "default" : "outline"}
-            size="sm"
-            onclick={() => (protocol = "https")}>HTTPS</Button
-          >
-          <Button variant={protocol === "ssh" ? "default" : "outline"} size="sm" onclick={() => (protocol = "ssh")}
-            >SSH</Button
-          >
-        </div>
+        <Segmented
+          label="Protokoll"
+          value={protocol}
+          options={[["HTTPS", "https"], ["SSH", "ssh"]] as const}
+          onchange={(v) => (protocol = v)}
+        />
       {/if}
     {/if}
 

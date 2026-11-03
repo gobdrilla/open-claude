@@ -2,7 +2,7 @@
   import { confirm } from "$lib/confirm.svelte";
   import type { Store } from "@tauri-apps/plugin-store";
   import { forge, type Account, type ForgeKind } from "$lib/git";
-  import { Badge, Button, Dialog, IconButton, Input, TextButton } from "$lib/atelier-ui";
+  import { Badge, Button, Dialog, IconButton, Input, Segmented, TextButton } from "$lib/atelier-ui";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import GlobeIcon from "@lucide/svelte/icons/globe";
@@ -117,20 +117,12 @@
     {/if}
 
     <div class="flex flex-col gap-2">
-      <div class="flex gap-1.5">
-        <Button
-          variant={kind === "github" ? "default" : "outline"}
-          size="sm"
-          class="flex-1"
-          onclick={() => (kind = "github")}>GitHub</Button
-        >
-        <Button
-          variant={kind === "gitlab" ? "default" : "outline"}
-          size="sm"
-          class="flex-1"
-          onclick={() => (kind = "gitlab")}>GitLab</Button
-        >
-      </div>
+      <Segmented
+        label="Anbieter"
+        value={kind}
+        options={[["GitHub", "github"], ["GitLab", "gitlab"]] as const}
+        onchange={(v) => (kind = v)}
+      />
       <Input bind:value={host} placeholder="Host, z. B. github.com" density="sm" class="font-mono" />
       <Input bind:value={token} type="password" placeholder="Access Token" density="sm" class="font-mono" />
       <!-- Die Webview oeffnet target=_blank nicht, daher ueber den Standardbrowser. -->
@@ -144,14 +136,14 @@
           : "api, read_repository, write_repository"})
       </TextButton>
       {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
-      <div class="flex gap-1.5">
-        <Button size="sm" class="flex-1" disabled={busy || !host.trim() || !token.trim()} onclick={login}
-          >Anmelden</Button
-        >
-        <Button variant="outline" size="sm" disabled={busy} onclick={importCli}
-          >Von {kind === "github" ? "gh" : "glab"} übernehmen</Button
-        >
-      </div>
+    </div>
+
+    <div class="flex justify-end gap-1.5">
+      <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={importCli}
+        >Von {kind === "github" ? "gh" : "glab"} übernehmen</Button
+      >
+      <Button variant="outline" size="sm" onclick={() => (open = false)}>Schließen</Button>
+      <Button size="sm" disabled={busy || !host.trim() || !token.trim()} onclick={login}>Anmelden</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

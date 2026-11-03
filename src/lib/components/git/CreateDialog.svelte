@@ -1,7 +1,7 @@
 <script lang="ts">
   import { open as pickFolder } from "@tauri-apps/plugin-dialog";
   import { forge, accountId, type Account, type RepoLang } from "$lib/git";
-  import { Button, Checkbox, Dialog, FolderField, Input } from "$lib/atelier-ui";
+  import { Button, Checkbox, Dialog, FolderField, Input, Segmented } from "$lib/atelier-ui";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
 
   let {
@@ -131,18 +131,12 @@
 
       <span class="text-muted-foreground pt-2">Sprache</span>
       <div>
-        <div class="flex flex-wrap gap-1.5">
-          {#each langs as l (l.id)}
-            {@const off = l.tool && !l.found}
-            <Button
-              variant={lang === l.id ? "default" : "outline"}
-              size="sm"
-              class={off && lang !== l.id ? "text-muted-foreground" : ""}
-              title={off ? `${l.tool} nicht gefunden: nur .gitignore + README` : undefined}
-              onclick={() => (lang = l.id)}>{l.label}</Button
-            >
-          {/each}
-        </div>
+        <Segmented
+          label="Sprache"
+          value={lang}
+          options={langs.map((l) => [l.label, l.id, l.tool && !l.found ? `${l.tool} nicht gefunden: nur .gitignore + README` : undefined] as const)}
+          onchange={(v) => (lang = v)}
+        />
         {#if missing}
           <p class="text-muted-foreground mt-1 text-[11px]">{missing.tool} nicht gefunden: nur .gitignore + README</p>
         {/if}
@@ -153,26 +147,22 @@
 
       <span class="text-muted-foreground pt-2">Remote</span>
       <div class="space-y-1.5">
-        <div class="flex flex-wrap gap-1.5">
-          <Button variant={account ? "outline" : "default"} size="sm" onclick={() => (account = null)}
-            >Nur lokal</Button
-          >
-          {#each accounts as a (a.kind + a.host + a.user)}
-            <Button variant={account === a ? "default" : "outline"} size="sm" onclick={() => (account = a)}>
-              {a.user}<span class="text-muted-foreground ml-1 font-mono text-[10px]">@{a.host}</span>
-            </Button>
-          {/each}
+        <div class="flex flex-wrap items-center gap-1.5">
+          <Segmented
+            label="Remote"
+            value={account}
+            options={[["Nur lokal", null] as const, ...accounts.map((a) => [`${a.user}@${a.host}`, a] as const)]}
+            onchange={(v) => (account = v)}
+          />
           <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
         </div>
         {#if account}
-          <div class="flex gap-1.5">
-            <Button variant={priv ? "default" : "outline"} size="sm" onclick={() => (priv = true)}
-              >Privat</Button
-            >
-            <Button variant={priv ? "outline" : "default"} size="sm" onclick={() => (priv = false)}
-              >Öffentlich</Button
-            >
-          </div>
+          <Segmented
+            label="Sichtbarkeit"
+            value={priv}
+            options={[["Privat", true], ["Öffentlich", false]]}
+            onchange={(v) => (priv = v)}
+          />
         {/if}
       </div>
     </fieldset>
