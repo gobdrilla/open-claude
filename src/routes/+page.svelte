@@ -501,7 +501,6 @@
     extra = (await store.get<string[]>("extra")) ?? [];
     home = await homeDir();
     pins = (await store.get<string[]>("pins")) ?? [];
-    lastView = (await store.get<Record<string, ViewKey>>("lastView")) ?? {};
     repoGroups = (await store.get<RepoGroup[]>("repoGroups")) ?? [];
     accounts = (await store.get<Account[]>("accounts")) ?? [];
     autostart = await isEnabled().catch(() => false);
@@ -772,19 +771,6 @@
   // Title bar view switcher: fixed order, Editor/Git only where the project has a folder here.
   const VIEW_OPEN = { term: (r?: Repo) => launch(r), edit: openEdit, git: openGit } as const;
   type ViewKey = keyof typeof VIEW_OPEN;
-  // Last view per project: click/Enter on the start page reopens it (default Claude).
-  let lastView = $state<Record<string, ViewKey>>({});
-  $effect(() => {
-    const p = viewRepo?.path;
-    const v = view;
-    // Group and guest sessions are not the project's own view; free Claude has no project.
-    if (!p || v === "list" || isFree(viewRepo) || (v === "term" && activeSession?.group)) return;
-    untrack(() => {
-      if (lastView[p] === v) return;
-      lastView[p] = v;
-      store?.set("lastView", $state.snapshot(lastView));
-    });
-  });
   const ROW_VIEWS = [
     ["Claude", "term", TerminalIcon, 1],
     ["Editor", "edit", FileCodeIcon, 2],
@@ -795,9 +781,10 @@
   const limits = $derived(
     (Object.values(panels).find((p) => p.limits?.length)?.limits ?? []).flatMap((l) => (LIMIT_NAME[l.kind] ? [[LIMIT_NAME[l.kind], l] as const] : [])),
   );
-  // Group heads stay below the uppercase section heads (Wartet auf dich / Läuft / Projekte)
+  // Group heads stay below the uppercase section heads (Wartet auf dich / Projekte)
   const subHead = "[&_[data-command-group-heading]]:text-meta [&_[data-command-group-heading]]:font-normal";
-  const openRepo = (repo: Repo) => VIEW_OPEN[lastView[repo.path] ?? "term"](repo);
+  // Click/Enter on the start page always opens Claude.
+  const openRepo = (repo: Repo) => launch(repo);
   const views = $derived(
     [
       ["Claude", "term", `Claude (${mod}+1)`, TerminalIcon],
@@ -1809,7 +1796,7 @@
         [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
       ])}
       {@render keys("Startseite", [
-        ["⏎ / Klick", "Zuletzt genutzte Ansicht des Projekts öffnen (sonst Claude)"],
+        ["⏎ / Klick", "Claude im Projekt öffnen"],
         ["↑ ↓", "Projekt wählen"],
         [`${mac ? "⌥" : "Alt"} + 1 … 9`, "Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)"],
         [`${mod} + K`, "Suche fokussieren"],
