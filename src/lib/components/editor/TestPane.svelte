@@ -5,7 +5,7 @@
   import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
-  import { Button, Checkbox, ContextItem, IconButton, Input, Tabs, TextButton, menuContent, paneBar } from "$lib/atelier-ui";
+  import { Button, Checkbox, ContextItem, Empty, IconButton, Input, Tabs, TextButton, menuContent, paneBar } from "$lib/atelier-ui";
   import { cn } from "$lib/utils";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
@@ -14,6 +14,7 @@
   import CircleSlashIcon from "@lucide/svelte/icons/circle-slash";
   import CircleXIcon from "@lucide/svelte/icons/circle-x";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
+  import FlaskConicalIcon from "@lucide/svelte/icons/flask-conical";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
   import PlayIcon from "@lucide/svelte/icons/play";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -108,6 +109,10 @@
   {:else}<CircleIcon class="text-muted-foreground size-3.5 shrink-0" />{/if}
 {/snippet}
 
+{#snippet rescanAction()}
+  <Button size="xs" variant="outline" disabled={!!t.run} onclick={() => rescan(repo)}>Neu suchen</Button>
+{/snippet}
+
 {#snippet pre(label: string, text: string)}
   <div class="min-w-0 flex-1">
     <div class="text-muted-foreground mb-0.5 text-[10px]">{label}</div>
@@ -125,10 +130,10 @@
       size="xs"
       disabled={!!t.run || !counts.failed}
       title="Fehlgeschlagene erneut ausführen"
-      onclick={() => run("failed")}><RotateCwIcon /> Fehlgeschl.</Button
+      onclick={() => run("failed")}><RotateCwIcon /> Fehlgeschlagene</Button
     >
-    <Button variant="ghost" size="icon-xs" disabled={!t.run} title="Lauf abbrechen" aria-label="Lauf abbrechen" onclick={() => testCancel(repo)}
-      ><SquareIcon /></Button
+    <Button variant="ghost" size="xs" disabled={!t.run} title="Lauf abbrechen" onclick={() => testCancel(repo)}
+      ><SquareIcon /> Abbrechen</Button
     >
     <Button
       variant="ghost"
@@ -147,7 +152,7 @@
       >
     {/if}
     <span class="flex-1"></span>
-    <span class="text-muted-foreground flex items-center gap-1.5 px-1 font-mono text-[10px]" role="status">
+    <span class="text-muted-foreground text-meta flex items-center gap-1.5 px-1 font-mono" role="status">
       <span class="text-success">✓{counts.passed}</span>
       <span class="text-destructive">✗{counts.failed}</span>
       <span>○{counts.skipped}</span>
@@ -169,9 +174,11 @@
     onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   >
     {#if !visible.length}
-      <p class="text-muted-foreground px-3 py-4 text-center text-[11px]">
-        {t.scanning ? "Suche Tests …" : t.filter || t.failedOnly ? "Keine Treffer." : "Keine Tests gefunden."}
-      </p>
+      <div class="absolute inset-0">
+        <Empty icon={FlaskConicalIcon} action={t.scanning || t.filter || t.failedOnly ? undefined : rescanAction}>
+          {t.scanning ? "Suche Tests …" : t.filter || t.failedOnly ? "Keine Treffer." : "Keine Tests gefunden."}
+        </Empty>
+      </div>
     {/if}
     <div class="relative" style="height:{visible.length * ROW}px">
       {#each slice as r, i (r.id)}
@@ -259,7 +266,7 @@
     {#if t.tab === "output"}
       <pre bind:this={out} class="min-h-0 flex-1 overflow-auto p-2 font-mono text-[11px] whitespace-pre-wrap">{tail.join("\n")}</pre>
     {:else if !sel}
-      <p class="text-muted-foreground p-3 text-[11px]">Test wählen.</p>
+      <div class="min-h-0 flex-1"><Empty>Test in der Liste wählen.</Empty></div>
     {:else}
       <div class="min-h-0 flex-1 space-y-2 overflow-auto p-2">
         <div class="flex items-center gap-1.5">
