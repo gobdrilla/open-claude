@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  // Per terminal id: the invitation left the dialog (copied). Until then nothing is shared, so there is nothing to end.
+  const handedOut = $state<Record<string, boolean>>({});
+</script>
+
 <script lang="ts">
   import { Button, Dialog, Switch } from "$lib/atelier-ui";
   import { invoke } from "@tauri-apps/api/core";
@@ -24,6 +29,7 @@
   async function copy() {
     if (!share) return;
     await navigator.clipboard.writeText(share.ticket);
+    handedOut[id] = true;
     copied = true;
     setTimeout(() => (copied = false), 1500);
   }
@@ -37,11 +43,19 @@
   async function stop() {
     await invoke("share_stop", { id });
     delete shares[id];
+    delete handedOut[id];
     open = false;
+  }
+
+  // Closing before the invitation was copied or used drops it again: otherwise the session would stay
+  // shared without an "end" button.
+  function close() {
+    open = false;
+    if (share && !share.guests && !handedOut[id]) stop();
   }
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root bind:open onOpenChange={(o) => !o && close()}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
       <Dialog.Title>Sitzung teilen</Dialog.Title>
@@ -57,7 +71,7 @@
     {:else}
       <div class="grid min-w-0 gap-3">
         <div class="flex min-w-0 items-start gap-2">
-          <code class="bg-muted max-h-20 min-w-0 flex-1 overflow-y-auto rounded px-2 py-1.5 text-[11px] leading-snug break-all select-all">{share.ticket}</code>
+          <code oncopy={() => (handedOut[id] = true)} class="bg-muted max-h-20 min-w-0 flex-1 overflow-y-auto rounded px-2 py-1.5 text-[11px] leading-snug break-all select-all">{share.ticket}</code>
           <Button size="sm" variant="secondary" onclick={copy}>
             {#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if} Kopieren
           </Button>
@@ -78,8 +92,8 @@
     {/if}
 
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" onclick={() => (open = false)}>Schließen</Button>
-      {#if share}<Button variant="destructive" size="sm" onclick={stop}>Teilen beenden</Button>{/if}
+      {#if share && (share.guests || handedOut[id])}<Button variant="destructive" size="sm" class="mr-auto" onclick={stop}>Teilen beenden</Button>{/if}
+      <Button variant="ghost" size="sm" onclick={close}>Schließen</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>
