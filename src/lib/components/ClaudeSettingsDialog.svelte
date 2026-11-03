@@ -137,7 +137,7 @@
   });
   const globDirty = $derived(JSON.stringify(glob) !== JSON.stringify(globLoaded));
   const dirty = $derived(text !== loaded || globDirty);
-  const discard = async () => !dirty || (await confirm("Ungespeicherte Änderungen an den Claude-Einstellungen verwerfen?", "Verwerfen"));
+  const discard = async () => !dirty || (await confirm("Ungespeicherte Änderungen an den Claude-Einstellungen gehen verloren.", "Verwerfen", "Änderungen verwerfen?"));
   async function close() {
     if (await discard()) open = false;
   }

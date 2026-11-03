@@ -77,7 +77,7 @@
   }
 
   async function remove() {
-    if (!(await confirm(`Profil „${sel}“ löschen? Wirkt erst mit Speichern.`, "Löschen"))) return;
+    if (!(await confirm("Wirkt erst mit Speichern.", "Löschen", `Profil „${sel}“ löschen?`))) return;
     draft = renameProfile(draft, sel, null);
     sel = names[0] ?? "";
   }

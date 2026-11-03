@@ -56,17 +56,17 @@
   const restartHint = () => (running ? `\n\n${running} laufende Sitzung(en) nutzen bis zum Neustart weiter das bisherige Konto.` : "");
 
   async function switchTo(a: Account) {
-    if (!(await confirm(`Zu ${a.email} wechseln? Gilt für neu gestartete Sitzungen.${restartHint()}`, "Wechseln", "Konto wechseln", { tone: "default" }))) return;
+    if (!(await confirm(`Zu ${a.email} wechseln? Gilt für neu gestartete Sitzungen.${restartHint()}`, "Wechseln", "Konto wechseln?", { tone: "default" }))) return;
     act(() => invoke("claude_account_switch", { email: a.email }));
   }
 
   async function forget(a: Account) {
-    if (!(await confirm(`${a.email} aus der Liste entfernen? Angemeldet bleibt, wer gerade aktiv ist.`, "Entfernen"))) return;
+    if (!(await confirm(`${a.email} aus der Liste entfernen? Angemeldet bleibt, wer gerade aktiv ist.`, "Entfernen", "Konto entfernen?"))) return;
     act(() => invoke("claude_account_forget", { email: a.email }));
   }
 
   async function logout() {
-    if (!current || !(await confirm(`${current.email} bei Claude abmelden?${restartHint()}`, "Abmelden"))) return;
+    if (!current || !(await confirm(`${current.email} bei Claude abmelden?${restartHint()}`, "Abmelden", "Abmelden?"))) return;
     act(() => invoke("claude_logout"));
   }
 
@@ -139,7 +139,7 @@
           <Input bind:value={code} placeholder="Code aus dem Browser (falls verlangt)" density="sm" class="font-mono" onkeydown={(e) => e.key === "Enter" && sendCode()} />
           <Button size="sm" variant="outline" disabled={!code.trim()} onclick={sendCode}>Senden</Button>
         </div>
-        <div class="flex justify-end"><Button variant="ghost" size="sm" onclick={stopLogin}>Abbrechen</Button></div>
+        <div class="flex justify-end"><Button variant="ghost" size="sm" onclick={stopLogin}>Anmeldung abbrechen</Button></div>
       </div>
     {:else}
       <ul class="border-border/60 divide-border/60 divide-y rounded-lg border">
@@ -164,10 +164,13 @@
           <li class="text-muted-foreground px-3 py-3 text-sm">{loading ? "Lese Konten …" : "Nicht angemeldet."}</li>
         {/each}
       </ul>
-      <div class="flex justify-end">
-        <Button size="sm" disabled={busy} onclick={startLogin}>{current ? "Weiteres Konto anmelden" : "Anmelden"}</Button>
-      </div>
     {/if}
     {#if error}<p class="text-destructive text-xs whitespace-pre-line">{error}</p>{/if}
+    <div class="flex justify-end gap-2">
+      {#if !login}
+        <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={startLogin}>{current ? "Weiteres Konto anmelden" : "Anmelden"}</Button>
+      {/if}
+      <Button variant="ghost" size="sm" onclick={() => (open = false)}>Schließen</Button>
+    </div>
   </Dialog.Content>
 </Dialog.Root>

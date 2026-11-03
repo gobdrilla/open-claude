@@ -477,8 +477,8 @@
 
   async function installUpdate() {
     // Der Neustart laeuft an der Rueckfrage in Rust vorbei.
-    if (isDirty() && !(await confirm("Ungespeicherte Änderungen im Editor verwerfen und neu starten?", "Neu starten"))) return;
-    if (sessions.length && !(await confirm(sessionsLost(), "Neu starten"))) return;
+    if (isDirty() && !(await confirm("Ungespeicherte Änderungen im Editor gehen dabei verloren.", "Neu starten", "Update installieren?"))) return;
+    if (sessions.length && !(await confirm(sessionsLost(), "Neu starten", "Update installieren?"))) return;
     updating = true;
     try {
       await update!.download();
@@ -737,7 +737,7 @@
   }
 
   async function deleteGroup(name: string) {
-    if (!(await confirm(`Gruppe „${name}“ löschen? Die Repos selbst bleiben unverändert.`, "Löschen"))) return;
+    if (!(await confirm("Die Projekte selbst bleiben unverändert.", "Löschen", `Gruppe „${name}“ löschen?`))) return;
     repoGroups = repoGroups.filter((g) => g.name !== name);
     await store.set("repoGroups", $state.snapshot(repoGroups));
   }
@@ -998,7 +998,7 @@
 
   /** Per Klick beenden: claude arbeitet evtl. noch, daher nachfragen. */
   async function endSession(id: string) {
-    if (await confirm("Sitzung beenden? Ein laufender claude-Prozess wird abgebrochen.", "Beenden")) closeSession(id);
+    if (await confirm("Ein laufender claude-Prozess wird abgebrochen.", "Beenden", "Sitzung beenden?")) closeSession(id);
   }
 
   const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id], delete shares[id]);
