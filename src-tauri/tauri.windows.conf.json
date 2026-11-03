@@ -3,6 +3,11 @@
   "bundle": {
     "resources": {
       "xaml-preview/publish/": "xaml-preview/"
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/hooks.nsh"
+      }
     }
   }
 }
