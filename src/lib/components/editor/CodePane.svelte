@@ -8,8 +8,8 @@
   import { Button, DiffDialog, Empty } from "$lib/atelier-ui";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
-  import { gutterMarks, huge, span } from "$lib/editor.logic";
-  import { gitGutter, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
+  import { detectIndent, gutterMarks, huge, span } from "$lib/editor.logic";
+  import { gitGutter, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
   import { ghost } from "./ghost";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
@@ -51,6 +51,8 @@
         ]),
         basicSetup,
         theme,
+        indentOf(detectIndent(doc)),
+        indentGuides,
         lang.of([]),
         lspExt.of([]),
         lintGutter(),

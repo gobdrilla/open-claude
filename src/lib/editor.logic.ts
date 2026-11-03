@@ -153,6 +153,31 @@ export function gutterMarks(hunks: Hunk[]): GitMark[] {
 }
 
 /**
+ * Indent unit of a file from its leading whitespace, like VS Code's detectIndentation: tabs if most indented lines
+ * start with a tab, else the most frequent step (2..8 spaces) between consecutive indented lines. null = no hint.
+ */
+export function detectIndent(text: string): string | null {
+  let tabs = 0;
+  let spaces = 0;
+  let prev = 0;
+  const steps = new Map<number, number>();
+  for (const line of text.split("\n", 10_000)) {
+    const ws = /^[ \t]*/.exec(line)![0];
+    if (ws.length === line.trimEnd().length) continue; // blank lines carry no indent
+    if (ws[0] === "\t") tabs++;
+    else if (ws) spaces++;
+    if (ws.includes("\t")) continue;
+    // Steps of 1 are JSDoc " * " or alignment, not indentation.
+    const d = Math.abs(ws.length - prev);
+    if (d >= 2 && d <= 8) steps.set(d, (steps.get(d) ?? 0) + 1);
+    prev = ws.length;
+  }
+  if (tabs > spaces) return "\t";
+  const best = [...steps].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+  return best ? " ".repeat(best[0]) : null;
+}
+
+/**
  * Text als Bracketed Paste fuer claudes Prompt: landet im Eingabefeld, wird nie abgeschickt (kein \r am Ende).
  * Rahmen-Sequenzen im Text werden entfernt, sonst beendete ein \x1b[201~ den Paste vorzeitig und der Rest liefe als Tastendruck.
  */

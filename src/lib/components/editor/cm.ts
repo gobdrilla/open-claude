@@ -2,7 +2,8 @@
 import { EditorView } from "codemirror";
 import { Compartment, RangeSet, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { GutterMarker, gutter } from "@codemirror/view";
-import { HighlightStyle, LanguageDescription, LanguageSupport, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, LanguageDescription, LanguageSupport, indentUnit, syntaxHighlighting } from "@codemirror/language";
+import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { languages } from "@codemirror/language-data";
 import { styleTags, tags as t } from "@lezer/highlight";
 import type { St } from "../../testing.logic.ts";
@@ -99,6 +100,18 @@ const highlight = HighlightStyle.define([
 ]);
 
 export const theme: Extension = [chrome, syntaxHighlighting(highlight)];
+
+// Indent guides as in VS Code/JetBrains: one line per indent level, blank lines bridged, the block around the cursor
+// brighter. Same colors for light and dark: the CSS variables already switch with the app theme.
+const guide = "color-mix(in oklch, var(--foreground) 16%, transparent)";
+const activeGuide = "color-mix(in oklch, var(--foreground) 40%, transparent)";
+export const indentGuides: Extension = indentationMarkers({
+  thickness: 1,
+  colors: { light: guide, dark: guide, activeLight: activeGuide, activeDark: activeGuide },
+});
+
+/** Indent unit detected from the file (Tab key and guides); without a hint CodeMirror's default stays. */
+export const indentOf = (unit: string | null): Extension => (unit ? indentUnit.of(unit) : []);
 
 /** Language-Server-Anbindung (lsp.svelte.ts attach); leer ohne Freigabe oder Server. */
 export const lspExt = new Compartment();
