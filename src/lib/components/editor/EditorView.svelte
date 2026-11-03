@@ -23,7 +23,7 @@
   import BuildProfilesDialog from "./BuildProfilesDialog.svelte";
   import RunConfigsDialog from "./RunConfigsDialog.svelte";
   import ListPlusIcon from "@lucide/svelte/icons/list-plus";
-  import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, panelPath, type PanelId } from "$lib/dock";
+  import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, mainGroup, panelPath, splitAt, type PanelId } from "$lib/dock";
   import { closeTab, editor, focus, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
   import { allConfigs, chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
@@ -69,18 +69,25 @@
   ];
 
   function info(id: PanelId): TabInfo {
-    if (id === FILES) return { title: "Dateien", icon: FolderTreeIcon };
-    if (id === PREVIEW) return { title: "Vorschau", icon: PanelRightIcon };
-    if (id === TESTS) return { title: "Tests", icon: FlaskConicalIcon };
-    if (id === RUN) return { title: "Ausgabe", icon: SquareTerminalIcon };
-    if (id === PROBLEMS) return { title: "Probleme", icon: CircleAlertIcon };
-    if (id === SEARCH) return { title: "Suche", icon: SearchIcon };
+    // Panels close via their toolbar toggle; only file tabs carry an x.
+    if (id === FILES) return { title: "Dateien", icon: FolderTreeIcon, closable: false };
+    if (id === PREVIEW) return { title: "Vorschau", icon: PanelRightIcon, closable: false };
+    if (id === TESTS) return { title: "Tests", icon: FlaskConicalIcon, closable: false };
+    if (id === RUN) return { title: "Ausgabe", icon: SquareTerminalIcon, closable: false };
+    if (id === PROBLEMS) return { title: "Probleme", icon: CircleAlertIcon, closable: false };
+    if (id === SEARCH) return { title: "Suche", icon: SearchIcon, closable: false };
     const path = panelPath(id) ?? "";
     const f = s.files[path];
     // Auf der Platte geloescht, Puffer hat noch Aenderungen: der Tab bleibt und sagt es.
     const gone = f?.conflict === "deleted" ? " (gelöscht)" : "";
     const { icon, tint } = fileIcon(path);
     return { title: path.slice(path.lastIndexOf("/") + 1) + gone, hint: path + gone, dirty: f?.dirty, icon, tint };
+  }
+
+  // Output docks at the bottom like runStart does; closing asks first while something runs.
+  function toggleRun() {
+    if (groupOf(s.layout, RUN)) void closeTab(repo, RUN);
+    else setLayout(repo, splitAt(s.layout, RUN, mainGroup(s.layout).id, "bottom"));
   }
 
   // Wie VS Code: Suche zeigen und ins Feld springen, nie ausblenden.
@@ -151,7 +158,7 @@
   >
 {/snippet}
 
-{#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems", label: string, Icon: typeof SaveIcon, title = label)}
+{#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems" | "run", label: string, Icon: typeof SaveIcon, title = label)}
   {@const on = !!groupOf(s.layout, id)}
   <!-- Narrow window: icon only, the tooltip keeps the name. -->
   <Button
@@ -159,7 +166,7 @@
     size="xs"
     aria-pressed={on}
     title="{title} {on ? 'ausblenden' : 'einblenden'}"
-    onclick={() => togglePanel(repo, id)}
+    onclick={() => (id === "run" ? toggleRun() : togglePanel(repo, id))}
     ><Icon /> <span class="max-lg:hidden">{label}</span>
     {#if id === "problems" && found.length}
       <span
@@ -243,6 +250,7 @@
       {@render toggle("tests", "Tests", FlaskConicalIcon)}
       {@render toggle("preview", "Vorschau", PanelRightIcon)}
       {@render toggle("problems", "Probleme", CircleAlertIcon, `Probleme (${MOD}+Umschalt+M)`)}
+      {#if r.current || groupOf(s.layout, RUN)}{@render toggle("run", "Ausgabe", SquareTerminalIcon)}{/if}
     </span>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
