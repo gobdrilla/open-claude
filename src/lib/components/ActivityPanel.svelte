@@ -20,7 +20,6 @@
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
-  import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
   import PlayIcon from "@lucide/svelte/icons/play";
   import PencilIcon from "@lucide/svelte/icons/pencil";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -431,6 +430,7 @@
     return rows.filter((r): r is [string, string] => typeof r[1] === "string" && !!r[1]);
   }
   const ACT = { run: "running", ok: "done", err: "error" } as const;
+  const resultHead = "text-meta text-muted-foreground mb-1 font-semibold tracking-wide uppercase";
 
   // Status-Schluessel fuer status(): Laufen schlaegt Fehler schlaegt Abbruch; ohne Agents offen.
   const phaseState = (as: Agent[]) =>
@@ -679,8 +679,8 @@
               <span class="min-w-16 flex-1 truncate font-medium" title={r.name}>{r.name}</span>
               <span class="text-muted-foreground min-w-0 truncate tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
             </SectionToggle>
-            <IconButton size="bare" class="p-1.5" label="Groß anzeigen" onclick={() => openBig(r)}
-              ><Maximize2Icon class="size-3.5" /></IconButton
+            <Button size="2xs" variant="outline" class="mx-1.5" title="Groß anzeigen: alle Agents mit Verlauf und Ergebnis" onclick={() => openBig(r)}
+              >Details</Button
             >
           </div>
           {#if open}{@render phases(r)}{/if}
@@ -765,6 +765,8 @@
   {:else}
     {@const a = focused.a}
     {@const cs = chunks(log)}
+    <!-- Without a journal result, a finished agent's closing text is its result. -->
+    {@const fin = !a.result && a.state !== "running" && cs.length && !cs[cs.length - 1].tools ? cs.length - 1 : -1}
     <ol class="space-y-1">
       {#each cs as c, i (i)}
         <li>
@@ -776,6 +778,7 @@
                 <pre class="mt-1 max-h-64 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{e.body}</pre>
               </details>
             {:else}
+              {#if i === fin}<div class="{resultHead} mt-2">Ergebnis</div>{/if}
               <!-- Breite Tabellen/Code scrollen hier, nicht das ganze Panel unter die Kopfzeile. -->
               <div class="border-primary/40 min-w-0 overflow-x-auto border-l-2 py-0.5 pl-2"><Markdown text={e.body} /></div>
             {/if}
@@ -809,7 +812,7 @@
     </ol>
     {#if a.result}
       <div class="border-border/60 mt-2 rounded-lg border p-2">
-        <div class="text-muted-foreground mb-1">Ergebnis</div>
+        <div class={resultHead}>Ergebnis</div>
         <div class="min-w-0 overflow-x-auto"><Markdown text={a.result} /></div>
       </div>
     {/if}
