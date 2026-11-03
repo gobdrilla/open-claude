@@ -1764,6 +1764,7 @@
       ])}
       {@render keys("Git", [
         ["Esc", "Zurück zu den Projekten"],
+        ["Alt + 1 … 5", "Änderungen / Verlauf / Releases / CI / Unity"],
         [`${mod} + ⇧ + F`, "Fetch"],
         [`${mod} + ⇧ + L`, "Pull"],
         [`${mod} + ⇧ + P`, "Push"],

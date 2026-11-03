@@ -243,11 +243,13 @@
   function onkeydown(e: KeyboardEvent) {
     const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey; // AltGr = Strg+Alt
     const k = e.key.toLowerCase();
-    if (ctrl && !e.shiftKey && e.key === "1") tab = "changes";
-    else if (ctrl && !e.shiftKey && e.key === "2") tab = "history";
-    else if (ctrl && !e.shiftKey && e.key === "3") tab = "releases";
-    else if (ctrl && !e.shiftKey && e.key === "4") tab = "ci";
-    else if (ctrl && !e.shiftKey && e.key === "5" && isUnity) tab = "unity";
+    // Strg+1/2/3 switch views globally, so tabs use Alt+digit (e.code: macOS Option changes e.key).
+    const alt = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if (alt && e.code === "Digit1") tab = "changes";
+    else if (alt && e.code === "Digit2") tab = "history";
+    else if (alt && e.code === "Digit3") tab = "releases";
+    else if (alt && e.code === "Digit4") tab = "ci";
+    else if (alt && e.code === "Digit5" && isUnity) tab = "unity";
     else if (ctrl && e.shiftKey && k === "f") doFetch();
     else if (ctrl && e.shiftKey && k === "p") push();
     else if (ctrl && e.shiftKey && k === "l") pull();
@@ -467,11 +469,11 @@
             pill
             bind:value={tab}
             tabs={[
-              { id: "changes", label: "Änderungen", title: "Strg+1", count: status.files.length },
-              { id: "history", label: "Verlauf", title: "Strg+2" },
-              { id: "releases", label: "Releases", title: "Strg+3" },
-              { id: "ci", label: "CI", title: `${ciKind === "gitlab" ? "GitLab Pipelines" : ciKind === "github" ? "GitHub Actions" : "CI"} (Strg+4)` },
-              ...(isUnity ? [{ id: "unity" as const, label: "Unity", title: "Strg+5" }] : []),
+              { id: "changes", label: "Änderungen", title: "Alt+1", count: status.files.length },
+              { id: "history", label: "Verlauf", title: "Alt+2" },
+              { id: "releases", label: "Releases", title: "Alt+3" },
+              { id: "ci", label: "CI", title: `${ciKind === "gitlab" ? "GitLab Pipelines" : ciKind === "github" ? "GitHub Actions" : "CI"} (Alt+4)` },
+              ...(isUnity ? [{ id: "unity" as const, label: "Unity", title: "Alt+5" }] : []),
             ]}
           />
           <div class="min-h-0 flex-1">
