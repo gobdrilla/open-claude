@@ -504,8 +504,10 @@
   const sessionsLost = () => `${sessions.length} laufende Claude-Sitzung(en) werden dabei beendet.`;
 
   /** Ohne Tray beendet Schliessen die App (lib.rs, on_window_event); Rust fragt nur nach ungespeicherten Dateien. */
-  async function closeWindow() {
-    if (!mac && !tray && sessions.length && !(await confirm(sessionsLost(), "Beenden", "L'Atelier de Claude beenden?"))) return;
+  /** byKey: per Esc ausgeloest; das beendet ohne Tray die App, darum dann immer nachfragen. */
+  async function closeWindow(byKey = false) {
+    const ask = sessions.length ? sessionsLost() : byKey ? "Esc schließt das Fenster und beendet die App." : "";
+    if (!mac && !tray && ask && !(await confirm(ask, "Beenden", "L'Atelier de Claude beenden?"))) return;
     getCurrentWindow().close();
   }
 
@@ -1160,7 +1162,7 @@
       launchFree();
     } else if (e.key === "Escape") {
       if (query) query = "";
-      else closeWindow();
+      else closeWindow(true);
     } else {
       return;
     }
@@ -1292,7 +1294,7 @@
       tone="close"
       tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
-      onclick={closeWindow}
+      onclick={() => closeWindow()}
       label="Schließen"
       title={undefined}><XIcon class="size-3.5" /></IconButton
     >
