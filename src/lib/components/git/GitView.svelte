@@ -1,9 +1,11 @@
 <script lang="ts">
   import { confirm as ask } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, Checkbox, ConfirmDialog, DiffDialog, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
+  import { Button, Checkbox, ConfirmDialog, DiffDialog, IconButton, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import { tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
+  import { invoke } from "@tauri-apps/api/core";
+  import { FILES_APP } from "$lib/editor.logic";
   import { git, forge, accountId, type Account, type ForgeKind, type RepoAccount, type Status } from "$lib/git";
   import Sidebar from "./Sidebar.svelte";
   import AskDialog from "./AskDialog.svelte";
@@ -27,6 +29,8 @@
   import UserIcon from "@lucide/svelte/icons/user";
   import CheckIcon from "@lucide/svelte/icons/check";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
+  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import RefreshIcon from "@lucide/svelte/icons/refresh-cw";
 
   let {
     repo,
@@ -112,7 +116,7 @@
     if (remote || moved) forgeKey++;
   }
 
-  /** Fuer den Aktualisieren-Knopf in der Titelleiste und F5; alte Meldungen gelten dann nicht mehr. */
+  /** Fuer den Aktualisieren-Knopf in der Kopfleiste und F5; alte Meldungen gelten dann nicht mehr. */
   export const reload = () => {
     error = note = "";
     return refresh(true, true);
@@ -197,6 +201,11 @@
       busy = "";
     }
   }
+
+  const reveal = () =>
+    invoke("reveal", { path: repo.includes("\\") ? cur.replaceAll("/", "\\") : cur }).catch((e) => (error = String(e)));
+  // Only one filled action: pull first when behind (push would be rejected anyway), else push when ahead.
+  const hot = $derived(status?.behind ? "pull" : status?.ahead ? "push" : null);
 
   const doFetch = () => run("Fetch", () => git.fetch(cur));
   const pull = (rebase = false) => run("Pull", () => git.pull(cur, rebase));
@@ -331,17 +340,22 @@
       </div>
     {/if}
     {@render tool("Fetch", "Fetch (Strg+Umschalt+F)", doFetch, CloudDownloadIcon)}
-    {@render tool("Pull", "Pull (Strg+Umschalt+L)", () => pull(), DownloadIcon, !!status?.behind)}
+    {@render tool(status?.behind ? `Pull ${status.behind}` : "Pull", "Pull (Strg+Umschalt+L)", () => pull(), DownloadIcon, hot === "pull")}
     {@render menu([
       ["Pull (Merge)", () => pull(false)],
       ["Pull (Rebase)", () => pull(true)],
     ])}
-    {@render tool("Push", "Push (Strg+Umschalt+P)", push, UploadIcon, !!status?.ahead)}
+    {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", "Push (Strg+Umschalt+P)", push, UploadIcon, hot === "push")}
     {@render menu([["Force-Push …", forcePush]])}
     <span class="bg-border mx-1.5 h-4 w-px"></span>
     {@render tool("Stash", "Änderungen stashen", () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
     {@render tool("Branch", "Neuer Branch ab HEAD", () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
     <span class="flex-1"></span>
+    <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title="Ordner im {FILES_APP} öffnen (Strg+Umschalt+E)">
+      <FolderOpenIcon class="size-3.5" />
+      {FILES_APP}
+    </Button>
+    <IconButton size="md" class="mx-0.5" label="Aktualisieren" title="Aktualisieren (F5)" onclick={reload}><RefreshIcon class="size-3.5" /></IconButton>
     {#if acct}
       <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
         <DropdownMenu.Trigger
