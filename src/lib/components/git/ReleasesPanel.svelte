@@ -1,6 +1,6 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, RefreshButton, Row, Textarea, TextButton } from "$lib/atelier-ui";
+  import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Empty, Input, RefreshButton, Row, Textarea, TextButton } from "$lib/atelier-ui";
   import { confirm } from "$lib/confirm.svelte";
   import Markdown from "$lib/components/Markdown.svelte";
   import { untrack } from "svelte";
@@ -55,7 +55,8 @@
       page = 1;
       done = !res || res.items.length < PAGE;
       // Gespeichertes Release kann ausserhalb der ersten Seite liegen: dann den gelieferten Stand zeigen.
-      selected = select ? (items.find((r) => r.id === select.id) ?? (select === selected ? null : select)) : null;
+      // Without a (still existing) selection, preselect the newest release.
+      selected = (select && (items.find((r) => r.id === select.id) ?? (select === selected ? null : select))) || (items[0] ?? null);
     } catch (e) {
       if (g === gen) error = String(e);
     } finally {
@@ -219,7 +220,9 @@
             >
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-[11px]" title={r.name || r.tag}>{r.name || r.tag}</span>
-                <span class="text-muted-foreground block truncate font-mono text-[10px]">{r.tag}</span>
+                {#if r.name && r.name !== r.tag}
+                  <span class="text-muted-foreground block truncate font-mono text-[10px]">{r.tag}</span>
+                {/if}
               </span>
               {#if r.draft}<Badge variant="outline" class="shrink-0 text-[10px]">Draft</Badge>{/if}
               {#if r.prerelease}<Badge variant="outline" class="shrink-0 text-[10px] text-warning border-warning/40">Pre-Release</Badge>{/if}
@@ -231,9 +234,7 @@
           {/each}
           {#if loading}
             <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
-          {:else if !items.length}
-            <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Noch keine Releases.</p>
-          {:else if !done}
+          {:else if items.length && !done}
             <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
           {/if}
         </div>
@@ -255,7 +256,7 @@
               <Button size="xs" variant="destructive" disabled={busy} onclick={() => (confirmDelete = r)}>Löschen</Button>
             </div>
             <p class="text-muted-foreground text-[10px]">
-              <span class="font-mono">{r.tag}</span> · {r.author} · {new Date(r.published_at ?? r.created_at).toLocaleString("de-DE")}
+              {#if r.name && r.name !== r.tag}<span class="font-mono">{r.tag}</span> · {/if}{r.author} · {new Date(r.published_at ?? r.created_at).toLocaleString("de-DE")}
             </p>
             {#if r.body}
               <Markdown text={r.body} base={r.web_url} onerror={(e) => (error = e)} />
@@ -292,8 +293,15 @@
               </ul>
             {/if}
           </div>
-        {:else if items.length}
-          <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Release wählen.</p>
+        {:else if !loading}
+          <Empty icon={PackageIcon}>
+            Noch keine Releases.
+            {#snippet action()}
+              <Button size="sm" variant="outline" disabled={busy || !kind} onclick={() => openForm(null)}>
+                <PlusIcon class="size-3" />Neues Release
+              </Button>
+            {/snippet}
+          </Empty>
         {/if}
       </div>
     </div>
