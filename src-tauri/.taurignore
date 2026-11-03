@@ -1,0 +1,6 @@
+# Files written while the app runs; without this, `tauri dev` restarts the app and open sessions are lost.
+# dotnet build of the WPF preview (Tests panel, XAML preview)
+xaml-preview/bin/
+xaml-preview/obj/
+# claude writes type stubs into every mod folder it loads; in debug the built-in mod is the source folder
+**/.claude-plugin/types/

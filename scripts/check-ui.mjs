@@ -1,8 +1,10 @@
 // Controls come only from $lib/atelier-ui: raw elements and old import paths outside the library are errors.
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows that is "/C:/…" and join() makes "C:\C:\…".
+const root = fileURLToPath(new URL("..", import.meta.url));
 const src = join(root, "src");
 const lib = join(src, "lib", "atelier-ui");
 const RAW = /<(button|input|select|textarea)\b/g;
