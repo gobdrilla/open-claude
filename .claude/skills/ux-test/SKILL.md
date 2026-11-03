@@ -24,10 +24,11 @@ Treiber: `powershell -ExecutionPolicy Bypass -File .claude/skills/ux-test/ui.ps1
 git pull
 npm ci
 # Wayland: xdotool/import sehen native Wayland-Fenster nicht, darum die App unter XWayland starten
-GDK_BACKEND=x11 npm run tauri dev     # im Hintergrund
+# cargo liegt oft nur in ~/.cargo/bin, das fehlt dann im PATH der Shell
+PATH="$HOME/.cargo/bin:$PATH" GDK_BACKEND=x11 npm run tauri dev     # im Hintergrund
 ```
 Pakete, falls etwas fehlt: `xdotool imagemagick` und für den Build `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libdbus-1-dev pkg-config`.
-Treiber: `bash .claude/skills/ux-test/ui.sh <befehl> ...`
+Treiber: `bash .claude/skills/ux-test/ui.sh <befehl> ...` (steuert den Dev-Build, auch wenn eine installierte Atelier läuft)
 
 Screenshots in einen eigenen Ordner außerhalb des Repos, z. B. `%TEMP%\ux-test\` bzw. `/tmp/ux-test/`, Dateinamen wie `03-git-verlauf-dark-1280.png`.
 
@@ -37,11 +38,13 @@ Screenshots in einen eigenen Ordner außerhalb des Repos, z. B. `%TEMP%\ux-test\
 |---|---|---|
 | Screenshot | `shot C:\…\x.png` | `shot /tmp/ux-test/x.png` |
 | Kürzel | `combo ctrl+1`, `alt+2`, `f1`, `esc`, `ctrl+shift+e`, `altgr+q`, `down`, `space` | `keys ctrl+1`, `alt+2`, `F1`, `Escape`, `ctrl+shift+e` |
-| Text tippen | `keys "Terminal.svelte"`, `"{BS 5}"` (SendKeys) | `xdotool type "Terminal.svelte"` direkt |
+| Text tippen | `keys "Terminal.svelte"`, `"{BS 5}"` (SendKeys) | `type "Terminal.svelte"` |
 | Klick / Rechtsklick / Hover | `click 640 120`, `rclick …`, `hover …` | `click 640 120`, `rclick …`, `hover …` |
 | Fenstergröße | `size 1280 760` (physische Pixel = logisch × Skalierung) | `size 1280 720` |
 
 Koordinaten sind Pixel im letzten Screenshot, also relativ zur linken oberen Fensterecke. Erst Screenshot, Ziel im Bild suchen, dann klicken, dann neuer Screenshot. Klappt etwas zweimal nicht, den User bitten, den Schritt von Hand zu machen, und danach fotografieren.
+
+Der erste Klick nach dem Start oder nach einem Fokuswechsel geht manchmal verloren: lieber einen Klick pro Aufruf und danach fotografieren als ganze Klickketten. Esc auf der Startseite schließt das Fenster (mit Rückfrage), also Menüs dort lieber per Klick daneben schließen. Der User sollte während des Tests die Maus nicht bewegen.
 
 Unter Windows mit Skalierung 150 %: 1280×720 logisch heißt `size 1920 1080`. Der App-Zoom (Einstellungen › Darstellung) verkleinert die logische Breite zusätzlich: bei 120 % sind 1280 px nur ~1067 px, Texte in Werkzeugleisten können dann schon wegfallen.
 
