@@ -6,13 +6,14 @@
   import Share2Icon from "@lucide/svelte/icons/share-2";
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
   import PlusIcon from "@lucide/svelte/icons/plus";
+  import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import { Button, Select } from "$lib/atelier-ui";
   import { MODES } from "$lib/claudemode";
 
   // Steuert claude im Terminal: Slash-Commands gehen ueber die open-claude-Mod (claude_command), der Modus per Umschalt+Tab.
   // mode: aus der Terminal-Fusszeile (Terminal.svelte), undefined bis claude sie zeigt
   // guest: claude runs at the host, so only the view actions on the right are shown.
-  // share/onnew: missing = not offered for this session (guest, group).
+  // share/onnew/onskills: missing = not offered for this session (guest, group, no project).
   let {
     id,
     mode,
@@ -21,6 +22,7 @@
     ontoggleside,
     share,
     onnew,
+    onskills,
     onsettings,
   }: {
     id: string;
@@ -30,6 +32,7 @@
     ontoggleside: () => void;
     share?: { on: boolean; guests: number; open: () => void };
     onnew?: () => void;
+    onskills?: () => void;
     onsettings: () => void;
   } = $props();
 
@@ -146,6 +149,11 @@
     <Button variant="outline" size="xs" class="gap-1.5 font-normal" title="MCP-Server (/mcp)" onclick={mcp}
       ><PlugIcon class="size-3" /> MCP</Button
     >
+    {#if onskills}
+      <Button variant="outline" size="xs" class="gap-1.5 font-normal" title="Skills und Plugins dieses Projekts" onclick={onskills}
+        ><SparklesIcon class="size-3" /> Skills</Button
+      >
+    {/if}
   {/if}
   <span class="flex-1"></span>
   {#if error}<span class="text-destructive min-w-0 truncate" title={error}>{error}</span>{/if}

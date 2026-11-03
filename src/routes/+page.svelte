@@ -61,6 +61,7 @@
   import { unity, unityBadgeText, type UnityInfo } from "$lib/unity";
   import UnityCloseDialog from "$lib/components/unity/UnityCloseDialog.svelte";
   import ProfilesDialog from "$lib/components/skills/ProfilesDialog.svelte";
+  import SkillsDialog from "$lib/components/skills/SkillsDialog.svelte";
   import { sync, touched, profileFor, managed, pkey, emptyProject, type SkillStore, type ProjectSkills } from "$lib/skills";
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import DownloadIcon from "@lucide/svelte/icons/download";
@@ -199,6 +200,7 @@
   let accounts = $state<Account[]>([]);
   let skillStore = $state<SkillStore>({ profiles: {}, kindProfiles: {}, projects: {} });
   let profilesOpen = $state(false);
+  let skillsOpen = $state(false);
   let claudeOpen = $state(false);
   let claudeAccountsOpen = $state(false);
   let settingsOpen = $state(false);
@@ -1039,7 +1041,7 @@
 
   // Alle Dialoge ausser der Hilfe (F1 schaltet sie um)
   const anyDialog = $derived(
-    cloneOpen || createOpen || accountsOpen || shareOpen || joinOpen || claudeOpen || setup || rootOpen || !!doomed || profilesOpen || !!groupEdit ||
+    cloneOpen || createOpen || accountsOpen || shareOpen || joinOpen || claudeOpen || setup || rootOpen || !!doomed || profilesOpen || skillsOpen || !!groupEdit ||
       claudeAccountsOpen || settingsOpen || !!confirming.q || !!unityClosePath || ide.diffs.length > 0,
   );
 
@@ -1583,6 +1585,7 @@
           ontoggleside={toggleSide}
           share={s.guest ? undefined : { on: !!shares[s.id], guests: shares[s.id]?.guests ?? 0, open: () => (shareOpen = true) }}
           onnew={s.group || s.guest ? undefined : () => launch(s.repo, true)}
+          onskills={s.group || s.guest || isFree(s.repo) ? undefined : () => (skillsOpen = true)}
           onsettings={() => (claudeOpen = true)}
         />
       {/if}
@@ -1812,6 +1815,17 @@
   oncancel={() => (groupEdit = null)}
 />
 
+{#if activeSession && !activeSession.group && !activeSession.guest && !isFree(activeSession.repo)}
+  {@const r = activeSession.repo}
+  <SkillsDialog
+    bind:open={skillsOpen}
+    repo={r.path}
+    name={split(r.rel)[1]}
+    kind={r.kind}
+    store={skillStore}
+    onproject={(ps) => setProjectSkills(r.path, ps)}
+  />
+{/if}
 <ProfilesDialog bind:open={profilesOpen} store={skillStore} {repos} repo={current?.repo.path} onsave={saveProfiles} />
 
 <UnityCloseDialog bind:path={unityClosePath} onclosed={(p) => loadUnityInfo(p, true)} />
