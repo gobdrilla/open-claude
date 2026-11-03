@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abs, rel, ancestors, atRef, cite, detectIndent, devUrl, ghostText, gutterMarks, huge, moved, packageManager, pasteFrame, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
+import { abs, rel, ancestors, atRef, cite, detectIndent, devUrl, ghostText, indentBlock, gutterMarks, huge, moved, packageManager, pasteFrame, plain, pushNav, serverUrl, span, under, verdict } from "./editor.logic.ts";
 import { parseDiff } from "./diff.ts";
 
 test("unveraenderte Platte: nichts tun, egal ob lokal geaendert", () => {
@@ -183,4 +183,15 @@ test("detectIndent: tabs, 2 and 4 spaces, JSDoc and blank lines ignored", () => 
   assert.equal(detectIndent("a:\n  b:\n    c: 1\n  d: 2\n"), "  ");
   assert.equal(detectIndent("class A {\n    /**\n     * doc\n     */\n    void f() {\n\n        g();\n    }\n}\n"), "    ");
   assert.equal(detectIndent("no indent\nat all\n"), null);
+});
+
+test("indentBlock: deeper lines with blank lines inside, stops at the same level", () => {
+  const doc = ["a:", "  b: 1", "", "  c:", "    d: 2", "e: 3", "", "  "];
+  const at = (n: number) => doc[n - 1];
+  assert.equal(indentBlock(at, 1, doc.length), 5);
+  assert.equal(indentBlock(at, 4, doc.length), 5);
+  assert.equal(indentBlock(at, 2, doc.length), null); // next line is not deeper
+  assert.equal(indentBlock(at, 3, doc.length), null); // blank line
+  assert.equal(indentBlock(at, 6, doc.length), null); // only blank lines follow
+  assert.equal(indentBlock((n) => ["x", "\ty"][n - 1], 1, 2), 2);
 });

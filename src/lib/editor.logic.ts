@@ -178,6 +178,32 @@ export function detectIndent(text: string): string | null {
 }
 
 /**
+ * Indentation fold like VS Code's fallback: from line n (1-based) the block of following lines indented deeper,
+ * blank lines inside it included. Returns the last line of the block, null if there is none.
+ */
+export function indentBlock(line: (n: number) => string, n: number, total: number, tabSize = 4): number | null {
+  const indent = (s: string) => {
+    let col = 0;
+    for (const ch of s) {
+      if (ch === " ") col++;
+      else if (ch === "\t") col += tabSize - (col % tabSize);
+      else return col;
+    }
+    return -1; // blank
+  };
+  const base = indent(line(n));
+  if (base < 0) return null;
+  let last: number | null = null;
+  for (let i = n + 1; i <= total; i++) {
+    const d = indent(line(i));
+    if (d < 0) continue;
+    if (d <= base) break;
+    last = i;
+  }
+  return last;
+}
+
+/**
  * Text als Bracketed Paste fuer claudes Prompt: landet im Eingabefeld, wird nie abgeschickt (kein \r am Ende).
  * Rahmen-Sequenzen im Text werden entfernt, sonst beendete ein \x1b[201~ den Paste vorzeitig und der Rest liefe als Tastendruck.
  */

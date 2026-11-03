@@ -2,12 +2,12 @@
 import { EditorView } from "codemirror";
 import { Compartment, RangeSet, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { GutterMarker, gutter } from "@codemirror/view";
-import { HighlightStyle, LanguageDescription, LanguageSupport, indentUnit, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, LanguageDescription, LanguageSupport, foldService, foldable, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { languages } from "@codemirror/language-data";
 import { styleTags, tags as t } from "@lezer/highlight";
 import type { St } from "../../testing.logic.ts";
-import type { GitMark } from "../../editor.logic.ts";
+import { indentBlock, type GitMark } from "../../editor.logic.ts";
 
 const chrome = EditorView.theme(
   {
@@ -112,6 +112,23 @@ export const indentGuides: Extension = indentationMarkers({
 
 /** Indent unit detected from the file (Tab key and guides); without a hint CodeMirror's default stays. */
 export const indentOf = (unit: string | null): Extension => (unit ? indentUnit.of(unit) : []);
+
+// Fold by indentation where the grammar has no fold for the line (YAML, Python-like text, template blocks in .svelte),
+// as VS Code does. The guard lets the inner foldable() reach the syntax folding without calling us again.
+let probing = false;
+export const indentFolding: Extension = foldService.of((state, from, to) => {
+  if (probing) return null;
+  probing = true;
+  try {
+    if (foldable(state, from, to)) return null;
+  } finally {
+    probing = false;
+  }
+  const doc = state.doc;
+  const n = doc.lineAt(from).number;
+  const last = indentBlock((i) => doc.line(i).text, n, doc.lines, state.tabSize);
+  return last ? { from: to, to: doc.line(last).to } : null;
+});
 
 /** Language-Server-Anbindung (lsp.svelte.ts attach); leer ohne Freigabe oder Server. */
 export const lspExt = new Compartment();
