@@ -93,6 +93,9 @@
   let now = $state(Date.now());
   // Offen/zu je Run; ohne Eintrag sind laufende Runs offen.
   let openRuns = $state<Record<string, boolean>>({});
+  // Collapsed sections of the Arbeit tab, kept per app run (all open by default).
+  let folded = $state({ tpl: false, runs: false, agents: false });
+  const sectionHead = "text-muted-foreground py-1 text-ui font-normal";
   // Aufgeklappte Prompts, Schluessel `${run}:${agent}`; standardmaessig zu.
   let openPrompts = $state<Record<string, boolean>>({});
   // Phasen-Override des Users, Schluessel `${run}:${phase}`; ohne Eintrag offen, solange sie laeuft oder Fehler hat.
@@ -519,10 +522,13 @@
     {#if tab === "work" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
       <section class="border-border/60 @container mb-2 rounded-lg border">
-        <div class="flex items-center justify-between px-2 py-1">
-          <span class="text-muted-foreground">Vorlagen</span>
-          {#if !guest}<TextButton onclick={() => editTemplate(null)}>+ Neu</TextButton>{/if}
+        <div class="flex items-center justify-between pr-2">
+          <SectionToggle class={sectionHead} open={!folded.tpl} onclick={() => (folded.tpl = !folded.tpl)}
+            >Vorlagen{#if tpls.length}<span class="text-meta">{tpls.length}</span>{/if}</SectionToggle
+          >
+          {#if !guest}<TextButton class="shrink-0" onclick={() => editTemplate(null)}>+ Neu</TextButton>{/if}
         </div>
+        {#if !folded.tpl}
         {#each tpls as x (x.f.path)}
           <div class="border-border/60 flex items-center gap-1.5 border-t px-2 py-1">
             <span class="max-w-32 min-w-10 truncate font-medium" title={[x.f.path, x.description].filter(Boolean).join("\n")}>{x.name}</span>
@@ -573,6 +579,7 @@
           {#if !tplError}<p class="text-muted-foreground border-border/60 border-t px-2 py-1">Noch keine. Oder Claude sagen: „erstell einen Workflow für … und speicher ihn als Vorlage“.</p>{/if}
         {/each}
         {#if tplError}<p class="text-destructive border-border/60 border-t px-2 py-1">{tplError}</p>{/if}
+        {/if}
       </section>
     {/if}
     {#if actionError && !error}
@@ -692,10 +699,16 @@
         <Empty>Noch keine Prompts in dieser Sitzung.</Empty>
       {/each}
     {:else if tab === "work"}
+      {#if data.runs.length}
+      <section class="border-border/60 mb-2 rounded-lg border">
+        <SectionToggle class={sectionHead} open={!folded.runs} onclick={() => (folded.runs = !folded.runs)}
+          >Workflows<span class="text-meta">{data.runs.length}</span></SectionToggle
+        >
+        {#if !folded.runs}
       {#each data.runs as r (r.id)}
         {@const open = openRuns[r.id] ?? r.status === "running"}
         {@const [icon, color, text] = status(r.status)}
-        <section class="border-border/60 mb-2 rounded-lg border">
+        <div class="border-border/60 border-t">
           <div class="flex items-center">
             <SectionToggle variant="item" class="flex-1" {open} onclick={() => (openRuns[r.id] = !open)}>
               <span class={color} title={text}>{icon}</span>
@@ -707,12 +720,17 @@
             >
           </div>
           {#if open}{@render phases(r)}{/if}
-        </section>
+        </div>
       {/each}
+        {/if}
+      </section>
+      {/if}
       {#if solo.agents.length}
         <section class="border-border/60 mb-2 rounded-lg border">
-          <div class="text-muted-foreground px-2 py-1">Agents</div>
-          {@render phases(solo)}
+          <SectionToggle class={sectionHead} open={!folded.agents} onclick={() => (folded.agents = !folded.agents)}
+            >Agents<span class="text-meta">{solo.agents.length}</span></SectionToggle
+          >
+          {#if !folded.agents}{@render phases(solo)}{/if}
         </section>
       {:else if !data.runs.length}
         <Empty>Keine Workflows oder Agents in dieser Sitzung.</Empty>
