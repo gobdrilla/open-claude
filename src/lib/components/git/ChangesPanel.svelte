@@ -28,7 +28,7 @@
     /** remote: Remote-Stand hat sich geaendert (Push), Seitenleiste und Verlauf neu laden. */
     onchange: (remote?: boolean) => void;
     onconflict: (path: string) => void;
-    onedit?: (path: string) => void;
+    onedit?: (path: string, line?: number) => void;
     onsubmodule: (path: string) => void;
   } = $props();
 
@@ -498,7 +498,7 @@
           <Button size="xs" variant="outline" class="self-start" onclick={() => onsubmodule(sel!.path)}>Submodul öffnen</Button>
         </div>
       {:else if sel}
-        <DiffView diff={diff ?? ""} {actions} {busy} {repo} />
+        <DiffView diff={diff ?? ""} {actions} {busy} {repo} onopen={onedit} />
       {:else if status.files.length}
         <Empty icon={FileDiffIcon} hint="↑↓ wechseln · Leertaste stagen">Datei links auswählen, um den Diff zu sehen.</Empty>
       {:else}

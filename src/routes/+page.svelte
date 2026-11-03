@@ -1663,10 +1663,11 @@
           bind:this={gitView}
           repo={gitRepo.path}
           unity={isUnity(gitRepo)}
-          onedit={(path) => {
+          onedit={async (path, line) => {
             const repo = gitRepo!;
-            openEdit(repo);
-            if (editRepo?.path === repo.path) openFile(repo.path, path);
+            // openEdit waits for the git view to let go; before that editRepo is still unset.
+            await openEdit(repo);
+            if (editRepo?.path === repo.path) await openFile(repo.path, path, line);
           }}
           {accounts}
           onaccounts={() => (accountsOpen = true)}

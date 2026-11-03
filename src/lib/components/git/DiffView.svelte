@@ -13,7 +13,8 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { parseDiff } from "$lib/diff";
-  import { Button, PromptDialog, TextButton, fileIcon } from "$lib/atelier-ui";
+  import { Button, IconButton, PromptDialog, TextButton, fileIcon } from "$lib/atelier-ui";
+  import FileCodeIcon from "@lucide/svelte/icons/file-code";
   import { review } from "$lib/review.svelte";
   import { dirname } from "$lib/tree";
 
@@ -24,7 +25,20 @@
     busy = false,
     repo,
     rev,
-  }: { diff: string; actions?: HunkAction[]; empty?: string; busy?: boolean; repo?: string; rev?: string } = $props();
+    onopen,
+  }: {
+    diff: string;
+    actions?: HunkAction[];
+    empty?: string;
+    busy?: boolean;
+    repo?: string;
+    rev?: string;
+    /** Open the file in the editor (header button, double-click on a line jumps to it). */
+    onopen?: (path: string, line?: number) => void;
+  } = $props();
+
+  // Line in the new version; a deleted line maps to the nearest line above it.
+  const newLine = (hunk: Hunk, li: number) => hunk.lines.slice(0, li + 1).findLast((l) => l.new)?.new ?? Math.max(1, hunk.newStart);
 
   const files = $derived(parseDiff(diff));
 
@@ -109,6 +123,14 @@
           >{file.oldPath !== file.newPath ? `${file.oldPath} →` : dir}</span
         >
         <span class="flex-1"></span>
+        {#if onopen && file.status !== "deleted"}
+          <IconButton
+            size="md"
+            label="Im Editor öffnen"
+            title="Im Editor öffnen (Doppelklick auf eine Zeile springt dorthin)"
+            onclick={() => onopen(file.newPath, file.hunks[0] && newLine(file.hunks[0], 0))}><FileCodeIcon class="size-3.5" /></IconButton
+          >
+        {/if}
         {#if !file.binary}
           <span class="bg-success/15 text-success rounded-full px-1.5 font-mono text-[10px]">+{count(file, "add")}</span>
           <span class="bg-destructive/15 text-destructive rounded-full px-1.5 font-mono text-[10px]">−{count(file, "del")}</span>
@@ -156,6 +178,7 @@
               : ''} {noted ? 'outline-warning outline-1 -outline-offset-1 outline-dashed' : ''}"
             title={noted?.text}
             onclick={(e) => change && pickable && pick(key, hunk, li, e.shiftKey)}
+            ondblclick={onopen && file.status !== "deleted" ? () => onopen(file.newPath, newLine(hunk, li)) : undefined}
           >
             <span class="text-muted-foreground/60 w-10 shrink-0 pr-1 text-right select-none">{line.old ?? ""}</span>
             <span class="text-muted-foreground/60 w-10 shrink-0 pr-1 text-right select-none">{line.new ?? ""}</span>

@@ -323,15 +323,15 @@ fn diff_texts(repo: &str, path: &str, old: &str, new: &str, zero: bool) -> Resul
     Ok(format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n{hunks}"))
 }
 
-/// Diff HEAD -> `content` ohne Kontext fuer den Git-Gutter; normalisiert wie `read`.
-fn gutter(repo: &str, path: &str, content: &str) -> Result<String, String> {
+/// Diff HEAD -> `content` ohne Kontext fuer den Git-Gutter (with `context` for showing it); normalisiert wie `read`.
+fn gutter(repo: &str, path: &str, content: &str, context: bool) -> Result<String, String> {
     within(repo, path)?;
     let o = exec(git(repo).arg("show").arg(format!("HEAD:./{path}")), None)?;
     if !o.status.success() {
         // shortcut: untracked (oder kein Git, kein Commit) ohne Marken; sonst waere alles "neu".
         return Ok(String::new());
     }
-    diff_texts(repo, path, &lf(&String::from_utf8_lossy(&o.stdout)), content, true)
+    diff_texts(repo, path, &lf(&String::from_utf8_lossy(&o.stdout)), content, !context)
 }
 
 /// Bildtyp nach Endung; nur was Browser und API sicher anzeigen.
@@ -411,8 +411,8 @@ pub async fn fs_diff(repo: String, path: String, content: String) -> Result<Stri
 }
 
 #[tauri::command]
-pub async fn fs_gutter(repo: String, path: String, content: String) -> Result<String, String> {
-    blocking(move || gutter(&repo, &path, &content)).await
+pub async fn fs_gutter(repo: String, path: String, content: String, context: Option<bool>) -> Result<String, String> {
+    blocking(move || gutter(&repo, &path, &content, context.unwrap_or(false))).await
 }
 
 #[tauri::command]
@@ -614,13 +614,13 @@ mod tests {
         git_ok(&["-c", "core.autocrlf=false", "add", "a.txt"]);
         git_ok(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"]);
         // CRLF in HEAD gegen LF im Puffer: keine Aenderung.
-        assert_eq!(gutter(&repo, "a.txt", "eins\nzwei\ndrei\n").unwrap(), "");
-        let d = gutter(&repo, "a.txt", "eins\nZWEI\ndrei\n").unwrap();
+        assert_eq!(gutter(&repo, "a.txt", "eins\nzwei\ndrei\n", false).unwrap(), "");
+        let d = gutter(&repo, "a.txt", "eins\nZWEI\ndrei\n", false).unwrap();
         assert_eq!(d.matches("\n@@").count(), 1, "{d}");
         assert!(d.contains("\n@@ -2 +2 @@"), "{d}");
         // Untracked: keine Marken.
-        assert_eq!(gutter(&repo, "neu.txt", "x\n").unwrap(), "");
-        assert!(gutter(&repo, "../a.txt", "x").is_err());
+        assert_eq!(gutter(&repo, "neu.txt", "x\n", false).unwrap(), "");
+        assert!(gutter(&repo, "../a.txt", "x", false).is_err());
     }
 
     #[test]

@@ -28,6 +28,14 @@
   let host = $state<HTMLDivElement>();
   /** Diff fuer "Vergleichen"; null = Dialog zu. */
   let compare = $state<string | null>(null);
+  /** Buffer vs HEAD with context, after a click on a git gutter mark; null = dialog closed. */
+  let head = $state<string | null>(null);
+  const showHead = () =>
+    view &&
+    fs.gutter(repo, path, view.state.doc.toString(), true).then(
+      (d) => (head = d),
+      (e) => (s.error = String(e)),
+    );
 
   // Die Callbacks greifen nur auf den Store zu, nie auf die Komponente: der EditorState ueberlebt sie.
   const fresh = (doc: string) =>
@@ -58,7 +66,8 @@
         lintGutter(),
         wrap.of(prefs.wrap ? EditorView.lineWrapping : []),
         testGutter((id) => void testRun(repo, id)),
-        gitGutter,
+        // The state outlives this component (snapshots): reach the current one through a DOM event.
+        gitGutter((v) => v.dom.dispatchEvent(new CustomEvent("gitdiff", { bubbles: true }))),
         ghost(path, () => prefs.ai),
         EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
         EditorView.updateListener.of((u) => {
@@ -177,6 +186,13 @@
     return () => ((stale = true), clearTimeout(t));
   });
 
+  // Click on a git gutter mark (event from gitGutter in fresh).
+  $effect(() => {
+    const h = host;
+    h?.addEventListener("gitdiff", showHead);
+    return () => h?.removeEventListener("gitdiff", showHead);
+  });
+
   // Zeilenumbruch ist global: offene Editoren ziehen mit, wiederhergestellte Zustaende auch.
   $effect(() => {
     const w = prefs.wrap;
@@ -236,5 +252,6 @@
     <div bind:this={host} class="min-h-0 flex-1 overflow-hidden"></div>
   </div>
 
+  <DiffDialog diff={head} title={path.split("/").pop() ?? path} description="Änderungen seit dem letzten Commit" {repo} empty="Kein Unterschied." onclose={() => (head = null)} />
   <DiffDialog diff={compare} title="Platte → meine Änderungen" description={path} empty="Kein Unterschied." onclose={() => (compare = null)} />
 {/if}

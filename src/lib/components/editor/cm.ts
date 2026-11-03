@@ -264,12 +264,24 @@ const gitMarks = StateField.define<RangeSet<GutterMarker>>({
   },
 });
 
-/** Schmaler Balken neben dem Text: neu gruen, geaendert gelb, darunter geloescht rot. */
-export const gitGutter: Extension = [
+/** Schmaler Balken neben dem Text: neu gruen, geaendert gelb, darunter geloescht rot. A click on a mark calls show. */
+export const gitGutter = (show: (view: EditorView) => void): Extension => [
   gitMarks,
-  gutter({ class: "cm-git-gutter", markers: (v) => v.state.field(gitMarks) }),
+  gutter({
+    class: "cm-git-gutter",
+    markers: (v) => v.state.field(gitMarks),
+    domEventHandlers: {
+      mousedown(view, line) {
+        let hit = false;
+        view.state.field(gitMarks).between(line.from, line.from, () => void (hit = true));
+        if (hit) show(view);
+        return hit;
+      },
+    },
+  }),
   EditorView.theme({
     ".cm-git-gutter .cm-gutterElement": { width: "3px", padding: "0" },
+    ".cm-git-gutter .cm-gutterElement:has(span)": { cursor: "pointer" },
     ".cm-git-add, .cm-git-mod, .cm-git-del": { display: "block", height: "100%" },
     ".cm-git-add": { backgroundColor: "var(--success)" },
     ".cm-git-mod": { backgroundColor: "var(--warning)" },

@@ -41,7 +41,7 @@
     accounts: Account[];
     onaccounts: () => void;
     unity?: boolean;
-    onedit?: (path: string) => void;
+    onedit?: (path: string, line?: number) => void;
   } = $props();
 
   const isUnity = $derived(unity);
@@ -49,6 +49,8 @@
   // Geoeffnete Submodule, je Ebene relativ zur vorigen; alle Git-Aufrufe laufen auf cur.
   let trail = $state<string[]>([]);
   const cur = $derived(trail.length ? `${repo}/${trail.join("/")}` : repo);
+  // Panels see paths inside the shown submodule; the editor wants them relative to the project.
+  const edit = $derived(onedit && ((p: string, line?: number) => onedit([...trail, p].join("/"), line)));
   $effect(() => {
     repo;
     trail = [];
@@ -486,12 +488,12 @@
               <ChangesPanel
                 repo={cur}
                 {status}
-                onedit={onedit && ((p) => onedit([...trail, p].join("/")))}
+                onedit={edit}
                 onsubmodule={(p) => goto([...trail, p])}
                 onchange={(remote = false) => refresh(remote, remote)} onconflict={(p) => (conflictPath = p)} />
             </div>
             <div class="h-full {tab === 'history' ? '' : 'hidden'}">
-              <HistoryPanel repo={cur} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} />
+              <HistoryPanel repo={cur} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} onedit={edit} />
             </div>
             {#if seen.releases}
               <div class="h-full {tab === 'releases' ? '' : 'hidden'}">

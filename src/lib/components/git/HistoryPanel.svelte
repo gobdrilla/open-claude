@@ -15,8 +15,10 @@
   import SearchIcon from "@lucide/svelte/icons/search";
   import CopyIcon from "@lucide/svelte/icons/copy";
 
-  let { repo, onchange, busy, track, jumpTo = null, refreshKey = 0 }: {
+  let { repo, onchange, busy, track, jumpTo = null, refreshKey = 0, onedit }: {
     repo: string;
+    /** Open the current version of a file in the editor. */
+    onedit?: (path: string, line?: number) => void;
     /** Laeuft gerade eine Git-Aktion: keine zweite starten. Anzeige macht GitView ueber track. */
     busy: boolean;
     track: <T>(label: string, action: () => Promise<T>) => Promise<T>;
@@ -531,6 +533,7 @@
   onclose={() => (shown = null)}
   {repo}
   rev={detail?.commit.sha}
+  onopen={onedit}
   step={files.length > 1 ? (d) => (shown = (shown! + d + files.length) % files.length) : undefined}
 >
   {#if cur && shown !== null}

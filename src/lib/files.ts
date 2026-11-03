@@ -52,7 +52,7 @@ export const fs = {
   /** Unified Diff Platte -> content (LF) fuer DiffView; "" wenn gleich. Kopf: "diff --git a/<path> b/<path>". */
   diff: (repo: string, path: string, content: string) => call<string>("fs_diff", { repo, path, content }),
   /** Diff HEAD -> content ohne Kontext (-U0) fuer den Git-Gutter, Kopf wie diff(); "" wenn gleich oder untracked. */
-  gutter: (repo: string, path: string, content: string) => call<string>("fs_gutter", { repo, path, content }),
+  gutter: (repo: string, path: string, content: string, context = false) => call<string>("fs_gutter", { repo, path, content, context }),
   /** Projektsuche wie files(), je Zeile der erste Treffer, hoechstens 2000. Fehler bei ungueltigem Regex. */
   search: (repo: string, query: string, regex: boolean, caseSensitive: boolean) =>
     call<Hit[]>("fs_search", { repo, query, regex, case: caseSensitive }),
