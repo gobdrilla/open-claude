@@ -24,3 +24,27 @@ export function tally(es: { tool: string }[]): string {
     .map(([t, c]) => (c > 1 ? `${t} ×${c}` : t))
     .join(", ");
 }
+
+/** Parent folder of a path ("/" or "\"), "" without one. */
+export const folderOf = (p: string) =>
+  p.slice(0, Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"), 0));
+
+/**
+ * Image tiles: first everything loose, then one group per folder with more than `min` files (screenshot
+ * series), in the order of the input. Group key "" = loose tiles.
+ */
+export function byFolder<T extends { kind: string; label: string }>(
+  imgs: T[],
+  min = 10,
+): [string, T[]][] {
+  const by = new Map<string, T[]>();
+  for (const m of imgs) {
+    if (m.kind !== "file") continue;
+    const k = folderOf(m.label);
+    if (!by.has(k)) by.set(k, []);
+    by.get(k)!.push(m);
+  }
+  const big = [...by].filter(([, l]) => l.length > min);
+  const grouped = new Set(big.flatMap(([, l]) => l));
+  return [["", imgs.filter((m) => !grouped.has(m))], ...big];
+}

@@ -13,7 +13,7 @@
   import { pasted } from "$lib/pasteimg.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, untrack } from "svelte";
-  import { Button, Dialog, Empty, IconButton, Row, SectionToggle, Segmented, Tabs, TextButton } from "$lib/atelier-ui";
+  import { Badge, Button, Dialog, Empty, IconButton, Row, SectionToggle, Segmented, Tabs, TextButton } from "$lib/atelier-ui";
   import Markdown from "$lib/components/Markdown.svelte";
   import ZoomImage from "$lib/components/ZoomImage.svelte";
   import BtwPanel from "$lib/components/BtwPanel.svelte";
@@ -29,7 +29,7 @@
   import { blocked } from "$lib/ide.svelte";
   import { screens } from "$lib/components/Terminal.svelte";
   import { fromScript, metaOf, type WfFile } from "$lib/workflow.logic";
-  import { chunks, tally } from "$lib/activity.logic";
+  import { byFolder, chunks, tally } from "$lib/activity.logic";
 
   type Step = { at: number; tool: string; summary: string };
   type Agent = {
@@ -57,7 +57,7 @@
     planned: number[];
     agents: Agent[];
   };
-  type Img = { id: number; at: number; kind: string; label: string };
+  type Img = { id: number; at: number; kind: string; label: string; missing?: boolean };
   type Prompt = { at: number; text: string };
   type Entry = { at: number; kind: "prompt" | "text" | "tool"; tool: string; summary: string; body: string; output: string | null; error: boolean };
   // Kopie aus src-tauri/mods/open-claude/types/index.d.ts (Import scheitert an `declare module 'claude-code'`).
@@ -160,6 +160,10 @@
   );
   // Neueste zuerst ueber alle Transkripte (Session und Agents); gleiche Zeit: spaeter gefunden zuerst.
   const imgs = $derived([...(data?.images ?? []), ...pending].reverse().sort((a, b) => b.at - a.at));
+  // Screenshot series (> 10 files from one folder) get their own group; the lightbox follows this order.
+  const imgGroups = $derived(byFolder(imgs));
+  const ordered = $derived(imgGroups.flatMap(([, l]) => l));
+  const fileName = (m: Img) => (m.kind === "file" || m.kind === "read" ? m.label.split(/[\\/]/).pop() || m.label : m.label);
 
   let busy = false;
   async function poll() {
@@ -322,12 +326,14 @@
     }
   }
 
-  const key = (id: number) => `${data?.session}:${id}`;
-  async function full(id: number): Promise<string | undefined> {
+  // With `at`: a file rewritten under the same name (mtime) gets a fresh preview.
+  const key = (m: Img) => `${data?.session}:${m.id}:${m.at}`;
+  async function full(m: Img): Promise<string | undefined> {
+    const id = m.id;
     if (id < 0) return local[-id]?.url;
     const sid = data?.session;
     if (!sid) return;
-    const k = `${sid}:${id}`;
+    const k = key(m);
     let url = cache.get(k);
     if (url) cache.delete(k);
     else url = await call<string>("claude_image", { sid, id }).catch(() => undefined);
@@ -338,17 +344,18 @@
     return url;
   }
 
-  async function show(id: number) {
-    const k = key(id);
+  async function show(m: Img) {
+    const id = m.id;
+    const k = key(m);
     if (thumbs[k]) return;
     const sid = data?.session;
     let url = id < 0 ? local[-id]?.url : thumbCache.get(k);
     if (!url && sid) {
       url = await call<string>("claude_thumb", { sid, id }).catch(() => undefined);
       if (url) thumbCache.set(k, url);
-      else if (k === key(id)) noThumb[k] = true;
+      else if (sid === data?.session) noThumb[k] = true;
     }
-    if (url && k === key(id)) thumbs[k] = url;
+    if (url && sid === data?.session) thumbs[k] = url;
   }
 
   // Nur an id und Session haengen (shownId, sessionId unten): current ist nach jedem Poll ein neues Objekt,
@@ -356,16 +363,18 @@
   $effect(() => {
     const i = shownId;
     void sessionId;
+    void shownAt;
     fullUrl = undefined;
-    if (i !== undefined) untrack(() => full(i)).then((u) => current?.id === i && (fullUrl = u));
+    const m = untrack(() => current);
+    if (m) full(m).then((u) => current?.id === i && (fullUrl = u));
   });
 
   // Vorschau erst laden, wenn die Kachel in die Naehe der Sicht kommt.
-  function lazy(node: HTMLElement, id: number) {
+  function lazy(node: HTMLElement, m: Img) {
     const io = new IntersectionObserver(
       (es) => {
         if (es.some((e) => e.isIntersecting)) {
-          show(id);
+          show(m);
           io.disconnect();
         }
       },
@@ -457,13 +466,14 @@
     pasted.req = null;
   });
 
-  const index = $derived(imgs.findIndex((m) => m.id === shown));
-  const current = $derived(index < 0 ? null : imgs[index]);
+  const index = $derived(ordered.findIndex((m) => m.id === shown));
+  const current = $derived(index < 0 ? null : ordered[index]);
   const shownId = $derived(current?.id);
+  const shownAt = $derived(current?.at);
   const sessionId = $derived(data?.session);
   function step(d: number) {
     if (index < 0) return;
-    shown = imgs[(index + d + imgs.length) % imgs.length].id;
+    shown = ordered[(index + d + ordered.length) % ordered.length].id;
   }
   function onkeydown(e: KeyboardEvent) {
     if (e.key === "ArrowLeft") step(-1);
@@ -690,18 +700,19 @@
         <p class="text-muted-foreground p-2">Keine Workflows in dieser Session.</p>
       {/each}
     {:else if imgs.length}
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
-        {#each imgs as m (key(m.id))}
-          <TextButton tone="plain" class="group block min-w-0" onclick={() => (shown = m.id)} title={m.label}>
-            <div use:lazy={m.id} class="bg-background/40 group-hover:ring-primary/40 aspect-video overflow-hidden rounded-md ring-1 ring-foreground/5">
-              {#if thumbs[key(m.id)]}<img src={thumbs[key(m.id)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />
-              {:else if noThumb[key(m.id)]}<span class="text-muted-foreground grid h-full place-items-center text-[10px]">Keine Vorschau</span>{/if}
-            </div>
-            <div class="mt-1 truncate text-xs">{m.label}</div>
-            <div class="text-muted-foreground truncate text-[10px]">{ago(m.at)}</div>
-          </TextButton>
-        {/each}
-      </div>
+      {#each imgGroups as [folder, list] (folder)}
+        {#if folder}
+          <div class="text-meta text-muted-foreground mt-4 mb-2 flex first:mt-0 items-center gap-2" title={folder}>
+            <span class="text-foreground min-w-0 truncate font-mono">{folder.split(/[\\/]/).slice(-2).join("/")}</span>
+            <span class="shrink-0 tabular-nums">{list.length} Dateien</span>
+          </div>
+        {/if}
+        {#if list.length}
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
+            {#each list as m (key(m))}{@render tile(m)}{/each}
+          </div>
+        {/if}
+      {/each}
     {:else}
       <Empty>Noch keine Bilder in dieser Session.</Empty>
     {/if}
@@ -720,6 +731,22 @@
     </div>
   {/if}
 </div>
+
+{#snippet tile(m: Img)}
+  <TextButton tone="plain" class="group block min-w-0 {m.missing ? 'opacity-50' : ''}" onclick={() => (shown = m.id)} title={m.label}>
+    <div use:lazy={m} class="bg-background/40 group-hover:ring-primary/40 relative aspect-video overflow-hidden rounded-md ring-1 ring-foreground/5">
+      {#if m.missing}<span class="text-meta text-muted-foreground grid h-full place-items-center">gelöscht</span>
+      {:else if thumbs[key(m)]}<img src={thumbs[key(m)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />
+      {:else if noThumb[key(m)]}<span
+          class="text-meta text-muted-foreground grid h-full place-content-center px-1 text-center"
+          title="Das Vorschaubild ließ sich nicht erzeugen. Klick öffnet das Original.">Keine Vorschau<span class="opacity-70">Klick zeigt das Original</span></span
+        >{/if}
+      {#if m.kind === "file"}<Badge variant="secondary" class="text-meta absolute top-1 left-1 h-4 px-1.5">Datei</Badge>{/if}
+    </div>
+    <div class="text-ui mt-1 truncate">{fileName(m)}</div>
+    <div class="text-meta text-muted-foreground truncate">{ago(m.at)}</div>
+  </TextButton>
+{/snippet}
 
 {#snippet agentHead()}
   {#if focused}
@@ -964,7 +991,9 @@
           ><ChevronLeftIcon class="size-5" /></Button
         >
         <div class="flex min-h-0 min-w-0 flex-1 justify-center">
-          {#if fullUrl}
+          {#if current.missing}
+            <p class="text-muted-foreground p-8">Datei gelöscht.</p>
+          {:else if fullUrl}
             <ZoomImage src={fullUrl} alt={current.label} onswipe={step} />
           {:else}
             <p class="text-muted-foreground p-8">Lade …</p>
@@ -976,9 +1005,9 @@
       </div>
       <div class="text-muted-foreground flex items-center gap-2 text-xs">
         <span class="min-w-0 flex-1 truncate tabular-nums"
-          >{index + 1} / {imgs.length} · {current.label} · {current.at ? clock(current.at) : ""}</span
+          >{index + 1} / {ordered.length} · {current.label} · {current.at ? clock(current.at) : ""}</span
         >
-        {#if current.kind === "read"}
+        {#if current.kind === "read" || current.kind === "file"}
           <TextButton underline class="shrink-0" onclick={() => navigator.clipboard.writeText(current.label)}
             >Pfad kopieren</TextButton
           >

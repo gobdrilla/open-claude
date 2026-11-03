@@ -165,9 +165,17 @@ pub struct Entry {
 #[derive(Serialize, Clone, Debug)]
 pub struct Img {
     id: usize,
+    /// kind "file": mtime of the file, otherwise time of the transcript line
     at: u64,
+    /// paste|read|other|file
     kind: String,
+    /// kind "file" and "read": absolute path
     label: String,
+    /// kind "file": existed once, is gone now
+    missing: bool,
+    /// kind "file": existed at least once (paths only mentioned in commands or code never show)
+    #[serde(skip)]
+    seen: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -177,10 +185,11 @@ pub struct Prompt {
 }
 
 #[derive(Clone)]
-struct ImgRef {
-    path: PathBuf,
-    offset: u64,
-    nth: usize,
+enum ImgRef {
+    /// base64 image in a transcript line
+    Line { path: PathBuf, offset: u64, nth: usize },
+    /// image file Claude or an agent wrote to disk, found as a path in a tool call
+    File(PathBuf),
 }
 
 /// Zwischenstand eines Agent-Transkripts, inkrementell fortgeschrieben.
@@ -203,6 +212,8 @@ struct State {
     reads: HashMap<PathBuf, HashMap<String, String>>,
     hashes: HashSet<u64>,
     imgs: Vec<(ImgRef, Img)>,
+    /// Paths of the ImgRef::File entries, for dedupe
+    files: HashSet<PathBuf>,
     prompts: Vec<Prompt>,
     sums: HashMap<PathBuf, Sum>,
     /// Fertige Runs mit mtime ihrer Ergebnis-JSON: schreibt Claude sie neu (Resume), wird neu gelesen.
@@ -229,6 +240,7 @@ struct Launch {
 static CACHE: LazyLock<Mutex<Cache>> = LazyLock::new(Default::default);
 
 const IMAGE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const IMAGE_EXTS: [&str; 5] = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 
 pub(crate) fn config_dir() -> PathBuf {
     std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| crate::skills::home().join(".claude"))
@@ -346,6 +358,67 @@ fn content(v: &Value) -> &[Value] {
     v.pointer("/message/content").and_then(Value::as_array).map_or(&[], Vec::as_slice)
 }
 
+fn strings<'a>(v: &'a Value, out: &mut Vec<&'a str>) {
+    match v {
+        Value::String(s) => out.push(s),
+        Value::Array(a) => a.iter().for_each(|x| strings(x, out)),
+        Value::Object(m) => m.values().for_each(|x| strings(x, out)),
+        _ => {}
+    }
+}
+
+/// Image file paths in a command, tool input or tool output: Write file_path, `screencapture x.png`,
+/// `-o x.png`, `--path=x.png`, `> x.png`, `![](x.png)`. Relative ones against cwd, `~/` against home.
+/// shortcut: paths containing spaces are cut at the space and not found.
+fn image_paths(text: &str, cwd: &Path) -> Vec<PathBuf> {
+    text.split(|c: char| c.is_whitespace() || "\"'`=()<>,;|[]{}".contains(c))
+        .map(|t| t.trim_end_matches(['.', ':', '!', '?']))
+        .filter(|t| !t.contains("://") && !t.contains(['*', '$', '%']))
+        .filter(|t| Path::new(t).extension().and_then(|e| e.to_str()).is_some_and(|e| IMAGE_EXTS.iter().any(|x| x[1..].eq_ignore_ascii_case(e))))
+        .filter_map(|t| {
+            let p = t.strip_prefix("~/").map_or_else(|| cwd.join(t), |r| crate::skills::home().join(r));
+            // Lexically: "a/./b/../c.png" and "a/c.png" are the same tile
+            p.is_absolute().then(|| {
+                p.components().fold(PathBuf::new(), |mut o, c| {
+                    match c {
+                        std::path::Component::CurDir => {}
+                        std::path::Component::ParentDir => {
+                            o.pop();
+                        }
+                        c => o.push(c),
+                    }
+                    o
+                })
+            })
+        })
+        .collect()
+}
+
+/// Images for the panel. Files are stat'ed on every call: mtime as time, gone -> missing.
+fn image_list(st: &mut State) -> Vec<Img> {
+    // shortcut: only the newest 300 file paths are stat'ed and shown, older ones drop out; upgrade to paging if sessions need more.
+    let mut left = 300;
+    let mut out: Vec<Img> = st
+        .imgs
+        .iter_mut()
+        .rev()
+        .filter_map(|(r, img)| {
+            let ImgRef::File(p) = r else { return Some(img.clone()) };
+            if left == 0 {
+                return None;
+            }
+            left -= 1;
+            match fs::metadata(p).and_then(|m| m.modified()) {
+                Ok(t) => (img.at, img.missing, img.seen) = (ms(t), false, true),
+                Err(_) => img.missing = true,
+            }
+            img.seen.then(|| img.clone())
+        })
+        .collect();
+    out.reverse();
+    out
+}
+
 fn scan_images(st: &mut State, path: &Path) {
     new_lines(path, &mut st.offsets, |offset, line| {
         if let Some((id, at, status)) = ended(line) {
@@ -374,6 +447,29 @@ fn scan_images(st: &mut State, path: &Path) {
                 }
             }
         }
+        // shortcut: pre-filter only matches lowercase extensions, a line mentioning only "X.PNG" is skipped.
+        if IMAGE_EXTS.iter().any(|e| line.contains(e)) && (line.contains("\"tool_use\"") || line.contains("\"tool_result\"")) {
+            if let Ok(v) = serde_json::from_str::<Value>(line) {
+                let (cwd, at) = (Path::new(str_of(&v, "cwd")), iso_ms(str_of(&v, "timestamp")));
+                for c in content(&v) {
+                    // Read already shows the image itself from the transcript
+                    let part = match str_of(c, "type") {
+                        "tool_use" if str_of(c, "name") != "Read" => c.get("input"),
+                        "tool_result" => c.get("content"),
+                        _ => None,
+                    };
+                    let mut texts = Vec::new();
+                    part.into_iter().for_each(|x| strings(x, &mut texts));
+                    for f in texts.into_iter().flat_map(|t| image_paths(t, cwd)) {
+                        if st.files.insert(f.clone()) {
+                            let label = f.to_string_lossy().into_owned();
+                            let id = st.imgs.len();
+                            st.imgs.push((ImgRef::File(f), Img { id, at, kind: "file".into(), label, missing: false, seen: false }));
+                        }
+                    }
+                }
+            }
+        }
         if !line.contains("\"type\":\"image\"") {
             return;
         }
@@ -396,8 +492,8 @@ fn scan_images(st: &mut State, path: &Path) {
             };
             let id = st.imgs.len();
             st.imgs.push((
-                ImgRef { path: path.to_path_buf(), offset, nth },
-                Img { id, at, kind: kind.into(), label },
+                ImgRef::Line { path: path.to_path_buf(), offset, nth },
+                Img { id, at, kind: kind.into(), label, missing: false, seen: true },
             ));
         }
     });
@@ -964,7 +1060,7 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, want: Option<&str>, now: 
     }
     agents.sort_by_key(|a| (rank(&a.state), std::cmp::Reverse(a.started)));
     agents.truncate(50);
-    Activity { session: Some(sid), alive: alive.is_some(), runs, agents, images: st.imgs.iter().map(|x| x.1.clone()).collect(), prompts: st.prompts.clone(), panel: None, limits: None, modes: vec![] }
+    Activity { session: Some(sid), alive: alive.is_some(), runs, agents, images: image_list(st), prompts: st.prompts.clone(), panel: None, limits: None, modes: vec![] }
 }
 
 /// Nur das Session-Panel der Mod (Kopfleiste ueber dem Terminal), ohne den Rest von claude_activity.
@@ -1003,19 +1099,38 @@ pub async fn claude_activity(cwd: String, id: String) -> Result<Activity, String
 }
 
 fn image_at(r: &ImgRef) -> Result<String, String> {
-    let mut f = File::open(&r.path).map_err(|e| e.to_string())?;
-    f.seek(SeekFrom::Start(r.offset)).map_err(|e| e.to_string())?;
+    let (path, offset, nth) = match r {
+        ImgRef::Line { path, offset, nth } => (path, *offset, *nth),
+        ImgRef::File(p) => return image_file(p),
+    };
+    let mut f = File::open(path).map_err(|e| e.to_string())?;
+    f.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
     let mut line = Vec::new();
     BufReader::new(f.take(64 << 20)).read_until(b'\n', &mut line).map_err(|e| e.to_string())?;
     let v: Value = serde_json::from_slice(line.trim_ascii_end()).map_err(|e| e.to_string())?;
     let mut found = Vec::new();
     images(&v, None, &mut found);
-    let src = found.get(r.nth).ok_or("Bild nicht gefunden")?.0;
+    let src = found.get(nth).ok_or("Bild nicht gefunden")?.0;
     let mt = str_of(src, "media_type");
     if !IMAGE_TYPES.contains(&mt) {
         return Err(format!("Bildtyp nicht erlaubt: {mt}"));
     }
     Ok(format!("data:{mt};base64,{}", str_of(src, "data")))
+}
+
+fn image_file(p: &Path) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    let mt = match ext.as_str() {
+        "jpg" => "image/jpeg".to_string(),
+        e => format!("image/{e}"),
+    };
+    if !IMAGE_TYPES.contains(&mt.as_str()) {
+        return Err(format!("Bildtyp nicht erlaubt: {ext}"));
+    }
+    let mut bytes = Vec::new();
+    File::open(p).and_then(|f| f.take(64 << 20).read_to_end(&mut bytes)).map_err(|e| e.to_string())?;
+    Ok(format!("data:{mt};base64,{}", STANDARD.encode(bytes)))
 }
 
 /// Vorschau (hoechstens 320x180, JPEG) fuer die Kacheln im Panel: wenige KB statt des Vollbilds, das der
@@ -1292,6 +1407,48 @@ mod tests {
         let st = &cache[SID];
         assert_eq!(image_at(&st.imgs[1].0).unwrap(), "data:image/png;base64,REVG");
         assert_eq!(image_at(&st.imgs[0].0).unwrap(), "data:image/png;base64,QUJD");
+    }
+
+    #[test]
+    fn bildpfade_aus_befehlen() {
+        let cwd = Path::new("/w/p");
+        let got = |t: &str| image_paths(t, cwd).into_iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert_eq!(got("screencapture -x /tmp/a.png && echo ok"), ["/tmp/a.png"]);
+        assert_eq!(got("npx playwright screenshot --path=shots/out/b.JPG http://x/y.png"), ["/w/p/shots/out/b.JPG"]);
+        assert_eq!(got("node shoot.mjs > ./out/../c.webp; cat 'd e.gif'"), ["/w/p/c.webp", "/w/p/e.gif"]);
+        assert_eq!(got("Saved to out/f.jpeg. See ![x](g.png)"), ["/w/p/out/f.jpeg", "/w/p/g.png"]);
+        assert_eq!(got("ls *.png $OUT/x.png .png notes.txt image/png"), Vec::<String>::new());
+        assert!(image_paths("rel.png", Path::new("")).is_empty(), "relativ ohne cwd");
+        assert_eq!(image_paths("~/Desktop/s.png", cwd), [crate::skills::home().join("Desktop/s.png")]);
+    }
+
+    #[test]
+    fn bilddateien_aus_tool_calls() {
+        let (c, _) = setup("imgfile", false);
+        let dir = tmp("imgfile-out");
+        fs::write(dir.join("a.png"), b"x").unwrap();
+        fs::write(dir.join("b.gif"), b"x").unwrap();
+        let d = dir.to_string_lossy();
+        let main = c.join(format!("projects/-w-p/{SID}.jsonl"));
+        put(
+            &main,
+            &[
+                format!(r#"{{"type":"assistant","cwd":"{d}","message":{{"content":[{{"type":"tool_use","id":"t1","name":"Bash","input":{{"command":"screencapture a.png nie.png"}}}}]}}}}"#),
+                format!(r#"{{"type":"user","cwd":"/w/p","message":{{"content":[{{"type":"tool_result","tool_use_id":"t1","content":"wrote {d}/a.png and {d}/b.gif"}}]}}}}"#),
+                format!(r#"{{"type":"assistant","message":{{"content":[{{"type":"tool_use","id":"t2","name":"Read","input":{{"file_path":"{d}/r.png"}}}}]}}}}"#),
+                String::new(),
+            ]
+            .join("\n"),
+        );
+        let mut cache = Cache::new();
+        let a = activity_in(&mut cache, &c, "/w/p", None, 0);
+        let files = |a: &Activity| a.images.iter().map(|m| (Path::new(&m.label).file_name().unwrap().to_string_lossy().into_owned(), m.missing)).collect::<Vec<_>>();
+        assert_eq!(files(&a), [("a.png".to_string(), false), ("b.gif".to_string(), false)], "doppelt, nie da, Read: weg");
+        assert!(a.images.iter().all(|m| m.kind == "file" && m.at > 0));
+        assert_eq!(image_at(&cache[SID].imgs[0].0).unwrap(), "data:image/png;base64,eA==");
+        fs::remove_file(dir.join("a.png")).unwrap();
+        let a = activity_in(&mut cache, &c, "/w/p", None, 0);
+        assert_eq!(files(&a), [("a.png".to_string(), true), ("b.gif".to_string(), false)]);
     }
 
     #[test]
