@@ -17,9 +17,12 @@ use tauri::{AppHandle, Manager, Runtime};
 
 /// (Schluessel, Programm, Argumente, liegt auch in node_modules/.bin, Installationshinweis).
 /// Schluessel muessen zu SERVERS in src/lib/lsp.logic.ts passen.
+/// npm-Server teilen sich ein Prefix: svelte-language-server will typescript als Peer in ^5.9/^6, ein freies
+/// "typescript" zieht 7 und laesst die Svelte-Installation an ERESOLVE scheitern. Darum beide auf 6.
+/// shortcut: typescript@6 fest, anheben, sobald svelte-language-server typescript 7 als Peer erlaubt.
 const SERVERS: &[(&str, &str, &[&str], bool, &str)] = &[
-    ("typescript", "typescript-language-server", &["--stdio"], true, "npm i -g typescript-language-server typescript"),
-    ("svelte", "svelteserver", &["--stdio"], true, "npm i -g svelte-language-server"),
+    ("typescript", "typescript-language-server", &["--stdio"], true, "npm i -g typescript-language-server typescript@6"),
+    ("svelte", "svelteserver", &["--stdio"], true, "npm i -g svelte-language-server typescript@6"),
     ("rust", "rust-analyzer", &[], false, "rustup component add rust-analyzer"),
     ("python", "pyright-langserver", &["--stdio"], true, "npm i -g pyright"),
     ("go", "gopls", &[], false, "go install golang.org/x/tools/gopls@latest"),
@@ -221,10 +224,21 @@ fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
     };
     let err = reader.join().unwrap_or_default();
     if !status.success() {
-        let tail: Vec<&str> = err.lines().rev().take(5).collect();
-        return Err(format!("Installation von {cmd} fehlgeschlagen ({hint}):\n{}", tail.into_iter().rev().collect::<Vec<_>>().join("\n")));
+        return Err(format!("Installation von {cmd} fehlgeschlagen ({hint}):\n{}", install_reason(&err)));
     }
     Ok(())
+}
+
+/// Grund aus der Fehlerausgabe: npm endet mit leeren "npm error"-Zeilen und dem Log-Pfad, darum die ersten
+/// Zeilen mit Inhalt nehmen (Code und Meldung) statt der letzten.
+fn install_reason(err: &str) -> String {
+    let lines: Vec<&str> = err
+        .lines()
+        .map(|l| l.trim_start_matches("npm error").trim_start_matches("npm ERR!").trim())
+        .filter(|l| !l.is_empty() && !l.starts_with("A complete log of this run"))
+        .take(4)
+        .collect();
+    if lines.is_empty() { "keine Fehlerausgabe".into() } else { lines.join("\n") }
 }
 
 /// rustup legt rust-analyzer als Proxy an, auch wenn die Komponente fehlt: dann startet er nicht.
@@ -431,6 +445,15 @@ mod tests {
         // Von Hand: nichts Automatisches.
         assert!(install_cmd("Xcode bzw. Swift-Toolchain", own).is_none());
         assert!(install_cmd("Xcode Command Line Tools, LLVM oder Paketmanager (clangd)", own).is_none());
+    }
+
+    #[test]
+    fn install_grund_ohne_npm_rauschen() {
+        let npm = "npm error code EPERM\nnpm error syscall rename\nnpm error\nnpm error The operation was rejected.\nnpm error A complete log of this run can be found in: C:\\x.log\n";
+        assert_eq!(install_reason(npm), "code EPERM\nsyscall rename\nThe operation was rejected.");
+        assert_eq!(install_reason("npm ERR! code E404\nnpm ERR! 404 Not Found\n"), "code E404\n404 Not Found");
+        assert_eq!(install_reason("go: no network\n"), "go: no network");
+        assert_eq!(install_reason("npm error\n\n"), "keine Fehlerausgabe");
     }
 
     /// Echter Server (clangd, fehlt er: uebersprungen): Start, Framing in beide Richtungen, Diagnostics-Cache, Stopp.
