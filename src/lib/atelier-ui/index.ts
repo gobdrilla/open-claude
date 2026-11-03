@@ -27,12 +27,14 @@ export { default as FolderField } from "./FolderField.svelte";
 // Structure and dialogs
 export { default as SectionHead } from "./SectionHead.svelte";
 export { default as Empty } from "./Empty.svelte";
+export { default as SettingsSection } from "./SettingsSection.svelte";
+export { default as SettingRow } from "./SettingRow.svelte";
 export { default as ConfirmDialog } from "./ConfirmDialog.svelte";
 export { default as PromptDialog } from "./PromptDialog.svelte";
 export { default as DiffDialog } from "./DiffDialog.svelte";
 
 // Menus (bits-ui directly, with these classes) and helpers
-export { menuContent, menuItem, menuSeparator } from "./menu";
+export { menuContent, menuItem, menuSeparator, menuShortcut } from "./menu";
 export { default as ContextItem } from "./ContextItem.svelte";
 export { fileIcon } from "./fileIcon";
 export { paneBar } from "./pane";

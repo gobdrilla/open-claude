@@ -14,7 +14,7 @@
   import { relaunch } from "@tauri-apps/plugin-process";
   import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
-  import { Badge, Button, Command, ConfirmDialog, Dialog, IconButton, Input, Segmented, Slider, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
+  import { Badge, Button, Command, ConfirmDialog, Dialog, IconButton, Input, Segmented, Slider, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import SunMoonIcon from "@lucide/svelte/icons/sun-moon";
   import LaptopIcon from "@lucide/svelte/icons/laptop";
@@ -1539,7 +1539,7 @@
               >
                 <KeyboardIcon class="text-muted-foreground size-3.5" />
                 <span class="flex-1">Tastenkürzel</span>
-                <kbd class="text-muted-foreground font-mono text-[10px]">F1</kbd>
+                <kbd class={menuShortcut}>F1</kbd>
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -1883,7 +1883,7 @@
     {onSelect}
   >
     <span class="flex-1">{label}</span>
-    {#if key}<kbd class="text-muted-foreground font-mono text-[10px]">{key}</kbd>{/if}
+    {#if key}<kbd class={menuShortcut}>{key}</kbd>{/if}
   </ContextMenu.Item>
 {/snippet}
 

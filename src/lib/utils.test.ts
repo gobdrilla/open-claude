@@ -23,6 +23,12 @@ test("cn: Tailwind-Konflikte loest der letzte Wert", () => {
   assert.equal(cn("p-2", false && "x", "p-4"), "p-4");
 });
 
+test("cn: type scale tokens are font sizes, not colors", () => {
+  assert.equal(cn("text-muted-foreground text-meta"), "text-muted-foreground text-meta");
+  assert.equal(cn("text-xs text-body"), "text-body");
+  assert.equal(cn("text-title", "text-[10px]"), "text-[10px]");
+});
+
 const k = (key: string, code: string, m: Partial<KeyboardEvent> = {}) => ({ key, code, altKey: true, ctrlKey: false, metaKey: false, ...m }) as KeyboardEvent;
 test("altKey: Windows, US-Mac-Tottaste; € und AltGr bleiben Eingabe", () => {
   assert.ok(altKey(k("e", "KeyE"), "e")); // Windows/Linux

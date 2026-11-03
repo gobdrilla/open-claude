@@ -1,5 +1,9 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+// Type scale tokens from app.css; unknown, twMerge would treat text-meta as a color and drop text-muted-foreground.
+// shortcut: tv() definitions merge with the default config, so a token there must not share base/variant with a text color; pass twMergeConfig to tv() if that is ever needed.
+const twMerge = extendTailwindMerge({ extend: { theme: { text: ["meta", "ui", "body", "title"] } } });
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

@@ -104,7 +104,7 @@
 
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { Button, Dialog, IconButton, Input, Segmented, Select, Switch, Textarea } from "$lib/atelier-ui";
+  import { Button, Dialog, IconButton, Input, Segmented, Select, SettingRow, SettingsSection, Switch, Textarea } from "$lib/atelier-ui";
   import { confirm } from "$lib/confirm.svelte";
   const MODES = [
     ["Manuell", "default", "Fragt vor Änderungen und Befehlen"],
@@ -247,44 +247,43 @@
 
     <div class="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 text-xs">
       {#each SECTIONS as s (s.title)}
-        <section>
-          <h3 class="text-muted-foreground mb-1 text-[11px] font-medium tracking-wide uppercase">{s.title}</h3>
-          <div class="border-border/60 divide-y divide-foreground/5 rounded-lg border">
-            {#if s.title === "Berechtigungen"}
-              {@render row("Standard-Modus", "Mit welchem Modus neue Sitzungen starten", modeCtl)}
-            {/if}
-            {#each s.fields as f (f.k)}
-              {@render row(f.label, f.hint, ctl, f)}
-            {/each}
-            {#if s.title === "Berechtigungen"}
-              {#each RULES as [k, label] (k)}
-                <div class="px-2 py-1.5">
-                  <div class="mb-1 flex items-center gap-2">
-                    <span class="flex-1">{label}</span>
-                    <span class="text-muted-foreground tabular-nums">{rules(k).length}</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1">
-                    {#each rules(k) as r (r)}
-                      <span class="bg-secondary flex items-center gap-1 rounded py-0.5 pr-0.5 pl-1.5 font-mono text-[11px]"
-                        >{r}<IconButton size="bare" tone="danger" label="{r} entfernen" disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
-                          ><XIcon class="size-3" /></IconButton
-                        ></span
-                      >
-                    {/each}
-                    <Input
-                      bind:value={adding[k]}
-                      disabled={!parsed}
-                      placeholder={k === "deny" ? "z. B. Bash(rm -rf:*)" : "z. B. Bash(npm test:*)"}
-                      density="xs" class="w-48 font-mono"
-                      onkeydown={(e) => e.key === "Enter" && addRule(k)}
-                      onblur={() => addRule(k)}
-                    />
-                  </div>
+        <SettingsSection title={s.title}>
+          {#if s.title === "Berechtigungen"}
+            <SettingRow label="Standard-Modus" description="Mit welchem Modus neue Sitzungen starten">
+              <Segmented value={mode} options={MODES} onchange={(v) => set(modeField, v)} disabled={!parsed} />
+            </SettingRow>
+          {/if}
+          {#each s.fields as f (f.k)}
+            <SettingRow label={f.label} description={f.hint}>{@render ctl(f)}</SettingRow>
+          {/each}
+          {#if s.title === "Berechtigungen"}
+            {#each RULES as [k, label] (k)}
+              <div class="px-2 py-1.5">
+                <div class="mb-1 flex items-center gap-2">
+                  <span class="flex-1">{label}</span>
+                  <span class="text-muted-foreground tabular-nums">{rules(k).length}</span>
                 </div>
-              {/each}
-            {/if}
-          </div>
-        </section>
+                <div class="flex flex-wrap gap-1">
+                  {#each rules(k) as r (r)}
+                    <span class="bg-secondary flex items-center gap-1 rounded py-0.5 pr-0.5 pl-1.5 font-mono text-[11px]"
+                      >{r}<IconButton size="bare" tone="danger" label="{r} entfernen" disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
+                        ><XIcon class="size-3" /></IconButton
+                      ></span
+                    >
+                  {/each}
+                  <Input
+                    bind:value={adding[k]}
+                    disabled={!parsed}
+                    placeholder={k === "deny" ? "z. B. Bash(rm -rf:*)" : "z. B. Bash(npm test:*)"}
+                    density="xs" class="w-48 font-mono"
+                    onkeydown={(e) => e.key === "Enter" && addRule(k)}
+                    onblur={() => addRule(k)}
+                  />
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </SettingsSection>
       {/each}
 
       <details>
@@ -303,20 +302,6 @@
     </div>
   </Dialog.Content>
 </Dialog.Root>
-
-{#snippet row(label: string, hint: string | undefined, control: import("svelte").Snippet<[Field]>, f: Field = modeField)}
-  <div class="flex min-h-9 items-center gap-3 px-2 py-1.5">
-    <div class="min-w-0 flex-1">
-      <div>{label}</div>
-      {#if hint}<div class="text-muted-foreground text-[11px]">{hint}</div>{/if}
-    </div>
-    {@render control(f)}
-  </div>
-{/snippet}
-
-{#snippet modeCtl(_: Field)}
-  <Segmented value={mode} options={MODES} onchange={(v) => set(modeField, v)} disabled={!parsed} />
-{/snippet}
 
 {#snippet ctl(f: Field)}
   {@const off = !f.g && !parsed}

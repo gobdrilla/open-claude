@@ -112,6 +112,16 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
 
+  /* Type scale (text-meta/-ui/-body/-title); also registered in cn() (src/lib/utils.ts). */
+  --text-meta: 11px;
+  --text-meta--line-height: 16px;
+  --text-ui: 12px;
+  --text-ui--line-height: 16px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-title: 15px;
+  --text-title--line-height: 22px;
+
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Cascadia Code", Consolas, ui-monospace, monospace;
 }
