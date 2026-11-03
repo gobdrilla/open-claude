@@ -25,12 +25,12 @@
   const PAGE = 30;
   const POLL_MS = 10_000;
   const ICON = {
-    success: [CircleCheckIcon, "text-success"],
-    failure: [CircleXIcon, "text-destructive"],
-    running: [LoaderCircleIcon, "animate-spin text-warning"],
-    queued: [CircleDashedIcon, "text-muted-foreground"],
-    cancelled: [CircleSlashIcon, "text-muted-foreground opacity-60"],
-    skipped: [CircleMinusIcon, "text-muted-foreground opacity-60"],
+    success: [CircleCheckIcon, "text-success", "Erfolgreich"],
+    failure: [CircleXIcon, "text-destructive", "Fehlgeschlagen"],
+    running: [LoaderCircleIcon, "animate-spin text-warning", "Läuft"],
+    queued: [CircleDashedIcon, "text-muted-foreground", "Wartet"],
+    cancelled: [CircleSlashIcon, "text-muted-foreground opacity-60", "Abgebrochen"],
+    skipped: [CircleMinusIcon, "text-muted-foreground opacity-60", "Übersprungen"],
   } as const;
 
   let originUrl = $state<string | null>(null);
@@ -61,6 +61,11 @@
     const pad = (n: number) => String(n).padStart(2, "0");
     return s < 3600 ? `${Math.floor(s / 60)}:${pad(s % 60)}` : `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))} h`;
   }
+
+  const ago = (iso: string) => {
+    const a = age(iso);
+    return a && a !== "jetzt" ? `vor ${a}` : a;
+  };
 
   async function reload() {
     const g = ++gen;
@@ -195,8 +200,8 @@
 </script>
 
 {#snippet statusIcon(s: RunStatus)}
-  {@const [Icon, cls] = ICON[s]}
-  <Icon class="size-3.5 shrink-0 {cls}" aria-label={s} />
+  {@const [Icon, cls, text] = ICON[s]}
+  <span class="shrink-0" title={text}><Icon class="size-3.5 {cls}" aria-label={text} /></span>
 {/snippet}
 
 {#snippet action(title: string, onclick: () => void, Icon: typeof RotateCcwIcon, busyKey: string)}
@@ -272,8 +277,9 @@
               <span class="font-mono">{r.sha.slice(0, 7)}</span>
             </div>
           </div>
-          <span class="text-muted-foreground shrink-0 font-mono text-[10px] tabular-nums">{duration(r.duration_s)}</span>
-          <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[10px] tabular-nums">{age(r.created_at)}</span>
+          <span class="text-muted-foreground shrink-0 text-right text-[10px] tabular-nums" title={new Date(r.created_at).toLocaleString("de-DE")}>
+            {#if r.duration_s != null}Dauer {duration(r.duration_s)} · {/if}{ago(r.created_at)}
+          </span>
           {#if pending(r.status)}
             {@render action("Abbrechen", () => act(r.id, r.id, false, "cancel"), SquareIcon, `false:${r.id}`)}
           {:else}
@@ -297,7 +303,7 @@
                   {@render statusIcon(j.status)}
                   {#if j.stage}<span class="text-muted-foreground shrink-0 text-[10px]">{j.stage}</span>{/if}
                   <span class="min-w-0 flex-1 truncate text-[11px]" title={j.name}>{j.name}</span>
-                  <span class="text-muted-foreground shrink-0 font-mono text-[10px] tabular-nums">{duration(j.duration_s)}</span>
+                  <span class="text-muted-foreground shrink-0 text-[10px] tabular-nums">{#if j.duration_s != null}Dauer {duration(j.duration_s)}{/if}</span>
                   {#if pending(j.status)}
                     {#if kind === "gitlab"}
                       {@render action("Job abbrechen", () => act(r.id, j.id, true, "cancel"), SquareIcon, `true:${j.id}`)}
