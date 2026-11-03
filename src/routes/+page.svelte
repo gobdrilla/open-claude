@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { age, altKey, cn } from "$lib/utils";
+  import { age, cn } from "$lib/utils";
   import { onMount, tick, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
@@ -798,9 +798,9 @@
   const openRepo = (repo: Repo) => VIEW_OPEN[lastView[repo.path] ?? "term"](repo);
   const views = $derived(
     [
-      ["Claude", "term", "Claude im Projekt öffnen", TerminalIcon],
-      ...(isFree(viewRepo) ? [] : [["Editor", "edit", `Editor (${mod}+Umschalt+E)`, FileCodeIcon] as const]),
-      ...(viewRepo?.path ? [["Git", "git", "Git-Ansicht (Alt+G)", GitBranchIcon] as const] : []),
+      ["Claude", "term", `Claude (${mod}+1)`, TerminalIcon],
+      ...(isFree(viewRepo) ? [] : [["Editor", "edit", `Editor (${mod}+2)`, FileCodeIcon] as const]),
+      ...(viewRepo?.path ? [["Git", "git", `Git (${mod}+3)`, GitBranchIcon] as const] : []),
     ] as const satisfies readonly (readonly [string, ViewKey, string, typeof TerminalIcon])[],
   );
   // Ab der zweiten Sitzung im selben Projekt durchnummeriert
@@ -1045,7 +1045,12 @@
 
   // Esc gehoert offenen Dialogen/Menues. Die schliessen schon vor onKey, daher hier vorher nachsehen.
   let overlayOnEsc = false;
+  const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+  // Alt held: the start page shows the Alt+1..9 hints only then.
+  let altHeld = $state(false);
+  const noteAlt = (e: KeyboardEvent) => (altHeld = e.altKey && !e.ctrlKey && !e.metaKey);
   const noteCtrl = (e: KeyboardEvent) => {
+    noteAlt(e);
     // Capture am Fenster: vor xterm und CodeMirror, die Shell bekommt die Taste nicht.
     const dir = zoomKey(e, mac);
     if (dir !== null) {
@@ -1054,11 +1059,23 @@
       setZoom(dir);
       return;
     }
-    if (e.key === "Escape")
-      overlayOnEsc = !!document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]');
+    if (e.key === "Escape") overlayOnEsc = !!document.querySelector(OVERLAY);
     // WebView2 wuerde neu laden: Sitzungen verwaisen. Im Terminal gehoert Strg+R/F5 der Shell (xterm verhindert selbst).
     const reload = e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r");
     if (reload && !(e.target instanceof Element && e.target.closest(".xterm"))) e.preventDefault();
+    // Strg+1/2/3 (Claude/Editor/Git) and Strg+Umschalt+E (file manager) in every view, also in xterm (Strg+2/3
+    // would send NUL/ESC there) and CodeMirror. Digits by code, so AZERTY works too. AltGr = Strg+Alt stays input.
+    const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey;
+    const n = ctrl && !e.shiftKey ? ["Digit1", "Digit2", "Digit3"].indexOf(e.code) : -1;
+    const files = ctrl && e.shiftKey && e.key.toLowerCase() === "e";
+    if ((n < 0 && !files) || document.querySelector(OVERLAY)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // On the start page: the selected project.
+    const repo = view === "list" ? current?.repo : viewRepo;
+    if (files) return void (repo?.path && reveal(repo));
+    const v = ROW_VIEWS[n][1];
+    if (v !== view && (view === "list" || views.some((o) => o[1] === v))) VIEW_OPEN[v](repo);
   };
 
   // Alle Dialoge ausser der Hilfe (F1 schaltet sie um)
@@ -1072,11 +1089,7 @@
     // Die Git-Ansicht hat ihre eigenen Kuerzel in GitView.svelte.
     // Der Editor hat Strg+S/Esc selbst (EditorView, CodeMirror); Esc verlaesst ihn nicht.
     if (view !== "list") {
-      // Mit Umschalt: Strg+E gehoert im Terminal der Shell.
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "e") {
-        e.preventDefault();
-        openEdit(viewRepo);
-      } else if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "w") || (e.shiftKey && e.key === "Escape")) {
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "w") || (e.shiftKey && e.key === "Escape")) {
         e.preventDefault();
         back();
       } else if (e.key === "Escape" && view === "git") {
@@ -1086,12 +1099,6 @@
         e.preventDefault();
         if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.blur();
         else back();
-      } else if (altKey(e, "e")) {
-        e.preventDefault();
-        reveal(viewRepo);
-      } else if (altKey(e, "g") && view !== "git" && !isFree(viewRepo)) {
-        e.preventDefault();
-        openGit(viewRepo);
       }
       return;
     }
@@ -1107,22 +1114,18 @@
     // Offene Dialoge bekommen ihre Tasten selbst.
     if (help || anyDialog) return;
 
-    if (ctrl && e.key >= "1" && e.key <= "9") {
-      launch(flat[Number(e.key) - 1]?.repo);
+    // Alt+1..9: n-th hit in its last view. By code: Option+digit on the Mac types a character.
+    const nth = e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[1-9]$/.test(e.code) ? flat[Number(e.code[5]) - 1] : undefined;
+    if (nth) {
+      openRepo(nth.repo);
     } else if (ctrl && e.key.toLowerCase() === "k") {
       input?.select();
     } else if (ctrl && e.key.toLowerCase() === "r") {
       rescan();
     } else if (ctrl && e.key.toLowerCase() === "o") {
       pickRoot();
-    } else if (ctrl && e.shiftKey && e.key.toLowerCase() === "e") {
-      openEdit(current?.repo);
-    } else if (ctrl && e.key.toLowerCase() === "e") {
-      reveal(current?.repo);
-    } else if (ctrl && e.key.toLowerCase() === "p") {
+    } else if (ctrl && e.key.toLowerCase() === "d") {
       if (current) togglePin(current.repo.path);
-    } else if (ctrl && e.key.toLowerCase() === "g") {
-      openGit(current?.repo);
     } else if (ctrl && e.shiftKey && e.key.toLowerCase() === "n") {
       createOpen = true;
     } else if (ctrl && e.key.toLowerCase() === "n") {
@@ -1147,7 +1150,7 @@
   });
 </script>
 
-<svelte:window onkeydown={onKey} onkeydowncapture={noteCtrl} />
+<svelte:window onkeydown={onKey} onkeydowncapture={noteCtrl} onkeyup={noteAlt} onblur={() => (altHeld = false)} />
 
 {#if amongUs.on}<IdleAmongUs rate={amongUs.rate} volume={amongUs.volume} />{/if}
 
@@ -1486,16 +1489,15 @@
                           {item.repo.branch}
                         </Badge>
                       {/if}
-                      <span class="text-muted-foreground w-12 text-right font-mono text-[11px] tabular-nums">
-                        {age(item.repo.last_commit)}
-                      </span>
-                      {#if nr <= 9}
-                        <kbd
-                          class="text-muted-foreground border-border hidden {mac ? 'w-10' : 'w-12'} rounded border px-1 py-0.5 text-center font-mono text-[10px] sm:block"
-                          >{mac ? `⌘${nr}` : `${mod}+${nr}`}</kbd
+                      <!-- Alt+1..9 hint replaces the age only while Alt is held -->
+                      {#if altHeld && nr <= 9}
+                        <kbd class="text-muted-foreground border-border text-meta w-12 rounded border text-center font-mono"
+                          >{mac ? `⌥${nr}` : `Alt+${nr}`}</kbd
                         >
                       {:else}
-                        <span class="hidden {mac ? 'w-10' : 'w-12'} sm:block"></span>
+                        <span class="text-muted-foreground w-12 text-right font-mono text-[11px] tabular-nums">
+                          {age(item.repo.last_commit)}
+                        </span>
                       {/if}
                       <!-- Targets on hover/keyboard selection; covers the row's right edge (same background as the selected row). -->
                       <div class="bg-muted absolute inset-y-0 right-1 hidden items-center gap-0.5 pl-2 group-data-selected/command-item:flex">
@@ -1520,17 +1522,17 @@
                   <ContextMenu.Content
                     class={cn(menuContent, "min-w-52 rounded-lg shadow-lg")}
                   >
-                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", "", () => launch(item.repo))}
+                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", `${mod}+1`, () => launch(item.repo))}
                     {#if running.has(item.repo.path)}
                       {@render repoItem("Weitere Claude-Sitzung", "", () => launch(item.repo, true))}
                     {/if}
-                    {@render repoItem("Editor", `${mod}+⇧+E`, () => openEdit(item.repo))}
-                    {@render repoItem("Git-Ansicht", `${mod}+G`, () => openGit(item.repo))}
+                    {@render repoItem("Editor", `${mod}+2`, () => openEdit(item.repo))}
+                    {@render repoItem("Git-Ansicht", `${mod}+3`, () => openGit(item.repo))}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem(`Im ${FILES_APP} zeigen`, `${mod}+E`, () => reveal(item.repo))}
+                    {@render repoItem(`Im ${FILES_APP} zeigen`, `${mod}+⇧+E`, () => reveal(item.repo))}
                     {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
                     {@render repoItem("Pfad kopieren", "", () => navigator.clipboard.writeText(item.repo.path))}
-                    {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", `${mod}+P`, () => togglePin(item.repo.path))}
+                    {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", `${mod}+D`, () => togglePin(item.repo.path))}
                     {@render repoItem("Repo-Gruppe erstellen …", "", () => (groupEdit = { orig: null, g: { name: "", paths: [item.repo.path] } }))}
                     {#if isUnity(item.repo)}
                       <ContextMenu.Separator class={menuSeparator} />
@@ -1714,73 +1716,63 @@
 {/snippet}
 
 {#snippet keys(title: string, list: string[][])}
-  <div>
-    <h3 class="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">{title}</h3>
-    <dl class="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
+  <section>
+    <h3 class="text-muted-foreground text-meta mb-2 font-semibold tracking-wide uppercase">{title}</h3>
+    <dl class="text-body grid grid-cols-[12rem_1fr] items-center gap-x-4 gap-y-1.5">
       {#each list as [key, what] (key)}
-        <dt class="border-border rounded border px-1.5 py-0.5 text-center font-mono text-[11px]">
-          {key}
-        </dt>
+        <dt class="border-border text-meta justify-self-start rounded border px-1.5 py-0.5 font-mono">{key}</dt>
         <dd class="text-muted-foreground">{what}</dd>
       {/each}
     </dl>
-  </div>
+  </section>
 {/snippet}
 
 <Dialog.Root bind:open={help}>
   <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
     <Dialog.Header>
       <Dialog.Title>Tastenkürzel</Dialog.Title>
-      <Dialog.Description>Alles lässt sich ohne Maus bedienen.</Dialog.Description>
+      <Dialog.Description>Ein Schema für alle Ansichten. Alles lässt sich auch ohne Maus bedienen.</Dialog.Description>
     </Dialog.Header>
-    <div class="grid gap-6 sm:grid-cols-2">
-      {@render keys("Liste", [
+    <div class="grid gap-5">
+      {@render keys("Überall", [
+        [`${mod} + 1 / 2 / 3`, "Claude / Editor / Git des Projekts (auf der Startseite: des gewählten)"],
+        [`${mod} + ⇧ + E`, `Projektordner im ${FILES_APP} öffnen`],
+        [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zu den Projekten, Sitzung läuft weiter"],
+        [`F1 / ${mod} + /`, "Diese Übersicht"],
+        [`${mod} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
+        [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
+      ])}
+      {@render keys("Startseite", [
         ["⏎ / Klick", "Zuletzt genutzte Ansicht des Projekts öffnen (sonst Claude)"],
         ["↑ ↓", "Projekt wählen"],
-        [`${mod} + 1 … 9`, "Claude im Treffer starten"],
-        [`${mod} + G`, "Git-Ansicht öffnen"],
-        [`${mod} + ⇧ + E`, "Editor öffnen"],
+        [`${mac ? "⌥" : "Alt"} + 1 … 9`, "Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)"],
+        [`${mod} + K`, "Suche fokussieren"],
+        [`${mod} + D`, "Projekt anpinnen"],
         [`${mod} + N`, "Repo klonen"],
         [`${mod} + ⇧ + N`, "Neues Repo anlegen"],
-        [`${mod} + K`, "Suche fokussieren"],
-        [`${mod} + P`, "Projekt anpinnen"],
-        [`${mod} + E`, `Ordner im ${FILES_APP} öffnen`],
+        [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
         [`${mod} + R`, "Neu einlesen"],
         [`${mod} + O`, "Dev-Ordner wechseln"],
-        [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
         ["Rechtsklick", "Weitere Aktionen, z. B. vom Gerät löschen"],
         ["Esc", "Suche leeren, sonst schließen (bzw. ins Tray)"],
       ])}
-      <div class="grid content-start gap-6">
-        {@render keys("Überall", [
-          [`${mod} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
-          [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
-        ])}
-        {@render keys("Terminal, Git und Editor", [
-          [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zur Liste, Sitzung läuft weiter"],
-          ["Alt + E", `Ordner im ${FILES_APP} öffnen`],
-          ["Alt + G", "Im Terminal und Editor: Git-Ansicht öffnen"],
-          [`${mod} + ⇧ + E`, "Editor öffnen"],
-          ["Strg + ⇧ + C / Strg + V", "Im Terminal: kopieren / einfügen"],
-        ])}
-        {@render keys("Editor", [
-          [`${mod} + S`, "Datei speichern"],
-          [`${mod} + P`, "Datei suchen und öffnen"],
-          ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
-        ])}
-        {@render keys("Git-Ansicht", [
-          ["Esc", "Zurück zur Liste"],
-          [`${mod} + 1 … 5`, "Änderungen / Verlauf / Releases / CI / Unity"],
-          [`${mod} + ⇧ + F`, "Fetch"],
-          [`${mod} + ⇧ + L`, "Pull"],
-          [`${mod} + ⇧ + P`, "Push"],
-          ["F5", "Aktualisieren"],
-          [`${mod} + ⏎`, "Commit"],
-          ["Leertaste", "Datei stagen / unstagen"],
-          ["F7 / ⇧ + F7", "Merge-Editor: nächster / vorheriger Konflikt"],
-          [`${mod} + S`, "Merge-Editor: speichern"],
-        ])}
-      </div>
+      {@render keys("Claude", [["Strg + ⇧ + C / Strg + V", "Im Terminal kopieren / einfügen"]])}
+      {@render keys("Editor", [
+        [`${mod} + S`, "Datei speichern"],
+        [`${mod} + P`, "Datei suchen und öffnen"],
+        ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
+      ])}
+      {@render keys("Git", [
+        ["Esc", "Zurück zu den Projekten"],
+        [`${mod} + ⇧ + F`, "Fetch"],
+        [`${mod} + ⇧ + L`, "Pull"],
+        [`${mod} + ⇧ + P`, "Push"],
+        ["F5", "Aktualisieren"],
+        [`${mod} + ⏎`, "Commit"],
+        ["Leertaste", "Datei stagen / unstagen"],
+        ["F7 / ⇧ + F7", "Merge-Editor: nächster / vorheriger Konflikt"],
+        [`${mod} + S`, "Merge-Editor: speichern"],
+      ])}
     </div>
   </Dialog.Content>
 </Dialog.Root>

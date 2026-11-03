@@ -5,7 +5,6 @@
 
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { altKey } from "$lib/utils";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -185,8 +184,7 @@
 
   function onKeyEvent(e: KeyboardEvent) {
     if (e.type !== "keydown") return true;
-    // Alt+E (Explorer) und Alt+G (Git-Ansicht) macht der App-Handler.
-    if (altKey(e, "e") || altKey(e, "g")) return false;
+    // Strg+1/2/3 and Strg+Umschalt+E never get here: the app takes them in the capture phase (+page.svelte).
     // Umschalt+Esc fuehrt zur Liste zurueck; einfaches Esc bleibt bei claude (abbrechen, zurueckspringen).
     if (e.shiftKey && e.key === "Escape") return false;
     if (!e.ctrlKey) return true;
