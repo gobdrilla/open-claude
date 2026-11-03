@@ -3,7 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, Empty, PromptDialog, RefreshButton, fileIcon, menuContent, paneBar } from "$lib/components/kit";
+  import { ContextItem, Empty, IconButton, PromptDialog, RefreshButton, Row as RowButton, fileIcon, menuContent, paneBar } from "$lib/atelier-ui";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import FilePlusIcon from "@lucide/svelte/icons/file-plus";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
@@ -134,17 +134,11 @@
     <span class="text-foreground min-w-0 flex-1 truncate text-[11px] font-semibold" title={repo}
       >{repo.split(/[\\/]/).pop()}</span
     >
-    <button
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground grid size-5 place-items-center rounded"
-      title="Neue Datei im Projektordner"
-      aria-label="Neue Datei"
-      onclick={() => create("", false)}><FilePlusIcon class="size-3" /></button
+    <IconButton label="Neue Datei" title="Neue Datei im Projektordner" onclick={() => create("", false)}
+      ><FilePlusIcon class="size-3" /></IconButton
     >
-    <button
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground grid size-5 place-items-center rounded"
-      title="Neuer Ordner im Projektordner"
-      aria-label="Neuer Ordner"
-      onclick={() => create("", true)}><FolderPlusIcon class="size-3" /></button
+    <IconButton label="Neuer Ordner" title="Neuer Ordner im Projektordner" onclick={() => create("", true)}
+      ><FolderPlusIcon class="size-3" /></IconButton
     >
   </div>
   <Notice bind:text={error} />
@@ -169,10 +163,9 @@
       {@const dir = r.dir ? r.path : dirname(r.path)}
       <ContextMenu.Root>
         <ContextMenu.Trigger>
-          <button
-            class="flex h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left text-xs {r.ignored
-              ? 'opacity-50'
-              : ''} {r.path === s.active ? 'bg-accent text-foreground' : 'hover:bg-accent/50'}"
+          <RowButton
+            dim={r.ignored}
+            text="md" selected={r.path === s.active} class="h-6 pr-2"
             style="padding-left:{4 + r.depth * 12}px"
             onclick={(e) => ((e.currentTarget as HTMLElement).focus(), click(r))}
             data-tree-row
@@ -186,7 +179,7 @@
             {#if !r.dir}{@const ic = fileIcon(r.path)}<ic.icon class="size-3.5 shrink-0 {ic.tint}" />{/if}
             <span class="min-w-0 flex-1 truncate">{r.name}</span>
             {#if s.files[r.path]?.dirty}<span class="bg-primary size-1.5 shrink-0 rounded-full"></span>{/if}
-          </button>
+          </RowButton>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content class={menuContent}>

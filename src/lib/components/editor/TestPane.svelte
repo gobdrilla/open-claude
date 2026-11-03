@@ -5,8 +5,7 @@
   import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { ContextItem, Tabs, menuContent, paneBar } from "$lib/components/kit";
+  import { Button, Checkbox, ContextItem, IconButton, Input, Tabs, TextButton, menuContent, paneBar } from "$lib/atelier-ui";
   import { cn } from "$lib/utils";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
@@ -156,15 +155,8 @@
     </span>
   </div>
   <div class="border-border flex items-center gap-2 border-b px-2 py-1">
-    <input
-      class="border-input bg-background min-w-0 flex-1 rounded border px-1.5 py-0.5 text-[11px] outline-none"
-      placeholder="Filter …"
-      aria-label="Tests filtern"
-      bind:value={t.filter}
-    />
-    <label class="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px]">
-      <input type="checkbox" bind:checked={t.failedOnly} /> nur Fehler
-    </label>
+    <Input density="xs" class="min-w-0 flex-1" placeholder="Filter …" aria-label="Tests filtern" bind:value={t.filter} />
+    <Checkbox size="sm" muted class="shrink-0" bind:checked={t.failedOnly}>nur Fehler</Checkbox>
   </div>
   <Notice bind:text={() => t.error, (v) => (t.error = v)} timeout={0} />
   <Notice bind:text={() => t.note, (v) => (t.note = v)} kind="note" timeout={0} />
@@ -206,14 +198,15 @@
                 e.preventDefault();
               }}
             >
-              <button
-                tabindex="-1"
-                aria-label={r.open ? "Zuklappen" : "Aufklappen"}
-                class="grid size-4 shrink-0 place-items-center {r.kids ? '' : 'invisible'}"
+              <IconButton
+                tabindex={-1}
+                size="xs"
+                label={r.open ? "Zuklappen" : "Aufklappen"}
+                class={r.kids ? "" : "invisible"}
                 onclick={(e) => {
                   e.stopPropagation();
                   setExpanded(repo, r.id, !r.open);
-                }}><ChevronRightIcon class="size-3 transition-transform {r.open ? 'rotate-90' : ''}" /></button
+                }}><ChevronRightIcon class="size-3 transition-transform {r.open ? 'rotate-90' : ''}" /></IconButton
               >
               {@render status(st)}
               <span class="min-w-0 flex-1 truncate {n.kind === 'file' ? 'font-mono text-[11px]' : ''}">{n.name}</span>
@@ -225,16 +218,17 @@
                 >
               {/if}
               <span class="text-muted-foreground shrink-0 text-[10px] tabular-nums">{ms(t.results[r.id]?.ms)}</span>
-              <button
-                tabindex="-1"
-                class="hover:bg-secondary grid size-4 shrink-0 place-items-center rounded opacity-0 group-hover:opacity-100 disabled:hidden"
-                aria-label="Ausführen"
-                title="Ausführen"
+              <IconButton
+                tabindex={-1}
+                size="xs"
+                reveal
+                class="disabled:hidden"
+                label="Ausführen"
                 disabled={!!t.run}
                 onclick={(e) => {
                   e.stopPropagation();
                   run(r.id);
-                }}><PlayIcon class="size-3" /></button
+                }}><PlayIcon class="size-3" /></IconButton
               >
             </div>
           </ContextMenu.Trigger>
@@ -273,11 +267,12 @@
           <span class="min-w-0 flex-1 truncate font-medium">{title(t, sel.id) || sel.name}</span>
           {#if sel.line !== null || res?.at}
             {@const at = res?.at ?? { file: sel.file, line: sel.line ?? 1 }}
-            <button
-              class="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 font-mono text-[10px]"
+            <TextButton
+              size="xs"
+              class="shrink-0 gap-0.5 font-mono"
               title="Im Editor öffnen"
               onclick={() => void open(repo, at.file, at.line)}
-              >{at.file.slice(at.file.lastIndexOf("/") + 1)}:{at.line}<ExternalLinkIcon class="size-3" /></button
+              >{at.file.slice(at.file.lastIndexOf("/") + 1)}:{at.line}<ExternalLinkIcon class="size-3" /></TextButton
             >
           {/if}
         </div>
@@ -294,9 +289,11 @@
           {#if res.diff}{@render pre("Diff", res.diff)}{/if}
           {#if res.stack}
             <div class="text-muted-foreground text-[10px]">Stack</div>
-            <pre class="max-h-48 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{#each stackLinks(res.stack) as p, k (k)}{#if p.loc}{@const loc = p.loc}<button
-                    class="text-primary hover:underline"
-                    onclick={() => jump(sel.id, loc.file, loc.line)}>{p.text}</button
+            <pre class="max-h-48 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{#each stackLinks(res.stack) as p, k (k)}{#if p.loc}{@const loc = p.loc}<TextButton
+                    tone="primary"
+                    underline
+                    class="inline"
+                    onclick={() => jump(sel.id, loc.file, loc.line)}>{p.text}</TextButton
                   >{:else}{p.text}{/if}{/each}</pre>
           {/if}
         {/if}

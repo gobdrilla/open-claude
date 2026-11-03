@@ -1,17 +1,14 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, ConfirmDialog, DiffDialog, PromptDialog, fileIcon, menuContent } from "$lib/components/kit";
+  import { Badge, Button, ConfirmDialog, ContextItem, DiffDialog, Input, PromptDialog, Row, TextButton, fileIcon, menuContent } from "$lib/atelier-ui";
   import { age, cn } from "$lib/utils";
   import { tick, untrack } from "svelte";
   import { ContextMenu } from "bits-ui";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
   import { git, type Commit, type CommitDetail, type ResetMode } from "$lib/git";
-  import { layout, type Row } from "$lib/graph";
+  import { layout, type Row as GraphRow } from "$lib/graph";
   import { fileDiff, parseDiff, stat, type FileStatus } from "$lib/diff";
   import { dirname } from "$lib/tree";
   import { ask } from "$lib/ask.svelte";
-  import { Button } from "$lib/components/ui/button/index.js";
   import { reviewCount, sendReview } from "$lib/review.svelte";
   import { theme } from "$lib/theme.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
@@ -292,19 +289,17 @@
   </Badge>
 {/snippet}
 
-{#snippet commitRow(c: Commit, row: Row | null)}
+{#snippet commitRow(c: Commit, row: GraphRow | null)}
   <ContextMenu.Root>
     <!-- Auswahl zeigt bg-accent, ein Fokusrahmen waere doppelt -->
     <ContextMenu.Trigger class="outline-none">
-      <button
+      <Row
         id="commit-{c.sha}"
-        tabindex="-1"
+        tabindex={-1}
         role="option"
         aria-selected={selected === c.sha}
-        class="hover:bg-accent/60 flex h-[26px] w-full items-center gap-2 rounded-md px-2 text-left outline-none {selected ===
-        c.sha
-          ? 'bg-primary/15'
-          : ''}"
+        selected={selected === c.sha}
+        class="h-[26px] gap-2 py-0 focus-visible:ring-0"
         onclick={() => select(c.sha)}
       >
         {#if row}
@@ -339,7 +334,7 @@
         <span class="text-muted-foreground hidden max-w-28 shrink-0 truncate text-[11px] sm:block">{c.author}</span>
         <span class="text-muted-foreground bg-secondary/60 shrink-0 rounded px-1 font-mono text-[10px]">{c.sha.slice(0, 7)}</span>
         <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[10px] tabular-nums">{age(c.date)}</span>
-      </button>
+      </Row>
     </ContextMenu.Trigger>
     <ContextMenu.Portal>
       <ContextMenu.Content class={cn(menuContent, "min-w-48")}>
@@ -390,7 +385,7 @@
 <div class="flex h-full min-h-0 flex-col text-xs">
   <div class="flex items-center gap-2 px-2 py-1.5">
     <SearchIcon class="text-muted-foreground size-3.5 shrink-0" />
-    <Input bind:value={query} placeholder="Verlauf durchsuchen" class="h-7! rounded-full text-[11px]" />
+    <Input bind:value={query} placeholder="Verlauf durchsuchen" density="sm" class="rounded-full" />
   </div>
 
   <Notice bind:text={error} />
@@ -414,12 +409,13 @@
         {#if loading}
           <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Durchsucht {skip} Commits …</p>
         {:else if !done}
-          <button
-            class="text-muted-foreground hover:text-foreground w-full px-2 py-2 text-center text-[11px]"
+          <TextButton
+            size="sm"
+            block
             onclick={() => ((searchUntil = skip + SEARCH_STEP), loadMore())}
           >
             {filtered.length ? "" : "Keine Treffer. "}Nur die letzten {skip} Commits durchsucht – weiter suchen
-          </button>
+          </TextButton>
         {:else if filtered.length === 0}
           <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Keine Treffer.</p>
         {/if}
@@ -446,15 +442,15 @@
       <div class="space-y-1 px-3 pt-2 pb-1.5">
         <p class="truncate text-xs font-medium" title={detail.commit.subject}>{detail.commit.subject}</p>
         <div class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px]">
-          <button class="hover:text-foreground flex items-center gap-1 font-mono" title="SHA kopieren" onclick={() => copySha(detail!.commit.sha)}
-            >{detail.commit.sha.slice(0, 8)}<CopyIcon class="size-2.5" /></button
+          <TextButton class="font-mono" title="SHA kopieren" onclick={() => copySha(detail!.commit.sha)}
+            >{detail.commit.sha.slice(0, 8)}<CopyIcon class="size-2.5" /></TextButton
           >
           <span>·</span><span title={detail.commit.email}>{detail.commit.author}</span>
           <span>·</span><span title={new Date(detail.commit.date).toLocaleString("de-DE")}>{age(detail.commit.date)}</span>
           {#if detail.commit.parents.length}
             <span>·</span><span>Eltern</span>
             {#each detail.commit.parents as p (p)}
-              <button class="hover:text-primary font-mono underline-offset-2 hover:underline" onclick={() => select(p)}>{p.slice(0, 8)}</button>
+              <TextButton tone="link" underline class="font-mono" onclick={() => select(p)}>{p.slice(0, 8)}</TextButton>
             {/each}
           {/if}
           <span class="ml-auto font-mono tabular-nums">
@@ -465,10 +461,11 @@
           </span>
         </div>
         {#if detail.body}
-          <button
-            class="text-muted-foreground hover:text-foreground w-full text-left text-[11px] whitespace-pre-wrap {full ? 'block' : 'line-clamp-2'}"
+          <TextButton
+            size="sm"
+            class="block w-full whitespace-pre-wrap"
             title={full ? "Weniger" : "Ganz anzeigen"}
-            onclick={() => (full = !full)}>{detail.body}</button
+            onclick={() => (full = !full)}><span class={full ? "" : "line-clamp-2"}>{detail.body}</span></TextButton
           >
         {/if}
       </div>
@@ -478,8 +475,9 @@
             {@const st = stats[i]}
             {@const ic = fileIcon(f.newPath)}
             {@const [label, tone] = STATUS[f.status]}
-            <button
-              class="bg-card border-border/60 hover:bg-accent/60 hover:border-border flex min-w-0 flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition-colors"
+            <Row
+              variant="card"
+              density="roomy"
               title={f.oldPath !== f.newPath ? `${f.oldPath} → ${f.newPath}` : f.newPath}
               onclick={() => (shown = i)}
             >
@@ -496,7 +494,7 @@
                     {#if st.d}<span class="text-destructive">−{st.d}</span>{/if}</span
                   >{/if}
               </span>
-            </button>
+            </Row>
           {/each}
         </div>
       {/if}

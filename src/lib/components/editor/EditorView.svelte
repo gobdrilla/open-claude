@@ -2,8 +2,7 @@
   // Editor-Ansicht eines Projekts: verdrahtet Dock, Dateibaum und Code-Panels mit dem Store.
   // Haelt selbst keinen Zustand: beim Wechsel zu Terminal/Git wird sie abgebaut, Puffer und Layout liegen in $lib/editor.svelte.
   import Notice from "$lib/components/Notice.svelte";
-  import { Empty, Select, fileIcon } from "$lib/components/kit";
-  import { Button } from "$lib/components/ui/button/index.js";
+  import { Button, Empty, Select, fileIcon } from "$lib/atelier-ui";
   import SaveIcon from "@lucide/svelte/icons/save";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
@@ -151,9 +150,8 @@
 {#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems", label: string, Icon: typeof SaveIcon, title = label)}
   {@const on = !!groupOf(s.layout, id)}
   <Button
-    variant="ghost"
+    variant="toggle"
     size="xs"
-    class={on ? "bg-background text-foreground ring-foreground/10 ring-1 [&_svg]:text-primary" : "text-muted-foreground"}
     aria-pressed={on}
     title="{title} {on ? 'ausblenden' : 'einblenden'}"
     onclick={() => togglePanel(repo, id)}><Icon /> {label}</Button
@@ -163,9 +161,8 @@
 <div class="flex h-full min-h-0 flex-col text-xs">
   <div class="bg-chrome border-border flex items-center gap-0.5 border-b px-2 py-1">
     <Button
-      variant="ghost"
+      variant="quiet"
       size="xs"
-      class="text-muted-foreground"
       disabled={!s.active || !s.files[s.active]?.dirty}
       title="Speichern ({MOD}+S)"
       onclick={() => save(repo)}><SaveIcon /> Speichern</Button
@@ -192,9 +189,8 @@
         onchange={(v) => setRun(repo, v)}
       />
       <Button
-        variant="ghost"
+        variant="quiet"
         size="icon-xs"
-        class="text-muted-foreground"
         title="Eigene Startziele"
         aria-label="Eigene Startziele"
         onclick={() => (customOpen = true)}><ListPlusIcon /></Button
@@ -208,33 +204,31 @@
         onchange={(v) => setProfile(repo, v)}
       />
       <Button
-        variant="ghost"
+        variant="quiet"
         size="icon-xs"
-        class="text-muted-foreground"
         title="Build-Profile verwalten"
         aria-label="Build-Profile verwalten"
         onclick={() => (profilesOpen = true)}><SlidersIcon /></Button
       >
       <Button
-        variant="ghost"
+        variant="quiet"
         size="icon-xs"
-        class={cfg && !running ? "text-success hover:text-success" : "text-muted-foreground"}
+        class={cfg && !running ? "text-success hover:text-success" : ""}
         disabled={!cfg || running}
         title={cfg ? `${cfg.label} starten (F5) – führt Code aus dem Projekt aus` : "Nichts zum Starten"}
         onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /></Button
       >
       <Button
-        variant="ghost"
+        variant="quiet"
         size="icon-xs"
-        class={running ? "text-destructive hover:text-destructive" : "text-muted-foreground"}
+        class={running ? "text-destructive hover:text-destructive" : ""}
         disabled={!running}
         title="Stoppen (Umschalt+F5)"
         onclick={() => runStop(repo)}><SquareIcon /></Button
       >
       <Button
-        variant="ghost"
+        variant="quiet"
         size="icon-xs"
-        class="text-muted-foreground"
         disabled={!r.current}
         title="Neu starten ({MOD}+Umschalt+F5)"
         onclick={() => runRestart(repo)}><RotateCcwIcon /></Button
@@ -247,9 +241,8 @@
     {@render toggle("preview", "Vorschau", PanelRightIcon)}
     {@render toggle("problems", errors ? String(errors) : "", CircleAlertIcon, `Probleme (${MOD}+Umschalt+M)`)}
     <Button
-      variant="ghost"
+      variant="quiet"
       size="icon-xs"
-      class="text-muted-foreground"
       aria-label="Layout zurücksetzen"
       title="Layout zurücksetzen: Dateien links, Editor in der Mitte; offene Dateien bleiben, ein laufender Prozess stoppt"
       onclick={() => resetLayout(repo)}><LayoutDashboardIcon /></Button

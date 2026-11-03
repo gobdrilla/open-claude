@@ -1,15 +1,10 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { ConfirmDialog, RefreshButton } from "$lib/components/kit";
+  import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, RefreshButton, Row, Textarea, TextButton } from "$lib/atelier-ui";
   import { confirm } from "$lib/confirm.svelte";
   import Markdown from "$lib/components/Markdown.svelte";
   import { untrack } from "svelte";
   import { age } from "$lib/utils";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
   import { git, forge, type ForgeKind, type Release, type ReleaseAsset, type ReleaseInput } from "$lib/git";
   import { invoke } from "@tauri-apps/api/core";
   import { FILES_APP } from "$lib/editor.logic";
@@ -208,16 +203,18 @@
         <div class="border-border flex items-center gap-2 border-b px-2 py-1.5">
           <span class="text-muted-foreground flex-1 truncate">{host}</span>
           <RefreshButton {loading} onclick={() => reload()} />
-          <Button size="sm" variant="outline" class="h-6 text-[11px]" disabled={busy || !kind} onclick={() => openForm(null)}>
+          <Button size="xs" variant="outline" disabled={busy || !kind} onclick={() => openForm(null)}>
             <PlusIcon class="size-3" />Neues Release
           </Button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Releases">
           {#each items as r (r.id)}
-            <button
+            <Row
               role="option"
               aria-selected={selected?.id === r.id}
-              class="hover:bg-accent flex w-full items-center gap-2 px-2 py-1 text-left {selected?.id === r.id ? 'bg-accent' : ''}"
+              flush
+              selected={selected?.id === r.id}
+              class="gap-2"
               onclick={() => (selected = r)}
             >
               <span class="min-w-0 flex-1">
@@ -230,16 +227,14 @@
               <span class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[10px] tabular-nums">
                 {age(r.published_at ?? r.created_at)}
               </span>
-            </button>
+            </Row>
           {/each}
           {#if loading}
             <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
           {:else if !items.length}
             <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Noch keine Releases.</p>
           {:else if !done}
-            <button class="text-muted-foreground hover:text-foreground w-full px-2 py-2 text-center text-[11px]" onclick={loadMore}>
-              Mehr laden
-            </button>
+            <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
           {/if}
         </div>
       </div>
@@ -250,14 +245,14 @@
           <div class="space-y-2 px-3 py-2">
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="min-w-0 flex-1 truncate text-sm font-semibold">{r.name || r.tag}</h2>
-              <Button size="sm" variant="ghost" class="h-6 text-[11px]" onclick={() => forge.openUrl(r.web_url).catch((e) => (error = String(e)))}>
+              <Button size="xs" variant="ghost" onclick={() => forge.openUrl(r.web_url).catch((e) => (error = String(e)))}>
                 <ExternalLinkIcon class="size-3" />Im Browser
               </Button>
               {#if kind === "github" && r.draft}
-                <Button size="sm" class="h-6 text-[11px]" disabled={busy} onclick={() => publish(r)}>Veröffentlichen</Button>
+                <Button size="xs" disabled={busy} onclick={() => publish(r)}>Veröffentlichen</Button>
               {/if}
-              <Button size="sm" variant="outline" class="h-6 text-[11px]" disabled={busy} onclick={() => openForm(r)}>Bearbeiten</Button>
-              <Button size="sm" variant="destructive" class="h-6 text-[11px]" disabled={busy} onclick={() => (confirmDelete = r)}>Löschen</Button>
+              <Button size="xs" variant="outline" disabled={busy} onclick={() => openForm(r)}>Bearbeiten</Button>
+              <Button size="xs" variant="destructive" disabled={busy} onclick={() => (confirmDelete = r)}>Löschen</Button>
             </div>
             <p class="text-muted-foreground text-[10px]">
               <span class="font-mono">{r.tag}</span> · {r.author} · {new Date(r.published_at ?? r.created_at).toLocaleString("de-DE")}
@@ -272,8 +267,9 @@
                 {#each r.assets as a (a.url)}
                   {@const d = downloads[a.url]}
                   <li>
-                    <button
-                      class="hover:bg-accent group flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[11px]"
+                    <Row
+                      density="compact"
+                      class="group gap-2 px-1"
                       title={d === "…" ? "Wird heruntergeladen …" : d ? `Im ${FILES_APP} zeigen: ${d}` : "In den Downloads-Ordner laden"}
                       onclick={() => download(a)}
                     >
@@ -290,7 +286,7 @@
                       {#if kind === "github"}
                         <span class="text-muted-foreground w-16 shrink-0 text-right font-mono text-[10px]">{a.downloads} ↓</span>
                       {/if}
-                    </button>
+                    </Row>
                   </li>
                 {/each}
               </ul>
@@ -330,9 +326,7 @@
         <div class="space-y-1">
           <div class="flex items-center">
             <label for="release-body" class="text-muted-foreground flex-1">Beschreibung (Markdown)</label>
-            <button class="text-muted-foreground hover:text-foreground text-[11px]" onclick={() => (preview = !preview)}>
-              {preview ? "Bearbeiten" : "Vorschau"}
-            </button>
+            <TextButton size="sm" onclick={() => (preview = !preview)}>{preview ? "Bearbeiten" : "Vorschau"}</TextButton>
           </div>
           {#if preview}
             <div class="border-input h-[212px] overflow-y-auto rounded-md border px-3 py-2">
@@ -343,17 +337,13 @@
               {/if}
             </div>
           {:else}
-            <Textarea id="release-body" bind:value={form.body} rows={10} class="font-mono text-[11px]" />
+            <Textarea id="release-body" bind:value={form.body} rows={10} density="xs" class="font-mono" />
           {/if}
         </div>
         {#if kind === "github"}
           <div class="flex gap-4">
-            <label class="flex items-center gap-1.5">
-              <input type="checkbox" bind:checked={form.draft} class="accent-primary" />Draft
-            </label>
-            <label class="flex items-center gap-1.5">
-              <input type="checkbox" bind:checked={form.prerelease} class="accent-primary" />Pre-Release
-            </label>
+            <Checkbox bind:checked={form.draft}>Draft</Checkbox>
+            <Checkbox bind:checked={form.prerelease}>Pre-Release</Checkbox>
           </div>
         {/if}
       </div>

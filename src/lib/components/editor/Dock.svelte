@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import XIcon from "@lucide/svelte/icons/x";
+  import { IconButton } from "$lib/atelier-ui";
   export type TabInfo = { title: string; hint?: string; dirty?: boolean; closable?: boolean; icon?: typeof XIcon; tint?: string };
 </script>
 
@@ -212,12 +213,12 @@
               <span class="whitespace-nowrap">{t.title}</span>
               {#if t.closable !== false}
                 <!-- Ungespeichert: Punkt, der beim Ueberfahren zum x wird. Per Tastatur schliesst Entf auf dem Tab. -->
-                <button
-                  tabindex="-1"
-                  aria-label="{t.title} schließen"
-                  class="hover:bg-secondary grid size-4 place-items-center rounded {t.dirty || n.active === id
-                    ? ''
-                    : 'opacity-0 group-hover/tab:opacity-100'}"
+                <IconButton
+                  tabindex={-1}
+                  size="xs"
+                  label="{t.title} schließen"
+                  tone="inherit"
+                  class={t.dirty || n.active === id ? "" : "opacity-0 group-hover/tab:opacity-100"}
                   onclick={(e) => {
                     e.stopPropagation();
                     onclose(id);
@@ -225,7 +226,7 @@
                 >
                   {#if t.dirty}<span class="bg-primary size-1.5 rounded-full group-hover/tab:hidden"></span>{/if}
                   <XIcon class="size-3 {t.dirty ? 'hidden group-hover/tab:block' : ''}" />
-                </button>
+                </IconButton>
               {:else}
                 <span class="w-1"></span>
               {/if}

@@ -15,9 +15,8 @@
 
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Empty, RefreshButton } from "$lib/components/kit";
+  import { Button, Empty, RefreshButton } from "$lib/atelier-ui";
   import { untrack } from "svelte";
-  import { Button } from "$lib/components/ui/button/index.js";
   import UnityCloseDialog from "./UnityCloseDialog.svelte";
   import { unity, verdict, formatDuration, type UnityInfo } from "$lib/unity";
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";

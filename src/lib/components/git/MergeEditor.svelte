@@ -5,10 +5,9 @@
   import { SvelteSet } from "svelte/reactivity";
   import { git, type Conflict } from "$lib/git";
   import { diffLines, parseConflicts, render, type Choice, type Mark, type Segment } from "$lib/conflict";
-  import { Button } from "$lib/components/ui/button/index.js";
+  import { Button, TextButton, Textarea, menuContent, menuItem } from "$lib/atelier-ui";
   import { DropdownMenu } from "bits-ui";
   import { cn } from "$lib/utils";
-  import { menuContent, menuItem } from "$lib/components/kit";
   import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronsLeftIcon from "@lucide/svelte/icons/chevrons-left";
@@ -225,10 +224,10 @@
     >
       {#if total}{total - open.length}/{total}{:else}keine Konfliktmarker{/if}
     </span>
-    <Button variant="ghost" size="sm" class="h-6 px-1.5" onclick={() => jump(-1)} disabled={!total || editing} title="Vorheriger Konflikt (Umschalt+F7)">
+    <Button variant="ghost" size="xs" onclick={() => jump(-1)} disabled={!total || editing} title="Vorheriger Konflikt (Umschalt+F7)">
       <ChevronUpIcon class="size-3.5" />
     </Button>
-    <Button variant="ghost" size="sm" class="h-6 px-1.5" onclick={() => jump(1)} disabled={!total || editing} title="Nächster Konflikt (F7)">
+    <Button variant="ghost" size="xs" onclick={() => jump(1)} disabled={!total || editing} title="Nächster Konflikt (F7)">
       <ChevronDownIcon class="size-3.5" />
     </Button>
     <span class="bg-border h-4 w-px"></span>
@@ -256,10 +255,10 @@
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
-    <Button variant="ghost" size="sm" class="h-6 shrink-0 text-[11px]" disabled={!conflict} onclick={() => whole(conflict!.merged)} title="Zurücksetzen: alle Entscheidungen verwerfen">
+    <Button variant="ghost" size="xs" class="shrink-0" disabled={!conflict} onclick={() => whole(conflict!.merged)} title="Zurücksetzen: alle Entscheidungen verwerfen">
       <UndoIcon class="size-3.5" /> <span class="hidden @xl:inline">Zurücksetzen</span>
     </Button>
-    <Button variant="ghost" size="sm" class="h-6 shrink-0 text-[11px] {editing ? 'text-primary' : ''}" disabled={!conflict} onclick={() => (editing ? applyEdit() : startEdit())} title={editing ? "Übernehmen" : "Von Hand bearbeiten"}>
+    <Button variant="ghost" size="xs" class="shrink-0 {editing ? 'text-primary' : ''}" disabled={!conflict} onclick={() => (editing ? applyEdit() : startEdit())} title={editing ? "Übernehmen" : "Von Hand bearbeiten"}>
       <PencilIcon class="size-3.5" /> <span class="hidden @xl:inline">{editing ? "Übernehmen" : "Bearbeiten"}</span>
     </Button>
   </div>
@@ -272,16 +271,18 @@
       <p class="text-muted-foreground px-3 py-6">Lade Konflikt …</p>
     {:else}
       <div class="flex min-h-0 flex-1 items-start gap-2 px-3 py-4">
-        <Button variant="outline" size="sm" class="text-xs" disabled={busy} onclick={() => side(false)}>{sides.ours} komplett übernehmen</Button>
-        <Button variant="outline" size="sm" class="text-xs" disabled={busy} onclick={() => side(true)}>{sides.theirs} komplett übernehmen</Button>
+        <Button variant="outline" size="sm" disabled={busy} onclick={() => side(false)}>{sides.ours} komplett übernehmen</Button>
+        <Button variant="outline" size="sm" disabled={busy} onclick={() => side(true)}>{sides.theirs} komplett übernehmen</Button>
       </div>
     {/if}
   {:else if editing}
-    <textarea
-      class="bg-background min-h-0 flex-1 resize-none p-3 font-mono text-xs leading-5 outline-none"
+    <Textarea
+      bare
+      density="sm"
+      class="flex-1 p-3 font-mono leading-5"
       spellcheck="false"
       bind:value={draft}
-    ></textarea>
+    />
   {:else}
     <div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto font-mono leading-5" bind:this={scroller}>
       {#each segments as seg, i (i)}
@@ -291,9 +292,8 @@
           {@const tail = i === segments.length - 1 ? 0 : CONTEXT}
           {#if ls.length > head + tail + CONTEXT && !expanded.has(i)}
             {#if head}{@render code(ls.slice(0, head), starts[i])}{/if}
-            <button
-              class="text-muted-foreground hover:text-foreground bg-secondary/40 w-full px-3 py-0.5 text-left text-[11px]"
-              onclick={() => expanded.add(i)}>… {ls.length - head - tail} unveränderte Zeilen einblenden</button
+            <TextButton size="sm" class="bg-secondary/40 w-full rounded-none px-3 py-0.5" onclick={() => expanded.add(i)}
+              >… {ls.length - head - tail} unveränderte Zeilen einblenden</TextButton
             >
             {#if tail}{@render code(ls.slice(-tail), starts[i] + ls.length - tail)}{/if}
           {:else}
@@ -315,8 +315,7 @@
                 <span class="min-w-0 flex-1 truncate" title={sides.ours}>{sides.ours}</span>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  class="h-5 px-1"
+                  size="2xs"
                   disabled={hasOurs}
                   onclick={() => choose(n, c === "theirs" ? "theirs-ours" : "ours")}
                   title={c === "theirs" ? `${sides.ours} zusätzlich anhängen` : `${sides.ours} übernehmen`}
@@ -332,11 +331,11 @@
                   Konflikt {n + 1}{c ? ` · ${label(c)}` : ""}
                 </span>
                 {#if c}
-                  <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[11px]" onclick={() => choose(n, null)}>
+                  <Button variant="ghost" size="2xs" onclick={() => choose(n, null)}>
                     <UndoIcon class="size-3" /> Rückgängig
                   </Button>
                 {:else if seg.base !== null}
-                  <Button variant="outline" size="sm" class="h-5 px-1.5 text-[11px]" onclick={() => choose(n, "base")}>Basis übernehmen</Button>
+                  <Button variant="outline" size="2xs" onclick={() => choose(n, "base")}>Basis übernehmen</Button>
                 {/if}
               </div>
               {#if result.length}
@@ -358,8 +357,7 @@
               <div class="text-muted-foreground flex h-6 items-center gap-1 bg-info/10 pr-3 pl-1 font-sans text-[11px]">
                 <Button
                   variant="ghost"
-                  size="sm"
-                  class="h-5 px-1"
+                  size="2xs"
                   disabled={hasTheirs}
                   onclick={() => choose(n, c === "ours" ? "ours-theirs" : "theirs")}
                   title={c === "ours" ? `${sides.theirs} zusätzlich anhängen` : `${sides.theirs} übernehmen`}
@@ -378,8 +376,8 @@
 
   <div class="bg-chrome border-border flex items-center justify-end gap-2 border-t px-3 py-1.5">
     <span class="text-muted-foreground mr-auto min-w-0 truncate text-[11px] whitespace-nowrap">F7 / Umschalt+F7 navigieren · Strg+S speichern</span>
-    <Button variant="ghost" size="sm" class="h-7 text-xs" onclick={cancel}>Abbrechen</Button>
-    <Button size="sm" class="h-7 text-xs" disabled={!conflict || busy || (!editing && open.length > 0)} onclick={save}>
+    <Button variant="ghost" size="sm" onclick={cancel}>Abbrechen</Button>
+    <Button size="sm" disabled={!conflict || busy || (!editing && open.length > 0)} onclick={save}>
       Speichern &amp; als gelöst markieren
     </Button>
   </div>

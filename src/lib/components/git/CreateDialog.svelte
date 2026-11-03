@@ -1,10 +1,7 @@
 <script lang="ts">
   import { open as pickFolder } from "@tauri-apps/plugin-dialog";
   import { forge, accountId, type Account, type RepoLang } from "$lib/git";
-  import { FolderField } from "$lib/components/kit";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Button, Checkbox, Dialog, FolderField, Input } from "$lib/atelier-ui";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
 
   let {
@@ -121,7 +118,7 @@
         <Input
           bind:value={name}
           placeholder="my-app"
-          class="font-mono text-xs"
+          density="sm" class="font-mono"
           onkeydown={(e) => e.key === "Enter" && doCreate()}
         />
         {#if name && !NAME.test(name)}
@@ -140,7 +137,7 @@
             <Button
               variant={lang === l.id ? "default" : "outline"}
               size="sm"
-              class="text-xs {off && lang !== l.id ? 'text-muted-foreground' : ''}"
+              class={off && lang !== l.id ? "text-muted-foreground" : ""}
               title={off ? `${l.tool} nicht gefunden: nur .gitignore + README` : undefined}
               onclick={() => (lang = l.id)}>{l.label}</Button
             >
@@ -152,30 +149,27 @@
       </div>
 
       <span></span>
-      <label class="flex items-center gap-2">
-        <input type="checkbox" bind:checked={mit} class="accent-primary" />
-        MIT-Lizenz
-      </label>
+      <Checkbox bind:checked={mit}>MIT-Lizenz</Checkbox>
 
       <span class="text-muted-foreground pt-2">Remote</span>
       <div class="space-y-1.5">
         <div class="flex flex-wrap gap-1.5">
-          <Button variant={account ? "outline" : "default"} size="sm" class="text-xs" onclick={() => (account = null)}
+          <Button variant={account ? "outline" : "default"} size="sm" onclick={() => (account = null)}
             >Nur lokal</Button
           >
           {#each accounts as a (a.kind + a.host + a.user)}
-            <Button variant={account === a ? "default" : "outline"} size="sm" class="text-xs" onclick={() => (account = a)}>
+            <Button variant={account === a ? "default" : "outline"} size="sm" onclick={() => (account = a)}>
               {a.user}<span class="text-muted-foreground ml-1 font-mono text-[10px]">@{a.host}</span>
             </Button>
           {/each}
-          <Button variant="outline" size="sm" class="text-xs" onclick={onaccounts}>Konto hinzufügen…</Button>
+          <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
         </div>
         {#if account}
           <div class="flex gap-1.5">
-            <Button variant={priv ? "default" : "outline"} size="sm" class="text-xs" onclick={() => (priv = true)}
+            <Button variant={priv ? "default" : "outline"} size="sm" onclick={() => (priv = true)}
               >Privat</Button
             >
-            <Button variant={priv ? "outline" : "default"} size="sm" class="text-xs" onclick={() => (priv = false)}
+            <Button variant={priv ? "outline" : "default"} size="sm" onclick={() => (priv = false)}
               >Öffentlich</Button
             >
           </div>
@@ -194,11 +188,10 @@
       <Button
         variant="outline"
         size="sm"
-        class="text-xs"
         onclick={() => (open = false)}
         disabled={busy}>{done ? "Schließen" : "Abbrechen"}</Button
       >
-      <Button size="sm" class="gap-1.5 text-xs" disabled={busy || done || !valid} onclick={doCreate}>
+      <Button size="sm" class="gap-1.5" disabled={busy || done || !valid} onclick={doCreate}>
         {#if busy}<LoaderCircleIcon class="size-3.5 animate-spin" />{/if}
         Anlegen
       </Button>

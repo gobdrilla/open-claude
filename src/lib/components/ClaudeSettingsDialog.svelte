@@ -104,11 +104,7 @@
 
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
-  import { Segmented, Select, Switch } from "$lib/components/kit";
+  import { Button, Dialog, IconButton, Input, Segmented, Select, Switch, Textarea } from "$lib/atelier-ui";
   import { confirm } from "$lib/confirm.svelte";
   const MODES = [
     ["Manuell", "default", "Fragt vor Änderungen und Befehlen"],
@@ -270,8 +266,8 @@
                   <div class="flex flex-wrap gap-1">
                     {#each rules(k) as r (r)}
                       <span class="bg-secondary flex items-center gap-1 rounded py-0.5 pr-0.5 pl-1.5 font-mono text-[11px]"
-                        >{r}<button class="hover:text-destructive text-muted-foreground" aria-label="{r} entfernen" disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
-                          ><XIcon class="size-3" /></button
+                        >{r}<IconButton size="bare" tone="danger" label="{r} entfernen" disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
+                          ><XIcon class="size-3" /></IconButton
                         ></span
                       >
                     {/each}
@@ -279,7 +275,7 @@
                       bind:value={adding[k]}
                       disabled={!parsed}
                       placeholder={k === "deny" ? "z. B. Bash(rm -rf:*)" : "z. B. Bash(npm test:*)"}
-                      class="h-6 w-48 font-mono text-[11px] md:text-[11px]"
+                      density="xs" class="w-48 font-mono"
                       onkeydown={(e) => e.key === "Enter" && addRule(k)}
                       onblur={() => addRule(k)}
                     />
@@ -293,7 +289,7 @@
 
       <details>
         <summary class="text-muted-foreground cursor-pointer text-[11px] font-medium tracking-wide uppercase">settings.json direkt bearbeiten</summary>
-        <Textarea bind:value={text} spellcheck={false} class="mt-1.5 h-64 font-mono text-[11px] md:text-[11px]" placeholder={"{}"} />
+        <Textarea bind:value={text} spellcheck={false} density="xs" class="mt-1.5 h-64 font-mono" placeholder={"{}"} />
       </details>
     </div>
 
@@ -337,7 +333,7 @@
       min="1"
       value={String(shown(f))}
       disabled={off}
-      class="h-7 w-20 text-xs md:text-xs"
+      density="sm" class="w-20"
       onchange={(e) => {
         const n = Math.round(Number(e.currentTarget.value));
         set(f, Number.isFinite(n) && n > 0 ? n : undefined);
@@ -349,7 +345,7 @@
       list={f.list ? `cs-${f.k}` : undefined}
       disabled={off}
       placeholder={f.placeholder}
-      class="h-7 w-48 font-mono text-xs md:text-xs"
+      density="sm" class="w-48 font-mono"
       onchange={(e) => set(f, e.currentTarget.value.trim())}
     />
     {#if f.list}<datalist id="cs-{f.k}">{#each f.list as o (o)}<option value={o}></option>{/each}</datalist>{/if}

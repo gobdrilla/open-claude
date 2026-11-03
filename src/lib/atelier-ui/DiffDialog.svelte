@@ -1,8 +1,8 @@
 <script lang="ts">
   // Diff im grossen Dialog; mit step blaettern ←/→ bzw. Knoepfe durch mehrere Dateien. Esc schliesst (bits-ui).
   import type { Snippet } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
+  import * as Dialog from "./primitives/dialog/index.js";
+  import { Button } from "./primitives/button/index.js";
   import DiffView from "$lib/components/git/DiffView.svelte";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";

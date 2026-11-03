@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import * as Dialog from "./primitives/dialog/index.js";
+  import { Button } from "./primitives/button/index.js";
+  import { Input } from "./primitives/input/index.js";
 
   let {
     open,

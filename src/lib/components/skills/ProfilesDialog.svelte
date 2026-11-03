@@ -1,10 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Button, Dialog, Input, Row, Segmented, Select } from "$lib/atelier-ui";
   import Notice from "$lib/components/Notice.svelte";
-  import { Segmented, Select } from "$lib/components/kit";
   import { fuzzy } from "$lib/fuzzy";
   import { confirm } from "$lib/confirm.svelte";
   import { skills, renameProfile, fromProject, adjust, emptyProject, type SkillStore, type SkillsInfo } from "$lib/skills";
@@ -110,10 +107,10 @@
       <div class="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto">
         <div class="flex flex-col gap-0.5">
           {#each names as n (n)}
-            <button
-              class="truncate rounded px-2 py-1 text-left {sel === n ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-secondary'}"
+            <Row
+              text="md" selected={sel === n} class={sel === n ? "" : "text-muted-foreground"}
               title={n}
-              onclick={() => (sel = n)}>{n}</button
+              onclick={() => (sel = n)}><span class="truncate">{n}</span></Row
             >
           {:else}
             <p class="text-muted-foreground px-2">Noch keine Profile.</p>
@@ -121,10 +118,10 @@
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <Input bind:value={name} placeholder="Neues Profil" class="h-7 text-xs" onkeydown={(e) => e.key === "Enter" && create(false)} />
+          <Input bind:value={name} placeholder="Neues Profil" density="sm" onkeydown={(e) => e.key === "Enter" && create(false)} />
           <div class="flex gap-1.5">
-            <Button size="sm" variant="outline" class="h-6 flex-1 text-[11px]" disabled={!nameOk} onclick={() => create(false)}>Leer</Button>
-            <Button size="sm" variant="outline" class="h-6 flex-1 text-[11px]" disabled={!nameOk || !ctx} onclick={() => create(true)}
+            <Button size="xs" variant="outline" class="flex-1" disabled={!nameOk} onclick={() => create(false)}>Leer</Button>
+            <Button size="xs" variant="outline" class="flex-1" disabled={!nameOk || !ctx} onclick={() => create(true)}
               >Aus Projekt</Button
             >
           </div>
@@ -159,14 +156,14 @@
             <div class="flex items-center gap-2">
               <Input
                 value={sel}
-                class="h-7 w-48 text-xs"
+                density="sm" class="w-48"
                 title="Umbenennen mit Enter"
                 onkeydown={(e) => e.key === "Enter" && rename(e.currentTarget)}
                 onblur={(e) => rename(e.currentTarget)}
               />
               <span class="flex-1"></span>
-              <Input bind:value={query} placeholder="Skill suchen" class="h-7 w-40 text-xs" />
-              <Button variant="ghost" size="sm" class="text-destructive h-7" title="Profil löschen" onclick={remove}>
+              <Input bind:value={query} placeholder="Skill suchen" density="sm" class="w-40" />
+              <Button variant="ghost-danger" size="sm" title="Profil löschen" onclick={remove}>
                 <TrashIcon class="size-3.5" />
               </Button>
             </div>

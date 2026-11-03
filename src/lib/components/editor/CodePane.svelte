@@ -5,8 +5,7 @@
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";
   import { lintGutter, setDiagnostics } from "@codemirror/lint";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { DiffDialog, Empty } from "$lib/components/kit";
+  import { Button, DiffDialog, Empty } from "$lib/atelier-ui";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
   import { gutterMarks, huge, span } from "$lib/editor.logic";

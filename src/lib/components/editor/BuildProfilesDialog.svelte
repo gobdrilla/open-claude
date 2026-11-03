@@ -1,8 +1,5 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Switch } from "$lib/components/kit";
+  import { Button, Dialog, IconButton, Input, Switch } from "$lib/atelier-ui";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
   import { editor, setProfile, setProfiles } from "$lib/editor.svelte";
   import { BUILTIN, parseArgs, type Profile } from "$lib/run.logic";
@@ -49,13 +46,11 @@
           <span class="font-medium">{p.name}</span>
           <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]" title={describe(p)}>{describe(p)}</span>
           {#if i >= BUILTIN.length}
-            <Button
-              variant="ghost"
-              size="icon"
-              class="text-muted-foreground hover:text-destructive size-6"
-              title="Profil {p.name} löschen"
-              aria-label="Profil {p.name} löschen"
-              onclick={() => setProfiles(repo, s.profiles.filter((x) => x.name !== p.name))}><TrashIcon class="size-3.5" /></Button
+            <IconButton
+              size="md"
+              tone="danger"
+              label="Profil {p.name} löschen"
+              onclick={() => setProfiles(repo, s.profiles.filter((x) => x.name !== p.name))}><TrashIcon class="size-3.5" /></IconButton
             >
           {/if}
         </li>
@@ -63,14 +58,14 @@
     </ul>
 
     <div class="flex flex-col gap-2">
-      <Input bind:value={name} placeholder="Name, z. B. Profiling" class="text-xs" onkeydown={enter} />
+      <Input bind:value={name} placeholder="Name, z. B. Profiling" density="sm" onkeydown={enter} />
       <label class="flex items-center gap-2 text-xs">
         <Switch on={release} label="Release" onclick={() => (release = !release)} />
         Release
       </label>
-      <Input bind:value={args} placeholder="Zusatzargumente (optional)" class="font-mono text-xs" onkeydown={enter} />
+      <Input bind:value={args} placeholder="Zusatzargumente (optional)" density="sm" class="font-mono" onkeydown={enter} />
       {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
-      <Button size="sm" class="text-xs" disabled={!name.trim() || !!error} onclick={add}>Profil anlegen</Button>
+      <Button size="sm" disabled={!name.trim() || !!error} onclick={add}>Profil anlegen</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

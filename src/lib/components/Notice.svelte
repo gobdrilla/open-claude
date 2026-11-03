@@ -1,6 +1,7 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
   import XIcon from "@lucide/svelte/icons/x";
+  import { IconButton, TextButton } from "$lib/atelier-ui";
 
   // Kompakte Meldungsleiste: eine Zeile, Klick zeigt den ganzen Text, verschwindet nach timeout von selbst
   // (0 = bleibt). Solange die Maus drauf ist oder der Text aufgeklappt ist, bleibt sie stehen.
@@ -38,13 +39,14 @@
     onmouseenter={() => (hover = true)}
     onmouseleave={() => (hover = false)}
   >
-    <button
-      class="min-w-0 flex-1 text-left {expanded ? 'max-h-40 overflow-y-auto break-words whitespace-pre-wrap' : 'truncate'}"
+    <TextButton
+      tone="inherit"
+      class="block min-w-0 flex-1 {expanded ? 'max-h-40 overflow-y-auto break-words whitespace-pre-wrap' : 'truncate'}"
       onclick={() => (expanded = !expanded)}
-      title={expanded ? "Einklappen" : text}>{expanded ? text : text.replace(/\s+/g, " ")}</button
+      title={expanded ? "Einklappen" : text}>{expanded ? text : text.replace(/\s+/g, " ")}</TextButton
     >
-    <button class="hover:text-foreground mt-0.5 shrink-0 opacity-70" onclick={() => (text = "")} aria-label="Meldung schließen">
+    <IconButton size="bare" tone="inherit" class="mt-0.5" label="Meldung schließen" onclick={() => (text = "")}>
       <XIcon class="size-3" />
-    </button>
+    </IconButton>
   </div>
 {/if}

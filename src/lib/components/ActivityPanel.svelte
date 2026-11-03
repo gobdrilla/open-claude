@@ -13,15 +13,13 @@
   import { pasted } from "$lib/pasteimg.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, untrack } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { Button, Dialog, Empty, IconButton, Row, SectionToggle, Segmented, Tabs, TextButton } from "$lib/atelier-ui";
   import Markdown from "$lib/components/Markdown.svelte";
   import ZoomImage from "$lib/components/ZoomImage.svelte";
   import BtwPanel from "$lib/components/BtwPanel.svelte";
-  import { Empty, Segmented, Tabs } from "$lib/components/kit";
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import Maximize2Icon from "@lucide/svelte/icons/maximize-2";
   import PlayIcon from "@lucide/svelte/icons/play";
   import PencilIcon from "@lucide/svelte/icons/pencil";
@@ -491,9 +489,9 @@
   {#if inFocus}
     <!-- Ausserhalb des Scrollbereichs: sticky lag dort ueber breitem Inhalt. -->
     <div class="border-border shrink-0 border-b px-2 py-1.5 text-xs">
-      <button class="text-muted-foreground hover:text-foreground flex max-w-full items-center gap-0.5" onclick={() => (focus = null)}>
+      <TextButton class="flex max-w-full gap-0.5" onclick={() => (focus = null)}>
         <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate" title={focused?.r.name}>{focused?.r.name ?? "Zurück"}</span>
-      </button>
+      </TextButton>
       {@render agentHead()}
     </div>
   {/if}
@@ -507,7 +505,7 @@
       <section class="border-border/60 mb-2 rounded-lg border">
         <div class="flex items-center justify-between px-2 py-1">
           <span class="text-muted-foreground">Vorlagen</span>
-          {#if !guest}<button class="text-muted-foreground hover:text-foreground" onclick={() => editTemplate(null)}>+ Neu</button>{/if}
+          {#if !guest}<TextButton onclick={() => editTemplate(null)}>+ Neu</TextButton>{/if}
         </div>
         {#each tpls as x (x.f.path)}
           <div class="border-border/60 flex items-center gap-1.5 border-t px-2 py-1">
@@ -519,27 +517,28 @@
               {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-[10px]" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
             </span>
             <span class="text-muted-foreground min-w-0 flex-1 truncate" title={x.description}>{x.description}</span>
-            <button
-              class="hover:text-foreground text-muted-foreground shrink-0 disabled:opacity-40"
+            <IconButton
+              size="bare"
+              label="Starten"
               disabled={!data?.alive}
               title={data?.alive ? "In die Claude-Session schreiben (Enter selbst drücken)" : "Kein laufendes claude in diesem Terminal-Ordner"}
-              aria-label="Starten"
-              onclick={() => startTemplate(x.f)}><PlayIcon class="size-3.5" /></button
+              onclick={() => startTemplate(x.f)}><PlayIcon class="size-3.5" /></IconButton
             >
             {#if !guest}
-            <button
-              class="hover:text-foreground text-muted-foreground shrink-0 disabled:opacity-40"
+            <IconButton
+              size="bare"
+              label="Bearbeiten"
               disabled={!x.builder}
               title={x.builder ? "Bearbeiten" : "Freies Skript: nur in einer Datei bearbeitbar"}
-              aria-label="Bearbeiten"
-              onclick={() => editTemplate(x.f)}><PencilIcon class="size-3.5" /></button
+              onclick={() => editTemplate(x.f)}><PencilIcon class="size-3.5" /></IconButton
             >
-            <button
-              class="hover:text-destructive text-muted-foreground shrink-0 disabled:opacity-40"
+            <IconButton
+              size="bare"
+              tone="danger"
+              label="Löschen"
               disabled={!/^[A-Za-z0-9_-]+$/.test(x.f.file)}
               title={/^[A-Za-z0-9_-]+$/.test(x.f.file) ? "Löschen" : "Dateiname mit Sonderzeichen: nur von Hand löschbar"}
-              aria-label="Löschen"
-              onclick={() => deleteTemplate(x.f, x.name)}><Trash2Icon class="size-3.5" /></button
+              onclick={() => deleteTemplate(x.f, x.name)}><Trash2Icon class="size-3.5" /></IconButton
             >
             {/if}
           </div>
@@ -552,7 +551,7 @@
     {#if actionError && !error}
       <p class="text-destructive bg-destructive/10 mb-2 flex items-start gap-2 rounded-md px-2 py-1">
         <span class="min-w-0 flex-1 break-words">{actionError}</span>
-        <button class="hover:text-foreground shrink-0" aria-label="Meldung schließen" onclick={() => (actionError = "")}>✕</button>
+        <IconButton size="bare" tone="inherit" label="Meldung schließen" title="" onclick={() => (actionError = "")}>✕</IconButton>
       </p>
     {/if}
     {#if error}
@@ -657,10 +656,10 @@
       {@render agentLog()}
     {:else if tab === "prompts"}
       {#each [...(data.prompts ?? [])].reverse() as p, i (i)}
-        <button class="hover:bg-accent/40 block w-full rounded-md px-2 py-1.5 text-left" title={p.text} aria-label="In claudes Transkript springen: {p.text.slice(0, 80)}" onclick={() => jump(p)}>
+        <Row density="roomy" text="md" class="block" title={p.text} aria-label="In claudes Transkript springen: {p.text.slice(0, 80)}" onclick={() => jump(p)}>
           <div class="line-clamp-2 break-words">{p.text}</div>
           <div class="text-muted-foreground text-[10px]">{ago(p.at)}</div>
-        </button>
+        </Row>
       {:else}
         <Empty>Noch keine Prompts in dieser Session.</Empty>
       {/each}
@@ -676,17 +675,13 @@
         {@const [icon, color, text] = status(r.status)}
         <section class="border-border/60 mb-2 rounded-lg border">
           <div class="flex items-center">
-            <button
-              class="hover:bg-accent/40 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left"
-              aria-expanded={open}
-              onclick={() => (openRuns[r.id] = !open)}
-            >
+            <SectionToggle variant="item" class="flex-1" {open} onclick={() => (openRuns[r.id] = !open)}>
               <span class={color} title={text}>{icon}</span>
               <span class="min-w-16 flex-1 truncate font-medium" title={r.name}>{r.name}</span>
               <span class="text-muted-foreground min-w-0 truncate tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
-            </button>
-            <button class="text-muted-foreground hover:text-foreground shrink-0 p-1.5" title="Groß anzeigen" aria-label="Groß anzeigen" onclick={() => openBig(r)}
-              ><Maximize2Icon class="size-3.5" /></button
+            </SectionToggle>
+            <IconButton size="bare" class="p-1.5" label="Groß anzeigen" onclick={() => openBig(r)}
+              ><Maximize2Icon class="size-3.5" /></IconButton
             >
           </div>
           {#if open}{@render phases(r)}{/if}
@@ -697,14 +692,14 @@
     {:else if imgs.length}
       <div class="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
         {#each imgs as m (key(m.id))}
-          <button class="group min-w-0 text-left" onclick={() => (shown = m.id)} title={m.label}>
+          <TextButton tone="plain" class="group block min-w-0" onclick={() => (shown = m.id)} title={m.label}>
             <div use:lazy={m.id} class="bg-background/40 group-hover:ring-primary/40 aspect-video overflow-hidden rounded-md ring-1 ring-foreground/5">
               {#if thumbs[key(m.id)]}<img src={thumbs[key(m.id)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />
               {:else if noThumb[key(m.id)]}<span class="text-muted-foreground grid h-full place-items-center text-[10px]">Keine Vorschau</span>{/if}
             </div>
             <div class="mt-1 truncate text-xs">{m.label}</div>
             <div class="text-muted-foreground truncate text-[10px]">{ago(m.at)}</div>
-          </button>
+          </TextButton>
         {/each}
       </div>
     {:else}
@@ -838,12 +833,12 @@
       {@const [pi, pc, pt] = status(st)}
       {@const n = g.agents.filter((a) => a.state === "done").length}
       {@const err = g.agents.filter(failed).length}
-      <button
-        class="border-border/60 bg-secondary/30 hover:bg-accent/40 flex w-full items-center gap-2 border-t px-2 py-1 text-left {dlg ? 'sticky top-0 z-10 backdrop-blur' : ''}"
-        aria-expanded={open}
+      <SectionToggle
+        variant="item"
+        class="border-border/60 bg-secondary/30 rounded-none border-t {dlg ? 'sticky top-0 z-10 backdrop-blur' : ''}"
+        {open}
         onclick={() => (openPhases[ok] = !open)}
       >
-        <ChevronDownIcon class="text-muted-foreground size-3.5 shrink-0 transition-transform {open ? '' : '-rotate-90'}" />
         <span class={pc} title={pt}>{pi}</span>
         <span class="min-w-16 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}" title={g.p}>{g.p || "Ohne Phase"}</span>
         <span class="text-muted-foreground min-w-0 truncate tabular-nums"
@@ -851,7 +846,7 @@
               g.agents.reduce((t, a) => t + a.tokens, 0),
             )}{/if}</span
         >
-      </button>
+      </SectionToggle>
     {/if}
     {#if open}
     <ul class="border-border/60 {shown.length ? 'border-t' : ''}">
@@ -861,8 +856,12 @@
         {@const pk = `${r.id}:${a.id || g.p + i}`}
         <li>
           <div class="flex items-start">
-            <button
-              class="hover:bg-accent/40 group/agent min-w-0 flex-1 py-1 pr-2 text-left {r.phases.length ? 'pl-6' : 'pl-2'} disabled:cursor-default {dlg && a.id && a.id === focus?.agent ? 'bg-accent/60' : ''}"
+            <Row
+              indent={!!r.phases.length}
+              flush
+              text="md"
+              selected={!!(dlg && a.id && a.id === focus?.agent)}
+              class="group/agent block flex-1 pr-2 disabled:opacity-100"
               disabled={!a.id}
               title={a.id ? "Verlauf anzeigen" : undefined}
               onclick={() => openAgent(r, a)}
@@ -878,14 +877,15 @@
               {#if last}
                 <div class="text-muted-foreground truncate pl-5 font-mono text-[11px]" title="{last.tool} {last.summary}">{last.tool} {last.summary}</div>
               {/if}
-            </button>
+            </Row>
             {#if a.prompt}
               <!-- Eigener Button neben dem Agent-Button (nicht darin): klappt nur den Prompt -->
-              <button
-                class="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-0.5 px-1.5 py-1 text-[10px]"
+              <TextButton
+                size="xs"
+                class="shrink-0 gap-0.5 px-1.5 py-1"
                 aria-expanded={!!openPrompts[pk]}
                 onclick={() => (openPrompts[pk] = !openPrompts[pk])}
-                >Prompt <ChevronRightIcon class="size-3 transition-transform {openPrompts[pk] ? 'rotate-90' : ''}" /></button
+                >Prompt <ChevronRightIcon class="size-3 transition-transform {openPrompts[pk] ? 'rotate-90' : ''}" /></TextButton
               >
             {/if}
           </div>
@@ -960,8 +960,8 @@
     {#if current}
       <Dialog.Title class="sr-only">{current.label}</Dialog.Title>
       <div class="flex min-h-0 items-center gap-2">
-        <button class="hover:bg-accent rounded-md p-1" aria-label="Vorheriges Bild" onclick={() => step(-1)}
-          ><ChevronLeftIcon class="size-5" /></button
+        <Button variant="ghost" size="icon-sm" aria-label="Vorheriges Bild" onclick={() => step(-1)}
+          ><ChevronLeftIcon class="size-5" /></Button
         >
         <div class="flex min-h-0 min-w-0 flex-1 justify-center">
           {#if fullUrl}
@@ -970,8 +970,8 @@
             <p class="text-muted-foreground p-8">Lade …</p>
           {/if}
         </div>
-        <button class="hover:bg-accent rounded-md p-1" aria-label="Nächstes Bild" onclick={() => step(1)}
-          ><ChevronRightIcon class="size-5" /></button
+        <Button variant="ghost" size="icon-sm" aria-label="Nächstes Bild" onclick={() => step(1)}
+          ><ChevronRightIcon class="size-5" /></Button
         >
       </div>
       <div class="text-muted-foreground flex items-center gap-2 text-xs">
@@ -979,8 +979,8 @@
           >{index + 1} / {imgs.length} · {current.label} · {current.at ? clock(current.at) : ""}</span
         >
         {#if current.kind === "read"}
-          <button class="hover:text-foreground shrink-0 underline-offset-2 hover:underline" onclick={() => navigator.clipboard.writeText(current.label)}
-            >Pfad kopieren</button
+          <TextButton underline class="shrink-0" onclick={() => navigator.clipboard.writeText(current.label)}
+            >Pfad kopieren</TextButton
           >
         {/if}
       </div>

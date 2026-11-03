@@ -1,7 +1,5 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Button, Dialog, Input } from "$lib/atelier-ui";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { confirm } from "$lib/confirm.svelte";
@@ -138,7 +136,7 @@
         {/if}
         <pre class="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded-lg p-2 font-mono text-[10px] whitespace-pre-wrap">{login.out.trim().split("\n").slice(-12).join("\n") || "Starte …"}</pre>
         <div class="flex gap-2">
-          <Input bind:value={code} placeholder="Code aus dem Browser (falls verlangt)" class="font-mono text-xs" onkeydown={(e) => e.key === "Enter" && sendCode()} />
+          <Input bind:value={code} placeholder="Code aus dem Browser (falls verlangt)" density="sm" class="font-mono" onkeydown={(e) => e.key === "Enter" && sendCode()} />
           <Button size="sm" variant="outline" disabled={!code.trim()} onclick={sendCode}>Senden</Button>
         </div>
         <div class="flex justify-end"><Button variant="ghost" size="sm" onclick={stopLogin}>Abbrechen</Button></div>

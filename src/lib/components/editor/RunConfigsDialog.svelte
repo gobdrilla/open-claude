@@ -1,7 +1,5 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Button, Dialog, IconButton, Input } from "$lib/atelier-ui";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
   import { editor, setCustom, setRun } from "$lib/editor.svelte";
   import { run } from "$lib/run.svelte";
@@ -47,13 +45,11 @@
             <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-[11px]" title={c.command}
               >{c.dir ? `${c.dir}: ` : ""}{c.command}</span
             >
-            <Button
-              variant="ghost"
-              size="icon"
-              class="text-muted-foreground hover:text-destructive size-6"
-              title="Startziel {c.name} löschen"
-              aria-label="Startziel {c.name} löschen"
-              onclick={() => setCustom(repo, s.custom.filter((x) => x.name !== c.name))}><TrashIcon class="size-3.5" /></Button
+            <IconButton
+              size="md"
+              tone="danger"
+              label="Startziel {c.name} löschen"
+              onclick={() => setCustom(repo, s.custom.filter((x) => x.name !== c.name))}><TrashIcon class="size-3.5" /></IconButton
             >
           </li>
         {/each}
@@ -61,11 +57,11 @@
     {/if}
 
     <div class="flex flex-col gap-2">
-      <Input bind:value={name} placeholder="Name, z. B. App starten" class="text-xs" onkeydown={enter} />
-      <Input bind:value={command} placeholder="Befehl, z. B. npm run tauri dev" class="font-mono text-xs" onkeydown={enter} />
-      <Input bind:value={dir} placeholder="Ordner (optional, relativ zum Projekt)" class="font-mono text-xs" onkeydown={enter} />
+      <Input bind:value={name} placeholder="Name, z. B. App starten" density="sm" onkeydown={enter} />
+      <Input bind:value={command} placeholder="Befehl, z. B. npm run tauri dev" density="sm" class="font-mono" onkeydown={enter} />
+      <Input bind:value={dir} placeholder="Ordner (optional, relativ zum Projekt)" density="sm" class="font-mono" onkeydown={enter} />
       {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
-      <Button size="sm" class="text-xs" disabled={!name.trim() || !command.trim() || !!error} onclick={add}>Startziel anlegen</Button>
+      <Button size="sm" disabled={!name.trim() || !command.trim() || !!error} onclick={add}>Startziel anlegen</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

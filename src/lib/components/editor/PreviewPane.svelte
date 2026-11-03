@@ -2,9 +2,7 @@
   // Vorschau der aktiven oder angehefteten Datei. Der Renderer kommt aus files.PREVIEW_KINDS (nach Endung).
   // Haelt nur Anzeigezustand; pin und url liegen im Store und ueberleben das Umdocken.
   import Markdown from "$lib/components/Markdown.svelte";
-  import { Empty, paneBar } from "$lib/components/kit";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Button, Empty, Input, TextButton, paneBar } from "$lib/atelier-ui";
   import PinIcon from "@lucide/svelte/icons/pin";
   import PinOffIcon from "@lucide/svelte/icons/pin-off";
   import PlayIcon from "@lucide/svelte/icons/play";
@@ -103,13 +101,14 @@
       aria-label="Adresse der Vorschau"
       aria-invalid={bad}
       spellcheck={false}
-      class="h-6! min-w-0 flex-1 font-mono text-[11px]"
+      density="xs"
+      class="min-w-0 flex-1 font-mono"
       onkeydown={(e) => e.key === "Enter" && go()}
     />
     <Button
-      variant="ghost"
+      variant="quiet"
       size="icon-xs"
-      class={running ? "text-foreground" : "text-muted-foreground"}
+      class={running ? "text-foreground" : ""}
       disabled={!running && (!dev || busy)}
       title={running
         ? `Stoppen (${r.current?.cfg.label})`
@@ -123,9 +122,8 @@
       {#if running}<SquareIcon />{:else}<PlayIcon />{/if}
     </Button>
     <Button
-      variant="ghost"
+      variant="quiet"
       size="icon-xs"
-      class={s.pin ? "text-foreground" : "text-muted-foreground"}
       disabled={!target}
       aria-pressed={!!s.pin}
       title={s.pin ? `Angeheftet: ${s.pin} – lösen, um der aktiven Datei zu folgen` : "Vorschau an diese Datei heften"}
@@ -133,7 +131,7 @@
     >
       {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if}
     </Button>
-    <Button variant="ghost" size="icon-xs" class="text-muted-foreground" title="Neu laden" onclick={() => n++}>
+    <Button variant="quiet" size="icon-xs" title="Neu laden" onclick={() => n++}>
       <RefreshCwIcon />
     </Button>
   </div>
@@ -179,9 +177,10 @@
       <Empty>
         <div>
           Für die WPF-Vorschau fehlt die .NET 8 Desktop Runtime.<br />
-          <button
-            class="text-primary underline"
-            onclick={() => forge.openUrl(DOTNET_URL).catch((e) => (s.error = String(e)))}>Bei Microsoft herunterladen</button
+          <TextButton
+            tone="primary"
+            class="underline"
+            onclick={() => forge.openUrl(DOTNET_URL).catch((e) => (s.error = String(e)))}>Bei Microsoft herunterladen</TextButton
           >
         </div>
       </Empty>

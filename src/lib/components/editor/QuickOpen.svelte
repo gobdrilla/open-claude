@@ -1,11 +1,10 @@
 <script lang="ts">
   // Strg+P: Datei des Projekts per Fuzzy-Suche oeffnen. Die Liste kommt bei jedem Oeffnen frisch (git ls-files, ohne Git alle Dateien).
   // Praefix "@": Symbole der aktiven Datei (Strg+Umschalt+O), "#": Symbole im Projekt (Strg+T), beides ueber laufende Language-Server.
-  import * as Command from "$lib/components/ui/command/index.js";
+  import { Command, fileIcon } from "$lib/atelier-ui";
   import { fuzzy } from "$lib/fuzzy";
   import { fs } from "$lib/files";
   import { editor, open as openFile } from "$lib/editor.svelte";
-  import { fileIcon } from "$lib/components/kit";
   import { documentSymbols, workspaceSymbols, type SymHit } from "$lib/lsp.svelte";
 
   let { repo, open = $bindable(false), initial = "" }: { repo: string; open: boolean; initial?: string } = $props();

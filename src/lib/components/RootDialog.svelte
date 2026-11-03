@@ -3,9 +3,7 @@
   import { open as pickFolder } from "@tauri-apps/plugin-dialog";
   import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { FolderField } from "$lib/components/kit";
+  import { Button, Dialog, FolderField, Row } from "$lib/atelier-ui";
 
   // first: Erststart, nicht wegklickbar, eine der beiden Wahlen muss fallen. onchoose("") = ohne Dev-Ordner.
   let {
@@ -57,10 +55,10 @@
 </script>
 
 {#snippet option(id: "dev" | "single", Icon: typeof FolderSearchIcon, title: string, text: string)}
-  <button
-    class="flex w-full items-start gap-3 rounded-lg p-3 text-left ring-1 transition-colors {mode === id
-      ? 'bg-primary/5 ring-primary/60'
-      : 'ring-border hover:bg-accent/40'}"
+  <Row
+    variant="card"
+    selected={mode === id}
+    class="flex-row items-start gap-3 p-3 text-sm"
     aria-pressed={mode === id}
     onclick={() => (mode = id)}
   >
@@ -69,7 +67,7 @@
       <span class="block text-sm font-medium">{title}</span>
       <span class="text-muted-foreground block text-xs">{text}</span>
     </span>
-  </button>
+  </Row>
 {/snippet}
 
 <Dialog.Root {open} onOpenChange={(o) => !o && !first && onclose()}>

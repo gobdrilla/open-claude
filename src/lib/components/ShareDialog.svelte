@@ -1,8 +1,6 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
+  import { Button, Dialog, Switch } from "$lib/atelier-ui";
   import { invoke } from "@tauri-apps/api/core";
-  import { Switch } from "$lib/components/kit";
   import { shares } from "$lib/share.svelte";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import CheckIcon from "@lucide/svelte/icons/check";

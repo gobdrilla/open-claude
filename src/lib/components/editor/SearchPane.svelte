@@ -14,7 +14,7 @@
 <script lang="ts">
   // Suche ueber alle Projektdateien (fs_search). Klick springt zur Fundstelle.
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, Empty, fileIcon, menuContent, paneBar } from "$lib/components/kit";
+  import { ContextItem, Empty, IconButton, Input as TextInput, Row, fileIcon, menuContent, paneBar } from "$lib/atelier-ui";
   import { ContextMenu } from "bits-ui";
   import { sendToClaude } from "$lib/ide.svelte";
   import SearchIcon from "@lucide/svelte/icons/search";
@@ -53,18 +53,19 @@
 </script>
 
 {#snippet flag(label: string, title: string, on: boolean, set: (v: boolean) => void)}
-  <button
-    class="shrink-0 rounded px-1 font-mono text-[11px] {on ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent'}"
-    {title}
-    aria-pressed={on}
-    onclick={() => set(!on)}>{label}</button
+  <IconButton
+    size="text"
+    pressed={on}
+    label={title}
+    onclick={() => set(!on)}>{label}</IconButton
   >
 {/snippet}
 
 <div class="flex h-full min-h-0 flex-col text-xs">
   <div class={paneBar}>
-    <input
-      class="border-input bg-background min-w-0 flex-1 rounded border px-1.5 py-0.5 text-[11px] outline-none"
+    <TextInput
+      density="xs"
+      class="min-w-0 flex-1"
       placeholder="In Dateien suchen …"
       aria-label="In Dateien suchen"
       data-search
@@ -93,13 +94,10 @@
           {#each list as h (h.line)}
             <ContextMenu.Root>
               <ContextMenu.Trigger>
-                <button
-                  class="hover:bg-accent flex w-full items-baseline gap-2 py-0.5 pr-2 pl-7 text-left"
-                  onclick={() => open(repo, path, h.line, h.col)}
-                >
+                <Row flush density="compact" text="md" class="items-baseline gap-2 pr-2 pl-7" onclick={() => open(repo, path, h.line, h.col)}>
                   <span class="text-muted-foreground w-8 shrink-0 text-right font-mono text-[10px]">{h.line}</span>
                   <span class="truncate font-mono text-[11px]">{h.text}</span>
-                </button>
+                </Row>
               </ContextMenu.Trigger>
               <ContextMenu.Portal>
                 <ContextMenu.Content class={menuContent}>

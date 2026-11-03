@@ -1,10 +1,8 @@
 <script lang="ts">
   // Vorgeschlagene Aenderung von Claude (IDE-Protokoll, openDiff): annehmen schreibt claude selbst, nicht wir.
   // Schliessen = ablehnen; claude wartet so lange, die Rueckfrage im Terminal gilt parallel.
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { DiffDialog } from "$lib/components/kit";
+  import { Button, DiffDialog, Input } from "$lib/atelier-ui";
   import { fs } from "$lib/files";
-  import { Input } from "$lib/components/ui/input/index.js";
   import { blocked, claudeTarget, decide, ide, rel, sendToClaude, type IdeDiff } from "$lib/ide.svelte";
 
   const d = $derived(ide.diffs[0]);
@@ -54,7 +52,8 @@
       <Input
         bind:value={reason}
         placeholder="Grund (optional)"
-        class="h-8 w-48 text-xs"
+        density="sm"
+        class="w-48"
         onkeydown={(e) => e.key === "Enter" && reason.trim() && reject(d)}
       />
       <Button variant="outline" size="sm" onclick={() => reject(d)}>Ablehnen</Button>

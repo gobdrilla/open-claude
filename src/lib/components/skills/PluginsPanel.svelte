@@ -1,9 +1,8 @@
 <script lang="ts">
   import { confirm } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { RefreshButton, SectionHead, Segmented, Switch } from "$lib/components/kit";
+  import { Button, IconButton, Input, RefreshButton, SectionHead, Segmented, Switch } from "$lib/atelier-ui";
   import { untrack, type Snippet } from "svelte";
-  import { Input } from "$lib/components/ui/input/index.js";
   import { fuzzy } from "$lib/fuzzy";
   import { skills, groupInstalled, pickAvailable, type PluginsInfo, type PluginAction, type InstalledPlugin } from "$lib/skills";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
@@ -104,11 +103,8 @@
 </script>
 
 {#snippet action(label: string, id: string, onclick: () => void, title = "")}
-  <button
-    class="border-border hover:bg-secondary shrink-0 rounded border px-1.5 py-0.5 text-[10px] disabled:opacity-50"
-    {title}
-    disabled={!!busy}
-    {onclick}>{busy === id ? "…" : label}</button
+  <Button variant="outline" size="2xs" {title} disabled={!!busy} {onclick}
+    >{busy === id ? "…" : label}</Button
   >
 {/snippet}
 
@@ -119,12 +115,13 @@
   <div class="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2">
     {@render lead?.()}
     <span class="flex-1"></span>
-    <Input bind:value={query} placeholder="Plugin suchen" class="h-7 w-48 text-xs" />
-    <button
-      class="border-border hover:bg-secondary rounded border px-2 py-0.5 text-[11px] disabled:opacity-50"
+    <Input bind:value={query} placeholder="Plugin suchen" density="sm" class="w-48" />
+    <Button
+      variant="outline"
+      size="xs"
       title="Marketplaces aktualisieren und nach neuen Versionen suchen"
       disabled={!!busy || !info}
-      onclick={checkUpdates}>{busy === "updates" ? "Prüfe …" : "Updates prüfen"}</button
+      onclick={checkUpdates}>{busy === "updates" ? "Prüfe …" : "Updates prüfen"}</Button
     >
     <RefreshButton loading={loading || busy === "updates"} disabled={loading || !!busy} onclick={reload} />
   </div>
@@ -171,12 +168,13 @@
                 disabled={!!busy}
                 onclick={() => run(main.enabled ? "disable" : "enable", g.id, main.scope, main.projectPath ?? repo)}
               />
-              <button
-                class="text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
+              <IconButton
+                size="bare"
+                tone="danger"
+                label="Entfernen"
                 title="Aus {SCOPE[main.scope]} entfernen"
-                aria-label="Entfernen"
                 disabled={!!busy}
-                onclick={() => remove(main)}><Trash2Icon class="size-3.5" /></button
+                onclick={() => remove(main)}><Trash2Icon class="size-3.5" /></IconButton
               >
             {:else}
               <span class="text-muted-foreground w-24 shrink-0 text-right text-[10px]">pro Projekt im Skills-Modus</span>
@@ -242,11 +240,9 @@
           if (source.trim()) addMarketplace();
         }}
       >
-        <Input bind:value={source} placeholder="owner/repo, https-/git-URL oder Pfad" class="h-7 flex-1 text-xs" />
-        <button
-          type="submit"
-          class="border-border hover:bg-secondary rounded border px-2 py-0.5 text-[11px] disabled:opacity-50"
-          disabled={!!busy || !source.trim()}>{busy === source.trim() && busy ? "…" : "Hinzufügen"}</button
+        <Input bind:value={source} placeholder="owner/repo, https-/git-URL oder Pfad" density="sm" class="flex-1" />
+        <Button type="submit" variant="outline" size="xs" disabled={!!busy || !source.trim()}
+          >{busy === source.trim() && busy ? "…" : "Hinzufügen"}</Button
         >
       </form>
     </div>

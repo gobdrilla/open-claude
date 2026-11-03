@@ -13,8 +13,7 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { parseDiff } from "$lib/diff";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { PromptDialog, fileIcon } from "$lib/components/kit";
+  import { Button, PromptDialog, TextButton, fileIcon } from "$lib/atelier-ui";
   import { review } from "$lib/review.svelte";
   import { dirname } from "$lib/tree";
 
@@ -120,9 +119,9 @@
       {:else if file.hunks.length === 0}
         <p class="text-muted-foreground px-2 py-1 font-sans">Keine Inhaltsänderung.</p>
       {:else if size(file) > BIG && !opened.has(fi)}
-        <button class="text-muted-foreground hover:text-foreground px-2 py-1 font-sans" onclick={() => opened.add(fi)}>
+        <TextButton class="px-2 py-1 font-sans" onclick={() => opened.add(fi)}>
           {size(file)} Zeilen – anzeigen
-        </button>
+        </TextButton>
       {/if}
       {#each size(file) > BIG && !opened.has(fi) ? [] : file.hunks as hunk, hi (hi)}
         {@const key = `${fi}:${hi}`}
@@ -130,15 +129,15 @@
         <div class="bg-primary/5 text-primary/70 border-primary/10 flex items-center gap-1 border-y px-2.5 py-0.5">
           <span class="min-w-0 flex-1 truncate">{hunk.header}</span>
           {#if repo && sel.size}
-            <Button variant="ghost" size="xs" class="h-5 font-sans text-[11px]" onclick={() => comment(file, hunk, key, sel)}>
+            <Button variant="ghost" size="2xs" class="font-sans" onclick={() => comment(file, hunk, key, sel)}>
               Kommentieren
             </Button>
           {/if}
           {#each actions as a (a.label)}
             <Button
               variant={a.destructive ? "destructive" : "ghost"}
-              size="xs"
-              class="h-5 font-sans text-[11px]"
+              size="2xs"
+              class="font-sans"
               disabled={busy}
               onclick={() => a.run(file, hunk, sel)}
             >

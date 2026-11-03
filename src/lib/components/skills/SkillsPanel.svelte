@@ -1,9 +1,8 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { RefreshButton, SectionHead, Segmented, Select, Switch } from "$lib/components/kit";
+  import { IconButton, Input, RefreshButton, SectionHead, Segmented, Select, Switch, TextButton } from "$lib/atelier-ui";
   import PluginsPanel from "./PluginsPanel.svelte";
   import { untrack } from "svelte";
-  import { Input } from "$lib/components/ui/input/index.js";
   import { fuzzy } from "$lib/fuzzy";
   import { skills, layers, resolve, adjust, emptyProject, pkey, type SkillsInfo, type ModsInfo, type SkillStore, type ProjectSkills, type Skill, type Source } from "$lib/skills";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
@@ -89,11 +88,12 @@
   <span class="w-16 shrink-0 text-right text-[10px] {source === 'project' ? 'text-primary' : 'text-muted-foreground'}"
     >{ORIGIN[source]}</span
   >
-  <button
-    class="text-muted-foreground hover:text-foreground shrink-0 {source === 'project' ? '' : 'invisible'}"
+  <IconButton
+    size="bare"
+    class={source === "project" ? "" : "invisible"}
+    label="Zurücksetzen"
     title="Projekt-Anpassung zurücksetzen"
-    aria-label="Zurücksetzen"
-    onclick={reset}><RotateCcwIcon class="size-3" /></button
+    onclick={reset}><RotateCcwIcon class="size-3" /></IconButton
   >
 {/snippet}
 
@@ -128,7 +128,7 @@
         aria-label="Profil"
       />
       <span class="flex-1"></span>
-      <Input bind:value={query} placeholder="Skill suchen" class="h-7 w-48 text-xs" />
+      <Input bind:value={query} placeholder="Skill suchen" density="sm" class="w-48" />
       <RefreshButton {loading} onclick={reload} />
     </div>
 
@@ -154,10 +154,10 @@
         {/each}
         {#if mods}
           <SectionHead title="Mods">
-            <button
-              class="text-muted-foreground hover:text-foreground text-[11px]"
+            <TextButton
+              size="sm"
               title={mods.dir}
-              onclick={() => invoke("reveal", { path: mods!.dir }).catch((e) => (error = String(e)))}>Ordner öffnen</button
+              onclick={() => invoke("reveal", { path: mods!.dir }).catch((e) => (error = String(e)))}>Ordner öffnen</TextButton
             >
           </SectionHead>
           <p class="text-muted-foreground px-3 py-1.5 text-[11px]">

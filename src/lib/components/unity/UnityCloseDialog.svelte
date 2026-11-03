@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Switch } from "$lib/components/kit";
+  import { Button, Dialog, Switch } from "$lib/atelier-ui";
   import { unity } from "$lib/unity";
 
   /** Projektpfad; null = Dialog zu. */

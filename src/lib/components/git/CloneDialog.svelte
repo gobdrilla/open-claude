@@ -1,14 +1,10 @@
 <script lang="ts">
   import { age } from "$lib/utils";
-  import { FolderField } from "$lib/components/kit";
+  import { Badge, Button, Dialog, FolderField, Input, Row, TextButton } from "$lib/atelier-ui";
   import { open as pickFolder } from "@tauri-apps/plugin-dialog";
   import { listen } from "@tauri-apps/api/event";
   import { forge, accountId, type Account, type RemoteRepo, type CloneProgress } from "$lib/git";
   import { fuzzy } from "$lib/fuzzy";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
   import SearchIcon from "@lucide/svelte/icons/search";
   import StarIcon from "@lucide/svelte/icons/star";
   import LockIcon from "@lucide/svelte/icons/lock";
@@ -210,18 +206,16 @@
         <Button
           variant={mode === "browse" && account === a ? "default" : "outline"}
           size="sm"
-          class="text-xs"
           onclick={() => selectAccount(a)}
         >
           {a.user}<span class="text-muted-foreground ml-1 font-mono text-[10px]">@{a.host}</span>
         </Button>
       {/each}
-      <Button variant="outline" size="sm" class="text-xs" onclick={onaccounts}>Konto hinzufügen…</Button>
+      <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
       <span class="flex-1"></span>
       <Button
         variant={mode === "url" ? "default" : "outline"}
         size="sm"
-        class="text-xs"
         onclick={() => {
           mode = "url";
           selected = null;
@@ -230,7 +224,7 @@
     </div>
 
     {#if mode === "url"}
-      <Input bind:value={url} placeholder="https://… oder git@…" class="font-mono text-xs" />
+      <Input bind:value={url} placeholder="https://… oder git@…" density="sm" class="font-mono" />
     {:else if !account}
       <p class="text-muted-foreground px-1 py-6 text-center text-sm">
         {accounts.length ? "Konto oben wählen." : "Noch kein Konto verbunden."}
@@ -242,12 +236,12 @@
           <Input
             bind:value={query}
             placeholder="Eigene Repos filtern…"
-            class="pl-7 text-xs"
+            density="sm" class="pl-7"
             onkeydown={(e) => e.key === "Enter" && searchRemote()}
             oninput={() => (searched = null)}
           />
         </div>
-        <Button variant="outline" size="sm" class="text-xs" disabled={!query.trim() || loading} onclick={searchRemote}
+        <Button variant="outline" size="sm" disabled={!query.trim() || loading} onclick={searchRemote}
           >Überall suchen</Button
         >
       </div>
@@ -260,11 +254,11 @@
         {:else}
           {#each results as r (r.full_name)}
             {@const isExisting = existingNames.has(r.name.toLowerCase())}
-            <button
-              class="border-border hover:bg-secondary flex w-full items-center gap-2 border-b px-2.5 py-1.5 text-left last:border-0 {selected ===
-              r
-                ? 'bg-secondary'
-                : ''}"
+            <Row
+              flush
+              density="roomy"
+              selected={selected === r}
+              class="border-border gap-2 border-b last:border-0"
               onclick={() => pick(r)}
             >
               <div class="min-w-0 flex-1">
@@ -286,12 +280,11 @@
               {#if isExisting}
                 <Badge variant="outline" class="text-primary gap-0.5 text-[10px]"><CheckIcon class="size-3" />lokal</Badge>
               {/if}
-            </button>
+            </Row>
           {/each}
           {#if !searched && own.length && !loading && !ownDone}
-            <button
-              class="text-muted-foreground hover:text-foreground w-full py-1.5 text-center text-[11px]"
-              onclick={() => loadOwn(page + 1)}>Mehr laden…</button
+            <TextButton size="sm" block onclick={() => loadOwn(page + 1)}
+              >Mehr laden…</TextButton
             >
           {/if}
         {/if}
@@ -302,10 +295,9 @@
           <Button
             variant={protocol === "https" ? "default" : "outline"}
             size="sm"
-            class="text-xs"
             onclick={() => (protocol = "https")}>HTTPS</Button
           >
-          <Button variant={protocol === "ssh" ? "default" : "outline"} size="sm" class="text-xs" onclick={() => (protocol = "ssh")}
+          <Button variant={protocol === "ssh" ? "default" : "outline"} size="sm" onclick={() => (protocol = "ssh")}
             >SSH</Button
           >
         </div>
@@ -327,10 +319,10 @@
     {#if error}<p class="text-destructive text-xs whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-1.5">
-      <Button variant="outline" size="sm" class="text-xs" onclick={() => (open = false)} disabled={cloning}>Abbrechen</Button>
+      <Button variant="outline" size="sm" onclick={() => (open = false)} disabled={cloning}>Abbrechen</Button>
       <Button
         size="sm"
-        class="gap-1.5 text-xs"
+        class="gap-1.5"
         disabled={cloning || !dest.trim() || (mode === "url" ? !url.trim() : !selected)}
         onclick={doClone}
       >

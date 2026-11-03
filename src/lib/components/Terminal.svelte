@@ -25,7 +25,7 @@
   import { abs, cite, rel } from "$lib/editor.logic";
   import { sendTo } from "$lib/ide.svelte";
   import { ContextMenu } from "bits-ui";
-  import { ContextItem, menuContent } from "$lib/components/kit";
+  import { ContextItem, menuContent } from "$lib/atelier-ui";
   import { shares } from "$lib/share.svelte";
 
   let {

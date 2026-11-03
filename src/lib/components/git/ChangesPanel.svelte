@@ -1,13 +1,12 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, ConfirmDialog, fileIcon, menuContent } from "$lib/components/kit";
+  import { Button, Checkbox, ConfirmDialog, ContextItem, Row, Textarea, fileIcon, menuContent } from "$lib/atelier-ui";
   import { dirname } from "$lib/tree";
   import { FILES_APP, atRef } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
   import { reviewCount, sendReview } from "$lib/review.svelte";
   import { ContextMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
-  import { Button } from "$lib/components/ui/button/index.js";
   import { git, type FileChange, type Status } from "$lib/git";
   import { hunkPatch, linesPatch, type DiffFile, type Hunk } from "$lib/diff";
   import { pruneSel, rangeSel, toggleSel } from "$lib/selection";
@@ -288,8 +287,7 @@
       >
       <Button
         variant="ghost"
-        size="xs"
-        class="h-5 text-[11px]"
+        size="2xs"
         disabled={files.length === 0}
         onclick={() => move(files, isStaged)}
       >
@@ -301,8 +299,7 @@
         <span class="text-muted-foreground flex-1 text-[11px] whitespace-nowrap">{picked.length} ausgewählt</span>
         <Button
           variant="ghost"
-          size="xs"
-          class="h-5 text-[11px]"
+          size="2xs"
           disabled={busy}
           title={isStaged ? "Ausgewählte unstagen" : "Ausgewählte stagen"}
           onclick={() => move(picked, isStaged)}
@@ -311,9 +308,8 @@
         </Button>
         {#if !isStaged}
           <Button
-            variant="ghost"
-            size="xs"
-            class="text-destructive h-5 text-[11px]"
+            variant="ghost-danger"
+            size="2xs"
             disabled={busy}
             title="Ausgewählte verwerfen …"
             onclick={() => discard(picked)}
@@ -332,14 +328,9 @@
         {@const multi = isChosen(f, isStaged) && picked.length > 1}
         <ContextMenu.Root>
           <ContextMenu.Trigger>
-            <button
-              class="hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] select-none {isChosen(
-                f,
-                isStaged,
-              ) ||
-              (sel?.path === f.path && sel.staged === isStaged)
-                ? 'bg-primary/15'
-                : ''}"
+            <Row
+              class="select-none"
+              selected={isChosen(f, isStaged) || (sel?.path === f.path && sel.staged === isStaged)}
               title={f.orig ? `${f.orig} → ${f.path}` : f.path}
               data-file-list={isStaged}
               onclick={(e) => pickRow(e, f, files, isStaged)}
@@ -377,7 +368,7 @@
                 class="grid size-4 shrink-0 place-items-center rounded font-mono text-[9px] font-bold {color[code] ?? ''} {bg[code] ?? 'bg-secondary'}"
                 >{code}</span
               >
-            </button>
+            </Row>
           </ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Content class={menuContent}>
@@ -431,14 +422,10 @@
             <span class="font-mono text-[10px]">{conflicts.length}</span>
           </div>
           {#each conflicts as f (f.path)}
-            <button
-              class="text-destructive hover:bg-accent/60 flex w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-[11px]"
-              title="Im Merge-Editor öffnen"
-              onclick={() => onconflict(f.path)}
-            >
+            <Row tone="danger" density="compact" title="Im Merge-Editor öffnen" onclick={() => onconflict(f.path)}>
               <span class="w-3 shrink-0 text-center font-mono font-bold">U</span>
               <span class="min-w-0 flex-1 truncate font-mono" title={f.path}>{f.path}</span>
-            </button>
+            </Row>
           {/each}
         </div>
       {/if}
@@ -447,8 +434,9 @@
 
       <!-- Commit -->
       <div class="bg-background/60 ring-foreground/5 flex flex-col gap-1.5 rounded-xl p-2 ring-1">
-        <textarea
-          class="border-input bg-background focus-visible:ring-ring/50 h-24 resize-none rounded-lg border px-2 py-1 font-mono text-[11px] outline-none focus-visible:ring-2"
+        <Textarea
+          density="xs"
+          class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono"
           placeholder="Commit-Nachricht (Strg+Enter, mit Umschalt: + Push)"
           bind:value={message}
           onkeydown={(e) => {
@@ -458,12 +446,9 @@
               commit(e.shiftKey && !amend);
             }
           }}
-        ></textarea>
+        />
         <div class="flex items-center gap-2">
-          <label class="flex cursor-pointer items-center gap-1 text-[11px]">
-            <input type="checkbox" bind:checked={amend} onchange={toggleAmend} />
-            Amend
-          </label>
+          <Checkbox size="sm" bind:checked={amend} onchange={toggleAmend}>Amend</Checkbox>
           <span
             class="flex-1 font-mono text-[10px] {subjectLen > 72 ? 'text-warning' : 'text-muted-foreground'}"
             title={subjectLen > 72 ? "Betreffzeile länger als 72 Zeichen" : "Länge der Betreffzeile"}
@@ -471,8 +456,8 @@
             {subjectLen}/72
           </span>
           <Button
+            variant="glow"
             size="xs"
-            class="from-primary to-primary/70 shadow-primary/30 bg-linear-to-br shadow-md"
             disabled={!canCommit}
             onclick={() => commit()}
           >

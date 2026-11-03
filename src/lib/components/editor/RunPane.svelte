@@ -6,8 +6,7 @@
   import { FitAddon } from "@xterm/addon-fit";
   import { Unicode11Addon } from "@xterm/addon-unicode11";
   import "@xterm/xterm/css/xterm.css";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { paneBar } from "$lib/components/kit";
+  import { Button, paneBar } from "$lib/atelier-ui";
   import EraserIcon from "@lucide/svelte/icons/eraser";
   import MessageSquareShareIcon from "@lucide/svelte/icons/message-square-share";
   import PlayIcon from "@lucide/svelte/icons/play";

@@ -6,8 +6,7 @@
 
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { Empty } from "$lib/components/kit";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
+  import { Empty, Textarea } from "$lib/atelier-ui";
   import Markdown from "$lib/components/Markdown.svelte";
 
   let { cwd, id, sid }: { cwd: string; id: string; sid: string | null } = $props();
@@ -60,7 +59,7 @@
       rows={2}
       disabled={!sid}
       placeholder={sid ? "Nebenfrage … (Enter senden, Shift+Enter neue Zeile)" : "Keine laufende Claude-Session"}
-      class="text-xs md:text-xs"
+      density="sm"
       onkeydown={keydown}
     />
   </div>

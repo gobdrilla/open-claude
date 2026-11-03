@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import PlugIcon from "@lucide/svelte/icons/plug";
   import SettingsIcon from "@lucide/svelte/icons/settings";
-  import { Select } from "$lib/components/kit";
+  import { Button, Select } from "$lib/atelier-ui";
   import { MODES } from "$lib/claudemode";
 
   // Steuert claude im Terminal: Slash-Commands gehen ueber die open-claude-Mod (claude_command), der Modus per Umschalt+Tab.
@@ -102,11 +102,8 @@
       title="Berechtigungsmodus (Umschalt+Tab im Terminal)"
       aria-label="Berechtigungsmodus"
     />
-    <button
-      type="button"
-      class="border-border hover:text-foreground flex h-6 items-center gap-1 rounded border px-1.5"
-      title="MCP-Server (/mcp)"
-      onclick={mcp}><PlugIcon class="size-3" /><span class="hidden @3xl:inline">MCP</span></button
+    <Button variant="outline" size="xs" class="px-1.5 font-normal" title="MCP-Server (/mcp)" onclick={mcp}
+      ><PlugIcon class="size-3" /><span class="hidden @3xl:inline">MCP</span></Button
     >
     <Select
       value={model}
@@ -124,11 +121,8 @@
       title="Wie gründlich Claude nachdenkt (/effort)"
       aria-label="Effort"
     />
-    <button
-      type="button"
-      class="border-border hover:text-foreground flex h-6 items-center gap-1 rounded border px-1.5"
-      title="Claude-Einstellungen"
-      onclick={onsettings}><SettingsIcon class="size-3" /><span class="hidden @3xl:inline">Einstellungen</span></button
+    <Button variant="outline" size="xs" class="px-1.5 font-normal" title="Claude-Einstellungen" onclick={onsettings}
+      ><SettingsIcon class="size-3" /><span class="hidden @3xl:inline">Einstellungen</span></Button
     >
     {#if error}<span class="text-destructive truncate" title={error}>{error}</span>{/if}
   </div>

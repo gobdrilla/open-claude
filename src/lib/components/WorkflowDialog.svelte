@@ -1,11 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { untrack } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Segmented } from "$lib/components/kit";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
+  import { Button, Dialog, Input, Segmented, Textarea } from "$lib/atelier-ui";
   import { EFFORTS, MODELS, fromScript, newAgent, newPhase, newTemplate, problems, toScript, type WfFile, type WfTemplate } from "$lib/workflow.logic";
   import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
@@ -117,13 +113,13 @@
       <div class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2">
         <span class="text-muted-foreground">Name</span>
         <div class="flex items-center gap-2">
-          <Input bind:value={t.name} placeholder="code-review" class="font-mono text-xs" />
+          <Input bind:value={t.name} placeholder="code-review" density="sm" class="font-mono" />
           <Segmented value={scope} options={[["Global", "user"], ["Projekt", "project"]] as const} onchange={(v) => (scope = v)} />
         </div>
         <span class="text-muted-foreground">Beschreibung</span>
-        <Input bind:value={t.description} placeholder="Was der Workflow tut" class="text-xs" />
+        <Input bind:value={t.description} placeholder="Was der Workflow tut" density="sm" />
         <span class="text-muted-foreground">Wann nutzen</span>
-        <Input bind:value={t.whenToUse} placeholder="optional" class="text-xs" />
+        <Input bind:value={t.whenToUse} placeholder="optional" density="sm" />
         <span class="text-muted-foreground">Ablauf</span>
         <span class="truncate font-mono">{flow}</span>
       </div>
@@ -132,7 +128,7 @@
         <section class="border-border/60 space-y-2 rounded-lg border p-2">
           <div class="flex items-center gap-1.5">
             <span class="text-muted-foreground shrink-0">Phase {i + 1}</span>
-            <Input bind:value={p.title} class="h-7 text-xs" />
+            <Input bind:value={p.title} density="sm" />
             <Segmented value={p.mode} options={[["parallel", "parallel"], ["nacheinander", "sequence"]] as const} onchange={(v) => (p.mode = v)} />
             <Button variant="ghost" size="icon-sm" aria-label="Nach oben" disabled={i === 0} onclick={() => move(t.phases, i, -1)}><ArrowUpIcon class="size-3.5" /></Button>
             <Button variant="ghost" size="icon-sm" aria-label="Nach unten" disabled={i === t.phases.length - 1} onclick={() => move(t.phases, i, 1)}
@@ -145,13 +141,13 @@
             <div class="bg-secondary/30 space-y-1.5 rounded-md p-2">
               <div class="flex items-center gap-1.5">
                 <span class="text-muted-foreground shrink-0">Agent</span>
-                <Input bind:value={a.label} placeholder="Label (optional)" class="h-7 text-xs" />
+                <Input bind:value={a.label} placeholder="Label (optional)" density="sm" />
                 <Button variant="ghost" size="icon-sm" aria-label="Agent duplizieren" onclick={() => p.agents.splice(j + 1, 0, { ...$state.snapshot(a) })}
                   ><CopyIcon class="size-3.5" /></Button
                 >
                 <Button variant="ghost" size="icon-sm" aria-label="Agent löschen" onclick={() => p.agents.splice(j, 1)}><Trash2Icon class="size-3.5" /></Button>
               </div>
-              <Textarea bind:value={a.prompt} rows={3} placeholder={"Was soll der Agent tun? {{args}} {{prev}}"} class="font-mono text-xs" />
+              <Textarea bind:value={a.prompt} rows={3} placeholder={"Was soll der Agent tun? {{args}} {{prev}}"} density="sm" class="font-mono" />
               <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-muted-foreground">Modell</span>
                 <Segmented value={a.model} options={MODELS.map((m) => [m ? m[0].toUpperCase() + m.slice(1) : "Session", m] as const)} onchange={(v) => (a.model = v)} />
@@ -164,15 +160,15 @@
                   bind:value={a.schema}
                   rows={4}
                   placeholder={'{"type":"object","properties":{"findings":{"type":"array","items":{"type":"string"}}},"required":["findings"]}'}
-                  class="mt-1 font-mono text-xs"
+                  density="sm" class="mt-1 font-mono"
                 />
               </details>
             </div>
           {/each}
-          <Button variant="outline" size="sm" class="text-xs" onclick={() => p.agents.push(newAgent())}>+ Agent</Button>
+          <Button variant="outline" size="sm" onclick={() => p.agents.push(newAgent())}>+ Agent</Button>
         </section>
       {/each}
-      <Button variant="outline" size="sm" class="text-xs" onclick={() => t.phases.push(newPhase(t.phases.length + 1))}>+ Phase</Button>
+      <Button variant="outline" size="sm" onclick={() => t.phases.push(newPhase(t.phases.length + 1))}>+ Phase</Button>
 
       <details>
         <summary class="text-muted-foreground cursor-pointer">Skript-Vorschau</summary>

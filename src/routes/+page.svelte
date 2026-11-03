@@ -14,16 +14,11 @@
   import { relaunch } from "@tauri-apps/plugin-process";
   import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
-  import * as Command from "$lib/components/ui/command/index.js";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Badge, Button, Command, ConfirmDialog, Dialog, IconButton, Input, Segmented, Slider, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import FolderIcon from "@lucide/svelte/icons/folder";
   import SunMoonIcon from "@lucide/svelte/icons/sun-moon";
   import LaptopIcon from "@lucide/svelte/icons/laptop";
   import { theme, setMode } from "$lib/theme.svelte";
-  import { ConfirmDialog, Segmented, menuContent, menuItem, menuSeparator } from "$lib/components/kit";
   import { answer, confirm, confirming } from "$lib/confirm.svelte";
   import { pasted } from "$lib/pasteimg.svelte";
   import RefreshIcon from "@lucide/svelte/icons/refresh-cw";
@@ -1168,11 +1163,11 @@
   data-tauri-drag-region
 >
   {#if viewRepo}
-    <button
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground {lights ? '' : '-ml-3.5'} mr-1 grid h-9 w-10 place-items-center"
+    <IconButton
+      size="window"
+      class="{lights ? '' : '-ml-3.5'} mr-1"
       onclick={back}
-      aria-label="Zurück zur Liste ({mod}+Umschalt+W)"
-      title="Zurück zur Liste ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /></button
+      label="Zurück zur Liste ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /></IconButton
     >
     <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
       <span class="truncate text-xs font-semibold" data-tauri-drag-region>
@@ -1204,34 +1199,33 @@
     </div>
     {#if view === "git" && gitRepo}
       <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground h-6 gap-1.5 text-[11px]"
+        variant="quiet"
+        size="xs"
+        class="gap-1.5"
         onclick={() => reveal(gitRepo!)}
         title="Ordner im {FILES_APP} öffnen (Alt+E)"><FolderOpenIcon class="size-3.5" /> {FILES_APP}</Button
       >
       <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground h-6 text-[11px]"
+        variant="quiet"
+        size="xs"
         onclick={() => gitView?.reload()}
         title="Aktualisieren (F5)"
         aria-label="Aktualisieren"><RefreshIcon class="size-3.5" /></Button
       >
     {:else if view === "term" && activeSession}
       <Button
-        variant="ghost"
-        size="sm"
-        class="h-6 gap-1.5 text-[11px] {side ? 'text-foreground' : 'text-muted-foreground'}"
+        variant="quiet"
+        size="xs"
+        class="gap-1.5"
         aria-pressed={side}
         onclick={toggleSide}
         title="Session, Workflows und Bilder"><WorkflowIcon class="size-3.5" /> Aktivität</Button
       >
       {#if !activeSession.guest}
         <Button
-          variant="ghost"
-          size="sm"
-          class="h-6 gap-1.5 text-[11px] {shares[activeSession.id] ? 'text-primary' : 'text-muted-foreground'}"
+          variant="quiet"
+          size="xs"
+          class="gap-1.5 {shares[activeSession.id] ? 'text-primary hover:text-primary' : ''}"
           onclick={() => (shareOpen = true)}
           title="Sitzung mit anderen teilen"
           ><Share2Icon class="size-3.5" /> Teilen{#if shares[activeSession.id]?.guests}&nbsp;({shares[activeSession.id].guests}){/if}</Button
@@ -1239,17 +1233,16 @@
       {/if}
       {#if !activeSession.group && !activeSession.guest}
         <Button
-          variant="ghost"
-          size="sm"
-          class="text-muted-foreground h-6 gap-1.5 text-[11px]"
+          variant="quiet"
+          size="xs"
+          class="gap-1.5"
           onclick={() => launch(activeSession.repo, true)}
           title="Weitere Claude-Sitzung im selben Projekt"><PlusIcon class="size-3.5" /> Sitzung</Button
         >
       {/if}
       <Button
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground h-6 text-[11px]"
+        variant="quiet"
+        size="xs"
         onclick={() => endSession(activeSession.id)}>Sitzung beenden</Button
       >
     {/if}
@@ -1272,8 +1265,8 @@
   {#if update}
     <Button
       variant="ghost"
-      size="sm"
-      class="text-primary mr-1 h-6 gap-1.5 text-[11px]"
+      size="xs"
+      class="text-primary mr-1 gap-1.5"
       disabled={updating}
       onclick={installUpdate}
       title={`Update installieren und neu starten${update.body ? `\n\n${update.body}` : ""}`}
@@ -1283,8 +1276,8 @@
   {#if missing.length}
     <Button
       variant="ghost"
-      size="sm"
-      class="mr-1 h-6 gap-1.5 text-[11px] text-warning"
+      size="xs"
+      class="mr-1 gap-1.5 text-warning"
       disabled={installingDeps}
       onclick={installDeps}
       title={`Fehlt auf diesem Rechner: ${missing.map((n) => DEPS[n]).join(", ")}. Klick installiert.`}
@@ -1294,19 +1287,21 @@
   {/if}
   {#if !mac}
     <!-- Fensterknoepfe wie bei Windows: nicht per Tab erreichbar, kein Fokusrahmen, Fokus bleibt im Terminal/der Suche. -->
-    <button
-      tabindex="-1"
+    <IconButton
+      size="window"
+      tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground grid h-9 w-11 shrink-0 place-items-center outline-none"
       onclick={() => getCurrentWindow().minimize()}
-      aria-label="Minimieren"><MinusIcon class="size-3.5" /></button
+      label="Minimieren"
+      title={undefined}><MinusIcon class="size-3.5" /></IconButton
     >
-    <button
-      tabindex="-1"
+    <IconButton
+      size="window"
+      tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
-      class="text-muted-foreground hover:bg-secondary hover:text-foreground grid h-9 w-11 shrink-0 place-items-center outline-none"
       onclick={() => getCurrentWindow().toggleMaximize()}
-      aria-label={maximized ? "Wiederherstellen" : "Maximieren"}
+      label={maximized ? "Wiederherstellen" : "Maximieren"}
+      title={undefined}
     >
       {#if maximized}
         <!-- Wiederherstellen: vorderes Quadrat unten links, hinteres oben rechts -->
@@ -1317,13 +1312,15 @@
       {:else}
         <SquareIcon class="size-3" />
       {/if}
-    </button>
-    <button
-      tabindex="-1"
+    </IconButton>
+    <IconButton
+      size="window"
+      tone="close"
+      tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
-      class="text-muted-foreground grid h-9 w-11 shrink-0 place-items-center outline-none hover:bg-[#b4404a] hover:text-white"
       onclick={closeWindow}
-      aria-label="Schließen"><XIcon class="size-3.5" /></button
+      label="Schließen"
+      title={undefined}><XIcon class="size-3.5" /></IconButton
     >
   {/if}
 </div>
@@ -1351,11 +1348,11 @@
         />
       </div>
       <Button
-        variant="ghost"
+        variant="quiet"
         size="sm"
         onclick={pickRoot}
         title={root ? `Dev-Ordner wechseln (Strg+O): ${root}` : "Dev-Ordner wählen (Strg+O)"}
-        class="text-muted-foreground font-mono text-xs"
+        class="font-mono"
       >
         <FolderIcon class="size-3.5" />
         <span class="max-w-44 truncate">{short}</span>
@@ -1408,11 +1405,13 @@
           {/if}
         </Button>
         <DropdownMenu.Root onOpenChange={(o) => o && loadClaudeCfg()}>
-          <DropdownMenu.Trigger
-            class="hover:bg-accent hover:text-foreground grid size-9 place-items-center rounded-md"
-            title="Einstellungen"
-            aria-label="Einstellungen"><SettingsIcon class="size-4" /></DropdownMenu.Trigger
-          >
+          <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+              <Button variant="ghost" size="icon" title="Einstellungen" aria-label="Einstellungen" {...props}
+                ><SettingsIcon class="size-4" /></Button
+              >
+            {/snippet}
+          </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content
               align="end"
@@ -1432,24 +1431,26 @@
                 <ZoomInIcon class="text-muted-foreground size-3.5" />
                 <span class="flex-1">Zoom</span>
                 <div class="bg-secondary flex items-center rounded p-0.5">
-                  <button
-                    class="text-muted-foreground hover:text-foreground rounded px-1.5 py-0.5 disabled:opacity-40"
+                  <IconButton
+                    size="text"
                     disabled={zoom <= ZOOM_MIN}
                     onclick={() => setZoom(-1)}
-                    aria-label="Verkleinern"
-                    title="Verkleinern ({mac ? '⌘' : 'Strg'} −)">−</button
+                    label="Verkleinern"
+                    title="Verkleinern ({mac ? '⌘' : 'Strg'} −)">−</IconButton
                   >
-                  <button
-                    class="hover:text-foreground w-11 rounded py-0.5 text-center text-[10px] tabular-nums"
+                  <TextButton
+                    tone="plain"
+                    size="xs"
+                    class="w-11 justify-center py-0.5 tabular-nums"
                     onclick={() => setZoom(0)}
-                    title="Zurücksetzen ({mac ? '⌘' : 'Strg'} 0)">{zoom} %</button
+                    title="Zurücksetzen ({mac ? '⌘' : 'Strg'} 0)">{zoom} %</TextButton
                   >
-                  <button
-                    class="text-muted-foreground hover:text-foreground rounded px-1.5 py-0.5 disabled:opacity-40"
+                  <IconButton
+                    size="text"
                     disabled={zoom >= ZOOM_MAX}
                     onclick={() => setZoom(1)}
-                    aria-label="Vergrößern"
-                    title="Vergrößern ({mac ? '⌘' : 'Strg'} +)">+</button
+                    label="Vergrößern"
+                    title="Vergrößern ({mac ? '⌘' : 'Strg'} +)">+</IconButton
                   >
                 </div>
               </div>
@@ -1490,12 +1491,10 @@
                 <label class="flex items-center gap-2 px-2 py-1.5">
                   <VolumeIcon class="text-muted-foreground size-3.5" />
                   <span class="flex-1">Sound</span>
-                  <input
-                    type="range"
+                  <Slider
                     min="0"
                     max="1"
                     step="0.05"
-                    class="accent-primary w-24"
                     aria-label="Easteregg-Lautstärke"
                     bind:value={amongUs.volume}
                     onchange={saveAmongUs}
@@ -1612,20 +1611,22 @@
                       onSelect={() => (withClaude ? launch(item.repo) : openGit(item.repo))}
                       class="gap-3 px-3 py-2"
                     >
-                      <button
-                        class="text-muted-foreground hover:text-primary -m-1 grid size-6 place-items-center rounded p-1 {pinned
-                          ? 'text-primary'
-                          : 'opacity-50'}"
+                      <IconButton
+                        size="bare"
+                        tone="primary"
+                        active={pinned}
+                        class="-m-1 p-1 {pinned ? '' : 'opacity-50'}"
                         onpointerdown={(e) => e.stopPropagation()}
                         onclick={(e) => {
                           e.stopPropagation();
                           togglePin(item.repo.path);
                         }}
-                        aria-label={pinned ? "Nicht mehr anpinnen" : "Anpinnen"}
+                        label={pinned ? "Nicht mehr anpinnen" : "Anpinnen"}
+                        title={undefined}
                         aria-pressed={pinned}
                       >
                         <StarIcon class="size-4 {pinned ? 'fill-current' : ''}" />
-                      </button>
+                      </IconButton>
 
                       <div class="min-w-0 flex-1">
                         <div class="truncate text-sm font-semibold" title={item.name}>
@@ -1644,16 +1645,16 @@
                         <Badge variant="outline" class="text-primary gap-1.5 pr-0.5 text-[11px]">
                           <span class="size-2 animate-pulse rounded-full bg-current"></span>
                           läuft
-                          <button
-                            class="text-muted-foreground hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded"
+                          <IconButton
+                            size="xs"
+                            tone="danger"
                             onpointerdown={(e) => e.stopPropagation()}
                             onclick={(e) => {
                               e.stopPropagation();
                               const s = sessionOf(item.repo.path);
                               if (s) endSession(s.id);
                             }}
-                            aria-label="Sitzung beenden"
-                            title="Sitzung beenden"><XIcon class="size-3" /></button
+                            label="Sitzung beenden"><XIcon class="size-3" /></IconButton
                           >
                         </Badge>
                       {/if}
@@ -1757,7 +1758,9 @@
             ? 'bg-background text-foreground'
             : 'text-muted-foreground hover:text-foreground'}"
         >
-          <button
+          <TextButton
+            tone="plain"
+            class="inline"
             role="tab"
             aria-selected={tabOn(s)}
             onclick={() => activate(s)}
@@ -1768,14 +1771,13 @@
                 class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
                 title={banners[s.id]}>{banners[s.id]}</span
               >{/if}
-          </button>
-          <button
-            class="hover:bg-destructive/20 hover:text-destructive grid size-4 place-items-center rounded opacity-0 group-hover:opacity-100 {tabOn(s)
-              ? 'opacity-100'
-              : ''}"
+          </TextButton>
+          <IconButton
+            size="xs"
+            tone="danger"
+            reveal={!tabOn(s)}
             onclick={() => endSession(s.id)}
-            title="Sitzung beenden"
-            aria-label="Sitzung beenden"><XIcon class="size-3" /></button
+            label="Sitzung beenden"><XIcon class="size-3" /></IconButton
           >
         </div>
       {/each}
@@ -1858,17 +1860,17 @@
     {#each [["⏎", "Git"], [`${mod} ⏎`, "Claude"]] as [key, what] (key)}
       <span class="flex items-center gap-1.5">{@render kbd(key)} {what}</span>
     {/each}
-    <button class="hover:text-foreground flex items-center gap-1.5" onclick={() => (help = true)}>
+    <TextButton tone="plain" class="gap-1.5" onclick={() => (help = true)}>
       {@render kbd("F1")} Hilfe
-    </button>
+    </TextButton>
   </footer>
 </div>
 
 {#snippet viewButton(target: string, title: string, onclick: () => void, Icon: typeof TerminalIcon, label: string)}
   <Button
-    variant="ghost"
-    size="sm"
-    class="h-6 gap-1.5 text-[11px] {view === target ? 'text-foreground' : 'text-muted-foreground'}"
+    variant="quiet"
+    size="xs"
+    class="gap-1.5"
     aria-pressed={view === target}
     onclick={() => view !== target && onclick()}
     {title}><Icon class="size-3.5" /> {label}</Button

@@ -1,10 +1,9 @@
 <script lang="ts">
   import { confirm as ask } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { ConfirmDialog, DiffDialog, PromptDialog, RefreshButton, Tabs, menuContent, menuItem, menuSeparator } from "$lib/components/kit";
+  import { Button, Checkbox, ConfirmDialog, DiffDialog, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import { tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
-  import { Button } from "$lib/components/ui/button/index.js";
   import { git, forge, accountId, type Account, type ForgeKind, type RepoAccount, type Status } from "$lib/git";
   import Sidebar from "./Sidebar.svelte";
   import AskDialog from "./AskDialog.svelte";
@@ -262,11 +261,9 @@
 
 {#snippet tool(label: string, title: string, onclick: () => void, Icon: typeof CloudDownloadIcon, hot = false)}
   <Button
-    variant={hot ? "default" : "ghost"}
+    variant={hot ? "glow" : "ghost"}
     size="sm"
-    class="h-7 gap-1.5 rounded-full px-2.5 text-[11px] {hot
-      ? 'from-primary to-primary/70 shadow-primary/30 bg-linear-to-br shadow-md'
-      : ''}"
+    class="gap-1.5 rounded-full"
     {onclick}
     {title}
     disabled={!!busy}
@@ -316,7 +313,7 @@
             {#each [repo.split(/[\\/]/).filter(Boolean).pop(), ...trail] as name, i (i)}
               {#if i}<span class="opacity-60">›</span>{/if}
               {#if i < trail.length}
-                <button class="hover:text-foreground truncate hover:underline" title="Zurück zu {name}" onclick={() => goto(trail.slice(0, i))}>{name}</button>
+                <TextButton tone="plain" underline class="block truncate" title="Zurück zu {name}" onclick={() => goto(trail.slice(0, i))}>{name}</TextButton>
               {:else}
                 <span class="truncate">{name}</span>
               {/if}
@@ -408,13 +405,12 @@
           ? ` – ${conflicts} ${conflicts === 1 ? "Konflikt" : "Konflikte"} offen`
           : " – keine Konflikte mehr"}
       </span>
-      <Button size="sm" class="h-6 text-[11px]" disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(repo))}
+      <Button size="xs" disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(repo))}
         >Fortsetzen</Button
       >
       <Button
         variant="ghost"
-        size="sm"
-        class="h-6 text-[11px]"
+        size="xs"
         disabled={!!busy}
         onclick={() =>
           (confirm = {
@@ -553,8 +549,5 @@
   onsubmit={doStash}
   oncancel={() => (stashOpen = false)}
 >
-  <label class="flex items-center gap-2 text-xs">
-    <input type="checkbox" bind:checked={stash.untracked} class="accent-primary" />
-    Neue (untracked) Dateien einschließen
-  </label>
+  <Checkbox size="md" bind:checked={stash.untracked}>Neue (untracked) Dateien einschließen</Checkbox>
 </PromptDialog>

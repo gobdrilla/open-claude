@@ -1,6 +1,6 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { RefreshButton, Segmented } from "$lib/components/kit";
+  import { IconButton, RefreshButton, Segmented, TextButton } from "$lib/atelier-ui";
   import { age } from "$lib/utils";
   import { git, forge, type ForgeKind, type Job, type Run, type RunAction, type RunStatus } from "$lib/git";
   import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
@@ -200,10 +200,8 @@
 {/snippet}
 
 {#snippet action(title: string, onclick: () => void, Icon: typeof RotateCcwIcon, busyKey: string)}
-  <button
-    class="text-muted-foreground hover:text-foreground hover:bg-accent grid size-5 shrink-0 place-items-center rounded disabled:opacity-50"
-    {title}
-    aria-label={title}
+  <IconButton
+    label={title}
     disabled={!!acting}
     onclick={(e) => {
       e.stopPropagation();
@@ -211,20 +209,19 @@
     }}
   >
     <Icon class="size-3 {acting === busyKey ? 'animate-pulse' : ''}" />
-  </button>
+  </IconButton>
 {/snippet}
 
 {#snippet browser(url: string)}
-  <button
-    class="text-muted-foreground hover:text-foreground hover:bg-accent grid size-5 shrink-0 place-items-center rounded"
-    title="Im Browser öffnen"
+  <IconButton
+    label="Im Browser öffnen"
     onclick={(e) => {
       e.stopPropagation();
       forge.openUrl(url).catch((err) => (error = String(err)));
     }}
   >
     <ExternalLinkIcon class="size-3" />
-  </button>
+  </IconButton>
 {/snippet}
 
 <div class="flex h-full min-h-0 flex-col text-xs">
@@ -322,9 +319,7 @@
       {#if loading}
         <p class="text-muted-foreground px-2 py-2 text-center text-[11px]">Lädt …</p>
       {:else if !done && runs.length}
-        <button class="text-muted-foreground hover:text-foreground w-full px-2 py-2 text-center text-[11px]" onclick={loadMore}>
-          Mehr laden
-        </button>
+        <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
       {:else if !runs.length && !error}
         <p class="text-muted-foreground px-2 py-4 text-center text-[11px]">Keine {label}.</p>
       {/if}

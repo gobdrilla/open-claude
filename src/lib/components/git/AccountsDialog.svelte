@@ -2,10 +2,7 @@
   import { confirm } from "$lib/confirm.svelte";
   import type { Store } from "@tauri-apps/plugin-store";
   import { forge, type Account, type ForgeKind } from "$lib/git";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
+  import { Badge, Button, Dialog, IconButton, Input, TextButton } from "$lib/atelier-ui";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import GlobeIcon from "@lucide/svelte/icons/globe";
@@ -105,16 +102,15 @@
             <Badge variant="outline" class="text-muted-foreground shrink-0 text-[10px]"
               >{a.kind === "github" ? "GitHub" : "GitLab"}</Badge
             >
-            <Button
-              variant="ghost"
-              size="icon"
-              class="text-muted-foreground hover:text-destructive size-6"
+            <IconButton
+              size="md"
+              tone="danger"
               disabled={busy}
               onclick={async () => (await confirm(`Konto ${a.user}@${a.host} entfernen? Der Token wird gelöscht.`, "Entfernen")) && logout(a)}
-              aria-label="Konto entfernen"
+              label="Konto entfernen"
             >
               <TrashIcon class="size-3.5" />
-            </Button>
+            </IconButton>
           </li>
         {/each}
       </ul>
@@ -125,34 +121,34 @@
         <Button
           variant={kind === "github" ? "default" : "outline"}
           size="sm"
-          class="flex-1 text-xs"
+          class="flex-1"
           onclick={() => (kind = "github")}>GitHub</Button
         >
         <Button
           variant={kind === "gitlab" ? "default" : "outline"}
           size="sm"
-          class="flex-1 text-xs"
+          class="flex-1"
           onclick={() => (kind = "gitlab")}>GitLab</Button
         >
       </div>
-      <Input bind:value={host} placeholder="Host, z. B. github.com" class="font-mono text-xs" />
-      <Input bind:value={token} type="password" placeholder="Access Token" class="font-mono text-xs" />
+      <Input bind:value={host} placeholder="Host, z. B. github.com" density="sm" class="font-mono" />
+      <Input bind:value={token} type="password" placeholder="Access Token" density="sm" class="font-mono" />
       <!-- Die Webview oeffnet target=_blank nicht, daher ueber den Standardbrowser. -->
-      <button
-        type="button"
+      <TextButton
+        size="sm"
         onclick={() => forge.openUrl(tokenUrl).catch((e) => (error = String(e)))}
-        class="text-muted-foreground hover:text-primary inline-flex items-center gap-1 self-start text-[11px]"
+        class="hover:text-primary self-start"
       >
         <ExternalLinkIcon class="size-3" /> Token mit den nötigen Rechten erstellen ({kind === "github"
           ? "repo, read:org"
           : "api, read_repository, write_repository"})
-      </button>
+      </TextButton>
       {#if error}<p class="text-destructive text-xs">{error}</p>{/if}
       <div class="flex gap-1.5">
-        <Button size="sm" class="flex-1 text-xs" disabled={busy || !host.trim() || !token.trim()} onclick={login}
+        <Button size="sm" class="flex-1" disabled={busy || !host.trim() || !token.trim()} onclick={login}
           >Anmelden</Button
         >
-        <Button variant="outline" size="sm" class="text-xs" disabled={busy} onclick={importCli}
+        <Button variant="outline" size="sm" disabled={busy} onclick={importCli}
           >Von {kind === "github" ? "gh" : "glab"} übernehmen</Button
         >
       </div>

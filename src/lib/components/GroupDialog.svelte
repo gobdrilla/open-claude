@@ -4,9 +4,7 @@
 </script>
 
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
+  import { Button, Checkbox, Dialog, Input, TextButton } from "$lib/atelier-ui";
 
   type Repo = { path: string; rel: string };
 
@@ -70,13 +68,13 @@
             <div class="text-destructive truncate text-sm">nicht gefunden{paths[0] === p ? " (Haupt-Repo)" : ""}</div>
             <div class="text-muted-foreground truncate font-mono text-[10px]" title={p}>{p}</div>
           </div>
-          <button class="text-muted-foreground hover:text-destructive text-[10px]" onclick={() => toggle(p)}>Entfernen</button>
+          <TextButton tone="danger" size="xs" onclick={() => toggle(p)}>Entfernen</TextButton>
         </li>
       {/each}
       {#each repos as r (r.path)}
         {@const on = paths.includes(r.path)}
         <li class="flex items-center gap-2.5 px-3 py-1.5">
-          <input type="checkbox" checked={on} onchange={() => toggle(r.path)} aria-label="{label(r)} in die Gruppe" />
+          <Checkbox checked={on} onchange={() => toggle(r.path)} aria-label="{label(r)} in die Gruppe" />
           <div class="min-w-0 flex-1">
             <div class="truncate text-sm" title={label(r)}>{label(r)}</div>
             <div class="text-muted-foreground truncate font-mono text-[10px]" title={r.path}>{r.rel}</div>
@@ -84,7 +82,7 @@
           {#if on && paths[0] === r.path}
             <span class="bg-primary/15 text-primary rounded-full px-2 py-0.5 text-[10px]">Haupt-Repo</span>
           {:else if on}
-            <button class="text-muted-foreground hover:text-foreground text-[10px]" onclick={() => makeMain(r.path)}>als Haupt-Repo</button>
+            <TextButton size="xs" onclick={() => makeMain(r.path)}>als Haupt-Repo</TextButton>
           {/if}
         </li>
       {/each}
