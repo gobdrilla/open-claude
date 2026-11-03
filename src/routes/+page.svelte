@@ -1276,6 +1276,48 @@
   <Notice bind:text={notice} />
   {#if !notice}<Notice bind:text={okNotice} kind="ok" />{/if}
   <Notice bind:text={ide.notice} kind="note" timeout={3000} />
+  <!-- Session tabs at the top in every view (also the start page), from the first session on. -->
+  {#if sessions.length}
+    <div class="bg-chrome border-border text-ui flex shrink-0 gap-px overflow-x-auto border-b px-1" role="tablist" aria-label="Sitzungen">
+      {#each sessions as s (s.id)}
+        {@const on = s.id === active}
+        <ContextMenu.Root>
+        <ContextMenu.Trigger
+          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {on
+            ? 'bg-background text-foreground'
+            : 'text-muted-foreground hover:text-foreground'}"
+        >
+          <TextButton
+            tone="plain"
+            class="inline"
+            role="tab"
+            aria-selected={on}
+            onclick={() => openSessionTab(s.id)}
+          >
+            {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
+                class="text-primary mr-1 inline size-3"
+              />{/if}{label(s)}{#if banners[s.id]}<span
+                class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
+                title={banners[s.id]}>{banners[s.id]}</span
+              >{/if}
+          </TextButton>
+          <IconButton
+            size="xs"
+            tone="danger"
+            reveal={!on}
+            onclick={() => endSession(s.id)}
+            label="Sitzung beenden"><XIcon class="size-3" /></IconButton
+          >
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content class={cn(menuContent, "min-w-44 rounded-lg shadow-lg")}>
+            <ContextItem label="Sitzung beenden …" destructive onSelect={() => endSession(s.id)} />
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+        </ContextMenu.Root>
+      {/each}
+    </div>
+  {/if}
   <Command.Root
     shouldFilter={false}
     bind:value={selected}
@@ -1345,7 +1387,7 @@
               ? "Hier liegen keine Git-Repos."
               : "Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (Strg+O)."}
         </Command.Empty>
-        {#if view === "list" && sessions.length && !query.trim()}
+        {#if view === "list" && sessions.some((s) => tabs[s.id] === "ask") && !query.trim()}
           <SessionOverview
             items={sessions.map((s) => ({ id: s.id, name: label(s), state: tabs[s.id], panel: panels[s.id] }))}
             onopen={openSessionTab}
@@ -1564,48 +1606,6 @@
   </Command.Root>
 
   <!-- Alle Terminals bleiben gemountet, sonst stirbt claude beim Zurueckgehen. -->
-  <!-- Session tabs belong to the Claude view; shown from the first session so × stays visible. -->
-  {#if view === "term"}
-    <div class="bg-chrome border-border text-ui flex shrink-0 gap-px overflow-x-auto border-b px-1" role="tablist" aria-label="Sitzungen">
-      {#each sessions as s (s.id)}
-        {@const on = s.id === active}
-        <ContextMenu.Root>
-        <ContextMenu.Trigger
-          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {on
-            ? 'bg-background text-foreground'
-            : 'text-muted-foreground hover:text-foreground'}"
-        >
-          <TextButton
-            tone="plain"
-            class="inline"
-            role="tab"
-            aria-selected={on}
-            onclick={() => openSessionTab(s.id)}
-          >
-            {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
-                class="text-primary mr-1 inline size-3"
-              />{/if}{label(s)}{#if banners[s.id]}<span
-                class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
-                title={banners[s.id]}>{banners[s.id]}</span
-              >{/if}
-          </TextButton>
-          <IconButton
-            size="xs"
-            tone="danger"
-            reveal={!on}
-            onclick={() => endSession(s.id)}
-            label="Sitzung beenden"><XIcon class="size-3" /></IconButton
-          >
-        </ContextMenu.Trigger>
-        <ContextMenu.Portal>
-          <ContextMenu.Content class={cn(menuContent, "min-w-44 rounded-lg shadow-lg")}>
-            <ContextItem label="Sitzung beenden …" destructive onSelect={() => endSession(s.id)} />
-          </ContextMenu.Content>
-        </ContextMenu.Portal>
-        </ContextMenu.Root>
-      {/each}
-    </div>
-  {/if}
   <div class="flex min-h-0 flex-1 flex-col {view === 'term' ? '' : 'hidden'}">
     {#if activeSession}
       {@const s = activeSession}
