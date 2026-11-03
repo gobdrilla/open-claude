@@ -14,23 +14,13 @@
   import { relaunch } from "@tauri-apps/plugin-process";
   import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
-  import { Badge, Button, Command, ConfirmDialog, Dialog, IconButton, Input, Segmented, Slider, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
+  import { Badge, Button, Command, ConfirmDialog, Dialog, IconButton, Input, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
   import FolderIcon from "@lucide/svelte/icons/folder";
-  import SunMoonIcon from "@lucide/svelte/icons/sun-moon";
-  import LaptopIcon from "@lucide/svelte/icons/laptop";
-  import { theme, setMode } from "$lib/theme.svelte";
   import { answer, confirm, confirming } from "$lib/confirm.svelte";
   import { pasted } from "$lib/pasteimg.svelte";
   import RefreshIcon from "@lucide/svelte/icons/refresh-cw";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
-  import KeyboardIcon from "@lucide/svelte/icons/keyboard";
   import StarIcon from "@lucide/svelte/icons/star";
-  import PowerIcon from "@lucide/svelte/icons/power";
-  import CircleQuestionMarkIcon from "@lucide/svelte/icons/circle-question-mark";
-  import { ASKS, noAsk, setNoAsk, type AskKey } from "$lib/ask.svelte";
-  import InboxIcon from "@lucide/svelte/icons/inbox";
-  import GhostIcon from "@lucide/svelte/icons/ghost";
-  import VolumeIcon from "@lucide/svelte/icons/volume-2";
   import MinusIcon from "@lucide/svelte/icons/minus";
   import SquareIcon from "@lucide/svelte/icons/square";
   import XIcon from "@lucide/svelte/icons/x";
@@ -39,15 +29,14 @@
   import ClaudeAccountsDialog from "$lib/components/ClaudeAccountsDialog.svelte";
   import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
   import SettingsIcon from "@lucide/svelte/icons/settings";
-  import BotIcon from "@lucide/svelte/icons/bot";
   import ClaudeSettingsDialog from "$lib/components/ClaudeSettingsDialog.svelte";
-  import { ContextMenu, DropdownMenu } from "bits-ui";
+  import SettingsDialog from "$lib/components/SettingsDialog.svelte";
+  import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import { fuzzy } from "$lib/fuzzy";
-  import { clampZoom, zoomKey, zoomStep, ZOOM_MAX, ZOOM_MIN } from "$lib/zoom";
-  import ZoomInIcon from "@lucide/svelte/icons/zoom-in";
+  import { clampZoom, zoomKey, zoomStep } from "$lib/zoom";
   import IdleAmongUs from "$lib/components/IdleAmongUs.svelte";
   import Terminal from "$lib/components/Terminal.svelte";
   import ClaudeBar from "$lib/components/ClaudeBar.svelte";
@@ -57,7 +46,7 @@
   import WorkflowIcon from "@lucide/svelte/icons/workflow";
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
-  import { drop, isDirty, open as openFile, prefs, toggleAi } from "$lib/editor.svelte";
+  import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
   import { claudeTarget, ide, listenIde } from "$lib/ide.svelte";
   import { testCancel } from "$lib/testing.svelte";
@@ -80,17 +69,14 @@
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
-  import UsersIcon from "@lucide/svelte/icons/users";
   import KeyRoundIcon from "@lucide/svelte/icons/key-round";
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
-  import PaletteIcon from "@lucide/svelte/icons/palette";
   import PackageIcon from "@lucide/svelte/icons/package";
   import Share2Icon from "@lucide/svelte/icons/share-2";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
   import ShareDialog from "$lib/components/ShareDialog.svelte";
   import JoinDialog from "$lib/components/JoinDialog.svelte";
   import { shares } from "$lib/share.svelte";
-  import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
 
   type Repo = {
     path: string;
@@ -155,7 +141,6 @@
   let lidAwake = $state(false);
   // Among-Us-Easteregg: rate ist der Faktor auf die Wartezeiten (groesser = seltener).
   let amongUs = $state({ on: true, rate: 1, volume: 1 });
-  const RATES: [string, number][] = [["Selten", 3], ["Normal", 1], ["Oft", 0.4]];
   let input = $state<HTMLInputElement | null>(null);
   // Sessions (auch mehrere pro Projekt); die Tab-Leiste ueber dem Terminal wechselt zwischen ihnen.
   // group/dirs: Sitzung einer Repo-Gruppe, startet in repo und kennt dirs als weitere Arbeitsordner
@@ -222,16 +207,7 @@
   let profilesOpen = $state(false);
   let claudeOpen = $state(false);
   let claudeAccountsOpen = $state(false);
-  // Haeufige Claude-Einstellungen direkt im Menue; der volle Dialog bleibt fuer den Rest.
-  let claudeCfg = $state<ClaudeCfg | null>(null);
-  const loadClaudeCfg = () => readClaude().then((c) => (claudeCfg = c), () => (claudeCfg = null));
-  async function setClaudeCfg(key: string, value: unknown) {
-    try {
-      claudeCfg = await setClaude(key, value);
-    } catch {
-      loadClaudeCfg();
-    }
-  }
+  let settingsOpen = $state(false);
   // Sync-Fehler sichtbar in jeder Ansicht (Liste, Terminal, Git).
   let skillNotice = $state("");
 
@@ -451,14 +427,15 @@
   getVersion().then((v) => (version = v));
   let updating = $state(false);
   let checking = $state(false);
+  /** Returns the result message for a manual check (shown in the settings dialog). */
   async function checkUpdate(manual = false) {
-    if (updating || checking) return;
+    if (updating || checking) return "";
     checking = true;
     try {
       update = (await check()) ?? update;
-      if (manual && !update) okNotice = "L'Atelier ist aktuell.";
+      return manual && !update ? "L'Atelier ist aktuell." : "";
     } catch (e) {
-      if (manual) notice = `Update-Prüfung fehlgeschlagen: ${e}`;
+      return manual ? `Update-Prüfung fehlgeschlagen: ${e}` : "";
     } finally {
       checking = false;
     }
@@ -1070,7 +1047,7 @@
   // Alle Dialoge ausser der Hilfe (F1 schaltet sie um)
   const anyDialog = $derived(
     cloneOpen || createOpen || accountsOpen || shareOpen || joinOpen || claudeOpen || setup || rootOpen || !!doomed || profilesOpen || !!groupEdit ||
-      claudeAccountsOpen || !!confirming.q || !!unityClosePath || ide.diffs.length > 0,
+      claudeAccountsOpen || settingsOpen || !!confirming.q || !!unityClosePath || ide.diffs.length > 0,
   );
 
   function onKey(e: KeyboardEvent) {
@@ -1404,146 +1381,9 @@
             <span class="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full"></span>
           {/if}
         </Button>
-        <DropdownMenu.Root onOpenChange={(o) => o && loadClaudeCfg()}>
-          <DropdownMenu.Trigger>
-            {#snippet child({ props })}
-              <Button variant="ghost" size="icon" title="Einstellungen" aria-label="Einstellungen" {...props}
-                ><SettingsIcon class="size-4" /></Button
-              >
-            {/snippet}
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              align="end"
-              sideOffset={4}
-              collisionPadding={8}
-              class={cn(menuContent, "max-h-[var(--bits-dropdown-menu-content-available-height)] min-w-56 overflow-y-auto rounded-lg shadow-lg")}
-            >
-              <!-- macOS: Autostart ueber die Systemeinstellungen. -->
-              {#if !mac}
-                {@render setting("Autostart", autostart, toggleAutostart, PowerIcon)}
-              {/if}
-              {@render setting(mac ? "Schließen legt in die Menüleiste" : "Schließen legt ins Tray", tray, toggleTray, InboxIcon)}
-              {@render setting("Zugeklappt wach, solange Claude arbeitet", lidAwake, toggleLidAwake, LaptopIcon)}
-              {@render setting("KI-Vorschläge im Editor", prefs.ai, toggleAi, SparklesIcon)}
-              <DropdownMenu.Separator class={menuSeparator} />
-              <div class="flex items-center gap-2 px-2 py-1.5">
-                <ZoomInIcon class="text-muted-foreground size-3.5" />
-                <span class="flex-1">Zoom</span>
-                <div class="bg-secondary flex items-center rounded p-0.5">
-                  <IconButton
-                    size="text"
-                    disabled={zoom <= ZOOM_MIN}
-                    onclick={() => setZoom(-1)}
-                    label="Verkleinern"
-                    title="Verkleinern ({mac ? '⌘' : 'Strg'} −)">−</IconButton
-                  >
-                  <TextButton
-                    tone="plain"
-                    size="xs"
-                    class="w-11 justify-center py-0.5 tabular-nums"
-                    onclick={() => setZoom(0)}
-                    title="Zurücksetzen ({mac ? '⌘' : 'Strg'} 0)">{zoom} %</TextButton
-                  >
-                  <IconButton
-                    size="text"
-                    disabled={zoom >= ZOOM_MAX}
-                    onclick={() => setZoom(1)}
-                    label="Vergrößern"
-                    title="Vergrößern ({mac ? '⌘' : 'Strg'} +)">+</IconButton
-                  >
-                </div>
-              </div>
-              <div class="flex items-center gap-2 px-2 py-1.5">
-                <SunMoonIcon class="text-muted-foreground size-3.5" />
-                <span class="flex-1">Design</span>
-                <Segmented
-                  value={theme.mode}
-                  options={[["System", "system"], ["Hell", "light"], ["Dunkel", "dark"]] as const}
-                  onchange={setMode}
-                />
-              </div>
-              {#if claudeCfg}
-                <DropdownMenu.Separator class={menuSeparator} />
-                <p class="text-muted-foreground px-2 py-1 text-[10px]">Claude (neue Sitzungen)</p>
-                <div class="flex items-center gap-2 px-2 py-1.5" title="Auto wechselt Hell/Dunkel live mit der App, Lila erst in neuen Sitzungen">
-                  <PaletteIcon class="text-muted-foreground size-3.5" />
-                  <span class="flex-1">Terminal-Theme</span>
-                  <Segmented
-                    value={String(claudeCfg.theme ?? "dark").startsWith("custom:open-claude:open-claude")
-                      ? "custom:open-claude:open-claude"
-                      : claudeCfg.theme === "auto"
-                        ? "auto"
-                        : ""}
-                    options={[["Std", "", "Standard von Claude Code oder ein anderes Theme aus den Claude-Einstellungen"], ["Auto", "auto"], ["Lila", "custom:open-claude:open-claude"]] as const}
-                    onchange={(v) => setClaudeCfg("theme", v || undefined)}
-                  />
-                </div>
-              {/if}
-              <DropdownMenu.Separator class={menuSeparator} />
-              {@render setting("Among-Us-Easteregg", amongUs.on, () => ((amongUs.on = !amongUs.on), saveAmongUs()), GhostIcon)}
-              {#if amongUs.on}
-                <div class="flex items-center gap-2 px-2 py-1.5">
-                  <span class="text-muted-foreground w-3.5"></span>
-                  <span class="flex-1">Häufigkeit</span>
-                  <Segmented value={amongUs.rate} options={RATES} onchange={(rate) => ((amongUs.rate = rate), saveAmongUs())} />
-                </div>
-                <label class="flex items-center gap-2 px-2 py-1.5">
-                  <VolumeIcon class="text-muted-foreground size-3.5" />
-                  <span class="flex-1">Sound</span>
-                  <Slider
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    aria-label="Easteregg-Lautstärke"
-                    bind:value={amongUs.volume}
-                    onchange={saveAmongUs}
-                  />
-                </label>
-              {/if}
-              <DropdownMenu.Separator class={menuSeparator} />
-              <p class="text-muted-foreground px-2 py-1 text-[10px]">Git: Rückfrage vor</p>
-              {#each Object.entries(ASKS) as [key, label] (key)}
-                {@render setting(label, !noAsk[key], () => setNoAsk(key as AskKey, !noAsk[key]), CircleQuestionMarkIcon)}
-              {/each}
-              <DropdownMenu.Separator class={menuSeparator} />
-              <DropdownMenu.Item
-                class={cn(menuItem, "py-1.5")}
-                onSelect={() => (profilesOpen = true)}
-              >
-                <SparklesIcon class="text-muted-foreground size-3.5" />
-                <span class="flex-1">Skill-Profile</span>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                class={cn(menuItem, "py-1.5")}
-                onSelect={() => (claudeOpen = true)}
-              >
-                <BotIcon class="text-muted-foreground size-3.5" />
-                <span class="flex-1">Claude-Einstellungen</span>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item class={cn(menuItem, "py-1.5")} onSelect={() => (claudeAccountsOpen = true)}>
-                <UsersIcon class="text-muted-foreground size-3.5" />
-                <span class="flex-1">Claude-Konten</span>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                class={cn(menuItem, "py-1.5")}
-                onSelect={() => checkUpdate(true)}
-              >
-                <DownloadIcon class="text-muted-foreground size-3.5 {checking ? 'animate-pulse' : ''}" />
-                <span class="flex-1">Nach Updates suchen</span>
-                {#if version}<span class="text-muted-foreground font-mono text-[10px]">v{version}</span>{/if}
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                class={cn(menuItem, "py-1.5")}
-                onSelect={() => (help = true)}
-              >
-                <KeyboardIcon class="text-muted-foreground size-3.5" />
-                <span class="flex-1">Tastenkürzel</span>
-                <kbd class={menuShortcut}>F1</kbd>
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+        <Button variant="ghost" size="icon" title="Einstellungen" aria-label="Einstellungen" onclick={() => (settingsOpen = true)}
+          ><SettingsIcon class="size-4" /></Button
+        >
       </div>
     </div>
 
@@ -1888,25 +1728,6 @@
   <kbd class="bg-secondary text-foreground/80 rounded px-1.5 py-px font-mono text-[10px]">{key}</kbd>
 {/snippet}
 
-{#snippet setting(label: string, on: boolean, toggle: () => void, Icon: typeof PowerIcon)}
-  <!-- Schalter bleiben im offenen Menue, damit man beide nacheinander umlegen kann -->
-  <DropdownMenu.Item
-    class={cn(menuItem, "py-1.5")}
-    closeOnSelect={false}
-    onSelect={toggle}
-  >
-    <Icon class="text-muted-foreground size-3.5" />
-    <span class="flex-1">{label}</span>
-    <span
-      class="relative h-3.5 w-6 rounded-full transition-colors {on ? 'bg-primary' : 'bg-secondary ring-border ring-1'}"
-      aria-hidden="true"
-      ><span
-        class="bg-foreground absolute top-0.5 size-2.5 rounded-full transition-all {on ? 'left-3' : 'left-0.5'}"
-      ></span></span
-    >
-  </DropdownMenu.Item>
-{/snippet}
-
 {#snippet keys(title: string, list: string[][])}
   <div>
     <h3 class="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">{title}</h3>
@@ -2005,6 +1826,31 @@
   </Dialog.Content>
 </Dialog.Root>
 
+<SettingsDialog
+  bind:open={settingsOpen}
+  bind:amongUs
+  {mac}
+  {version}
+  {update}
+  {checking}
+  {updating}
+  {autostart}
+  {tray}
+  {lidAwake}
+  {zoom}
+  onautostart={toggleAutostart}
+  ontray={toggleTray}
+  onlidawake={toggleLidAwake}
+  onzoom={setZoom}
+  onamongus={saveAmongUs}
+  oncheckupdate={() => checkUpdate(true)}
+  oninstall={installUpdate}
+  onclaude={() => (claudeOpen = true)}
+  onclaudeaccounts={() => (claudeAccountsOpen = true)}
+  onprofiles={() => (profilesOpen = true)}
+  ongitaccounts={() => (accountsOpen = true)}
+  onhelp={() => (help = true)}
+/>
 <ClaudeSettingsDialog bind:open={claudeOpen} />
 <ClaudeAccountsDialog bind:open={claudeAccountsOpen} running={sessions.length} />
 {#if activeSession && !activeSession.guest}<ShareDialog bind:open={shareOpen} id={activeSession.id} cwd={activeSession.repo.path} />{/if}
