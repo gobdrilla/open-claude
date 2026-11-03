@@ -184,7 +184,7 @@
         <div
           data-bar={n.id}
           role="tablist"
-          class="bg-chrome/50 border-border/60 flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b px-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          class="bg-chrome/50 border-border/60 @container flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b px-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           onwheel={(e) => {
             // Ohne Scrollbar: Mausrad scrollt die Tabs seitlich (Trackpad liefert deltaX selbst)
             if (!e.deltaX) e.currentTarget.scrollLeft += e.deltaY;
@@ -197,7 +197,8 @@
               role="tab"
               tabindex={n.active === id ? 0 : -1}
               aria-selected={n.active === id}
-              title={t.hint}
+              aria-label={t.title}
+              title={t.hint ?? t.title}
               class="group/tab focus-visible:ring-ring/50 flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md pr-1 pl-2 outline-none focus-visible:ring-2 {n.active ===
               id
                 ? 'bg-card text-foreground ring-foreground/10 shadow-xs ring-1'
@@ -210,7 +211,8 @@
               onkeydown={(e) => key(e, n, id)}
             >
               {#if t.icon}<t.icon class="size-3.5 shrink-0 {t.tint ?? ''}" />{/if}
-              <span class="whitespace-nowrap">{t.title}</span>
+              <!-- Narrow bar: fixed panels (Dateien, Suche, Tests) show only their icon unless active; the hidden scrollbar would cut them off. -->
+              <span class="whitespace-nowrap {t.icon && t.closable === false && n.active !== id ? '@max-[16rem]:hidden' : ''}">{t.title}</span>
               {#if t.closable !== false}
                 <!-- Ungespeichert: Punkt, der beim Ueberfahren zum x wird. Per Tastatur schliesst Entf auf dem Tab. -->
                 <IconButton

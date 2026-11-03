@@ -324,8 +324,8 @@
               {/if}
             {/each}
           </span>
-          <span class="flex items-center gap-1.5">
-            <span class="max-w-40 shrink-0 truncate font-mono text-ui font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
+          <span class="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+            <span class="max-w-40 min-w-0 truncate font-mono text-ui font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
             {#if status.ahead}<span class="bg-primary/15 text-primary rounded-full px-1.5 font-mono text-[10px]">↑{status.ahead}</span>{/if}
             {#if status.behind}<span class="bg-warning/15 text-warning rounded-full px-1.5 font-mono text-[10px]">↓{status.behind}</span>{/if}
             {#if status.upstream && !status.ahead && !status.behind}
@@ -347,15 +347,16 @@
     {@render tool("Stash", "Änderungen stashen", () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
     {@render tool("Branch", "Neuer Branch ab HEAD", () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
     <span class="flex-1"></span>
+    <!-- Narrow window: Explorer and account drop their text, the tooltip keeps it. -->
     <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title="Ordner im {FILES_APP} öffnen (Strg+Umschalt+E)">
       <FolderOpenIcon class="size-3.5" />
-      {FILES_APP}
+      <span class="max-lg:hidden">{FILES_APP}</span>
     </Button>
     <IconButton size="md" class="mx-0.5" label="Aktualisieren" title="Aktualisieren (F5)" onclick={reload}><RefreshIcon class="size-3.5" /></IconButton>
     {#if acct}
       <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
         <DropdownMenu.Trigger
-          class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 items-center gap-1.5 rounded-full px-2.5 text-meta"
+          class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta whitespace-nowrap"
           title={acct.name || acct.email ? `Commit als: ${acct.name ?? "?"} <${acct.email ?? "?"}>` : "Keine Commit-Identität gesetzt"}
         >
           {#if acctFor?.avatar}
@@ -363,12 +364,14 @@
           {:else}
             <UserIcon class="size-3.5" />
           {/if}
-          {#if acct.effective}
-            {acct.effective.slice(acct.effective.lastIndexOf(":") + 1)}
-            {#if !acct.account}<span class="hidden opacity-60 lg:inline">(automatisch)</span>{/if}
-          {:else}
-            System-Git
-          {/if}
+          <span class="max-w-40 truncate max-lg:hidden">
+            {#if acct.effective}
+              {acct.effective.slice(acct.effective.lastIndexOf(":") + 1)}
+              {#if !acct.account}<span class="opacity-60">(automatisch)</span>{/if}
+            {:else}
+              System-Git
+            {/if}
+          </span>
           <ChevronDownIcon class="size-3" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>

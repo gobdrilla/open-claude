@@ -114,8 +114,8 @@
 </script>
 
 <!-- Logo kommt aus static/logo.png; eigenes Logo: Datei ersetzen. -->
-<!-- Compact h-9 bar; on narrow widths it wraps instead of hiding labels. -->
-<header class="border-border text-ui flex min-h-9 shrink-0 flex-wrap items-center gap-1.5 border-b px-2.5 py-1">
+<!-- Compact h-9 bar, always one line; on narrow widths the view actions on the right drop their labels (tooltip keeps the name). -->
+<header class="border-border text-ui flex min-h-9 shrink-0 items-center gap-1.5 border-b px-2.5 py-1">
   <img src="/logo.png" alt="Claude" title="Claude" class="mr-1 size-4 shrink-0 select-none [image-rendering:pixelated]" draggable="false" />
   {#if !guest}
     <Select
@@ -155,7 +155,6 @@
       >
     {/if}
   {/if}
-  <!-- ml-auto keeps the view actions right-aligned when the bar wraps -->
   <div class="ml-auto flex min-w-0 items-center gap-1.5">
     {#if error}<span class="text-destructive min-w-0 truncate" title={error}>{error}</span>{/if}
     {#if share}
@@ -165,20 +164,20 @@
         class="gap-1.5 {share.on ? 'text-primary hover:text-primary' : ''}"
         onclick={share.open}
         title="Sitzung mit anderen teilen"
-        ><Share2Icon class="size-3.5" /> Teilen{#if share.guests}&nbsp;({share.guests}){/if}</Button
+        ><Share2Icon class="size-3.5" /> <span class="max-lg:hidden">Teilen</span>{#if share.guests}&nbsp;({share.guests}){/if}</Button
       >
     {/if}
-    <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title="Sitzung, Workflows und Bilder"
-      ><WorkflowIcon class="size-3.5" /> Aktivität</Button
+    <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title="Aktivität: Sitzung, Workflows und Bilder"
+      ><WorkflowIcon class="size-3.5" /> <span class="max-lg:hidden">Aktivität</span></Button
     >
     {#if onnew}
       <Button variant="quiet" size="xs" class="gap-1.5" onclick={onnew} title="Weitere Claude-Sitzung im selben Projekt"
-        ><PlusIcon class="size-3.5" /> Sitzung</Button
+        ><PlusIcon class="size-3.5" /> <span class="max-lg:hidden">Sitzung</span></Button
       >
     {/if}
     {#if !guest}
       <Button variant="quiet" size="xs" class="gap-1.5" title="Claude-Einstellungen" onclick={onsettings}
-        ><SettingsIcon class="size-3.5" /> Einstellungen</Button
+        ><SettingsIcon class="size-3.5" /> <span class="max-lg:hidden">Einstellungen</span></Button
       >
     {/if}
   </div>

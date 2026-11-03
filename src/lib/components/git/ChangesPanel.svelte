@@ -279,10 +279,10 @@
 
 {#snippet list(title: string, files: FileChange[], isStaged: boolean)}
   {@const picked = chosenIn(files, isStaged)}
-  <div class="bg-background/50 ring-foreground/5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1">
-    <div class="flex items-center gap-2 px-2 py-1.5 {isStaged ? 'bg-success/8' : 'bg-warning/8'}">
+  <div class="bg-background/50 ring-foreground/5 @container flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1">
+    <div class="flex items-center gap-2 px-2 py-1.5 whitespace-nowrap {isStaged ? 'bg-success/8' : 'bg-warning/8'}">
       <span class="size-2 shrink-0 rounded-full {isStaged ? 'bg-success shadow-success/50' : 'bg-warning shadow-warning/50'} shadow-[0_0_6px]"></span>
-      <span class="flex-1 text-meta font-semibold">{title}</span>
+      <span class="min-w-0 flex-1 truncate text-meta font-semibold">{title}</span>
       <span
         class="rounded-full px-1.5 font-mono text-[10px] {isStaged ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}"
         >{files.length}</span
@@ -290,10 +290,12 @@
       <Button
         variant="ghost"
         size="2xs"
+        class="shrink-0"
         disabled={files.length === 0}
         onclick={() => move(files, isStaged)}
       >
-        {isStaged ? "Alles unstagen" : "Alles stagen"}
+        <!-- Narrow column: "stagen"/"unstagen", so the list title stays readable. -->
+        <span class="@max-[15rem]:hidden">Alles</span>{isStaged ? "unstagen" : "stagen"}
       </Button>
     </div>
     {#if picked.length > 1}
@@ -439,7 +441,7 @@
       <div class="bg-background/60 ring-foreground/5 flex flex-col gap-1.5 rounded-xl p-2 ring-1">
         <Textarea
           density="xs"
-          class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono"
+          class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono [@media(max-height:640px)]:h-14"
           placeholder="Commit-Nachricht (Strg+Enter · mit Umschalt auch pushen)"
           bind:value={message}
           onkeydown={(e) => {
@@ -458,8 +460,8 @@
           >
             {subjectLen}/72
           </span>
-          <!-- Wraps as one unit at narrow widths; primary last as in dialog footers -->
-          <div class="ml-auto flex gap-2">
+          <!-- Wraps as one unit at narrow widths, and inside itself when even that is too wide; primary last as in dialog footers -->
+          <div class="ml-auto flex flex-wrap justify-end gap-2">
             {#if !amend}
               <Button size="xs" variant="outline" disabled={!canCommit} onclick={() => commit(true)} title="Strg+Umschalt+Enter">
                 Commit + Push
