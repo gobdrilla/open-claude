@@ -2,8 +2,10 @@
   // Editor-Ansicht eines Projekts: verdrahtet Dock, Dateibaum und Code-Panels mit dem Store.
   // Haelt selbst keinen Zustand: beim Wechsel zu Terminal/Git wird sie abgebaut, Puffer und Layout liegen in $lib/editor.svelte.
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, Empty, Select, fileIcon } from "$lib/atelier-ui";
+  import { DropdownMenu } from "bits-ui";
+  import { Button, Empty, IconButton, Select, fileIcon, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import SaveIcon from "@lucide/svelte/icons/save";
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
   import PanelRightIcon from "@lucide/svelte/icons/panel-right";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
@@ -42,7 +44,9 @@
 
   const s = $derived(editor(repo));
   const dirty = $derived(Object.values(s.files).filter((f) => f.dirty).length);
-  const errors = $derived(problems(lsp.diags, repo).filter((p) => (p.d.severity ?? 1) === 1).length);
+  const found = $derived(problems(lsp.diags, repo));
+  // Badge color follows the worst finding (1 = error, 2 = warning).
+  const worst = $derived(Math.min(...found.map((p) => p.d.severity ?? 1)));
   let quick = $state(false);
   let quickInit = $state("");
   let profilesOpen = $state(false);
@@ -149,12 +153,23 @@
 
 {#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems", label: string, Icon: typeof SaveIcon, title = label)}
   {@const on = !!groupOf(s.layout, id)}
+  <!-- Narrow window: icon only, the tooltip keeps the name. -->
   <Button
     variant="toggle"
     size="xs"
     aria-pressed={on}
     title="{title} {on ? 'ausblenden' : 'einblenden'}"
-    onclick={() => togglePanel(repo, id)}><Icon /> {label}</Button
+    onclick={() => togglePanel(repo, id)}
+    ><Icon /> <span class="max-lg:hidden">{label}</span>
+    {#if id === "problems" && found.length}
+      <span
+        class="text-meta rounded-full px-1.5 tabular-nums {worst === 1
+          ? 'bg-destructive/15 text-destructive'
+          : worst === 2
+            ? 'bg-warning/15 text-warning'
+            : 'bg-muted text-muted-foreground'}">{found.length}</span
+      >
+    {/if}</Button
   >
 {/snippet}
 
@@ -175,6 +190,7 @@
     {/if}
     <span class="bg-background/60 ring-foreground/10 ml-3 flex items-center gap-0.5 rounded-md p-0.5 ring-1">
       {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title="Läuft"></span>{/if}
+      <span class="text-muted-foreground pl-1.5 text-[11px] max-xl:hidden">Startziel</span>
       <Select
         class="h-5 max-w-60 border-0 bg-transparent font-mono text-[11px]"
         value={cfg?.label ?? ""}
@@ -188,13 +204,6 @@
         title="Startziel (F5 startet)"
         onchange={(v) => setRun(repo, v)}
       />
-      <Button
-        variant="quiet"
-        size="icon-xs"
-        title="Eigene Startziele"
-        aria-label="Eigene Startziele"
-        onclick={() => (customOpen = true)}><ListPlusIcon /></Button
-      >
       <Select
         class="h-5 max-w-32 border-0 bg-transparent text-[11px]"
         value={s.profile}
@@ -205,48 +214,59 @@
       />
       <Button
         variant="quiet"
-        size="icon-xs"
-        title="Build-Profile verwalten"
-        aria-label="Build-Profile verwalten"
-        onclick={() => (profilesOpen = true)}><SlidersIcon /></Button
-      >
-      <Button
-        variant="quiet"
-        size="icon-xs"
+        size="xs"
         class={cfg && !running ? "text-success hover:text-success" : ""}
         disabled={!cfg || running}
         title={cfg ? `${cfg.label} starten (F5) – führt Code aus dem Projekt aus` : "Nichts zum Starten"}
-        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /></Button
+        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> Starten</Button
       >
       <Button
         variant="quiet"
-        size="icon-xs"
+        size="xs"
         class={running ? "text-destructive hover:text-destructive" : ""}
         disabled={!running}
         title="Stoppen (Umschalt+F5)"
-        onclick={() => runStop(repo)}><SquareIcon /></Button
+        onclick={() => runStop(repo)}><SquareIcon /> <span class="max-xl:hidden">Stoppen</span></Button
       >
       <Button
         variant="quiet"
-        size="icon-xs"
+        size="xs"
         disabled={!r.current}
         title="Neu starten ({MOD}+Umschalt+F5)"
-        onclick={() => runRestart(repo)}><RotateCcwIcon /></Button
+        onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="max-xl:hidden">Neu starten</span></Button
       >
     </span>
     <span class="flex-1"></span>
-    {@render toggle("files", "Dateien", PanelLeftIcon)}
-    {@render toggle("search", "", SearchIcon, `Suche (${MOD}+Umschalt+F)`)}
-    {@render toggle("tests", "Tests", FlaskConicalIcon)}
-    {@render toggle("preview", "Vorschau", PanelRightIcon)}
-    {@render toggle("problems", errors ? String(errors) : "", CircleAlertIcon, `Probleme (${MOD}+Umschalt+M)`)}
-    <Button
-      variant="quiet"
-      size="icon-xs"
-      aria-label="Layout zurücksetzen"
-      title="Layout zurücksetzen: Dateien links, Editor in der Mitte; offene Dateien bleiben, ein laufender Prozess stoppt"
-      onclick={() => resetLayout(repo)}><LayoutDashboardIcon /></Button
-    >
+    <span class="bg-muted/60 flex items-center gap-0.5 rounded-md p-0.5">
+      {@render toggle("files", "Dateien", PanelLeftIcon)}
+      {@render toggle("search", "Suche", SearchIcon, `Suche (${MOD}+Umschalt+F)`)}
+      {@render toggle("tests", "Tests", FlaskConicalIcon)}
+      {@render toggle("preview", "Vorschau", PanelRightIcon)}
+      {@render toggle("problems", "Probleme", CircleAlertIcon, `Probleme (${MOD}+Umschalt+M)`)}
+    </span>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <IconButton {...props} size="md" label="Weitere Optionen"><EllipsisIcon class="size-3.5" /></IconButton>
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" class={menuContent}>
+          <DropdownMenu.Item class={menuItem} onSelect={() => (customOpen = true)}
+            ><ListPlusIcon class="size-3.5" /> Eigene Startziele …</DropdownMenu.Item
+          >
+          <DropdownMenu.Item class={menuItem} onSelect={() => (profilesOpen = true)}
+            ><SlidersIcon class="size-3.5" /> Build-Profile verwalten …</DropdownMenu.Item
+          >
+          <DropdownMenu.Separator class={menuSeparator} />
+          <DropdownMenu.Item
+            class={menuItem}
+            title="Dateien links, Editor in der Mitte; offene Dateien bleiben, ein laufender Prozess stoppt"
+            onSelect={() => resetLayout(repo)}><LayoutDashboardIcon class="size-3.5" /> Layout zurücksetzen</DropdownMenu.Item
+          >
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   </div>
   <Notice bind:text={() => s.error, (v) => (s.error = v)} />
   <div class="min-h-0 flex-1 p-1">
