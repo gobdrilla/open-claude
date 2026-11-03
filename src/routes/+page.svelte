@@ -1163,6 +1163,8 @@
 >
   {#if viewRepo}
     <!-- Global only: navigation, project context, view switcher. View actions live in each view's header. -->
+    <!-- Left and right side share the free width equally, so the switcher sits in the middle (macOS has no buttons right). -->
+    <div class="flex min-w-0 flex-1 basis-0 items-center" data-tauri-drag-region>
     <Button
       variant="quiet"
       size="xs"
@@ -1189,6 +1191,7 @@
         </Badge>
       {/if}
     </div>
+    </div>
     <Segmented
       variant="nav"
       label="Ansicht"
@@ -1196,6 +1199,7 @@
       options={views}
       onchange={(v) => v !== view && VIEW_OPEN[v](viewRepo)}
     />
+    <div class="min-w-2 flex-1 basis-0 self-stretch" data-tauri-drag-region></div>
   {:else}
     <img
       src="/logo.png"
