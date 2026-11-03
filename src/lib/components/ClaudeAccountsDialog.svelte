@@ -2,7 +2,6 @@
   import { Button, Dialog, Input } from "$lib/atelier-ui";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { confirm } from "$lib/confirm.svelte";
   import { forge } from "$lib/git";
   import { ptyClose, ptyWrite } from "$lib/files";
   import CheckIcon from "@lucide/svelte/icons/check";
@@ -53,21 +52,27 @@
     busy = false;
   }
 
-  const restartHint = () => (running ? `\n\n${running} laufende Sitzung(en) nutzen bis zum Neustart weiter das bisherige Konto.` : "");
+  const restartHint = () => (running ? ` ${running} laufende Sitzung(en) nutzen bis zum Neustart weiter das bisherige Konto.` : "");
 
-  async function switchTo(a: Account) {
-    if (!(await confirm(`Zu ${a.email} wechseln? Gilt für neu gestartete Sitzungen.${restartHint()}`, "Wechseln", "Konto wechseln?", { tone: "default" }))) return;
-    act(() => invoke("claude_account_switch", { email: a.email }));
-  }
+  // Rueckfrage direkt in der Zeile statt eines Dialogs im Dialog.
+  type Ask = { what: "switch" | "forget" | "logout"; email: string };
+  let asking = $state<Ask | null>(null);
+  $effect(() => {
+    if (!open) asking = null;
+  });
+  const QUESTION: Record<Ask["what"], [string, string]> = {
+    switch: ["Wechseln", "Gilt für neu gestartete Sitzungen."],
+    forget: ["Entfernen", "Aus der Liste entfernen? Angemeldet bleibt, wer gerade aktiv ist."],
+    logout: ["Abmelden", "Bei Claude abmelden?"],
+  };
 
-  async function forget(a: Account) {
-    if (!(await confirm(`${a.email} aus der Liste entfernen? Angemeldet bleibt, wer gerade aktiv ist.`, "Entfernen", "Konto entfernen?"))) return;
-    act(() => invoke("claude_account_forget", { email: a.email }));
-  }
-
-  async function logout() {
-    if (!current || !(await confirm(`${current.email} bei Claude abmelden?${restartHint()}`, "Abmelden", "Abmelden?"))) return;
-    act(() => invoke("claude_logout"));
+  function confirmAsk() {
+    const a = asking;
+    asking = null;
+    if (!a) return;
+    if (a.what === "switch") act(() => invoke("claude_account_switch", { email: a.email }));
+    else if (a.what === "forget") act(() => invoke("claude_account_forget", { email: a.email }));
+    else act(() => invoke("claude_logout"));
   }
 
   // Terminal-Steuerzeichen raus; die Ausgabe dient nur zum Lesen und fuer den Link
@@ -145,19 +150,33 @@
       <ul class="border-border/60 divide-border/60 divide-y rounded-lg border">
         {#each saved as a (a.email)}
           {@const on = a.email === current?.email}
-          <li class="flex items-center gap-2.5 px-3 py-2">
-            <span class="grid size-7 shrink-0 place-items-center rounded-full {on ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}">
-              {#if on}<CheckIcon class="size-3.5" />{:else}<UserIcon class="size-3.5" />{/if}
-            </span>
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-body font-medium" title={a.email}>{a.email}</div>
-              <div class="text-muted-foreground truncate text-ui">{on ? "Aktiv" : a.org}</div>
-            </div>
-            {#if on}
-              <Button variant="ghost" size="sm" class="text-destructive" disabled={busy} onclick={logout}>Abmelden</Button>
+          {@const ask = asking?.email === a.email ? asking : null}
+          <li class="flex min-h-13 items-center gap-2.5 px-3 py-2">
+            {#if ask}
+              <div class="min-w-0 flex-1 text-ui">
+                <div class="truncate font-medium" title={a.email}>{a.email}</div>
+                <div class="text-muted-foreground">{QUESTION[ask.what][1]}{ask.what === "forget" ? "" : restartHint()}</div>
+              </div>
+              <Button variant="ghost" size="sm" onclick={() => (asking = null)}>Abbrechen</Button>
+              <Button variant={ask.what === "switch" ? "default" : "destructive"} size="sm" disabled={busy} onclick={confirmAsk}
+                >{QUESTION[ask.what][0]}</Button
+              >
             {:else}
-              <Button variant="outline" size="sm" disabled={busy} onclick={() => switchTo(a)}>Wechseln</Button>
-              <Button variant="ghost" size="sm" disabled={busy} onclick={() => forget(a)}>Entfernen</Button>
+              <span class="grid size-7 shrink-0 place-items-center rounded-full {on ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}">
+                {#if on}<CheckIcon class="size-3.5" />{:else}<UserIcon class="size-3.5" />{/if}
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-body font-medium" title={a.email}>{a.email}</div>
+                <div class="text-muted-foreground truncate text-ui">{on ? "Aktiv" : a.org}</div>
+              </div>
+              {#if on}
+                <Button variant="ghost" size="sm" class="text-destructive" disabled={busy} onclick={() => (asking = { what: "logout", email: a.email })}
+                  >Abmelden</Button
+                >
+              {:else}
+                <Button variant="outline" size="sm" disabled={busy} onclick={() => (asking = { what: "switch", email: a.email })}>Wechseln</Button>
+                <Button variant="ghost" size="sm" disabled={busy} onclick={() => (asking = { what: "forget", email: a.email })}>Entfernen</Button>
+              {/if}
             {/if}
           </li>
         {:else}

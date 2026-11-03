@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { confirm } from "$lib/confirm.svelte";
   import type { Store } from "@tauri-apps/plugin-store";
   import { forge, type Account, type ForgeKind } from "$lib/git";
   import { Badge, Button, Dialog, IconButton, Input, Segmented, TextButton } from "$lib/atelier-ui";
@@ -18,6 +17,12 @@
   let token = $state("");
   let busy = $state(false);
   let error = $state("");
+  // Konto, dessen Zeile gerade "Entfernen?" fragt (kein Dialog im Dialog).
+  let asking = $state("");
+  const keyOf = (a: Account) => `${a.kind}:${a.host}:${a.user}`;
+  $effect(() => {
+    if (!open) asking = "";
+  });
 
   // Host-Feld beim Wechsel des Anbieters auf den ueblichen Default setzen.
   $effect(() => {
@@ -71,6 +76,7 @@
   }
 
   async function logout(a: Account) {
+    asking = "";
     busy = true;
     error = "";
     try {
@@ -93,24 +99,26 @@
     {#if accounts.length}
       <ul class="border-border divide-border divide-y rounded border text-body">
         {#each accounts as a (a.kind + a.host + a.user)}
-          <li class="flex items-center gap-2 px-2.5 py-1.5">
-            <GlobeIcon class="size-3.5 shrink-0" />
-            <span class="min-w-0 flex-1 truncate" title="{a.user}@{a.host}">
-              <span class="font-medium">{a.user}</span>
-              <span class="text-muted-foreground font-mono text-meta">@{a.host}</span>
-            </span>
-            <Badge variant="outline" class="text-muted-foreground shrink-0 text-meta"
-              >{a.kind === "github" ? "GitHub" : "GitLab"}</Badge
-            >
-            <IconButton
-              size="md"
-              tone="danger"
-              disabled={busy}
-              onclick={async () => (await confirm(`Konto ${a.user}@${a.host} entfernen? Der Token wird gelöscht.`, "Entfernen")) && logout(a)}
-              label="Konto entfernen"
-            >
-              <TrashIcon class="size-3.5" />
-            </IconButton>
+          <li class="flex min-h-10 items-center gap-2 px-2.5 py-1.5">
+            {#if asking === keyOf(a)}
+              <span class="min-w-0 flex-1 text-ui">
+                <span class="font-medium">{a.user}@{a.host}</span> entfernen? Der Token wird gelöscht.
+              </span>
+              <Button variant="ghost" size="sm" onclick={() => (asking = "")}>Abbrechen</Button>
+              <Button variant="destructive" size="sm" disabled={busy} onclick={() => logout(a)}>Entfernen</Button>
+            {:else}
+              <GlobeIcon class="size-3.5 shrink-0" />
+              <span class="min-w-0 flex-1 truncate" title="{a.user}@{a.host}">
+                <span class="font-medium">{a.user}</span>
+                <span class="text-muted-foreground font-mono text-meta">@{a.host}</span>
+              </span>
+              <Badge variant="outline" class="text-muted-foreground shrink-0 text-meta"
+                >{a.kind === "github" ? "GitHub" : "GitLab"}</Badge
+              >
+              <IconButton size="md" tone="danger" disabled={busy} onclick={() => (asking = keyOf(a))} label="Konto entfernen">
+                <TrashIcon class="size-3.5" />
+              </IconButton>
+            {/if}
           </li>
         {/each}
       </ul>

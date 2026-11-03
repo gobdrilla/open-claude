@@ -105,7 +105,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { Button, Dialog, IconButton, Input, Segmented, Select, SettingRow, SettingsSection, Switch, Textarea } from "$lib/atelier-ui";
-  import { confirm } from "$lib/confirm.svelte";
   const MODES = [
     ["Manuell", "default", "Fragt vor Änderungen und Befehlen"],
     ["Edits annehmen", "acceptEdits", "Dateiänderungen ohne Rückfrage"],
@@ -137,17 +136,28 @@
   });
   const globDirty = $derived(JSON.stringify(glob) !== JSON.stringify(globLoaded));
   const dirty = $derived(text !== loaded || globDirty);
-  const discard = async () => !dirty || (await confirm("Ungespeicherte Änderungen an den Claude-Einstellungen gehen verloren.", "Verwerfen", "Änderungen verwerfen?"));
-  async function close() {
-    if (await discard()) open = false;
+  // Ungespeicherte Aenderungen: die Fusszeile fragt nach, kein Dialog im Dialog. Nochmal Esc bricht die Frage ab.
+  let asking = $state<"close" | "reload" | null>(null);
+  function close() {
+    if (asking) asking = null;
+    else if (dirty) asking = "close";
+    else open = false;
   }
-  async function reload() {
-    if (await discard()) load();
+  function reload() {
+    if (dirty) asking = "reload";
+    else load();
+  }
+  function discardNow() {
+    const a = asking;
+    asking = null;
+    if (a === "close") open = false;
+    else load();
   }
 
   async function load() {
     error = "";
     custom = "";
+    asking = null;
     try {
       [loaded, globLoaded] = await Promise.all([invoke<string>("claude_settings_read"), invoke<Record<string, unknown>>("claude_global_read")]);
       text = loaded;
@@ -299,10 +309,16 @@
     {#if !parsed}<p class="text-destructive text-ui">settings.json ist kein gültiges JSON-Objekt</p>{/if}
     {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
 
-    <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" class="mr-auto" disabled={busy} onclick={reload}>Neu laden</Button>
-      <Button variant="ghost" size="sm" disabled={busy} onclick={close}>Abbrechen</Button>
-      <Button size="sm" disabled={busy || !parsed || !dirty} onclick={save}>Speichern</Button>
+    <div class="flex items-center justify-end gap-2">
+      {#if asking}
+        <span class="text-ui mr-auto">Ungespeicherte Änderungen gehen verloren.</span>
+        <Button variant="ghost" size="sm" onclick={() => (asking = null)}>Zurück</Button>
+        <Button variant="destructive" size="sm" onclick={discardNow}>Verwerfen</Button>
+      {:else}
+        <Button variant="ghost" size="sm" class="mr-auto" disabled={busy} onclick={reload}>Neu laden</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onclick={close}>Abbrechen</Button>
+        <Button size="sm" disabled={busy || !parsed || !dirty} onclick={save}>Speichern</Button>
+      {/if}
     </div>
   </Dialog.Content>
 </Dialog.Root>

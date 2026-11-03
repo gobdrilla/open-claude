@@ -208,6 +208,33 @@
   let claudeOpen = $state(false);
   let claudeAccountsOpen = $state(false);
   let settingsOpen = $state(false);
+
+  // Nie ein Dialog ueber einem Dialog: ein Unterdialog (Konten, Profile, Hilfe …) ersetzt den aufrufenden und
+  // gibt beim Schliessen an ihn zurueck, wie eine Unterseite.
+  type Sub = "accounts" | "claudeAccounts" | "claude" | "profiles" | "help";
+  let returnTo = $state.raw<{ sub: Sub; reopen: () => void } | null>(null);
+  const subOpen = (s: Sub) =>
+    ({ accounts: accountsOpen, claudeAccounts: claudeAccountsOpen, claude: claudeOpen, profiles: profilesOpen, help })[s];
+  function openSub(sub: Sub, from: "settings" | "clone" | "create") {
+    if (from === "settings") settingsOpen = false;
+    else if (from === "clone") cloneOpen = false;
+    else createOpen = false;
+    if (sub === "accounts") accountsOpen = true;
+    else if (sub === "claudeAccounts") claudeAccountsOpen = true;
+    else if (sub === "claude") claudeOpen = true;
+    else if (sub === "profiles") profilesOpen = true;
+    else help = true;
+    returnTo = {
+      sub,
+      reopen: () => (from === "settings" ? (settingsOpen = true) : from === "clone" ? (cloneOpen = true) : (createOpen = true)),
+    };
+  }
+  $effect(() => {
+    if (!returnTo || subOpen(returnTo.sub)) return;
+    const { reopen } = returnTo;
+    returnTo = null;
+    reopen();
+  });
   // Sync-Fehler sichtbar in jeder Ansicht (Liste, Terminal, Git).
   let skillNotice = $state("");
 
@@ -226,12 +253,13 @@
     : navigator.userAgent.includes("Windows")
       ? "Ändert solange die Deckel-Aktion des Energieplans. Auf Geräten mit Modern Standby unzuverlässig; danach schläft er erst nach der normalen Leerlaufzeit."
       : "Braucht systemd-logind; ob GNOME/KDE die Sperre beachten, ist nicht geprüft.";
-  async function toggleLidAwake() {
+  /** ask: aus den Einstellungen deren Inline-Rueckfrage, sonst der globale Dialog. */
+  async function toggleLidAwake(ask = confirm) {
     const msg =
       "Der Laptop bleibt zugeklappt wach, solange eine Claude-Session gerade arbeitet (Display aus). Wartet Claude auf dich oder ist fertig, schläft er normal ein. " +
       "In der Tasche kann er dabei heiß werden; unter 20 % Akku wird nicht wach gehalten.\n\n" +
       lidNote();
-    if (!lidAwake && !(await confirm(msg, "Einschalten", "Wach bei zugeklapptem Laptop?"))) return;
+    if (!lidAwake && !(await ask(msg, "Einschalten", "Wach bei zugeklapptem Laptop?", { tone: "default" }))) return;
     lidAwake = !lidAwake;
     await invoke("set_awake", { on: lidAwake });
     await store.set("lidAwake", lidAwake);
@@ -475,10 +503,10 @@
     getCurrentWindow().close();
   }
 
-  async function installUpdate() {
+  async function installUpdate(ask = confirm) {
     // Der Neustart laeuft an der Rueckfrage in Rust vorbei.
-    if (isDirty() && !(await confirm("Ungespeicherte Änderungen im Editor gehen dabei verloren.", "Neu starten", "Update installieren?"))) return;
-    if (sessions.length && !(await confirm(sessionsLost(), "Neu starten", "Update installieren?"))) return;
+    if (isDirty() && !(await ask("Ungespeicherte Änderungen im Editor gehen dabei verloren.", "Neu starten", "Update installieren?"))) return;
+    if (sessions.length && !(await ask(sessionsLost(), "Neu starten", "Update installieren?"))) return;
     updating = true;
     try {
       await update!.download();
@@ -1208,7 +1236,7 @@
       size="xs"
       class="text-primary mr-1 gap-1.5"
       disabled={updating}
-      onclick={installUpdate}
+      onclick={() => installUpdate()}
       title={`Update installieren und neu starten${update.body ? `\n\n${update.body}` : ""}`}
       ><DownloadIcon class="size-3.5" /> {updating ? "Aktualisiere…" : `Update ${update.version}`}</Button
     >
@@ -1778,13 +1806,12 @@
   onamongus={saveAmongUs}
   oncheckupdate={() => checkUpdate(true)}
   oninstall={installUpdate}
-  onclaude={() => (claudeOpen = true)}
-  onclaudeaccounts={() => (claudeAccountsOpen = true)}
-  onprofiles={() => (profilesOpen = true)}
-  ongitaccounts={() => (accountsOpen = true)}
-  onhelp={() => (help = true)}
+  onclaude={() => openSub("claude", "settings")}
+  onclaudeaccounts={() => openSub("claudeAccounts", "settings")}
+  onprofiles={() => openSub("profiles", "settings")}
+  ongitaccounts={() => openSub("accounts", "settings")}
+  onhelp={() => openSub("help", "settings")}
 />
-<!-- After SettingsDialog so it stacks above it when opened from there -->
 <Dialog.Root bind:open={help}>
   <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
     <Dialog.Header>
@@ -1871,26 +1898,20 @@
   root={root || home}
   existing={repos.map((r) => r.path)}
   onclone={cloned}
-  onaccounts={() => {
-    cloneOpen = false;
-    accountsOpen = true;
-  }}
+  onaccounts={() => openSub("accounts", "clone")}
 />
 <CreateDialog
   bind:open={createOpen}
   {accounts}
   root={root || home}
   oncreate={cloned}
-  onaccounts={() => {
-    createOpen = false;
-    accountsOpen = true;
-  }}
+  onaccounts={() => openSub("accounts", "create")}
 />
 
 <IdeDiff />
 
-<!-- Ein Dialog fuer alle Rueckfragen aus confirm() (window.confirm geht in der Webview nicht). Zuletzt im Markup,
-     damit er ueber anderen offenen Dialogen liegt. -->
+<!-- Ein Dialog fuer alle Rueckfragen aus confirm() (window.confirm geht in der Webview nicht). Nur ausserhalb von
+     Dialogen nutzen; in Dialogen fragt die Zeile selbst nach (Inline-Bestaetigung). -->
 <ConfirmDialog
   open={!!confirming.q}
   title={confirming.q?.title ?? ""}

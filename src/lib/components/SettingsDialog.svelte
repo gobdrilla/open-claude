@@ -1,18 +1,20 @@
 <script lang="ts">
-  import { Button, Dialog, IconButton, Row, Segmented, SettingRow, SettingsSection, Slider, Switch, TextButton } from "$lib/atelier-ui";
+  import { Button, ConfirmBar, Dialog, IconButton, Row, Segmented, SettingRow, SettingsSection, Slider, Switch, TextButton } from "$lib/atelier-ui";
   import type { Update } from "@tauri-apps/plugin-updater";
   import { theme, setMode } from "$lib/theme.svelte";
   import { ASKS, noAsk, setNoAsk, type AskKey } from "$lib/ask.svelte";
   import { prefs, toggleAi } from "$lib/editor.svelte";
   import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
   import { ZOOM_MAX, ZOOM_MIN } from "$lib/zoom";
+  import { Asker } from "$lib/confirm.svelte";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import BotIcon from "@lucide/svelte/icons/bot";
   import InfoIcon from "@lucide/svelte/icons/info";
 
-  // App settings; state and side effects stay in +page.svelte, the sub-dialogs open on top of this one.
+  // App settings; state and side effects stay in +page.svelte. Sub-dialogs replace this one (openSub there),
+  // questions show as a bar inside it.
   let {
     open = $bindable(false),
     amongUs = $bindable(),
@@ -51,12 +53,12 @@
     zoom: number;
     onautostart: () => void;
     ontray: () => void;
-    onlidawake: () => void;
+    onlidawake: (ask: Asker["ask"]) => void;
     onzoom: (dir: number) => void;
     onamongus: () => void;
     /** Resolves to the message to show (up to date or error). */
     oncheckupdate: () => Promise<string>;
-    oninstall: () => void;
+    oninstall: (ask: Asker["ask"]) => void;
     onclaude: () => void;
     onclaudeaccounts: () => void;
     onprofiles: () => void;
@@ -89,6 +91,14 @@
     if (open && tab === "terminal") loadClaudeCfg();
   });
 
+  // Rueckfragen (Deckel wach, Update) als Leiste hier drin. Gilt nur fuer den Reiter, in dem sie gestellt wurde.
+  const asker = new Asker();
+  $effect(() => {
+    void tab;
+    void open;
+    return () => asker.q?.done(false);
+  });
+
   let updateMsg = $state("");
   $effect(() => {
     if (!open) updateMsg = "";
@@ -113,6 +123,7 @@
     <div class="flex min-w-0 flex-1 flex-col">
       <h3 class="border-border text-title flex h-13 shrink-0 items-center border-b px-7">{TABS.find((t) => t[1] === tab)?.[0]}</h3>
       <div class="flex-1 space-y-5 overflow-y-auto px-7 py-5">
+        <ConfirmBar {asker} />
         {#if tab === "general"}
           <SettingsSection title="Start und Fenster">
             <!-- macOS: Autostart ueber die Systemeinstellungen. -->
@@ -128,7 +139,7 @@
               <Switch label="Schließen legt ins Tray" on={tray} onclick={ontray} />
             </SettingRow>
             <SettingRow label="Zugeklappt wach, solange Claude arbeitet" description="Der Laptop schläft beim Zuklappen erst ein, wenn Claude fertig ist.">
-              <Switch label="Zugeklappt wach" on={lidAwake} onclick={onlidawake} />
+              <Switch label="Zugeklappt wach" on={lidAwake} onclick={() => onlidawake(asker.ask)} />
             </SettingRow>
             <SettingRow label="KI-Vorschläge im Editor" description="Graue Vervollständigung beim Tippen, Tab übernimmt.">
               <Switch label="KI-Vorschläge im Editor" on={prefs.ai} onclick={toggleAi} />
@@ -213,7 +224,7 @@
               description={checking ? "Suche nach Updates …" : update ? `Update ${update.version} verfügbar.` : updateMsg || undefined}
             >
               {#if update}
-                <Button size="sm" disabled={updating} onclick={oninstall}>{updating ? "Aktualisiere…" : "Installieren und neu starten"}</Button>
+                <Button size="sm" disabled={updating} onclick={() => oninstall(asker.ask)}>{updating ? "Aktualisiere…" : "Installieren und neu starten"}</Button>
               {:else}
                 <Button variant="outline" size="sm" disabled={checking} onclick={checkNow}>Nach Updates suchen</Button>
               {/if}

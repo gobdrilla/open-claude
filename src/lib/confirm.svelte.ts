@@ -20,3 +20,26 @@ export function answer(ok: boolean) {
   confirming.q = null;
   q?.resolve(ok);
 }
+
+/** Rueckfrage innerhalb eines offenen Dialogs: ConfirmBar zeigt sie dort an, statt einen zweiten Dialog zu oeffnen. */
+export class Asker {
+  q = $state.raw<({ title: string; message: string; action: string; done: (ok: boolean) => void } & Opts) | null>(null);
+
+  /** Gleiche Form wie confirm(). */
+  ask = (message: string, action = "Fortfahren", title = "", opts: Opts = {}): Promise<boolean> => {
+    this.q?.done(false);
+    return new Promise((resolve) => {
+      const q = {
+        title,
+        message,
+        action,
+        ...opts,
+        done: (ok: boolean) => {
+          if (this.q === q) this.q = null;
+          resolve(ok);
+        },
+      };
+      this.q = q;
+    });
+  };
+}

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { confirm } from "$lib/confirm.svelte";
+  import { Asker } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, IconButton, Input, RefreshButton, SectionHead, Segmented, Switch } from "$lib/atelier-ui";
+  import { Button, ConfirmBar, IconButton, Input, RefreshButton, SectionHead, Segmented, Switch } from "$lib/atelier-ui";
   import { untrack, type Snippet } from "svelte";
   import { fuzzy } from "$lib/fuzzy";
   import { skills, groupInstalled, pickAvailable, type PluginsInfo, type PluginAction, type InstalledPlugin } from "$lib/skills";
@@ -16,6 +16,9 @@
   let query = $state("");
   let scopeChoice = $state<"user" | "project">("user");
   let source = $state("");
+  // Laeuft im Skills-Dialog: Rueckfragen als Leiste darin, kein Dialog im Dialog.
+  const asker = new Asker();
+  const confirm = asker.ask;
 
   async function reload() {
     loading = true;
@@ -111,6 +114,7 @@
 <div class="flex h-full min-h-0 flex-col text-ui">
   <Notice bind:text={error} />
   <Notice bind:text={note} kind="note" />
+  <ConfirmBar {asker} class="mx-3 mt-2" />
 
   <div class="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2">
     {@render lead?.()}

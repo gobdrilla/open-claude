@@ -3,7 +3,6 @@
   import { Button, Dialog, Input, Row, Segmented, Select } from "$lib/atelier-ui";
   import Notice from "$lib/components/Notice.svelte";
   import { fuzzy } from "$lib/fuzzy";
-  import { confirm } from "$lib/confirm.svelte";
   import { skills, renameProfile, fromProject, adjust, emptyProject, type SkillStore, type SkillsInfo } from "$lib/skills";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
 
@@ -76,8 +75,15 @@
     sel = to;
   }
 
-  async function remove() {
-    if (!(await confirm("Wirkt erst mit Speichern.", "Löschen", `Profil „${sel}“ löschen?`))) return;
+  // Erster Klick fragt im Knopf selbst nach, kein Dialog im Dialog. Wirkt ohnehin erst mit Speichern.
+  let askDel = $state(false);
+  $effect(() => {
+    void sel;
+    askDel = false;
+  });
+  function remove() {
+    if (!askDel) return void (askDel = true);
+    askDel = false;
     draft = renameProfile(draft, sel, null);
     sel = names[0] ?? "";
   }
@@ -163,8 +169,14 @@
               />
               <span class="flex-1"></span>
               <Input bind:value={query} placeholder="Skill suchen" density="sm" class="w-40" />
-              <Button variant="ghost-danger" size="sm" title="Profil löschen" onclick={remove}>
-                <TrashIcon class="size-3.5" />
+              <Button
+                variant={askDel ? "destructive" : "ghost-danger"}
+                size="sm"
+                title={askDel ? "Wirkt erst mit Speichern" : "Profil löschen"}
+                onclick={remove}
+                onblur={() => (askDel = false)}
+              >
+                <TrashIcon class="size-3.5" />{#if askDel}„{sel}“ löschen?{/if}
               </Button>
             </div>
           {/key}

@@ -30,6 +30,7 @@ export { default as Empty } from "./Empty.svelte";
 export { default as SettingsSection } from "./SettingsSection.svelte";
 export { default as SettingRow } from "./SettingRow.svelte";
 export { default as ConfirmDialog } from "./ConfirmDialog.svelte";
+export { default as ConfirmBar } from "./ConfirmBar.svelte";
 export { default as PromptDialog } from "./PromptDialog.svelte";
 export { default as DiffDialog } from "./DiffDialog.svelte";
 

@@ -6,7 +6,8 @@
 	import * as Dialog from "./index.js";
 	import DialogPortal from "./dialog-portal.svelte";
 	import type { Snippet } from "svelte";
-	import type { ComponentProps } from "svelte";
+	import { getContext, type ComponentProps } from "svelte";
+	import { OPEN_KEY } from "./dialog.svelte";
 
 	let {
 		ref = $bindable(null),
@@ -23,8 +24,24 @@
 		/** top: Oberkante auf einem Drittel der Hoehe (Command-Palette), waechst nach unten. */
 		align?: "center" | "top";
 	} = $props();
+
+	// bits-ui haengt das Portal schon beim Erzeugen der Komponente an body an, nicht beim Oeffnen. Bei gleichem
+	// z-50 entschied so die Startreihenfolge, welcher Dialog oben liegt: Rueckfragen lagen hinter spaeter
+	// erzeugten Dialogen. Darum erst beim Oeffnen einhaengen (landet am Ende von body) und nach der
+	// Schliess-Animation wieder aushaengen.
+	const isOpen = getContext<(() => boolean) | undefined>(OPEN_KEY) ?? (() => true);
+	let mounted = $state(isOpen());
+	$effect(() => {
+		if (isOpen()) {
+			mounted = true;
+			return;
+		}
+		const t = setTimeout(() => (mounted = false), 200);
+		return () => clearTimeout(t);
+	});
 </script>
 
+{#if mounted}
 <DialogPortal {...portalProps}>
 	<Dialog.Overlay />
 	<!-- Zentriert per Grid statt fixed + inset-0 + m-auto + h-fit: WebKitGTK ignoriert h-fit dort und streckt den
@@ -58,3 +75,4 @@
 	</DialogPrimitive.Content>
 	</div>
 </DialogPortal>
+{/if}
