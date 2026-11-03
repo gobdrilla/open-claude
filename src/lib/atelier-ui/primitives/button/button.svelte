@@ -19,8 +19,8 @@
 				toggle: "text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:ring-foreground/10 aria-pressed:[&_svg]:text-primary",
 				// Atelier: destructive action without a fill (discard, remove).
 				"ghost-danger": "text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20",
-				// Atelier: highlighted primary action (commit, sync).
-				glow: "from-primary to-primary/70 shadow-primary/30 text-primary-foreground bg-linear-to-br shadow-md hover:to-primary/90",
+				// Atelier: highlighted primary action (commit, sync). Gradient ends at /90: /70 over the light background fell to 3.2:1 text contrast.
+				glow: "from-primary to-primary/90 shadow-primary/30 text-primary-foreground bg-linear-to-br shadow-md hover:to-primary",
 			},
 			size: {
 				default: "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",

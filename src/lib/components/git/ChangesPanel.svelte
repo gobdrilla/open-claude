@@ -1,6 +1,6 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, Checkbox, ConfirmDialog, ContextItem, Row, Textarea, fileIcon, menuContent } from "$lib/atelier-ui";
+  import { Button, Checkbox, ConfirmDialog, ContextItem, Empty, Row, Textarea, fileIcon, menuContent } from "$lib/atelier-ui";
   import { dirname } from "$lib/tree";
   import { FILES_APP, atRef } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
@@ -12,6 +12,8 @@
   import { pruneSel, rangeSel, toggleSel } from "$lib/selection";
   import DiffView, { type HunkAction } from "./DiffView.svelte";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
+  import FileDiffIcon from "@lucide/svelte/icons/file-diff";
+  import CheckIcon from "@lucide/svelte/icons/check";
 
   let {
     repo,
@@ -488,8 +490,10 @@
         </div>
       {:else if sel}
         <DiffView diff={diff ?? ""} {actions} {busy} {repo} />
+      {:else if status.files.length}
+        <Empty icon={FileDiffIcon} hint="↑↓ wechseln · Leertaste stagen">Datei links auswählen, um den Diff zu sehen.</Empty>
       {:else}
-        <p class="text-muted-foreground p-3">Datei links auswählen.</p>
+        <Empty icon={CheckIcon}>Keine Änderungen.</Empty>
       {/if}
     </div>
   </div>
