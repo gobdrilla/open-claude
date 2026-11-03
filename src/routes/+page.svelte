@@ -795,6 +795,8 @@
   const limits = $derived(
     (Object.values(panels).find((p) => p.limits?.length)?.limits ?? []).flatMap((l) => (LIMIT_NAME[l.kind] ? [[LIMIT_NAME[l.kind], l] as const] : [])),
   );
+  // Group heads stay below the uppercase section heads (Wartet auf dich / Läuft / Projekte)
+  const subHead = "[&_[data-command-group-heading]]:text-meta [&_[data-command-group-heading]]:font-normal";
   const openRepo = (repo: Repo) => VIEW_OPEN[lastView[repo.path] ?? "term"](repo);
   const views = $derived(
     [
@@ -808,7 +810,7 @@
     if (s.group) return s.group;
     if (s.guest) return `Gast: ${s.host ? split(s.host)[1] : "verbinde …"}`;
     const n = sessions.filter((o) => !o.group && o.repo.path === s.repo.path).indexOf(s);
-    return split(s.repo.rel)[1] + (n > 0 ? ` ${n + 1}` : "");
+    return (isFree(s.repo) ? "Ohne Projekt" : split(s.repo.rel)[1]) + (n > 0 ? ` ${n + 1}` : "");
   };
 
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
@@ -1353,7 +1355,7 @@
           </h2>
         {/if}
         {#if repoGroups.length && !query.trim()}
-          <Command.Group heading="Gruppen">
+          <Command.Group heading="Gruppen" class={subHead}>
             {#each repoGroups as g (g.name)}
               {@const live = sessions.some((s) => s.group === g.name)}
               {@const members = g.paths.map((p) => split(repos.find((r) => r.path === p)?.rel ?? p)[1]).join(" · ")}
@@ -1372,7 +1374,7 @@
                           läuft
                         </Badge>
                       {/if}
-                      <Badge variant="outline" class="text-muted-foreground text-meta">{g.paths.length} Repos</Badge>
+                      <Badge variant="outline" class="text-muted-foreground text-meta">{g.paths.length} {g.paths.length === 1 ? "Projekt" : "Projekte"}</Badge>
                     </Command.Item>
                   {/snippet}
                 </ContextMenu.Trigger>
@@ -1389,7 +1391,7 @@
           </Command.Group>
         {/if}
         {#each groups as group (group.heading)}
-          <Command.Group heading={group.heading || undefined}>
+          <Command.Group heading={group.heading || undefined} class={subHead}>
             {#each group.items as item (item.repo.path)}
               {@const nr = flat.indexOf(item) + 1}
               {@const pinned = pins.includes(item.repo.path)}
@@ -1452,55 +1454,57 @@
                       {/if}
 
                       {@const prof = profileName(item.repo)}
-                      {#if prof}
-                        <Badge variant="outline" class="text-muted-foreground gap-1 text-meta" title="Skill-Profil">
-                          <SparklesIcon class="size-3" />
-                          {prof}
-                        </Badge>
-                      {/if}
-
-                      {#each tags(item.repo) as lang (lang)}
-                        {#if lang === "Unity"}
-                          {@const uinfo = unityInfo[item.repo.path]}
-                          <span use:onVisible={() => loadUnityInfo(item.repo.path)}>
-                            <Badge variant="outline" class="text-muted-foreground gap-1.5 text-meta">
-                              <span
-                                class="size-2 rounded-full {uinfo?.editorOpen ? 'bg-success' : ''}"
-                                style={uinfo?.editorOpen ? "" : `background:${LANG_COLOR.Unity}`}
-                                title={uinfo ? (uinfo.editorOpen ? "Editor offen" : "Editor zu") : ""}
-                              ></span>
-                              {unityBadgeText(uinfo)}
-                            </Badge>
-                          </span>
-                        {:else}
-                          <Badge variant="outline" class="text-muted-foreground gap-1.5 text-meta">
-                            <span
-                              class="size-2 rounded-full"
-                              style="background:{LANG_COLOR[lang] ?? 'var(--muted-foreground)'}"
-                            ></span>
-                            {lang}
+                      <!-- Meta gives way to the view actions on hover/keyboard selection -->
+                      <span class="flex items-center gap-3 group-data-selected/command-item:hidden">
+                        {#if prof}
+                          <Badge variant="outline" class="text-muted-foreground gap-1 text-meta" title="Skill-Profil">
+                            <SparklesIcon class="size-3" />
+                            {prof}
                           </Badge>
                         {/if}
-                      {/each}
 
-                      {#if item.repo.branch}
-                        <Badge variant="outline" class="text-muted-foreground gap-1 font-mono text-meta">
-                          <GitBranchIcon class="size-3" />
-                          {item.repo.branch}
-                        </Badge>
-                      {/if}
-                      <!-- Alt+1..9 hint replaces the age only while Alt is held -->
-                      {#if altHeld && nr <= 9}
-                        <kbd class="text-muted-foreground border-border text-meta w-12 rounded border text-center font-mono"
-                          >{mac ? `⌥${nr}` : `Alt+${nr}`}</kbd
-                        >
-                      {:else}
-                        <span class="text-muted-foreground w-12 text-right font-mono text-meta tabular-nums">
-                          {age(item.repo.last_commit)}
-                        </span>
-                      {/if}
-                      <!-- Targets on hover/keyboard selection; covers the row's right edge (same background as the selected row). -->
-                      <div class="bg-muted absolute inset-y-0 right-1 hidden items-center gap-0.5 pl-2 group-data-selected/command-item:flex">
+                        {#each tags(item.repo) as lang (lang)}
+                          {#if lang === "Unity"}
+                            {@const uinfo = unityInfo[item.repo.path]}
+                            <span use:onVisible={() => loadUnityInfo(item.repo.path)}>
+                              <Badge variant="outline" class="text-muted-foreground gap-1.5 text-meta">
+                                <span
+                                  class="size-2 rounded-full {uinfo?.editorOpen ? 'bg-success' : ''}"
+                                  style={uinfo?.editorOpen ? "" : `background:${LANG_COLOR.Unity}`}
+                                  title={uinfo ? (uinfo.editorOpen ? "Editor offen" : "Editor zu") : ""}
+                                ></span>
+                                {unityBadgeText(uinfo)}
+                              </Badge>
+                            </span>
+                          {:else}
+                            <Badge variant="outline" class="text-muted-foreground gap-1.5 text-meta">
+                              <span
+                                class="size-2 rounded-full"
+                                style="background:{LANG_COLOR[lang] ?? 'var(--muted-foreground)'}"
+                              ></span>
+                              {lang}
+                            </Badge>
+                          {/if}
+                        {/each}
+
+                        {#if item.repo.branch}
+                          <Badge variant="outline" class="text-muted-foreground gap-1 font-mono text-meta">
+                            <GitBranchIcon class="size-3" />
+                            {item.repo.branch}
+                          </Badge>
+                        {/if}
+                        <!-- Alt+1..9 hint replaces the age only while Alt is held -->
+                        {#if altHeld && nr <= 9}
+                          <kbd class="text-muted-foreground border-border text-meta w-12 rounded border text-center font-mono"
+                            >{mac ? `⌥${nr}` : `Alt+${nr}`}</kbd
+                          >
+                        {:else}
+                          <span class="text-muted-foreground w-12 text-right font-mono text-meta tabular-nums">
+                            {age(item.repo.last_commit)}
+                          </span>
+                        {/if}
+                      </span>
+                      <div class="-my-1 hidden items-center gap-0.5 group-data-selected/command-item:flex">
                         {#each ROW_VIEWS as [name, key, Icon, n] (key)}
                           <Button
                             variant="ghost"
@@ -1712,7 +1716,7 @@
 {/snippet}
 
 {#snippet kbd(key: string)}
-  <kbd class="bg-secondary text-foreground/80 rounded px-1.5 py-px font-mono text-[10px]">{key}</kbd>
+  <kbd class="bg-secondary text-foreground/80 border-border rounded border px-1.5 py-px font-mono text-[10px]">{key}</kbd>
 {/snippet}
 
 {#snippet keys(title: string, list: string[][])}
@@ -1726,57 +1730,6 @@
     </dl>
   </section>
 {/snippet}
-
-<Dialog.Root bind:open={help}>
-  <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-    <Dialog.Header>
-      <Dialog.Title>Tastenkürzel</Dialog.Title>
-      <Dialog.Description>Ein Schema für alle Ansichten. Alles lässt sich auch ohne Maus bedienen.</Dialog.Description>
-    </Dialog.Header>
-    <div class="grid gap-5">
-      {@render keys("Überall", [
-        [`${mod} + 1 / 2 / 3`, "Claude / Editor / Git des Projekts (auf der Startseite: des gewählten)"],
-        [`${mod} + ⇧ + E`, `Projektordner im ${FILES_APP} öffnen`],
-        [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zu den Projekten, Sitzung läuft weiter"],
-        [`F1 / ${mod} + /`, "Diese Übersicht"],
-        [`${mod} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
-        [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
-      ])}
-      {@render keys("Startseite", [
-        ["⏎ / Klick", "Zuletzt genutzte Ansicht des Projekts öffnen (sonst Claude)"],
-        ["↑ ↓", "Projekt wählen"],
-        [`${mac ? "⌥" : "Alt"} + 1 … 9`, "Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)"],
-        [`${mod} + K`, "Suche fokussieren"],
-        [`${mod} + D`, "Projekt anpinnen"],
-        [`${mod} + N`, "Repo klonen"],
-        [`${mod} + ⇧ + N`, "Neues Repo anlegen"],
-        [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
-        [`${mod} + R`, "Neu einlesen"],
-        [`${mod} + O`, "Dev-Ordner wechseln"],
-        ["Rechtsklick", "Weitere Aktionen, z. B. vom Gerät löschen"],
-        ["Esc", "Suche leeren, sonst schließen (bzw. ins Tray)"],
-      ])}
-      {@render keys("Claude", [["Strg + ⇧ + C / Strg + V", "Im Terminal kopieren / einfügen"]])}
-      {@render keys("Editor", [
-        [`${mod} + S`, "Datei speichern"],
-        [`${mod} + P`, "Datei suchen und öffnen"],
-        ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
-      ])}
-      {@render keys("Git", [
-        ["Esc", "Zurück zu den Projekten"],
-        ["Alt + 1 … 5", "Änderungen / Verlauf / Releases / CI / Unity"],
-        [`${mod} + ⇧ + F`, "Fetch"],
-        [`${mod} + ⇧ + L`, "Pull"],
-        [`${mod} + ⇧ + P`, "Push"],
-        ["F5", "Aktualisieren"],
-        [`${mod} + ⏎`, "Commit"],
-        ["Leertaste", "Datei stagen / unstagen"],
-        ["F7 / ⇧ + F7", "Merge-Editor: nächster / vorheriger Konflikt"],
-        [`${mod} + S`, "Merge-Editor: speichern"],
-      ])}
-    </div>
-  </Dialog.Content>
-</Dialog.Root>
 
 <RootDialog open={setup || rootOpen} first={setup} {root} onchoose={chooseRoot} onclose={() => (rootOpen = false)} />
 
@@ -1828,6 +1781,57 @@
   ongitaccounts={() => (accountsOpen = true)}
   onhelp={() => (help = true)}
 />
+<!-- After SettingsDialog so it stacks above it when opened from there -->
+<Dialog.Root bind:open={help}>
+  <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+    <Dialog.Header>
+      <Dialog.Title>Tastenkürzel</Dialog.Title>
+      <Dialog.Description>Ein Schema für alle Ansichten. Alles lässt sich auch ohne Maus bedienen.</Dialog.Description>
+    </Dialog.Header>
+    <div class="grid gap-5">
+      {@render keys("Überall", [
+        [`${mod} + 1 / 2 / 3`, "Claude / Editor / Git des Projekts (auf der Startseite: des gewählten)"],
+        [`${mod} + ⇧ + E`, `Projektordner im ${FILES_APP} öffnen`],
+        [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zu den Projekten, Sitzung läuft weiter"],
+        [`F1 / ${mod} + /`, "Diese Übersicht"],
+        [`${mod} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
+        [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
+      ])}
+      {@render keys("Startseite", [
+        ["⏎ / Klick", "Zuletzt genutzte Ansicht des Projekts öffnen (sonst Claude)"],
+        ["↑ ↓", "Projekt wählen"],
+        [`${mac ? "⌥" : "Alt"} + 1 … 9`, "Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)"],
+        [`${mod} + K`, "Suche fokussieren"],
+        [`${mod} + D`, "Projekt anpinnen"],
+        [`${mod} + N`, "Repo klonen"],
+        [`${mod} + ⇧ + N`, "Neues Repo anlegen"],
+        [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
+        [`${mod} + R`, "Neu einlesen"],
+        [`${mod} + O`, "Dev-Ordner wechseln"],
+        ["Rechtsklick", "Weitere Aktionen, z. B. vom Gerät löschen"],
+        ["Esc", "Suche leeren, sonst schließen (bzw. ins Tray)"],
+      ])}
+      {@render keys("Claude", [["Strg + ⇧ + C / Strg + V", "Im Terminal kopieren / einfügen"]])}
+      {@render keys("Editor", [
+        [`${mod} + S`, "Datei speichern"],
+        [`${mod} + P`, "Datei suchen und öffnen"],
+        ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
+      ])}
+      {@render keys("Git", [
+        ["Esc", "Zurück zu den Projekten"],
+        ["Alt + 1 … 5", "Änderungen / Verlauf / Releases / CI / Unity"],
+        [`${mod} + ⇧ + F`, "Fetch"],
+        [`${mod} + ⇧ + L`, "Pull"],
+        [`${mod} + ⇧ + P`, "Push"],
+        ["F5", "Aktualisieren"],
+        [`${mod} + ⏎`, "Commit"],
+        ["Leertaste", "Datei stagen / unstagen"],
+        ["F7 / ⇧ + F7", "Merge-Editor: nächster / vorheriger Konflikt"],
+        [`${mod} + S`, "Merge-Editor: speichern"],
+      ])}
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
 <ClaudeSettingsDialog bind:open={claudeOpen} />
 <ClaudeAccountsDialog bind:open={claudeAccountsOpen} running={sessions.length} />
 {#if activeSession && !activeSession.guest}<ShareDialog bind:open={shareOpen} id={activeSession.id} cwd={activeSession.repo.path} />{/if}

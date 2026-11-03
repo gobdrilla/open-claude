@@ -53,7 +53,7 @@
           <span class="text-body text-foreground/85 shrink-0">{w ? `Claude fragt: ${w.tool}` : "Claude wartet auf dich"}</span>
           {#if w?.summary}<span class="text-meta text-muted-foreground min-w-0 truncate font-mono" title={w.summary}>{w.summary}</span>{/if}
           <span class="flex-1"></span>
-          <Button variant="outline" size="sm" onclick={() => onopen(it.id)}>Öffnen</Button>
+          <Button variant="secondary" size="sm" onclick={() => onopen(it.id)}>Öffnen</Button>
         </div>
       {/each}
     </div>
