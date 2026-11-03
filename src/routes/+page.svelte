@@ -889,7 +889,7 @@
   }
 
   async function addProject() {
-    const picked = await open({ directory: true, defaultPath: root || home });
+    const picked = await open({ directory: true, title: "Projektordner hinzufügen", defaultPath: root || home });
     if (typeof picked === "string") await cloned(picked);
   }
 

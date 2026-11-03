@@ -46,7 +46,7 @@
   });
 
   async function browse() {
-    const picked = await pickFolder({ directory: true, defaultPath: path || undefined });
+    const picked = await pickFolder({ directory: true, title: "Ordner wählen", defaultPath: path || undefined });
     if (typeof picked === "string") (path = picked), (mode = "dev");
   }
 

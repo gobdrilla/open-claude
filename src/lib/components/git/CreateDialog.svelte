@@ -53,7 +53,7 @@
   });
 
   async function browseDest() {
-    const picked = await pickFolder({ directory: true, defaultPath: dest || root });
+    const picked = await pickFolder({ directory: true, title: "Zielordner wählen", defaultPath: dest || root });
     if (typeof picked !== "string") return;
     dest = picked;
     destTouched = true;
