@@ -280,17 +280,20 @@
           <span class="text-muted-foreground shrink-0 text-right text-meta tabular-nums" title={new Date(r.created_at).toLocaleString("de-DE")}>
             {r.duration_s != null ? `Dauer ${duration(r.duration_s)} · ` : ""}{ago(r.created_at)}
           </span>
-          {#if pending(r.status)}
-            {@render action("Abbrechen", () => act(r.id, r.id, false, "cancel"), SquareIcon, `false:${r.id}`)}
-          {:else}
-            {#if kind === "github"}
-              {@render action("Alle Jobs neu starten", () => act(r.id, r.id, false, "rerun"), RotateCcwIcon, `false:${r.id}`)}
+          <!-- Fixed width for up to three icons, so the time column stays aligned when a row has an extra action. -->
+          <span class="flex w-19 shrink-0 justify-end gap-2">
+            {#if pending(r.status)}
+              {@render action("Abbrechen", () => act(r.id, r.id, false, "cancel"), SquareIcon, `false:${r.id}`)}
+            {:else}
+              {#if kind === "github"}
+                {@render action("Alle Jobs neu starten", () => act(r.id, r.id, false, "rerun"), RotateCcwIcon, `false:${r.id}`)}
+              {/if}
+              {#if r.status === "failure" || r.status === "cancelled"}
+                {@render action("Fehlgeschlagene Jobs neu starten", () => act(r.id, r.id, false, "rerun_failed"), ListRestartIcon, `false:${r.id}`)}
+              {/if}
             {/if}
-            {#if r.status === "failure" || r.status === "cancelled"}
-              {@render action("Fehlgeschlagene Jobs neu starten", () => act(r.id, r.id, false, "rerun_failed"), ListRestartIcon, `false:${r.id}`)}
-            {/if}
-          {/if}
-          {@render browser(r.web_url)}
+            {@render browser(r.web_url)}
+          </span>
         </div>
         {#if open[r.id]}
           <div class="border-border ml-5 border-l py-0.5">

@@ -284,7 +284,7 @@
               {#if r.private}<LockIcon class="text-muted-foreground size-3" />{/if}
               {#if r.fork}<GitForkIcon class="text-muted-foreground size-3" />{/if}
               {#if r.archived}<ArchiveIcon class="text-muted-foreground size-3" />{/if}
-              <span class="text-muted-foreground w-8 text-right font-mono text-meta">{age(r.updated_at)}</span>
+              <span class="text-muted-foreground w-12 shrink-0 text-right font-mono text-meta whitespace-nowrap tabular-nums">{age(r.updated_at)}</span>
               {#if isExisting}
                 <Badge variant="outline" class="text-primary gap-0.5 text-meta"><CheckIcon class="size-3" />lokal</Badge>
               {/if}

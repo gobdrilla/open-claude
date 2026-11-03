@@ -209,4 +209,8 @@
     background: var(--muted-foreground);
     background-clip: content-box;
   }
+  /* Ecke zwischen beiden Scrollbalken (Diff, Editor): sonst ein weisses Quadrat in WebView2. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }

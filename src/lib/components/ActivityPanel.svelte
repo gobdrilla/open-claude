@@ -518,7 +518,8 @@
     </div>
   {/if}
 
-  <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-ui">
+  <!-- Arbeit: Spalte, damit der Leertext unter den Vorlagen nur den Rest fuellt (h-full ergaebe einen Scrollbalken). -->
+  <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-ui {tab === 'work' && !inFocus ? 'flex flex-col' : ''}">
     {#if tab === "work" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
       <section class="border-border/60 @container mb-2 rounded-lg border">
@@ -733,7 +734,7 @@
           {#if !folded.agents}{@render phases(solo)}{/if}
         </section>
       {:else if !data.runs.length}
-        <Empty>Keine Workflows oder Agents in dieser Sitzung.</Empty>
+        <div class="min-h-0 flex-1"><Empty>Keine Workflows oder Agents in dieser Sitzung.</Empty></div>
       {/if}
     {:else if imgs.length}
       {#each imgGroups as [folder, list] (folder)}

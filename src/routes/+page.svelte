@@ -1276,12 +1276,13 @@
         <ContextMenu.Root>
         <ContextMenu.Trigger
           class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {on
-            ? 'bg-background text-foreground'
+            ? 'bg-background text-foreground shadow-[inset_0_-2px_0_var(--primary)]'
             : 'text-muted-foreground hover:text-foreground'}"
         >
+          <!-- -mx-1 px-1: focus ring gets air around the text without moving the label. -->
           <TextButton
             tone="plain"
-            class="inline"
+            class="-mx-1 inline px-1"
             role="tab"
             aria-selected={on}
             onclick={() => openSessionTab(s.id)}
