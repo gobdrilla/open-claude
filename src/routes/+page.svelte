@@ -1163,8 +1163,8 @@
 >
   {#if viewRepo}
     <!-- Global only: navigation, project context, view switcher. View actions live in each view's header. -->
-    <!-- Left and right side share the free width equally, so the switcher sits in the middle (macOS has no buttons right). -->
-    <div class="flex min-w-0 flex-1 basis-0 items-center" data-tauri-drag-region>
+    <!-- Switcher follows right after project and branch; the rest of the bar stays a drag region. -->
+    <div class="flex min-w-0 items-center" data-tauri-drag-region>
     <Button
       variant="quiet"
       size="xs"
@@ -1172,7 +1172,7 @@
       onclick={back}
       title="Zurück zu den Projekten ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /> Projekte</Button
     >
-    <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
+    <div class="flex min-w-0 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
       <span class="text-ui truncate font-semibold" data-tauri-drag-region>
         {split(viewRepo.rel)[1]}
       </span>
@@ -1192,6 +1192,7 @@
       {/if}
     </div>
     </div>
+    <span class="bg-border mx-3 h-4 w-px shrink-0"></span>
     <Segmented
       variant="nav"
       label="Ansicht"
@@ -1199,7 +1200,7 @@
       options={views}
       onchange={(v) => v !== view && VIEW_OPEN[v](viewRepo)}
     />
-    <div class="min-w-2 flex-1 basis-0 self-stretch" data-tauri-drag-region></div>
+    <div class="min-w-2 flex-1 self-stretch" data-tauri-drag-region></div>
   {:else}
     <img
       src="/logo.png"
