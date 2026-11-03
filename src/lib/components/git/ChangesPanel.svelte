@@ -351,7 +351,8 @@
                   e.preventDefault();
                   const all = [...document.querySelectorAll<HTMLElement>("[data-file-list]")];
                   const next = all[all.indexOf(e.currentTarget) + (e.key === "ArrowDown" ? 1 : -1)];
-                  next?.dispatchEvent(new MouseEvent("click", { shiftKey: e.shiftKey }));
+                  // bubbles: Svelte 5 delegates onclick to the root, a non-bubbling click never reaches pickRow.
+                  next?.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: e.shiftKey }));
                   next?.scrollIntoView({ block: "nearest" });
                 } else if (e.key === "Escape" && picked.length > 1) {
                   // Nur die Mehrfachauswahl aufheben (Diff bleibt stehen) und die Ansicht nicht verlassen;
