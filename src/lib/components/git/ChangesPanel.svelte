@@ -122,7 +122,8 @@
   const move = (fs: FileChange[], isStaged: boolean) =>
     run(() => (isStaged ? git.unstage(repo, paths(fs)) : git.stage(repo, paths(fs))));
 
-  // Nach Stagen per Leertaste: Fokus auf die Datei, die jetzt an derselben Stelle der Liste steht.
+  // Nach Stagen per Leertaste: die Datei, die jetzt an derselben Stelle der Liste steht, wie per Klick waehlen
+  // (Fokus und Diff bleiben beisammen, sonst stuende der Fokus auf einer Zeile und der Diff waere leer).
   let refocus: { staged: boolean; index: number } | null = null;
   $effect(() => {
     status;
@@ -130,7 +131,9 @@
     const { staged: s, index } = refocus;
     refocus = null;
     const here = document.querySelectorAll<HTMLElement>(`[data-file-list="${s}"]`);
-    (here[Math.min(index, here.length - 1)] ?? document.querySelector<HTMLElement>("[data-file-list]"))?.focus();
+    const el = here[Math.min(index, here.length - 1)] ?? document.querySelector<HTMLElement>("[data-file-list]");
+    // bubbles: Svelte 5 delegates onclick to the root.
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 
   // Bestaetigung fuer Verwerfen.
