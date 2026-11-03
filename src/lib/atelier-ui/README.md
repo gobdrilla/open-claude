@@ -16,7 +16,7 @@ Missing a variant? Add it here (small, generic), not as ad-hoc classes in a view
 | `Input`, `Textarea` | Text fields (`density` prop). |
 | `Checkbox`, `Switch`, `Slider` | Boolean and range controls. |
 | `Segmented` | Single choice among a few options; `variant="nav"` is the view switcher. |
-| `Select` | Dropdown single choice. |
+| `Select` | Dropdown single choice; `label` shows a muted name before the value ("Modell Opus"). |
 | `Tabs` | Tab bar with optional counts. |
 | `Row`, `SectionToggle` | Clickable list row, collapsible section header. |
 | `FolderField` | Path field with folder picker. |

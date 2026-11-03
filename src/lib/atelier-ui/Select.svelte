@@ -13,6 +13,7 @@
     groups = [],
     onchange,
     placeholder = "",
+    label,
     disabled = false,
     class: className = "",
     title,
@@ -24,6 +25,8 @@
     groups?: readonly { label?: string; options: readonly Option[] }[];
     onchange?: (v: string) => void;
     placeholder?: string;
+    /** Muted name before the value ("Modell Opus"), for selects without a label next to them. */
+    label?: string;
     disabled?: boolean;
     class?: string;
     title?: string;
@@ -53,6 +56,7 @@
     {title}
     aria-label={ariaLabel}
   >
+    {#if label}<span class="text-muted-foreground shrink-0">{label}</span>{/if}
     <span class="flex-1 truncate text-left">{current ?? placeholder}</span>
     <ChevronDownIcon class="text-muted-foreground size-3 shrink-0" />
   </Select.Trigger>
