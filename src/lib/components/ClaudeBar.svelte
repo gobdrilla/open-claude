@@ -55,6 +55,7 @@
   let error = $state("");
 
   // Aktueller Stand aus dem Session-Panel der Mod; Modell kommt als voller Name (claude-opus-5-5[1m]).
+  // Effort hat in der Mod keinen Getter, er kommt erst mit dem ersten turn.step; bis dahin zeigt Denken „Standard“.
   async function poll() {
     const i = id;
     if (guest) return;
@@ -142,7 +143,7 @@
       value={effort}
       options={EFFORT}
       onchange={(v) => ((effort = v), run("effort", v))}
-      placeholder="–"
+      placeholder="Standard"
       title="Wie gründlich Claude nachdenkt (/effort)"
       aria-label="Denken"
     />
