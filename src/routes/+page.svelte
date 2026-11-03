@@ -161,6 +161,8 @@
   let active = $state<string | null>(null);
   // Berechtigungsmodus je Session, gelesen aus der Terminal-Fusszeile (Kopfleiste)
   let modes = $state<Record<string, string>>({});
+  // Denk-Stufe je Session aus dem Fusszeilen-Hinweis, bis die Mod sie nach dem ersten Turn meldet
+  let efforts = $state<Record<string, string>>({});
   // Tab-Status je Session aus dem Panel der Mod: laeuft, Rueckfrage, fertig (bis angesehen)
   let tabs = $state<Record<string, TabState>>({});
   // Was eine Hintergrund-Session fragt (Tool + Befehl); weg, sobald beantwortet oder Tab angesehen.
@@ -1051,7 +1053,7 @@
     if (await confirm("Ein laufender claude-Prozess wird abgebrochen.", "Beenden", "Sitzung beenden?")) closeSession(id);
   }
 
-  const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id], delete panels[id], delete shares[id]);
+  const forget = (id: string) => (delete tabs[id], delete modes[id], delete efforts[id], delete banners[id], delete panels[id], delete shares[id]);
 
   /** Geteilter Sitzung beitreten: eigener Tab, das Terminal verbindet sich zum Host. */
   async function join(ticket: string) {
@@ -1644,6 +1646,7 @@
       <ClaudeBar
         id={s.id}
         mode={modes[s.id]}
+        footerEffort={efforts[s.id]}
         guest={!!s.guest}
         {side}
         ontoggleside={toggleSide}
@@ -1667,6 +1670,7 @@
           visible={s.id === active}
           onexit={() => closeSession(s.id)}
           onmode={(m) => (modes[s.id] = m)}
+          oneffort={(e) => (efforts[s.id] = e)}
           onfile={async (path, line, col) => {
             await openEdit(s.repo);
             if (editRepo === s.repo) await openFile(s.repo.path, path, line, col && col - 1);

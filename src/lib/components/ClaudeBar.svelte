@@ -17,6 +17,7 @@
   let {
     id,
     mode,
+    footerEffort,
     guest = false,
     side,
     ontoggleside,
@@ -27,6 +28,8 @@
   }: {
     id: string;
     mode?: string;
+    /** Denk-Stufe aus der Terminal-Fusszeile; gilt, bis die Mod sie selbst meldet. */
+    footerEffort?: string;
     guest?: boolean;
     side: boolean;
     ontoggleside: () => void;
@@ -140,7 +143,7 @@
     />
     <Select
       label="Denken"
-      value={effort}
+      value={effort || footerEffort || ""}
       options={EFFORT}
       onchange={(v) => ((effort = v), run("effort", v))}
       placeholder="Standard"

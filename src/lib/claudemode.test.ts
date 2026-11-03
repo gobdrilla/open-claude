@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bannerText, modeOf, tabState } from "./claudemode.ts";
+import { bannerText, effortOf, modeOf, tabState } from "./claudemode.ts";
 
 test("modeOf", () => {
   assert.equal(modeOf(["❯ ", "  ▸▸ auto mode on (shift+tab to cycle)"]), "auto");
@@ -8,6 +8,14 @@ test("modeOf", () => {
   assert.equal(modeOf(["❯ ", "  ? for shortcuts"]), "default");
   // Dialog offen, keine Eingabezeile: unbekannt statt falsch Manuell
   assert.equal(modeOf(["  Manage MCP servers", "  Esc to close"]), undefined);
+});
+
+test("effortOf", () => {
+  assert.equal(effortOf(["                       ◐ medium · /effort", "────", "❯ "]), "medium");
+  assert.equal(effortOf(["  ● xhigh · /effort"]), "xhigh");
+  assert.equal(effortOf(["❯ ", "  ▸▸ auto mode on"]), undefined);
+  // Fliesstext im Chat zaehlt nicht
+  assert.equal(effortOf(["setz /effort auf high"]), undefined);
 });
 
 test("tabState", () => {

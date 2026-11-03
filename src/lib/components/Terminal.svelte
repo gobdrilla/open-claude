@@ -18,7 +18,7 @@
   import { evenCell } from "$lib/termcell";
   import { theme } from "$lib/theme.svelte";
   import { DARK, LIGHT, LINKS, clipboardKey, contrast, windowsPty } from "$lib/termtheme";
-  import { modeOf } from "$lib/claudemode";
+  import { effortOf, modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
   import { keep, pathHits } from "$lib/termlinks";
   import { abs, cite, rel } from "$lib/editor.logic";
@@ -34,6 +34,7 @@
     visible,
     onexit,
     onmode,
+    oneffort,
     onfile,
     guest,
     onguest,
@@ -44,6 +45,8 @@
     visible: boolean;
     onexit: () => void;
     onmode?: (mode: string) => void;
+    /** Denk-Stufe aus dem Hinweis "◐ medium · /effort" ueber der Eingabe. */
+    oneffort?: (effort: string) => void;
     /** Klick auf einen Dateipfad im Output; path relativ zu cwd, line/col ab 1. */
     onfile?: (path: string, line?: number, col?: number) => void;
     /** Einladung: Gast-Sitzung, claude laeuft beim Host (share.rs). */
@@ -365,6 +368,8 @@
       for (let y = Math.max(0, end - 10); y < end; y++) lines.push(b.getLine(y)?.translateToString(true) ?? "");
       const m = modeOf(lines);
       if (m) onmode?.(m);
+      const ef = effortOf(lines);
+      if (ef) oneffort?.(ef);
     });
     t.onData((data) => invoke("pty_write", { id, data }).catch(() => {}));
     const mode2031 = (on: boolean) => (p: (number | number[])[]) => {

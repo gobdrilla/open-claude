@@ -23,6 +23,17 @@ export function modeOf(lines: string[]): string | undefined {
   return lines.some((l) => l.trimStart().startsWith("❯")) ? "default" : undefined;
 }
 
+// Rechts ueber der Eingabe, z. B. "◐ medium · /effort"; steht nur zeitweise da.
+const EFFORT = /\b(low|medium|high|xhigh|max)\s*·\s*\/effort\b/;
+
+/** Denk-Stufe aus der Fusszeile, sonst undefined (Hinweis gerade nicht sichtbar). */
+export function effortOf(lines: string[]): string | undefined {
+  for (const l of lines) {
+    const m = EFFORT.exec(l);
+    if (m) return m[1];
+  }
+}
+
 export type TabState = "run" | "ask" | "done" | undefined;
 
 /** Tab-Status aus dem Session-Panel der Mod; "done" bleibt, bis der Tab angesehen wurde (seen). */
