@@ -89,7 +89,7 @@
   // Fehler einer Aktion (Springen, Verlauf, Bild): eigene Zeile, error ersetzt den ganzen Inhalt und blitzt nur auf.
   let actionError = $state("");
   let tplError = $state("");
-  let tab = $state<"session" | "wf" | "agents" | "img" | "prompts" | "btw">("session");
+  let tab = $state<"session" | "work" | "img" | "prompts">("session");
   // Session-Daten der Mod im Terminal; Countdowns rechnen gegen now.
   let panel = $state<Panel | null>(null);
   let now = $state(Date.now());
@@ -181,7 +181,7 @@
           if (arrived(d, n, m.at)) URL.revokeObjectURL(m.url), delete pasted.local[i][Number(n)];
       // Laufender Agent: Zeitleiste mitziehen; fertiger wird nur einmal geladen.
       if (focus && (!log || focused?.a.state === "running")) loadLog();
-      if (tab === "wf") loadTemplates();
+      if (tab === "work") loadTemplates();
     } catch (e) {
       if (c === cwd && i === id) error = String(e);
     } finally {
@@ -221,7 +221,7 @@
     }
   }
   $effect(() => {
-    if (tab === "wf") loadTemplates();
+    if (tab === "work") loadTemplates();
   });
 
   const tpls = $derived(
@@ -255,8 +255,8 @@
 
   // Agent-Tool-Agents als Pseudo-Run mit id "": gleiche Liste und Zeitleiste wie Workflow-Agents
   const solo = $derived<Run>({ id: "", name: "Agents", status: "", started: 0, duration_ms: 0, tokens: 0, phases: [], planned: [], agents: data?.agents ?? [] });
-  // Fokus gehoert zum Tab, aus dem er geoeffnet wurde
-  const inFocus = $derived(!!focus && (tab === "agents" ? focus.run === "" : tab === "wf" && focus.run !== ""));
+  // Focus belongs to the work tab (workflows and agents), where it was opened.
+  const inFocus = $derived(!!focus && tab === "work");
   const focused = $derived.by(() => {
     const r = focus?.run === "" ? solo : data?.runs.find((r) => r.id === focus?.run);
     const a = r?.agents.find((a) => a.id === focus?.agent);
@@ -487,12 +487,10 @@
   <Tabs
     bind:value={tab}
     tabs={[
-      { id: "session", label: "Session" },
-      { id: "wf", label: "Workflows", count: data?.runs.length, live: runningRuns },
-      { id: "agents", label: "Agents", count: data?.agents.length, live: runningAgents },
+      { id: "session", label: "Sitzung" },
+      { id: "work", label: "Arbeit", title: "Workflows und Agents", count: (data?.runs.length ?? 0) + (data?.agents.length ?? 0), live: runningRuns + runningAgents },
       { id: "img", label: "Bilder", count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
-      ...(guest ? [] : [{ id: "btw", label: "btw" }]),
     ]}
   />
 
@@ -506,11 +504,8 @@
     </div>
   {/if}
 
-  {#if tab === "btw"}
-    <BtwPanel {cwd} {id} sid={data?.alive ? data.session : null} />
-  {:else}
   <div bind:this={scroller} class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 text-xs">
-    {#if tab === "wf" && !inFocus}
+    {#if tab === "work" && !inFocus}
       <!-- Vor der if-Kette: auch ohne laufende Session sichtbar -->
       <section class="border-border/60 mb-2 rounded-lg border">
         <div class="flex items-center justify-between px-2 py-1">
@@ -673,13 +668,7 @@
       {:else}
         <Empty>Noch keine Prompts in dieser Session.</Empty>
       {/each}
-    {:else if tab === "agents"}
-      {#if solo.agents.length}
-        <section class="border-border/60 rounded-lg border [&>ul]:border-t-0">{@render phases(solo)}</section>
-      {:else}
-        <Empty>Keine Agents in dieser Session.</Empty>
-      {/if}
-    {:else if tab === "wf"}
+    {:else if tab === "work"}
       {#each data.runs as r (r.id)}
         {@const open = openRuns[r.id] ?? r.status === "running"}
         {@const [icon, color, text] = status(r.status)}
@@ -696,9 +685,15 @@
           </div>
           {#if open}{@render phases(r)}{/if}
         </section>
-      {:else}
-        <p class="text-muted-foreground p-2">Keine Workflows in dieser Session.</p>
       {/each}
+      {#if solo.agents.length}
+        <section class="border-border/60 mb-2 rounded-lg border">
+          <div class="text-muted-foreground px-2 py-1">Agents</div>
+          {@render phases(solo)}
+        </section>
+      {:else if !data.runs.length}
+        <Empty>Keine Workflows oder Agents in dieser Sitzung.</Empty>
+      {/if}
     {:else if imgs.length}
       {#each imgGroups as [folder, list] (folder)}
         {#if folder}
@@ -717,7 +712,6 @@
       <Empty>Noch keine Bilder in dieser Session.</Empty>
     {/if}
   </div>
-  {/if}
 
   <!-- Status unten statt in der Tab-Leiste: dort nahm er den Tabs bei schmalem Panel den Platz. -->
   {#if claudeState || live}
@@ -730,6 +724,7 @@
       {/if}
     </div>
   {/if}
+  {#if !guest}<BtwPanel {cwd} {id} sid={data?.alive ? data.session : null} />{/if}
 </div>
 
 {#snippet tile(m: Img)}
