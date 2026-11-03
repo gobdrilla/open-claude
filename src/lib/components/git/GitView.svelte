@@ -273,7 +273,8 @@
   </Button>
 {/snippet}
 
-{#snippet menu(items: [string, () => void][])}
+<!-- Third tuple field: checkmark state; when any item has one, all items reserve the check column. -->
+{#snippet menu(items: [string, () => void, boolean?][])}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger
       class="text-muted-foreground hover:bg-secondary hover:text-foreground -ml-1 grid h-7 w-4 place-items-center rounded-full disabled:opacity-50"
@@ -285,10 +286,11 @@
         align="start"
         class={menuContent}
       >
-        {#each items as [label, onSelect] (label)}
-          <DropdownMenu.Item class={menuItem} {onSelect}
-            >{label}</DropdownMenu.Item
-          >
+        {#each items as [label, onSelect, checked] (label)}
+          <DropdownMenu.Item class={menuItem} {onSelect}>
+            {#if items.some((i) => i[2] !== undefined)}<CheckIcon class="size-3 {checked ? '' : 'invisible'}" />{/if}
+            {label}
+          </DropdownMenu.Item>
         {/each}
       </DropdownMenu.Content>
     </DropdownMenu.Portal>
@@ -333,8 +335,8 @@
     {@render tool("Fetch", "Fetch (Strg+Umschalt+F)", doFetch, CloudDownloadIcon)}
     {@render tool(status?.behind ? `Pull ${status.behind}` : "Pull", "Pull (Strg+Umschalt+L)", () => pull(), DownloadIcon, hot === "pull")}
     {@render menu([
-      ["Pull (Merge)", () => pull(false)],
-      ["Pull (Rebase)", () => pull(true)],
+      ["Pull (Merge)", () => pull(false), true],
+      ["Pull (Rebase)", () => pull(true), false],
     ])}
     {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", "Push (Strg+Umschalt+P)", push, UploadIcon, hot === "push")}
     {@render menu([["Force-Push …", forcePush]])}
@@ -360,7 +362,7 @@
           {/if}
           {#if acct.effective}
             {acct.effective.slice(acct.effective.lastIndexOf(":") + 1)}
-            {#if !acct.account}<span class="opacity-60">(auto)</span>{/if}
+            {#if !acct.account}<span class="opacity-60">(automatisch)</span>{/if}
           {:else}
             System-Git
           {/if}
@@ -385,7 +387,7 @@
               onSelect={() => setAccount(null)}
             >
               <CheckIcon class="size-3 {acct.account ? 'invisible' : ''}" />
-              Standard (System-Git)
+              Automatisch (System-Git)
             </DropdownMenu.Item>
             <DropdownMenu.Separator class={menuSeparator} />
             <DropdownMenu.Item class={menuItem} onSelect={onaccounts}

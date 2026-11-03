@@ -416,7 +416,7 @@
                 />
                 {#if !b.current}
                   <ContextItem
-                    label="Löschen"
+                    label="Löschen …"
                     onSelect={() =>
                       askConfirm("Branch löschen", `„${b.name}“ lokal löschen?`, async () => {
                         try {
@@ -475,7 +475,7 @@
                     <ContextItem label="Als Production-Branch festlegen" onSelect={() => setBase(b.name)} />
                   {/if}
                   <ContextItem
-                    label="Löschen (remote)"
+                    label="Löschen (remote) …"
                     onSelect={() =>
                       askConfirm("Remote-Branch löschen", `„${b.name}“ auf dem Server löschen?`, async () => {
                         await git.branchDelete(repo, b.name, false, true);
@@ -513,7 +513,7 @@
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
                 <ContextItem
-                  label="Löschen"
+                  label="Löschen …"
                   onSelect={() => askConfirm("Tag löschen", `Tag „${t.name}“ löschen?`, () => git.tagDelete(repo, t.name))}
                   destructive
                 />
@@ -619,7 +619,7 @@
                 />
                 <ContextItem label="Anzeigen" onSelect={() => showStash(s)} />
                 <ContextItem
-                  label="Löschen"
+                  label="Löschen …"
                   onSelect={() => askConfirm("Stash löschen", `„${s.message}“ verwerfen?`, () => git.stashDrop(repo, s.index))}
                   destructive
                 />
