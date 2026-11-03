@@ -61,7 +61,7 @@
     <ChevronDownIcon class="text-muted-foreground size-3 shrink-0" />
   </Select.Trigger>
   <Select.Portal>
-    <Select.Content class="{menuContent} max-h-80 overflow-y-auto" sideOffset={4}>
+    <Select.Content class="{menuContent} max-h-80 overflow-y-auto" sideOffset={4} align="start" collisionPadding={8}>
       {#each all as g, i (i)}
         {#if g.options.length}
           <Select.Group>

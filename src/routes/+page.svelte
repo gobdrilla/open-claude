@@ -1358,7 +1358,7 @@
     loop
     class="bg-background flex-1 rounded-none! p-0 {view !== 'list' ? 'hidden!' : ''}"
   >
-    <div class="border-border flex items-center gap-2 border-b pr-2">
+    <div class="border-border flex items-center gap-2 border-b py-1 pr-2 pl-2">
       <div class="flex-1 [&_[data-slot=command-input-wrapper]]:p-0">
         <Command.Input
           bind:ref={input}
@@ -1681,7 +1681,7 @@
     </div>
     {#if side && activeSession && view === "term"}
       <Splitter bind:size={sideW} invert min={260} max={720} key="term.side" />
-      <div class="min-h-0 shrink-0 py-2 pr-2" style="width:{sideW}px; max-width:50%">
+      <div class="min-h-0 shrink-0 py-2 pr-2" style="width:{sideW}px; max-width:max(260px, 40%)">
         <ActivityPanel cwd={activeSession.host ?? activeSession.repo.path} id={activeSession.id} guest={!!activeSession.guest} />
       </div>
     {/if}
