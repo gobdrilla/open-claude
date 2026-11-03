@@ -31,7 +31,7 @@
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import ClaudeSettingsDialog from "$lib/components/ClaudeSettingsDialog.svelte";
   import SettingsDialog from "$lib/components/SettingsDialog.svelte";
-  import { ContextMenu } from "bits-ui";
+  import { ContextMenu, DropdownMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
   import { fuzzy } from "$lib/fuzzy";
@@ -67,7 +67,8 @@
   import DownloadIcon from "@lucide/svelte/icons/download";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
-  import KeyRoundIcon from "@lucide/svelte/icons/key-round";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import FolderDownIcon from "@lucide/svelte/icons/folder-down";
   import PackageIcon from "@lucide/svelte/icons/package";
   import UserPlusIcon from "@lucide/svelte/icons/user-plus";
@@ -1286,64 +1287,41 @@
           class="h-12! text-base!"
         />
       </div>
-      <Button
-        variant="quiet"
-        size="sm"
-        onclick={pickRoot}
-        title={root ? `Dev-Ordner wechseln (Strg+O): ${root}` : "Dev-Ordner wählen (Strg+O)"}
-        class="font-mono"
-      >
-        <FolderIcon class="size-3.5" />
-        <span class="max-w-44 truncate">{short}</span>
-      </Button>
-      <!-- Aktionen als Icons: dort, wo man ohnehin arbeitet, statt in der Fusszeile -->
-      <div class="text-muted-foreground flex items-center">
-        <Button variant="ghost" size="icon" onclick={rescan} title="Neu einlesen (Strg+R)" aria-label="Neu einlesen">
-          <RefreshIcon class="size-4 {scanning ? 'animate-spin' : ''}" />
-        </Button>
+      <!-- At most three actions, all labelled except the gear; the rest lives in the + Projekt menu and the settings. -->
+      <div class="flex items-center gap-1.5">
         <Button
           variant="ghost"
-          size="icon"
-          class={sessions.some((s) => isFree(s.repo)) ? "text-primary" : ""}
+          size="sm"
+          class="gap-1.5 {sessions.some((s) => isFree(s.repo)) ? 'text-primary' : ''}"
           onclick={launchFree}
-          title="Claude ohne Projekt starten (Strg+T)"
-          aria-label="Claude ohne Projekt starten"
+          title="Claude im Home-Ordner starten, ohne Git ({mod}+T)"><TerminalIcon class="size-3.5" /> Claude ohne Projekt</Button
         >
-          <TerminalIcon class="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          class={sessions.some((s) => s.guest) ? "text-primary" : ""}
-          onclick={() => (joinOpen = true)}
-          title="Geteilter Sitzung beitreten"
-          aria-label="Geteilter Sitzung beitreten"
-        >
-          <UserPlusIcon class="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onclick={addProject} title="Projektordner hinzufügen" aria-label="Projektordner hinzufügen">
-          <FolderInputIcon class="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onclick={() => (createOpen = true)} title="Neues Repo (Strg+Shift+N)" aria-label="Neues Repo">
-          <FolderPlusIcon class="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onclick={() => (cloneOpen = true)} title="Repo klonen (Strg+N)" aria-label="Repo klonen">
-          <FolderDownIcon class="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="relative"
-          onclick={() => (accountsOpen = true)}
-          title="Git-Konten (GitHub, GitLab)"
-          aria-label="Git-Konten"
-        >
-          <KeyRoundIcon class="size-4" />
-          {#if accounts.length}
-            <span class="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full"></span>
-          {/if}
-        </Button>
-        <Button variant="ghost" size="icon" title="Einstellungen" aria-label="Einstellungen" onclick={() => (settingsOpen = true)}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+              <Button {...props} size="sm" class="gap-1.5"><PlusIcon class="size-3.5" /> Projekt <ChevronDownIcon class="size-3" /></Button>
+            {/snippet}
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="end" sideOffset={4} class={cn(menuContent, "min-w-56 rounded-lg shadow-lg")}>
+              {#each [
+                [FolderDownIcon, "Repo klonen …", `${mod}+N`, () => (cloneOpen = true)],
+                [FolderPlusIcon, "Neues Repo anlegen …", `${mod}+⇧+N`, () => (createOpen = true)],
+                [FolderInputIcon, "Ordner hinzufügen …", "", addProject],
+                [UserPlusIcon, "Sitzung beitreten …", "", () => (joinOpen = true)],
+                [FolderIcon, "Dev-Ordner wechseln …", `${mod}+O`, pickRoot],
+              ] as const as [Icon, label, key, onSelect], i (label)}
+                {#if i === 4}<DropdownMenu.Separator class={menuSeparator} />{/if}
+                <DropdownMenu.Item class={cn(menuItem, "py-1.5")} {onSelect}>
+                  <Icon class="text-muted-foreground size-3.5" />
+                  <span class="flex-1">{label}</span>
+                  {#if key}<kbd class={menuShortcut}>{key}</kbd>{/if}
+                </DropdownMenu.Item>
+              {/each}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" title="Einstellungen" aria-label="Einstellungen" onclick={() => (settingsOpen = true)}
           ><SettingsIcon class="size-4" /></Button
         >
       </div>
@@ -1704,6 +1682,12 @@
     <span class="tabular-nums">
       {flat.length === repos.length ? `${repos.length} Projekte` : `${flat.length} von ${repos.length}`}
     </span>
+    <TextButton
+      class="max-w-44 gap-1 font-mono"
+      onclick={pickRoot}
+      title={root ? `Dev-Ordner wechseln (${mod}+O): ${root}` : `Dev-Ordner wählen (${mod}+O)`}
+      ><FolderIcon class="size-3 shrink-0" /><span class="truncate">{short}</span></TextButton
+    >
     <span class="flex items-center gap-1 opacity-70">
       {#if scanning}Lese ein …{:else if fromCache}Stand gespeichert{:else if scannedAt}aktualisiert
         {new Date(scannedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}{/if}
