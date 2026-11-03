@@ -101,7 +101,12 @@ export const skills = {
 };
 
 /** Installierte nach ID gruppiert; main = user-, sonst project-Eintrag; locals = Eintraege mit Scope local. */
-export function groupInstalled(list: InstalledPlugin[]) {
+// Das CLI meldet auch scope "session" (per --plugin-dir geladen, z. B. das Mod der App). Die lassen sich hier nicht
+// verwalten und haetten weder main noch locals.
+const MANAGED = new Set<string>(["user", "project", "local"]);
+
+export function groupInstalled(raw: InstalledPlugin[]) {
+  const list = raw.filter((p) => MANAGED.has(p.scope));
   const ids = [...new Set(list.map((p) => p.id))];
   return ids.map((id) => {
     const all = list.filter((p) => p.id === id);
