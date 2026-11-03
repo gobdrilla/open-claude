@@ -270,7 +270,7 @@
             ? ` · ${merges} Merges reichen, eingerückte kommen mit`
             : ''}"
         >
-          <span class="bg-warning/15 text-warning grid size-5 shrink-0 place-items-center rounded-md"><GitMergeIcon class="size-3" /></span>
+          <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><GitMergeIcon class="size-3" /></span>
           <span class="min-w-0 flex-1 truncate">Nicht in <span class="font-mono">{base}</span></span>
           <span class="font-mono text-[10px] {open.length ? 'text-warning' : 'text-muted-foreground'}"
             >{open.length}</span
@@ -347,7 +347,7 @@
   <!-- Branches -->
   <div class="border-border border-b py-1.5 last:border-b-0">
     <SectionToggle open={!!expanded.branches} onclick={() => (expanded.branches = !expanded.branches)}>
-      <span class="bg-primary/15 text-primary grid size-5 shrink-0 place-items-center rounded-md"><GitBranchIcon class="size-3" /></span>
+      <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><GitBranchIcon class="size-3" /></span>
       <span class="flex-1">Branches</span>
       <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{locals.length}</span>
     </SectionToggle>
@@ -444,7 +444,7 @@
   <!-- Remotes -->
   <div class="border-border border-b py-1.5 last:border-b-0">
     <SectionToggle open={!!expanded.remotes} onclick={() => (expanded.remotes = !expanded.remotes)}>
-      <span class="bg-info/15 text-info grid size-5 shrink-0 place-items-center rounded-md"><CloudIcon class="size-3" /></span>
+      <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><CloudIcon class="size-3" /></span>
       <span class="flex-1">Remotes</span>
       <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{branches.length - locals.length}</span>
     </SectionToggle>
@@ -494,7 +494,7 @@
   <!-- Tags -->
   <div class="border-border border-b py-1.5 last:border-b-0">
     <SectionToggle open={!!expanded.tags} onclick={() => (expanded.tags = !expanded.tags)}>
-      <span class="bg-success/15 text-success grid size-5 shrink-0 place-items-center rounded-md"><TagIcon class="size-3" /></span>
+      <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><TagIcon class="size-3" /></span>
       <span class="flex-1">Tags</span>
       <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{tags.length}</span>
     </SectionToggle>
@@ -635,7 +635,7 @@
   {#if originUrl}
     <div class="border-border border-b py-1.5 last:border-b-0">
       <SectionToggle open={!!expanded.pulls} onclick={() => (expanded.pulls = !expanded.pulls)}>
-        <span class="bg-primary/15 text-primary grid size-5 shrink-0 place-items-center rounded-md"><GitPullRequestIcon class="size-3" /></span>
+        <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><GitPullRequestIcon class="size-3" /></span>
         <span class="flex-1">Pull Requests</span>
         <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{pulls.length}</span>
       </SectionToggle>
