@@ -1603,22 +1603,24 @@
       {/each}
     </div>
   {/if}
-  <div class="flex min-h-0 flex-1 {view === 'term' ? '' : 'hidden'}">
+  <div class="flex min-h-0 flex-1 flex-col {view === 'term' ? '' : 'hidden'}">
+    {#if activeSession}
+      {@const s = activeSession}
+      <ClaudeBar
+        id={s.id}
+        mode={modes[s.id]}
+        guest={!!s.guest}
+        {side}
+        ontoggleside={toggleSide}
+        share={s.guest ? undefined : { on: !!shares[s.id], guests: shares[s.id]?.guests ?? 0, open: () => (shareOpen = true) }}
+        onnew={s.group || s.guest ? undefined : () => launch(s.repo, true)}
+        onskills={s.group || s.guest || isFree(s.repo) ? undefined : () => (skillsOpen = true)}
+        onsettings={() => (claudeOpen = true)}
+      />
+    {/if}
+    <!-- ClaudeBar spans the full width so the activity panel starts below its bottom border. -->
+    <div class="flex min-h-0 flex-1">
     <div class="flex min-w-0 flex-1 flex-col">
-      {#if activeSession}
-        {@const s = activeSession}
-        <ClaudeBar
-          id={s.id}
-          mode={modes[s.id]}
-          guest={!!s.guest}
-          {side}
-          ontoggleside={toggleSide}
-          share={s.guest ? undefined : { on: !!shares[s.id], guests: shares[s.id]?.guests ?? 0, open: () => (shareOpen = true) }}
-          onnew={s.group || s.guest ? undefined : () => launch(s.repo, true)}
-          onskills={s.group || s.guest || isFree(s.repo) ? undefined : () => (skillsOpen = true)}
-          onsettings={() => (claudeOpen = true)}
-        />
-      {/if}
       <div class="min-h-0 flex-1">
       {#each sessions as s (s.id)}
         <Terminal
@@ -1644,6 +1646,7 @@
         <ActivityPanel cwd={activeSession.host ?? activeSession.repo.path} id={activeSession.id} guest={!!activeSession.guest} />
       </div>
     {/if}
+  </div>
   </div>
 
   {#if editRepo}
