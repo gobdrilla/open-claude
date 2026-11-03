@@ -14,8 +14,6 @@
   import ReleasesPanel from "./ReleasesPanel.svelte";
   import PipelinesPanel from "./PipelinesPanel.svelte";
   import UnityPanel from "$lib/components/unity/UnityPanel.svelte";
-  import SkillsPanel from "$lib/components/skills/SkillsPanel.svelte";
-  import type { SkillStore, ProjectSkills } from "$lib/skills";
   import MergeEditor from "./MergeEditor.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
@@ -37,18 +35,12 @@
     accounts,
     onaccounts,
     unity = false,
-    kind = null,
-    skillStore,
-    onskills,
     onedit,
   }: {
     repo: string;
     accounts: Account[];
     onaccounts: () => void;
     unity?: boolean;
-    kind?: string | null;
-    skillStore: SkillStore;
-    onskills: (ps: ProjectSkills) => void;
     onedit?: (path: string) => void;
   } = $props();
 
@@ -74,9 +66,9 @@
   // Forge-Panels kosten API-Calls: nur nachziehen, wenn sich HEAD/Branch bewegt oder das Remote angefasst wurde.
   let forgeKey = $state(0);
   let side = $state(stored("git.side", 240));
-  let tab = $state<"changes" | "history" | "releases" | "ci" | "unity" | "skills">("changes");
+  let tab = $state<"changes" | "history" | "releases" | "ci" | "unity">("changes");
   // Forge-Tabs erst beim ersten Oeffnen mounten: sonst API-Calls, obwohl nie hingeschaut wird.
-  let seen = $state({ releases: false, ci: false, unity: false, skills: false });
+  let seen = $state({ releases: false, ci: false, unity: false });
   let ciKind = $state<ForgeKind | null>(null);
   $effect(() => {
     if (tab !== "changes" && tab !== "history") seen[tab] = true;
@@ -256,7 +248,6 @@
     else if (ctrl && !e.shiftKey && e.key === "3") tab = "releases";
     else if (ctrl && !e.shiftKey && e.key === "4") tab = "ci";
     else if (ctrl && !e.shiftKey && e.key === "5" && isUnity) tab = "unity";
-    else if (ctrl && !e.shiftKey && e.key === "6") tab = "skills";
     else if (ctrl && e.shiftKey && k === "f") doFetch();
     else if (ctrl && e.shiftKey && k === "p") push();
     else if (ctrl && e.shiftKey && k === "l") pull();
@@ -477,9 +468,8 @@
               { id: "changes", label: "Änderungen", title: "Strg+1", count: status.files.length },
               { id: "history", label: "Verlauf", title: "Strg+2" },
               { id: "releases", label: "Releases", title: "Strg+3" },
-              { id: "ci", label: ciKind === "gitlab" ? "Pipelines" : ciKind === "github" ? "Actions" : "CI", title: "Strg+4" },
+              { id: "ci", label: "CI", title: `${ciKind === "gitlab" ? "GitLab Pipelines" : ciKind === "github" ? "GitHub Actions" : "CI"} (Strg+4)` },
               ...(isUnity ? [{ id: "unity" as const, label: "Unity", title: "Strg+5" }] : []),
-              { id: "skills", label: "Skills", title: "Strg+6" },
             ]}
           />
           <div class="min-h-0 flex-1">
@@ -508,11 +498,6 @@
             {#if seen.unity}
               <div class="h-full {tab === 'unity' ? '' : 'hidden'}">
                 <UnityPanel {repo} />
-              </div>
-            {/if}
-            {#if seen.skills}
-              <div class="h-full {tab === 'skills' ? '' : 'hidden'}">
-                <SkillsPanel {repo} {kind} store={skillStore} onproject={onskills} />
               </div>
             {/if}
           </div>

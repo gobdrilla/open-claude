@@ -1828,9 +1828,6 @@
           bind:this={gitView}
           repo={gitRepo.path}
           unity={isUnity(gitRepo)}
-          kind={gitRepo.kind}
-          {skillStore}
-          onskills={(ps) => setProjectSkills(gitRepo!.path, ps)}
           onedit={(path) => {
             const repo = gitRepo!;
             openEdit(repo);
@@ -1968,7 +1965,7 @@
         ])}
         {@render keys("Git-Ansicht", [
           ["Esc", "Zurück zur Liste"],
-          [`${mod} + 1 … 6`, "Änderungen / Verlauf / Releases / Actions / Unity / Skills"],
+          [`${mod} + 1 … 5`, "Änderungen / Verlauf / Releases / CI / Unity"],
           [`${mod} + ⇧ + F`, "Fetch"],
           [`${mod} + ⇧ + L`, "Pull"],
           [`${mod} + ⇧ + P`, "Push"],
