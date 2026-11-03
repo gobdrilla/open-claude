@@ -36,13 +36,16 @@ Screenshots in einen eigenen Ordner außerhalb des Repos, z. B. `%TEMP%\ux-test\
 | Befehl | Windows (`ui.ps1`) | Linux (`ui.sh`) |
 |---|---|---|
 | Screenshot | `shot C:\…\x.png` | `shot /tmp/ux-test/x.png` |
-| Tasten | `keys "^1"` (Strg+1), `"%2"` (Alt+2), `"{F1}"`, `"{ESC}"`, `"^+e"` | `keys ctrl+1`, `alt+2`, `F1`, `Escape`, `ctrl+shift+e` |
+| Kürzel | `combo ctrl+1`, `alt+2`, `f1`, `esc`, `ctrl+shift+e`, `altgr+q`, `down`, `space` | `keys ctrl+1`, `alt+2`, `F1`, `Escape`, `ctrl+shift+e` |
+| Text tippen | `keys "Terminal.svelte"`, `"{BS 5}"` (SendKeys) | `xdotool type "Terminal.svelte"` direkt |
 | Klick / Rechtsklick / Hover | `click 640 120`, `rclick …`, `hover …` | `click 640 120`, `rclick …`, `hover …` |
 | Fenstergröße | `size 1280 760` (physische Pixel = logisch × Skalierung) | `size 1280 720` |
 
 Koordinaten sind Pixel im letzten Screenshot, also relativ zur linken oberen Fensterecke. Erst Screenshot, Ziel im Bild suchen, dann klicken, dann neuer Screenshot. Klappt etwas zweimal nicht, den User bitten, den Schritt von Hand zu machen, und danach fotografieren.
 
-Unter Windows mit Skalierung 150 %: 1280×720 logisch heißt `size 1920 1080`.
+Unter Windows mit Skalierung 150 %: 1280×720 logisch heißt `size 1920 1080`. Der App-Zoom (Einstellungen › Darstellung) verkleinert die logische Breite zusätzlich: bei 120 % sind 1280 px nur ~1067 px, Texte in Werkzeugleisten können dann schon wegfallen.
+
+Windows: Kürzel immer mit `combo`, nicht mit `keys`. SendKeys setzt kein `KeyboardEvent.code`, die App prüft aber `e.code` (Strg+1/2/3, Alt+1…5); mit `keys` sieht ein funktionierendes Kürzel kaputt aus. Läuft neben dem Dev-Build eine installierte Atelier, steuert `ui.ps1` den Dev-Build (`target\debug`).
 
 ## 3. Ablauf
 
