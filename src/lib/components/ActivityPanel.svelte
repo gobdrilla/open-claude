@@ -13,16 +13,15 @@
   import { pasted } from "$lib/pasteimg.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, untrack } from "svelte";
-  import { Badge, Button, Dialog, Empty, IconButton, Row, SectionToggle, Segmented, Tabs, TextButton } from "$lib/atelier-ui";
+  import { Badge, Button, Dialog, Empty, IconButton, Row, SectionToggle, Segmented, Tabs, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import Markdown from "$lib/components/Markdown.svelte";
   import ZoomImage from "$lib/components/ZoomImage.svelte";
   import BtwPanel from "$lib/components/BtwPanel.svelte";
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
-  import PlayIcon from "@lucide/svelte/icons/play";
-  import PencilIcon from "@lucide/svelte/icons/pencil";
-  import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
+  import { DropdownMenu } from "bits-ui";
   import WorkflowDialog from "$lib/components/WorkflowDialog.svelte";
   import { ptyWrite } from "$lib/files";
   import { blocked } from "$lib/ide.svelte";
@@ -522,29 +521,38 @@
               {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-[10px]" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
             </span>
             <span class="text-muted-foreground min-w-0 flex-1 truncate" title={x.description}>{x.description}</span>
-            <IconButton
-              size="bare"
-              label="Starten"
+            <Button
+              size="2xs"
+              variant="outline"
               disabled={!data?.alive}
-              title={data?.alive ? "In die Claude-Session schreiben (Enter selbst drücken)" : "Kein laufendes claude in diesem Terminal-Ordner"}
-              onclick={() => startTemplate(x.f)}><PlayIcon class="size-3.5" /></IconButton
+              title={data?.alive ? "In die Claude-Sitzung schreiben (Enter selbst drücken)" : "Kein laufendes claude in diesem Terminal-Ordner"}
+              onclick={() => startTemplate(x.f)}>Starten</Button
             >
             {#if !guest}
-            <IconButton
-              size="bare"
-              label="Bearbeiten"
-              disabled={!x.builder}
-              title={x.builder ? "Bearbeiten" : "Freies Skript: nur in einer Datei bearbeitbar"}
-              onclick={() => editTemplate(x.f)}><PencilIcon class="size-3.5" /></IconButton
-            >
-            <IconButton
-              size="bare"
-              tone="danger"
-              label="Löschen"
-              disabled={!/^[A-Za-z0-9_-]+$/.test(x.f.file)}
-              title={/^[A-Za-z0-9_-]+$/.test(x.f.file) ? "Löschen" : "Dateiname mit Sonderzeichen: nur von Hand löschbar"}
-              onclick={() => deleteTemplate(x.f, x.name)}><Trash2Icon class="size-3.5" /></IconButton
-            >
+              {@const deletable = /^[A-Za-z0-9_-]+$/.test(x.f.file)}
+              <!-- Edit and delete in the ⋯ menu: delete no longer sits right next to start. -->
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  {#snippet child({ props })}<IconButton {...props} label="Weitere Aktionen"><EllipsisIcon class="size-3.5" /></IconButton>{/snippet}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content align="end" class={menuContent}>
+                    <DropdownMenu.Item
+                      class="{menuItem} data-disabled:opacity-50"
+                      disabled={!x.builder}
+                      title={x.builder ? undefined : "Freies Skript: nur in einer Datei bearbeitbar"}
+                      onSelect={() => editTemplate(x.f)}>Bearbeiten …</DropdownMenu.Item
+                    >
+                    <DropdownMenu.Separator class={menuSeparator} />
+                    <DropdownMenu.Item
+                      class="{menuItem} text-destructive data-disabled:opacity-50"
+                      disabled={!deletable}
+                      title={deletable ? undefined : "Dateiname mit Sonderzeichen: nur von Hand löschbar"}
+                      onSelect={() => deleteTemplate(x.f, x.name)}>Löschen …</DropdownMenu.Item
+                    >
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             {/if}
           </div>
         {:else}
