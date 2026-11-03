@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Programme aus Terminal und Run-Panel erben Atelier als verantwortliche App; ohne diesen Text verweigert macOS still. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Programme, die du aus dem Atelier startest, möchten das Mikrofon benutzen.</string>
+</dict>
+</plist>
