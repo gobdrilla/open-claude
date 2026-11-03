@@ -3,10 +3,12 @@
   import { invoke } from "@tauri-apps/api/core";
   import { ContextMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
-  import { ContextItem, Empty, IconButton, PromptDialog, RefreshButton, Row as RowButton, fileIcon, menuContent, paneBar } from "$lib/atelier-ui";
+  import { Button, ContextItem, Empty, IconButton, PromptDialog, RefreshButton, Row as RowButton, fileIcon, menuContent, paneBar } from "$lib/atelier-ui";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import FilePlusIcon from "@lucide/svelte/icons/file-plus";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
+  import FolderIcon from "@lucide/svelte/icons/folder";
+  import FolderXIcon from "@lucide/svelte/icons/folder-x";
   import { fs, type Entry } from "$lib/files";
   import { editor, open, setExpanded, renamed, removed, poll } from "$lib/editor.svelte";
   import { rows, join, dirname, treeKey, type Row } from "$lib/tree";
@@ -144,18 +146,19 @@
   <Notice bind:text={error} />
 
   {#if !lists[""]}
-    <Empty>
-      {#if rootError}
-        <div class="space-y-2">
-          <p class="whitespace-pre-wrap select-text">{rootError}</p>
-          <RefreshButton loading={false} onclick={() => ((rootError = ""), load(""))} />
-        </div>
-      {:else}
-        Lädt …
-      {/if}
-    </Empty>
+    {#if rootError}
+      <Empty icon={FolderXIcon}>
+        <p class="whitespace-pre-wrap select-text">{rootError}</p>
+        {#snippet action()}<RefreshButton loading={false} onclick={() => ((rootError = ""), load(""))} />{/snippet}
+      </Empty>
+    {:else}
+      <Empty>Lädt …</Empty>
+    {/if}
   {:else if !lists[""].length}
-    <Empty>Ordner leer</Empty>
+    <Empty icon={FolderIcon}>
+      Der Projektordner ist leer.
+      {#snippet action()}<Button size="xs" variant="outline" onclick={() => create("", false)}><FilePlusIcon /> Neue Datei</Button>{/snippet}
+    </Empty>
   {:else}
   <div class="min-h-0 flex-1 overflow-y-auto px-1.5 py-1" bind:this={box} onkeydown={onKey} role="tree" tabindex="-1">
     {#each visible as r (r.path)}

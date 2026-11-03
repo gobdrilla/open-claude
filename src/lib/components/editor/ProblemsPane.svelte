@@ -36,7 +36,7 @@
   <!-- Einziger Rueckweg nach "Nicht fuer dieses Projekt" im Datei-Banner. -->
   <Empty icon={CircleAlertIcon}>
     Language-Server sind aus. Sie führen Projektcode aus.
-    <div class="mt-2"><Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button></div>
+    {#snippet action()}<Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>{/snippet}
   </Empty>
 {:else if !list.length}
   <Empty icon={CircleAlertIcon}>{scan?.busy ? "Noch keine Probleme gefunden." : "Keine Probleme im Projekt."}</Empty>

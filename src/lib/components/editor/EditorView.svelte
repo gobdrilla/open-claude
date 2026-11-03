@@ -153,9 +153,7 @@
 {/snippet}
 
 {#snippet empty()}
-  <Empty icon={FileCodeIcon}
-    >Datei im Baum wählen oder <kbd class="border-border/60 bg-secondary rounded border px-1 font-mono text-[10px]">{MOD}+P</kbd></Empty
-  >
+  <Empty icon={FileCodeIcon} hint="{MOD}+P">Datei im Baum wählen oder schnell öffnen.</Empty>
 {/snippet}
 
 {#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems" | "run", label: string, Icon: typeof SaveIcon, title = label)}
