@@ -162,6 +162,7 @@
       </div>
 
       {#if t.error}<p class="text-destructive text-meta">{t.error}</p>{/if}
+      {#if !t.report && !t.error && !t.running}<div class="flex-1"><Empty>Noch keine Testergebnisse. EditMode- oder PlayMode-Tests starten.</Empty></div>{/if}
 
       {#if t.report}
         {@const report = t.report}

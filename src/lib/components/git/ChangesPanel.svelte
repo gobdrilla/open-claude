@@ -439,7 +439,7 @@
         <Textarea
           density="xs"
           class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono"
-          placeholder="Commit-Nachricht (Strg+Enter, mit Umschalt: + Push)"
+          placeholder="Commit-Nachricht (Strg+Enter · mit Umschalt auch pushen)"
           bind:value={message}
           onkeydown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -449,7 +449,7 @@
             }
           }}
         />
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <Checkbox size="sm" bind:checked={amend} onchange={toggleAmend}>Amend</Checkbox>
           <span
             class="flex-1 font-mono text-meta {subjectLen > 72 ? 'text-warning' : 'text-muted-foreground'}"
@@ -457,19 +457,22 @@
           >
             {subjectLen}/72
           </span>
-          <Button
-            variant="glow"
-            size="xs"
-            disabled={!canCommit}
-            onclick={() => commit()}
-          >
-            {amend ? "Amend" : "Commit"}{staged.length ? ` (${staged.length})` : ""}
-          </Button>
-          {#if !amend}
-            <Button size="xs" variant="outline" disabled={!canCommit} onclick={() => commit(true)} title="Strg+Umschalt+Enter">
-              Commit + Push
+          <!-- Wraps as one unit at narrow widths; primary last as in dialog footers -->
+          <div class="ml-auto flex gap-2">
+            {#if !amend}
+              <Button size="xs" variant="outline" disabled={!canCommit} onclick={() => commit(true)} title="Strg+Umschalt+Enter">
+                Commit + Push
+              </Button>
+            {/if}
+            <Button
+              variant="glow"
+              size="xs"
+              disabled={!canCommit}
+              onclick={() => commit()}
+            >
+              {amend ? "Amend" : "Commit"}{staged.length ? ` (${staged.length})` : ""}
             </Button>
-          {/if}
+          </div>
         </div>
       </div>
     </div>

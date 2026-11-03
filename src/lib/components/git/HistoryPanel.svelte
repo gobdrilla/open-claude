@@ -327,7 +327,7 @@
         {/each}
         <span class="min-w-0 flex-1 truncate text-meta" title={c.subject}>{c.subject}</span>
         <span
-          class="grid size-4 shrink-0 place-items-center rounded-full text-meta font-bold text-white"
+          class="grid size-4 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white"
           style="background:{PALETTE[hash(c.author) % PALETTE.length]}"
           title={c.author}>{initials(c.author)}</span
         >

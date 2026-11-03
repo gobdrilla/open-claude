@@ -197,7 +197,8 @@
   const reveal = () =>
     invoke("reveal", { path: repo.includes("\\") ? cur.replaceAll("/", "\\") : cur }).catch((e) => (error = String(e)));
   // Only one filled action: pull first when behind (push would be rejected anyway), else push when ahead.
-  const hot = $derived(status?.behind ? "pull" : status?.ahead ? "push" : null);
+  // None during merge/rebase: git refuses both, the banner's Fortsetzen is the action then.
+  const hot = $derived(status?.state !== "clean" ? null : status?.behind ? "pull" : status?.ahead ? "push" : null);
 
   const doFetch = () => run("Fetch", () => git.fetch(cur));
   const pull = (rebase = false) => run("Pull", () => git.pull(cur, rebase));
@@ -324,7 +325,7 @@
             {/each}
           </span>
           <span class="flex items-center gap-1.5">
-            <span class="truncate font-mono text-ui font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
+            <span class="max-w-40 shrink-0 truncate font-mono text-ui font-semibold">{status.branch ?? `detached ${status.head.slice(0, 7)}`}</span>
             {#if status.ahead}<span class="bg-primary/15 text-primary rounded-full px-1.5 font-mono text-[10px]">↑{status.ahead}</span>{/if}
             {#if status.behind}<span class="bg-warning/15 text-warning rounded-full px-1.5 font-mono text-[10px]">↓{status.behind}</span>{/if}
             {#if status.upstream && !status.ahead && !status.behind}
@@ -364,7 +365,7 @@
           {/if}
           {#if acct.effective}
             {acct.effective.slice(acct.effective.lastIndexOf(":") + 1)}
-            {#if !acct.account}<span class="opacity-60">(automatisch)</span>{/if}
+            {#if !acct.account}<span class="hidden opacity-60 lg:inline">(automatisch)</span>{/if}
           {:else}
             System-Git
           {/if}
@@ -414,7 +415,7 @@
           ? ` – ${conflicts} ${conflicts === 1 ? "Konflikt" : "Konflikte"} offen`
           : " – keine Konflikte mehr"}
       </span>
-      <Button size="xs" disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(repo))}
+      <Button size="xs" variant={conflicts ? "secondary" : "default"} disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(repo))}
         >Fortsetzen</Button
       >
       <Button

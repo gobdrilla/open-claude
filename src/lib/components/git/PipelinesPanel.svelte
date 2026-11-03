@@ -278,7 +278,7 @@
             </div>
           </div>
           <span class="text-muted-foreground shrink-0 text-right text-meta tabular-nums" title={new Date(r.created_at).toLocaleString("de-DE")}>
-            {#if r.duration_s != null}Dauer {duration(r.duration_s)} · {/if}{ago(r.created_at)}
+            {r.duration_s != null ? `Dauer ${duration(r.duration_s)} · ` : ""}{ago(r.created_at)}
           </span>
           {#if pending(r.status)}
             {@render action("Abbrechen", () => act(r.id, r.id, false, "cancel"), SquareIcon, `false:${r.id}`)}
