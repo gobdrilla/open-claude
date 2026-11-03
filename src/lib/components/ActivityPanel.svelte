@@ -587,7 +587,7 @@
             .filter(Boolean)
             .join(" · ")}
           <section class="border-border/60 mb-2 rounded-lg border p-2">
-            {@render gauge("Kontext", p, sub)}
+            {@render gauge("Kontext", p, sub, true)}
           </section>
         {/if}
       {/if}
@@ -614,7 +614,7 @@
         {#if rows.length}
           <section class="border-border/60 mb-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-lg border p-2">
             {#each rows as [k, v] (k)}
-              <span class="text-muted-foreground">{k}</span><span class="truncate tabular-nums" title={v}>{v}</span>
+              <span class="text-muted-foreground">{k}</span><span class="truncate font-medium tabular-nums" title={v}>{v}</span>
             {/each}
           </section>
         {/if}
@@ -624,8 +624,8 @@
             <div class="text-muted-foreground mb-1">Modi</div>
             <div class="flex flex-wrap gap-1">
               {#each data.modes as m (m.name)}
-                <span class="bg-primary/10 text-primary rounded-full px-2 py-px" title="Plugin-Modus {m.name}"
-                  >{m.name}{#if m.level}<span class="text-primary/70">&nbsp;· {m.level}</span>{/if}</span
+                <Badge variant="secondary" class="text-meta font-normal" title="Plugin-Modus {m.name}"
+                  >{m.name}{#if m.level}<span class="text-muted-foreground">· {m.level}</span>{/if}</Badge
                 >
               {/each}
             </div>
@@ -932,8 +932,10 @@
   {/each}
 {/snippet}
 
-{#snippet gauge(label: string, p: number, sub: string)}
-  <div class="flex justify-between"><span>{label}</span><span class="tabular-nums {txt(p)}">{Math.round(p)}%</span></div>
+{#snippet gauge(label: string, p: number, sub: string, big = false)}
+  <div class="flex items-baseline justify-between">
+    <span class="text-muted-foreground">{label}</span><span class="{big ? 'text-title' : 'text-body'} font-semibold tabular-nums {txt(p)}">{Math.round(p)} %</span>
+  </div>
   <div class="my-1 h-1 overflow-hidden rounded-full bg-foreground/5">
     <div class="h-full rounded-full {lvl(p)}" style:width="{Math.min(100, Math.max(0, p))}%"></div>
   </div>
