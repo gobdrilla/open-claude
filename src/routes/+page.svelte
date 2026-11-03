@@ -74,6 +74,7 @@
   import ShareDialog from "$lib/components/ShareDialog.svelte";
   import JoinDialog from "$lib/components/JoinDialog.svelte";
   import { shares } from "$lib/share.svelte";
+  import SessionOverview, { type Panel } from "$lib/components/start/SessionOverview.svelte";
 
   type Repo = {
     path: string;
@@ -161,6 +162,8 @@
   let tabs = $state<Record<string, TabState>>({});
   // Was eine Hintergrund-Session fragt (Tool + Befehl); weg, sobald beantwortet oder Tab angesehen.
   let banners = $state<Record<string, string>>({});
+  // Last session panel per session (context, current tool, todos) for the start page; filled by the tab poll.
+  let panels = $state<Record<string, Panel>>({});
   const TAB: Record<string, [string, string, string]> = {
     run: ["◐", "text-primary animate-pulse", "Claude arbeitet"],
     ask: ["?", "text-warning font-bold", "Claude wartet auf dich"],
@@ -497,6 +500,7 @@
     extra = (await store.get<string[]>("extra")) ?? [];
     home = await homeDir();
     pins = (await store.get<string[]>("pins")) ?? [];
+    lastView = (await store.get<Record<string, ViewKey>>("lastView")) ?? {};
     repoGroups = (await store.get<RepoGroup[]>("repoGroups")) ?? [];
     accounts = (await store.get<Account[]>("accounts")) ?? [];
     autostart = await isEnabled().catch(() => false);
@@ -665,11 +669,9 @@
       const focused = document.hasFocus();
       let alert = false;
       for (const s of sessions) {
-        const p = await invoke<{ busy?: boolean; waiting?: boolean; waitingFor?: { tool: string; summary: string } | null } | null>(
-          "claude_panel",
-          { id: s.id },
-        ).catch(() => null);
+        const p = await invoke<Panel | null>("claude_panel", { id: s.id }).catch(() => null);
         if (!sessions.includes(s)) continue;
+        if (p) panels[s.id] = p;
         const prev = tabs[s.id];
         const seen = focused && view === "term" && s.id === active;
         const next = tabState(prev, p, seen);
@@ -769,6 +771,30 @@
   // Title bar view switcher: fixed order, Editor/Git only where the project has a folder here.
   const VIEW_OPEN = { term: (r?: Repo) => launch(r), edit: openEdit, git: openGit } as const;
   type ViewKey = keyof typeof VIEW_OPEN;
+  // Last view per project: click/Enter on the start page reopens it (default Claude).
+  let lastView = $state<Record<string, ViewKey>>({});
+  $effect(() => {
+    const p = viewRepo?.path;
+    const v = view;
+    // Group and guest sessions are not the project's own view; free Claude has no project.
+    if (!p || v === "list" || isFree(viewRepo) || (v === "term" && activeSession?.group)) return;
+    untrack(() => {
+      if (lastView[p] === v) return;
+      lastView[p] = v;
+      store?.set("lastView", $state.snapshot(lastView));
+    });
+  });
+  const ROW_VIEWS = [
+    ["Claude", "term", TerminalIcon, 1],
+    ["Editor", "edit", FileCodeIcon, 2],
+    ["Git", "git", GitBranchIcon, 3],
+  ] as const;
+  // Account-wide usage limits from any session panel (footer of the start page).
+  const LIMIT_NAME: Record<string, string> = { five_hour: "5 h", seven_day: "Woche" };
+  const limits = $derived(
+    (Object.values(panels).find((p) => p.limits?.length)?.limits ?? []).flatMap((l) => (LIMIT_NAME[l.kind] ? [[LIMIT_NAME[l.kind], l] as const] : [])),
+  );
+  const openRepo = (repo: Repo) => VIEW_OPEN[lastView[repo.path] ?? "term"](repo);
   const views = $derived(
     [
       ["Claude", "term", "Claude im Projekt öffnen", TerminalIcon],
@@ -996,7 +1022,7 @@
     if (await confirm("Ein laufender claude-Prozess wird abgebrochen.", "Beenden", "Sitzung beenden?")) closeSession(id);
   }
 
-  const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id], delete shares[id]);
+  const forget = (id: string) => (delete tabs[id], delete modes[id], delete banners[id], delete panels[id], delete shares[id]);
 
   /** Geteilter Sitzung beitreten: eigener Tab, das Terminal verbindet sich zum Host. */
   async function join(ticket: string) {
@@ -1016,14 +1042,9 @@
     if (active === id) sessions.length ? (active = sessions.at(-1)!.id) : back();
   }
 
-  // Klick/Enter oeffnet Git, mit Strg+Enter bzw. Umschalt+Klick Claude (Strg+Klick ist auf dem Mac Rechtsklick).
-  // onSelect der Liste kennt kein Event, daher die Taste in der Capture-Phase merken, bevor die Liste reagiert.
-  let withClaude = false;
   // Esc gehoert offenen Dialogen/Menues. Die schliessen schon vor onKey, daher hier vorher nachsehen.
   let overlayOnEsc = false;
-  const noteCtrl = (e: KeyboardEvent | PointerEvent) => {
-    withClaude = e instanceof KeyboardEvent ? e.ctrlKey || e.metaKey : e.shiftKey;
-    if (!(e instanceof KeyboardEvent)) return;
+  const noteCtrl = (e: KeyboardEvent) => {
     // Capture am Fenster: vor xterm und CodeMirror, die Shell bekommt die Taste nicht.
     const dir = zoomKey(e, mac);
     if (dir !== null) {
@@ -1125,7 +1146,7 @@
   });
 </script>
 
-<svelte:window onkeydown={onKey} onkeydowncapture={noteCtrl} onpointerdowncapture={noteCtrl} />
+<svelte:window onkeydown={onKey} onkeydowncapture={noteCtrl} />
 
 {#if amongUs.on}<IdleAmongUs rate={amongUs.rate} volume={amongUs.volume} />{/if}
 
@@ -1341,6 +1362,15 @@
               ? "Hier liegen keine Git-Repos."
               : "Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (Strg+O)."}
         </Command.Empty>
+        {#if view === "list" && sessions.length && !query.trim()}
+          <SessionOverview
+            items={sessions.map((s) => ({ id: s.id, name: label(s), state: tabs[s.id], panel: panels[s.id] }))}
+            onopen={openSessionTab}
+          />
+          <h2 class="text-muted-foreground text-meta flex gap-1.5 px-3 pt-4 font-semibold tracking-wide uppercase">
+            Projekte <span class="font-normal">{repos.length}</span>
+          </h2>
+        {/if}
         {#if repoGroups.length && !query.trim()}
           <Command.Group heading="Gruppen">
             {#each repoGroups as g (g.name)}
@@ -1389,7 +1419,7 @@
                     <Command.Item
                       {...props}
                       value={item.repo.path}
-                      onSelect={() => (withClaude ? launch(item.repo) : openGit(item.repo))}
+                      onSelect={() => openRepo(item.repo)}
                       class="gap-3 px-3 py-2"
                     >
                       <IconButton
@@ -1489,6 +1519,22 @@
                       {:else}
                         <span class="hidden {mac ? 'w-10' : 'w-12'} sm:block"></span>
                       {/if}
+                      <!-- Targets on hover/keyboard selection; covers the row's right edge (same background as the selected row). -->
+                      <div class="bg-muted absolute inset-y-0 right-1 hidden items-center gap-0.5 pl-2 group-data-selected/command-item:flex">
+                        {#each ROW_VIEWS as [name, key, Icon, n] (key)}
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            class="text-ui gap-1.5 {key === 'term' && running.has(item.repo.path) ? 'text-primary' : ''}"
+                            title="{name} ({mod}+{n})"
+                            onpointerdown={(e) => e.stopPropagation()}
+                            onclick={(e) => {
+                              e.stopPropagation();
+                              VIEW_OPEN[key](item.repo);
+                            }}><Icon class="size-3.5" /> {name}</Button
+                          >
+                        {/each}
+                      </div>
                     </Command.Item>
                   {/snippet}
                 </ContextMenu.Trigger>
@@ -1496,12 +1542,12 @@
                   <ContextMenu.Content
                     class={cn(menuContent, "min-w-52 rounded-lg shadow-lg")}
                   >
-                    {@render repoItem("Git-Ansicht", `${mod}+G`, () => openGit(item.repo))}
-                    {@render repoItem("Editor", `${mod}+⇧+E`, () => openEdit(item.repo))}
-                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", `${mod}+⏎`, () => launch(item.repo))}
+                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", "", () => launch(item.repo))}
                     {#if running.has(item.repo.path)}
                       {@render repoItem("Weitere Claude-Sitzung", "", () => launch(item.repo, true))}
                     {/if}
+                    {@render repoItem("Editor", `${mod}+⇧+E`, () => openEdit(item.repo))}
+                    {@render repoItem("Git-Ansicht", `${mod}+G`, () => openGit(item.repo))}
                     <ContextMenu.Separator class={menuSeparator} />
                     {@render repoItem(`Im ${FILES_APP} zeigen`, `${mod}+E`, () => reveal(item.repo))}
                     {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
@@ -1649,17 +1695,20 @@
       ? 'hidden'
       : ''}"
   >
+    {#if limits.length}
+      <span class="tabular-nums" title="Nutzungslimits des Claude-Kontos">
+        Limits {limits.map(([name, l]) => `${name} ${Date.parse(l.resetsAt ?? "") <= Date.now() ? 0 : Math.round(l.percentUsed)} %`).join(" · ")}
+      </span>
+    {/if}
+    <span class="flex-1"></span>
     <span class="tabular-nums">
       {flat.length === repos.length ? `${repos.length} Projekte` : `${flat.length} von ${repos.length}`}
     </span>
-    <span class="opacity-70">
+    <span class="flex items-center gap-1 opacity-70">
       {#if scanning}Lese ein …{:else if fromCache}Stand gespeichert{:else if scannedAt}aktualisiert
         {new Date(scannedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}{/if}
+      <IconButton size="sm" onclick={rescan} label="Neu einlesen ({mod}+R)"><RefreshIcon class="size-3 {scanning ? 'animate-spin' : ''}" /></IconButton>
     </span>
-    <span class="flex-1"></span>
-    {#each [["⏎", "Git"], [`${mod} ⏎`, "Claude"]] as [key, what] (key)}
-      <span class="flex items-center gap-1.5">{@render kbd(key)} {what}</span>
-    {/each}
     <TextButton tone="plain" class="gap-1.5" onclick={() => (help = true)}>
       {@render kbd("F1")} Hilfe
     </TextButton>
@@ -1702,8 +1751,7 @@
     </Dialog.Header>
     <div class="grid gap-6 sm:grid-cols-2">
       {@render keys("Liste", [
-        ["⏎ / Klick", "Git-Ansicht öffnen"],
-        [`${mod} + ⏎ / Umschalt + Klick`, "Claude im Projekt starten"],
+        ["⏎ / Klick", "Zuletzt genutzte Ansicht des Projekts öffnen (sonst Claude)"],
         ["↑ ↓", "Projekt wählen"],
         [`${mod} + 1 … 9`, "Claude im Treffer starten"],
         [`${mod} + G`, "Git-Ansicht öffnen"],
