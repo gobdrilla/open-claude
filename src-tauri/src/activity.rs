@@ -1409,6 +1409,8 @@ mod tests {
         assert_eq!(image_at(&st.imgs[0].0).unwrap(), "data:image/png;base64,QUJD");
     }
 
+    // Unix paths only; Windows paths are covered by bilddateien_aus_tool_calls.
+    #[cfg(unix)]
     #[test]
     fn bildpfade_aus_befehlen() {
         let cwd = Path::new("/w/p");
@@ -1428,7 +1430,8 @@ mod tests {
         let dir = tmp("imgfile-out");
         fs::write(dir.join("a.png"), b"x").unwrap();
         fs::write(dir.join("b.gif"), b"x").unwrap();
-        let d = dir.to_string_lossy();
+        // Forward slashes: a raw Windows path would break the JSON escaping.
+        let d = dir.to_string_lossy().replace('\\', "/");
         let main = c.join(format!("projects/-w-p/{SID}.jsonl"));
         put(
             &main,
