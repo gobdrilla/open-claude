@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { EditorView, basicSetup } from "codemirror";
+  import { EditorView } from "codemirror";
+  import { basicSetup } from "./setup";
   import { EditorState, Transaction } from "@codemirror/state";
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";

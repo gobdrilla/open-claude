@@ -1,6 +1,6 @@
 // CodeMirror-Zubehoer fuer CodePane: Thema aus den CSS-Variablen der App und Sprachwahl nach Dateiname.
 import { EditorView } from "codemirror";
-import { Compartment, RangeSet, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { Compartment, RangeSet, StateEffect, StateField, type EditorState, type Extension } from "@codemirror/state";
 import { GutterMarker, gutter } from "@codemirror/view";
 import { HighlightStyle, LanguageDescription, LanguageSupport, foldService, foldable, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
@@ -118,16 +118,21 @@ export const indentGuides: Extension = indentationMarkers({
 export const indentOf = (unit: string | null): Extension => (unit ? indentUnit.of(unit) : []);
 
 // Fold by indentation where the grammar has no fold for the line (YAML, Python-like text, template blocks in .svelte),
-// as VS Code does. The guard lets the inner foldable() reach the syntax folding without calling us again.
+// as VS Code does.
 let probing = false;
-export const indentFolding: Extension = foldService.of((state, from, to) => {
-  if (probing) return null;
+/** Fold services that only fill gaps return null while this runs. */
+export const probingGrammar = () => probing;
+/** The grammar's own fold for the line: foldable() with the gap-filling fold services (indent, LSP) silenced. */
+export function grammarFold(state: EditorState, from: number, to: number) {
   probing = true;
   try {
-    if (foldable(state, from, to)) return null;
+    return foldable(state, from, to);
   } finally {
     probing = false;
   }
+}
+export const indentFolding: Extension = foldService.of((state, from, to) => {
+  if (probing || grammarFold(state, from, to)) return null;
   const doc = state.doc;
   const n = doc.lineAt(from).number;
   const last = indentBlock((i) => doc.line(i).text, n, doc.lines, state.tabSize);
