@@ -24,6 +24,8 @@ import {
 import DOMPurify from "dompurify";
 import { fs } from "./files.ts";
 import { open, peek, setText } from "./editor.svelte.ts";
+import { inlayHints, refreshInlay } from "./components/editor/inlay.svelte.ts";
+import { INIT_OPTIONS } from "./inlay.logic.ts";
 import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
 
 type Out = { t: "msg"; m: string } | { t: "exit"; code: number | null; err: string };
@@ -226,6 +228,11 @@ function connect(repo: string, server: string): Promise<Conn | null> {
           const r = JSON.parse(o.m);
           if (r.method === "workspace/applyEdit" && "id" in r) return void serverEdit(conn, transport, r.id, r.params.edit);
         }
+        if (conn && o.m.includes('"workspace/inlayHint/refresh"')) {
+          transport.send(JSON.stringify({ jsonrpc: "2.0", id: JSON.parse(o.m).id, result: null }));
+          for (const f of conn.ws.files) f.view?.dispatch({ effects: refreshInlay.of(null) });
+          return;
+        }
         for (const h of handlers) h(o.m);
         return;
       }
@@ -255,6 +262,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
       workspace: (c) => new StoreWorkspace(c, repo),
       // Erste Antworten grosser Server (rust-analyzer beim Indexieren) dauern.
       timeout: 15000,
+      initializationOptions: INIT_OPTIONS[server],
       // Hover-Markdown landet per innerHTML in der Webview.
       sanitizeHTML: (h) => DOMPurify.sanitize(h),
       notificationHandlers: {
@@ -276,6 +284,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
           { key: "Mod-.", run: actionsCmd, preventDefault: true },
         ]),
         actionsMenu,
+        inlayHints,
         { clientCapabilities: ACTION_CAPS },
       ],
     });

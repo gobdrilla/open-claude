@@ -3,7 +3,7 @@
   import type { Update } from "@tauri-apps/plugin-updater";
   import { theme, setMode } from "$lib/theme.svelte";
   import { ASKS, noAsk, setNoAsk, type AskKey } from "$lib/ask.svelte";
-  import { prefs, toggleAi, toggleBlame } from "$lib/editor.svelte";
+  import { prefs, toggleAi, togglePref } from "$lib/editor.svelte";
   import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
   import { ZOOM_MAX, ZOOM_MIN } from "$lib/zoom";
   import { Asker } from "$lib/confirm.svelte";
@@ -141,11 +141,16 @@
             <SettingRow label="Zugeklappt wach, solange Claude arbeitet" description="Der Laptop schläft beim Zuklappen erst ein, wenn Claude fertig ist.">
               <Switch label="Zugeklappt wach" on={lidAwake} onclick={() => onlidawake(asker.ask)} />
             </SettingRow>
+          </SettingsSection>
+          <SettingsSection title="Editor">
             <SettingRow label="KI-Vorschläge im Editor" description="Graue Vervollständigung beim Tippen, Tab übernimmt.">
               <Switch label="KI-Vorschläge im Editor" on={prefs.ai} onclick={toggleAi} />
             </SettingRow>
             <SettingRow label="Git-Blame in der aktuellen Zeile" description="Autor, Alter und Commit hinter der Cursorzeile; Klick zeigt den Commit im Verlauf.">
-              <Switch label="Git-Blame in der aktuellen Zeile" on={prefs.blame} onclick={toggleBlame} />
+              <Switch label="Git-Blame in der aktuellen Zeile" on={prefs.blame} onclick={() => togglePref("blame")} />
+            </SettingRow>
+            <SettingRow label="Inlay-Hinweise" description="Typen und Parameternamen grau im Code, vom Language-Server.">
+              <Switch label="Inlay-Hinweise" on={prefs.inlay} onclick={() => togglePref("inlay")} />
             </SettingRow>
           </SettingsSection>
           <SettingsSection title="Darstellung">

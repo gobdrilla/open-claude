@@ -453,28 +453,30 @@ export function setText(repo: string, path: string, text: string): void {
 }
 
 /** Zeilenumbruch (Alt+Z), global fuer alle Projekte; localStorage "editor:wrap". */
-export const prefs = $state({ wrap: false, ai: true, blame: true });
+export const prefs = $state({ wrap: false, ai: true, inlay: true, blame: true });
 try {
   prefs.wrap = localStorage.getItem("editor:wrap") === "1";
   prefs.ai = localStorage.getItem("editor:ai") !== "0";
+  prefs.inlay = localStorage.getItem("editor:inlay") !== "0";
   prefs.blame = localStorage.getItem("editor:blame") !== "0";
 } catch {
   // Ohne localStorage: kein Umbruch, KI-Vorschlaege an.
+}
+
+/** Settings switches for inlay hints and git blame; localStorage "editor:<key>". */
+export function togglePref(key: "inlay" | "blame"): void {
+  prefs[key] = !prefs[key];
+  try {
+    localStorage.setItem(`editor:${key}`, prefs[key] ? "1" : "0");
+  } catch {
+    // Session only then.
+  }
 }
 
 export function toggleAi(): void {
   prefs.ai = !prefs.ai;
   try {
     localStorage.setItem("editor:ai", prefs.ai ? "1" : "0");
-  } catch {
-    // Gilt dann nur fuer diese Sitzung.
-  }
-}
-
-export function toggleBlame(): void {
-  prefs.blame = !prefs.blame;
-  try {
-    localStorage.setItem("editor:blame", prefs.blame ? "1" : "0");
   } catch {
     // Gilt dann nur fuer diese Sitzung.
   }
