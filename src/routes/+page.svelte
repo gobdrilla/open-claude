@@ -1422,7 +1422,7 @@
             ? `Kein Projekt passt zu „${query.trim()}“.`
             : root
               ? "Hier liegen keine Git-Repos."
-              : "Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (Strg+O)."}
+              : `Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (${mod}+O).`}
         </Command.Empty>
         {#if view === "list" && sessions.some((s) => tabs[s.id] === "ask") && !query.trim()}
           <SessionOverview
@@ -1857,7 +1857,7 @@
         ["Rechtsklick", "Weitere Aktionen, z. B. vom Gerät löschen"],
         ["Esc", "Suche leeren, sonst schließen (bzw. ins Tray)"],
       ])}
-      {@render keys("Claude", [["Strg + ⇧ + C / Strg + V", "Im Terminal kopieren / einfügen"]])}
+      {@render keys("Claude", [[mac ? "⌘ + C / ⌘ + V" : "Strg + ⇧ + C / Strg + V", "Im Terminal kopieren / einfügen"]])}
       {@render keys("Editor", [
         [`${mod} + S`, "Datei speichern"],
         [`${mod} + P`, "Datei suchen und öffnen"],

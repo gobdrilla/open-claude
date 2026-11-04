@@ -2,7 +2,7 @@
   import Notice from "$lib/components/Notice.svelte";
   import { Button, Checkbox, ConfirmDialog, ContextItem, Empty, Row, Textarea, fileIcon, menuContent } from "$lib/atelier-ui";
   import { dirname } from "$lib/tree";
-  import { FILES_APP, atRef } from "$lib/editor.logic";
+  import { FILES_APP, MOD, SHIFT, atRef } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
   import { reviewCount, sendReview } from "$lib/review.svelte";
   import { ContextMenu } from "bits-ui";
@@ -445,7 +445,7 @@
         <Textarea
           density="xs"
           class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono [@media(max-height:640px)]:h-14"
-          placeholder="Commit-Nachricht (Strg+Enter · mit Umschalt auch pushen)"
+          placeholder="Commit-Nachricht ({MOD}+Enter · mit {SHIFT} auch pushen)"
           bind:value={message}
           onkeydown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -466,7 +466,7 @@
           <!-- Wraps as one unit at narrow widths, and inside itself when even that is too wide; primary last as in dialog footers -->
           <div class="ml-auto flex flex-wrap justify-end gap-2">
             {#if !amend}
-              <Button size="xs" variant="outline" disabled={!canCommit} onclick={() => commit(true)} title="Strg+Umschalt+Enter">
+              <Button size="xs" variant="outline" disabled={!canCommit} onclick={() => commit(true)} title="{MOD}+{SHIFT}+Enter">
                 Commit + Push
               </Button>
             {/if}

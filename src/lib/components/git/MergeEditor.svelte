@@ -1,5 +1,6 @@
 <script lang="ts">
   import { confirm } from "$lib/confirm.svelte";
+  import { MOD, SHIFT } from "$lib/editor.logic";
   import Notice from "$lib/components/Notice.svelte";
   import { tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -375,7 +376,7 @@
   {/if}
 
   <div class="bg-chrome border-border flex items-center justify-end gap-2 border-t px-3 py-1.5">
-    <span class="text-muted-foreground mr-auto min-w-0 truncate text-meta whitespace-nowrap">F7 / Umschalt+F7 navigieren · Strg+S speichern</span>
+    <span class="text-muted-foreground mr-auto min-w-0 truncate text-meta whitespace-nowrap">F7 / {SHIFT}+F7 navigieren · {MOD}+S speichern</span>
     <Button variant="ghost" size="sm" onclick={cancel}>Schließen</Button>
     <Button size="sm" disabled={!conflict || busy || (!editing && open.length > 0)} onclick={save}>
       Speichern &amp; als gelöst markieren

@@ -27,7 +27,7 @@
   import { closeTab, editor, focus, permanent, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
   import { allConfigs, chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
-  import { MOD } from "$lib/editor.logic";
+  import { MOD, SHIFT } from "$lib/editor.logic";
   import Dock, { type TabInfo } from "./Dock.svelte";
   import FileTree from "./FileTree.svelte";
   import CodePane from "./CodePane.svelte";
@@ -257,17 +257,17 @@
         variant="quiet"
         size="xs"
         disabled={!r.current}
-        title="Neu starten ({MOD}+Umschalt+F5)"
+        title="Neu starten ({MOD}+{SHIFT}+F5)"
         onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">Neu starten</span></Button
       >
     </span>
     <span class="flex-1"></span>
     <span class="bg-muted/60 flex items-center gap-0.5 rounded-md p-0.5">
       {@render toggle("files", "Dateien", PanelLeftIcon)}
-      {@render toggle("search", "Suche", SearchIcon, `Suche (${MOD}+Umschalt+F)`)}
+      {@render toggle("search", "Suche", SearchIcon, `Suche (${MOD}+{SHIFT}+F)`)}
       {@render toggle("tests", "Tests", FlaskConicalIcon)}
       {@render toggle("preview", "Vorschau", PanelRightIcon)}
-      {@render toggle("problems", "Probleme", CircleAlertIcon, `Probleme (${MOD}+Umschalt+M)`)}
+      {@render toggle("problems", "Probleme", CircleAlertIcon, `Probleme (${MOD}+{SHIFT}+M)`)}
       {#if r.current || groupOf(s.layout, RUN)}{@render toggle("run", "Ausgabe", SquareTerminalIcon)}{/if}
     </span>
     <DropdownMenu.Root>

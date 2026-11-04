@@ -20,7 +20,7 @@
   import SearchIcon from "@lucide/svelte/icons/search";
   import { fs, type Hit } from "$lib/files";
   import { open } from "$lib/editor.svelte";
-  import { MOD, atRef } from "$lib/editor.logic";
+  import { MOD, SHIFT, atRef } from "$lib/editor.logic";
 
   let { repo }: { repo: string } = $props();
 
@@ -99,7 +99,7 @@
   </div>
   <Notice bind:text={error} timeout={0} />
   {#if !s.q || !hits.length}
-    <Empty icon={SearchIcon} hint={s.q ? undefined : `${MOD}+Umschalt+F`}>{busy ? "Suche …" : s.q ? "Keine Treffer." : "Suchbegriff eingeben."}</Empty>
+    <Empty icon={SearchIcon} hint={s.q ? undefined : `${MOD}+{SHIFT}+F`}>{busy ? "Suche …" : s.q ? "Keine Treffer." : "Suchbegriff eingeben."}</Empty>
   {:else}
     <div class="text-muted-foreground px-2 py-0.5 text-meta" role="status">
       {hits.length >= 2000 ? "Über 2000" : hits.length} Treffer in {groups.length} Dateien

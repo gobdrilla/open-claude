@@ -103,6 +103,8 @@ export const huge = (text: string) => text.length > 1_000_000 || /[^\n]{10000}/.
 
 /** Modifier-Taste fuer Tastenkuerzel in Texten, wie in +page.svelte. */
 export const MOD = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") ? "⌘" : "Strg";
+/** Shift key in shortcut texts: the symbol on the Mac, as its keys are labeled. */
+export const SHIFT = MOD === "⌘" ? "⇧" : "Umschalt";
 /** Name des Dateimanagers fuer "Im … zeigen": Finder, Explorer, unter Linux allgemein. */
 export const FILES_APP =
   typeof navigator === "undefined" ? "Explorer" : navigator.userAgent.includes("Mac") ? "Finder" : navigator.userAgent.includes("Windows") ? "Explorer" : "Dateimanager";

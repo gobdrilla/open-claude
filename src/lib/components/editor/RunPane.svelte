@@ -13,7 +13,7 @@
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { ptyResize } from "$lib/files";
-  import { MOD } from "$lib/editor.logic";
+  import { MOD, SHIFT } from "$lib/editor.logic";
   import { DARK, LIGHT, LINKS, clipboardKey, contrast, windowsPty } from "$lib/termtheme";
   import { theme } from "$lib/theme.svelte";
   import { attach, clearOutput, run, runRestart, runStart, runStop, runWrite, tailOutput } from "$lib/run.svelte";
@@ -139,7 +139,7 @@
         onclick={() => runStart(repo, cur?.cfg)}><PlayIcon /></Button
       >
     {/if}
-    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten ({MOD}+Umschalt+F5)" onclick={() => runRestart(repo)}>
+    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten ({MOD}+{SHIFT}+F5)" onclick={() => runRestart(repo)}>
       <RotateCcwIcon />
     </Button>
     <Button

@@ -5,7 +5,7 @@
   import { tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
-  import { FILES_APP } from "$lib/editor.logic";
+  import { FILES_APP, MOD, SHIFT } from "$lib/editor.logic";
   import { git, forge, accountId, type Account, type ForgeKind, type RepoAccount, type Status } from "$lib/git";
   import Sidebar from "./Sidebar.svelte";
   import AskDialog from "./AskDialog.svelte";
@@ -340,20 +340,20 @@
         </div>
       </div>
     {/if}
-    {@render tool("Fetch", "Fetch (Strg+Umschalt+F)", doFetch, CloudDownloadIcon)}
-    {@render tool(status?.behind ? `Pull ${status.behind}` : "Pull", "Pull (Strg+Umschalt+L)", () => pull(), DownloadIcon, hot === "pull")}
+    {@render tool("Fetch", `Fetch (${MOD}+${SHIFT}+F)`, doFetch, CloudDownloadIcon)}
+    {@render tool(status?.behind ? `Pull ${status.behind}` : "Pull", `Pull (${MOD}+${SHIFT}+L)`, () => pull(), DownloadIcon, hot === "pull")}
     {@render menu([
       ["Pull (Merge)", () => pull(false), true],
       ["Pull (Rebase)", () => pull(true), false],
     ])}
-    {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", "Push (Strg+Umschalt+P)", push, UploadIcon, hot === "push")}
+    {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", `Push (${MOD}+${SHIFT}+P)`, push, UploadIcon, hot === "push")}
     {@render menu([["Force-Push …", forcePush]])}
     <span class="bg-border mx-1.5 h-4 w-px"></span>
     {@render tool("Stash", "Änderungen stashen", () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
     {@render tool("Branch", "Neuer Branch ab HEAD", () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
     <span class="flex-1"></span>
     <!-- Narrow window: Explorer and account drop their text, the tooltip keeps it. -->
-    <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title="Ordner im {FILES_APP} öffnen (Strg+Umschalt+E)">
+    <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title="Ordner im {FILES_APP} öffnen ({MOD}+{SHIFT}+E)">
       <FolderOpenIcon class="size-3.5" />
       <span class="max-lg:hidden">{FILES_APP}</span>
     </Button>
