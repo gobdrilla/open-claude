@@ -30,6 +30,7 @@ import { codeLens, refreshLens } from "./components/editor/codeLens.svelte.ts";
 import { docHighlight } from "./components/editor/docHighlight.ts";
 import { lspFolding } from "./components/editor/lspFold.ts";
 import { breadcrumbs } from "./components/editor/breadcrumbs.ts";
+import { semanticTokens } from "./components/editor/semantic.ts";
 import { INIT_OPTIONS, SETTINGS } from "./inlay.logic.ts";
 import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
 
@@ -338,6 +339,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
         docHighlight,
         lspFolding,
         breadcrumbs,
+        semanticTokens,
         { clientCapabilities: ACTION_CAPS },
       ],
     });

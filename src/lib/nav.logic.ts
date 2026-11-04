@@ -83,3 +83,39 @@ export function crumbsAt(tree: SymNode[], pos: LspPos): Crumb[] {
     level = hit.at(-1)!.children ?? [];
   }
 }
+
+export type SemKind = "type" | "fn" | "prop" | "const" | "meta";
+/** Semantic token types that get a color; the rest (keywords, strings, variables, parameters) keep the grammar's. */
+const SEM: Record<string, SemKind> = {
+  namespace: "type",
+  type: "type",
+  class: "type",
+  enum: "type",
+  interface: "type",
+  struct: "type",
+  typeParameter: "type",
+  function: "fn",
+  method: "fn",
+  property: "prop",
+  field: "prop",
+  event: "prop",
+  enumMember: "const",
+  constant: "const",
+  macro: "meta",
+  decorator: "meta",
+};
+
+/** semanticTokens data (5 numbers per token, line and start relative to the previous token) as absolute spans. */
+export function semanticSpans(data: number[], types: string[]): { line: number; character: number; length: number; kind: SemKind }[] {
+  const out = [];
+  let line = 0;
+  let character = 0;
+  for (let i = 0; i + 4 < data.length; i += 5) {
+    if (data[i]) character = 0;
+    line += data[i];
+    character += data[i + 1];
+    const kind = SEM[types[data[i + 3]]];
+    if (kind) out.push({ line, character, length: data[i + 2], kind });
+  }
+  return out;
+}

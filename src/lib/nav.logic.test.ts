@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lensLabel, lensOf, lineLenses, toLocs, uniqueLocs, type Loc, crumbsAt, symbolTree, type SymNode } from "./nav.logic.ts";
+import { lensLabel, lensOf, lineLenses, toLocs, uniqueLocs, type Loc, crumbsAt, semanticSpans, symbolTree, type SymNode } from "./nav.logic.ts";
 
 const r = (line: number, character = 0) => ({ start: { line, character }, end: { line, character: character + 1 } });
 
@@ -78,4 +78,16 @@ test("crumbsAt on a flat answer orders containing symbols by size", () => {
   ]);
   assert.deepEqual(crumbsAt(tree, { line: 3, character: 0 }).map((c) => c.sym.name), ["App", "run"]);
   assert.deepEqual(crumbsAt(tree, { line: 10, character: 0 }), []);
+});
+
+test("semanticSpans decodes relative positions and keeps only names that get a color", () => {
+  const types = ["class", "keyword", "method", "parameter"];
+  // keyword at 0:0, class at 0:10, method on line 2 at 4, parameter right after, class on the same line further on
+  const data = [0, 0, 9, 1, 0, 0, 10, 6, 0, 0, 2, 4, 4, 2, 0, 0, 5, 1, 3, 0, 0, 3, 5, 0, 1];
+  assert.deepEqual(semanticSpans(data, types), [
+    { line: 0, character: 10, length: 6, kind: "type" },
+    { line: 2, character: 4, length: 4, kind: "fn" },
+    { line: 2, character: 12, length: 5, kind: "type" },
+  ]);
+  assert.deepEqual(semanticSpans([0, 0, 3], types), [], "incomplete token is ignored");
 });
