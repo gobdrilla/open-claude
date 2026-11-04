@@ -17,6 +17,7 @@
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import FileDiffIcon from "@lucide/svelte/icons/file-diff";
   import CheckIcon from "@lucide/svelte/icons/check";
+  import TrashIcon from "@lucide/svelte/icons/trash-2";
 
   let {
     repo,
@@ -365,8 +366,17 @@
         <span class="@max-[15rem]:hidden">Alles</span>{isStaged ? "unstagen" : "stagen"}
       </Button>
       {#if !isStaged}
-        <Button variant="ghost-danger" size="2xs" class="shrink-0" disabled={files.length === 0 || busy} onclick={() => discard(files)}>
-          <span class="@max-[15rem]:hidden">Alle</span>verwerfen …
+        <!-- Icon only: a text button pushed the list title down to "Nicht …" at 1280 px. -->
+        <Button
+          variant="ghost-danger"
+          size="2xs"
+          class="shrink-0"
+          title="Alle verwerfen …"
+          aria-label="Alle verwerfen …"
+          disabled={files.length === 0 || busy}
+          onclick={() => discard(files)}
+        >
+          <TrashIcon />
         </Button>
       {/if}
     </div>
