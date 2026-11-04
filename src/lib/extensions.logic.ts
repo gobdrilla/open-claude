@@ -248,6 +248,17 @@ export function findLinks(text: string, linkers: Linker[]): Link[] {
   return out;
 }
 
+/** Runs async tasks one after another, in call order; a failed task does not block the next.
+ *  Two git config writes at once fail on .git/config.lock (Enter plus change, or blur plus "Global verwenden"). */
+export function serial() {
+  let last: Promise<unknown> = Promise.resolve();
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const p = last.then(task);
+    last = p.catch(() => {});
+    return p;
+  };
+}
+
 /** Text split into plain and linked parts; concatenated it is the input again. */
 export function segments(text: string, links: Link[]): { text: string; url?: string; title?: string }[] {
   const out: { text: string; url?: string; title?: string }[] = [];

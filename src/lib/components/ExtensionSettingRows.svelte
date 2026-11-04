@@ -51,7 +51,6 @@
           aria-invalid={!!errors[d.key]}
           oninput={(e: Event) => (draft[d.key] = (e.currentTarget as HTMLInputElement).value)}
           onchange={() => draft[d.key] !== undefined && save(d, draft[d.key])}
-          onkeydown={(e: KeyboardEvent) => e.key === "Enter" && draft[d.key] !== undefined && save(d, draft[d.key])}
         />
       {:else if d.type === "boolean" && repo}
         <Segmented value={own[d.key] ?? ""} options={[["Global", ""], ["An", "true"], ["Aus", "false"]]} onchange={(v) => save(d, v)} label={d.title} />

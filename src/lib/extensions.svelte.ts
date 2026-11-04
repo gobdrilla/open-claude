@@ -2,7 +2,7 @@
 // Global values live in the store (settings.json, key "extensions"), per-project values in the local git config ocui.ext.<id>.<key>.
 import { invoke } from "@tauri-apps/api/core";
 import type { Store } from "@tauri-apps/plugin-store";
-import { compileLinker, parseManifest, resolve, type Linker, type Manifest, type Values } from "./extensions.logic.ts";
+import { compileLinker, parseManifest, resolve, serial, type Linker, type Manifest, type Values } from "./extensions.logic.ts";
 
 export type Entry = { key: string; source: "builtin" | "user"; dir?: string; manifest?: Manifest; error?: string; warnings: string[] };
 type RepoValues = Record<string, Record<string, string>>;
@@ -86,9 +86,11 @@ export async function loadRepo(repo: string) {
   exts.repo[repo] = vals;
 }
 
+const writes = serial();
+
 /** null or "" removes the project value. */
 export async function setRepo(repo: string, id: string, key: string, v: string | null) {
-  await invoke("git_ext_set", { repo, id, key, value: v || null });
+  await writes(() => invoke("git_ext_set", { repo, id, key, value: v || null }));
   await loadRepo(repo);
 }
 

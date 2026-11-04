@@ -13,6 +13,7 @@ import {
   parseManifest,
   resolve,
   segments,
+  serial,
   type LinkDecl,
   type Linker,
   type SettingDecl,
@@ -185,4 +186,27 @@ test("segments: Rundlauf", () => {
     { text: "ABC-1", url: "https://x.atlassian.net/browse/ABC-1", title: "Jira-Ticket" },
     { text: " b" },
   ]);
+});
+
+test("serial: Schreibvorgänge nacheinander, Fehler blockiert nicht", async () => {
+  const run = serial();
+  const log: string[] = [];
+  let busy = 0;
+  const task = (name: string, ms: number, fail = false) => () =>
+    new Promise<string>((ok, no) => {
+      assert.equal(busy++, 0, `${name} startet, während ein anderer läuft`);
+      log.push(`start ${name}`);
+      setTimeout(() => {
+        busy--;
+        log.push(`end ${name}`);
+        fail ? no(new Error(name)) : ok(name);
+      }, ms);
+    });
+  const a = run(task("set", 20));
+  const b = run(task("fail", 5, true));
+  const c = run(task("unset", 1));
+  assert.equal(await a, "set");
+  await assert.rejects(b, /fail/);
+  assert.equal(await c, "unset");
+  assert.deepEqual(log, ["start set", "end set", "start fail", "end fail", "start unset", "end unset"]);
 });
