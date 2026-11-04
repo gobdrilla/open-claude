@@ -247,6 +247,7 @@
   ] as const;
   let mergeRev = $state<string | null>(null);
   let mergeMsg = $state("");
+  let mergeError = $state("");
   let mergeMode = $state<MergeMode>(readMode());
   function readMode(): MergeMode {
     try {
@@ -259,17 +260,25 @@
   function openMerge(rev: string) {
     mergeRev = rev;
     mergeMsg = "";
+    mergeError = "";
   }
   async function doMerge() {
-    if (!mergeRev) return;
+    if (!mergeRev || busy) return;
     const [rev, mode, msg] = [mergeRev, mergeMode, mergeMsg.trim() ? mergeMsg : null];
-    mergeRev = null;
     try {
       localStorage.setItem("git.mergeMode", mode);
     } catch {
       // Ohne localStorage gilt die Wahl nur fuer diese Sitzung.
     }
-    await run("Merge", () => git.merge(repo, rev, mode, mode === "ff-only" ? null : msg));
+    mergeError = "";
+    try {
+      await track("Merge", () => git.merge(repo, rev, mode, mode === "ff-only" ? null : msg));
+      mergeRev = null;
+      onchange();
+    } catch (e) {
+      // Shown in the dialog: the sidebar notice cuts it to one line, and another mode is one click away here.
+      mergeError = String(e);
+    }
   }
 
   // Lokal wie remote: das Backend wechselt auf einen vorhandenen lokalen Branch oder legt den
@@ -761,14 +770,16 @@
   action="Mergen"
   tone="default"
   wide
+  disabled={busy}
   onconfirm={doMerge}
   oncancel={() => (mergeRev = null)}
 >
   <div class="flex flex-col gap-2">
-    <Select bind:value={mergeMode} options={MERGE_MODES} class="h-7 w-full" aria-label="Merge-Modus" />
+    <Select bind:value={mergeMode} options={MERGE_MODES} onchange={() => (mergeError = "")} class="h-7 w-full" aria-label="Merge-Modus" />
     {#if mergeMode !== "ff-only"}
       <Textarea bind:value={mergeMsg} density="sm" class="h-24 field-sizing-fixed font-mono" spellcheck={true} placeholder="Eigene Nachricht (optional)" aria-label="Merge-Nachricht" />
     {/if}
+    {#if mergeError}<p class="text-destructive text-ui max-h-40 overflow-y-auto break-words whitespace-pre-wrap">{mergeError}</p>{/if}
   </div>
 </ConfirmDialog>
 
