@@ -17,6 +17,7 @@
   import { findPanel } from "./findpanel";
   import { lens } from "./lens";
   import { ruler } from "./ruler";
+  import { stickyScroll } from "./sticky";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -82,6 +83,7 @@
         // The state outlives this component (snapshots): reach the current one through a DOM event.
         gitGutter((v) => v.dom.dispatchEvent(new CustomEvent("gitdiff", { bubbles: true }))),
         ghost(path, () => prefs.ai),
+        stickyScroll,
         EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
         EditorView.updateListener.of((u) => {
           if (!u.selectionSet && !(u.focusChanged && u.view.hasFocus)) return;
