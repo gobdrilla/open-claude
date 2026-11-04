@@ -12,6 +12,7 @@
   import { gitGutter, indentFolding, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
   import { ghost } from "./ghost";
   import { wordHighlight } from "./wordHighlight";
+  import { bracketColors } from "./bracketColors";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -64,6 +65,7 @@
         indentGuides,
         indentFolding,
         wordHighlight,
+        bracketColors,
         lang.of([]),
         lspExt.of([]),
         lintGutter(),
