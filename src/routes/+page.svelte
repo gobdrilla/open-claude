@@ -1721,6 +1721,7 @@
           }}
           {accounts}
           onaccounts={() => (accountsOpen = true)}
+          onbranch={(b) => gitRepo && (gitRepo.branch = b)}
         />
       {/key}
     </div>

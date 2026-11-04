@@ -40,6 +40,7 @@
     unity = false,
     onedit,
     commit = null,
+    onbranch,
   }: {
     repo: string;
     accounts: Account[];
@@ -48,6 +49,8 @@
     onedit?: (path: string, line?: number) => void;
     /** Open with this commit selected in the history (inline blame in the editor). */
     commit?: string | null;
+    /** Branch of the project (not a submodule) changed: keeps the title bar chip current. */
+    onbranch?: (branch: string) => void;
   } = $props();
 
   const isUnity = $derived(unity);
@@ -118,6 +121,7 @@
       loadError = true;
     }
     const moved = before !== `${status?.head}|${status?.branch}`;
+    if (moved && status && cur === repo) onbranch?.(status.branch ?? status.head.slice(0, 7));
     if (force || moved) refreshKey++;
     if (remote || moved) forgeKey++;
   }
