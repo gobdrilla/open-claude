@@ -14,6 +14,7 @@
   import { wordHighlight } from "./wordHighlight";
   import { bracketColors } from "./bracketColors";
   import { gotoLineKey } from "./gotoline";
+  import { findPanel } from "./findpanel";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -62,6 +63,7 @@
         ]),
         gotoLineKey,
         basicSetup,
+        findPanel,
         theme,
         indentOf(detectIndent(doc)),
         indentGuides,
