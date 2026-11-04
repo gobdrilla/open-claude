@@ -3,6 +3,7 @@
   import { EditorView } from "codemirror";
   import { basicSetup } from "./setup";
   import { expandSelection } from "./expandSel";
+  import { postfix } from "./postfix";
   import { EditorState, Transaction } from "@codemirror/state";
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";
@@ -116,6 +117,7 @@
         // The state outlives this component (snapshots): reach the current one through a DOM event.
         gitGutter((v) => v.dom.dispatchEvent(new CustomEvent("gitdiff", { bubbles: true }))),
         ghost(path, () => prefs.ai),
+        postfix(path),
         stickyScroll,
         inlineBlame(prefs.blame, repo, path, openCommit),
         EditorView.updateListener.of(
