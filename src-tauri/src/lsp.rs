@@ -168,6 +168,13 @@ fn resolve(root: &Path, cmd: &str, npm: bool, own: &Path) -> Option<PathBuf> {
         .or_else(|| dirs.iter().find_map(|d| exts.iter().map(|e| d.join(format!("{cmd}{e}"))).find(|p| p.is_file())))
 }
 
+/// Installs from before the typescript@6 pin pulled typescript 7, which has no lib/tsserver.js:
+/// typescript-language-server then fails every initialize. Reinstalling with the pinned hint repairs it.
+fn stale_typescript(key: &str, own: &Path) -> bool {
+    let ts = own.join("node_modules").join("typescript");
+    matches!(key, "typescript" | "svelte") && ts.join("package.json").is_file() && !ts.join("lib").join("tsserver.js").is_file()
+}
+
 /// Automatische Installation aus dem Hinweistext: "npm i -g a b" ins App-eigene Prefix (kein sudo, kein globales
 /// Paket), rustup/go/dotnet wie angegeben. None = nur von Hand (clangd, sourcekit-lsp) oder Werkzeug fehlt.
 fn install_cmd(hint: &str, own: &Path) -> Option<(PathBuf, Vec<String>)> {
@@ -273,7 +280,7 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
         SERVERS.iter().find(|s| s.0 == server).ok_or_else(|| format!("Unbekannter Language-Server: {server}"))?;
     let own = app.path().app_data_dir().map_err(|e| e.to_string())?.join("lsp");
     let prog = match resolve(&root, cmd, npm, &own) {
-        Some(p) if !(key == "rust" && rust_analyzer_missing()) => p,
+        Some(p) if !(key == "rust" && rust_analyzer_missing()) && !stale_typescript(key, &own) => p,
         // Fehlt: selbst installieren (der Nutzer hat Language-Server fuer das Projekt schon freigegeben).
         _ => {
             install(cmd, hint, &own)?;
@@ -412,6 +419,21 @@ mod tests {
 
     fn msg(body: &str) -> Vec<u8> {
         format!("Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    #[test]
+    fn typescript_7_im_prefix_gilt_als_kaputt() {
+        let own = std::env::temp_dir().join(format!("ocui-lsp-ts-{}", std::process::id()));
+        let ts = own.join("node_modules").join("typescript");
+        std::fs::create_dir_all(ts.join("lib")).unwrap();
+        assert!(!stale_typescript("typescript", &own), "no typescript at all is not stale");
+        std::fs::write(ts.join("package.json"), "{}").unwrap();
+        assert!(stale_typescript("typescript", &own));
+        assert!(stale_typescript("svelte", &own));
+        assert!(!stale_typescript("python", &own));
+        std::fs::write(ts.join("lib").join("tsserver.js"), "").unwrap();
+        assert!(!stale_typescript("typescript", &own));
+        let _ = std::fs::remove_dir_all(&own);
     }
 
     #[test]
