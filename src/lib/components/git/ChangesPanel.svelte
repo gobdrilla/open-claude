@@ -8,6 +8,8 @@
   import { ContextMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
   import { git, type FileChange, type Status } from "$lib/git";
+  import { cleanSuggestion, prefixes, ticketFromBranch, withPrefix, withTicket } from "$lib/commitmsg.logic";
+  import { prefs } from "$lib/editor.svelte";
   import { hunkPatch, linesPatch, type DiffFile, type Hunk } from "$lib/diff";
   import { pruneSel, rangeSel, toggleSel } from "$lib/selection";
   import DiffView, { type HunkAction } from "./DiffView.svelte";
@@ -242,6 +244,48 @@
   let message = $state("");
   let amend = $state(false);
   const subjectLen = $derived(message.split("\n")[0].length);
+  let msgRef = $state<HTMLTextAreaElement | null>(null);
+
+  // Hints: commit types the project already uses, ticket key from the branch name.
+  let subjects = $state<string[]>([]);
+  $effect(() => {
+    const r = repo;
+    git
+      .log(r, null, 0, 200)
+      .then((cs) => r === repo && (subjects = cs.map((c) => c.subject)))
+      .catch(() => {});
+  });
+  const types = $derived(prefixes(subjects));
+  const ticket = $derived(ticketFromBranch(status.branch));
+  // Disabled rather than hidden once typing starts: the hint row must not jump away.
+  const canSuggest = $derived(prefs.ai && staged.length > 0);
+  function hint(next: string) {
+    message = next;
+    msgRef?.focus();
+  }
+
+  let suggesting = $state(false);
+  async function suggest() {
+    error = "";
+    suggesting = true;
+    try {
+      const d = await git.diff(repo, null, true);
+      // Shaped like git's own COMMIT_EDITMSG (cursor on top, diff below the scissors), recent subjects for the style.
+      const recent = subjects.slice(0, 10).map((s) => `# ${s}\n`).join("");
+      const raw = await invoke<string>("ai_complete", {
+        path: "COMMIT_EDITMSG",
+        before: "",
+        after: `\n# Please enter the commit message for your changes.\n# Recent commits:\n${recent}# ------------------------ >8 ------------------------\n${d.slice(0, 12000)}`,
+      });
+      const s = cleanSuggestion(raw);
+      if (!s) error = "Kein Vorschlag, gleich noch mal versuchen.";
+      else if (!message.trim()) message = s;
+    } catch (e) {
+      error = String(e);
+    } finally {
+      suggesting = false;
+    }
+  }
   const canCommit = $derived(!busy && message.trim() !== "" && (amend || staged.length > 0));
   // Fuer Amend geladene Nachricht; beim Abwaehlen wieder weg, sofern unveraendert.
   let amendMsg = "";
@@ -469,6 +513,7 @@
           class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono [@media(max-height:640px)]:h-14"
           placeholder="Commit-Nachricht ({MOD}+Enter · mit {SHIFT} auch pushen)"
           spellcheck={true}
+          bind:ref={msgRef}
           bind:value={message}
           onkeydown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -478,13 +523,43 @@
             }
           }}
         />
+        {#if (types.length || ticket || canSuggest) && !amend}
+          <div class="flex flex-wrap gap-1">
+            {#each types as t (t)}
+              <Button variant="ghost" size="2xs" class="font-mono" title="Am Anfang einfügen" onclick={() => hint(withPrefix(message, t + ": "))}>
+                {t}:
+              </Button>
+            {/each}
+            {#if ticket}
+              <Button variant="ghost" size="2xs" class="font-mono" title="Am Anfang einfügen" onclick={() => hint(withTicket(message, ticket))}>
+                {ticket}
+              </Button>
+            {/if}
+            {#if canSuggest}
+              <Button
+                variant="ghost"
+                size="2xs"
+                class="ml-auto"
+                disabled={suggesting || !!message.trim()}
+                title={message.trim() ? "Nur bei leerer Nachricht" : "Claude schreibt eine Nachricht zu den gestagten Änderungen"}
+                onclick={suggest}
+              >
+                {suggesting ? "Claude schreibt …" : "Vorschlag von Claude"}
+              </Button>
+            {/if}
+          </div>
+        {/if}
         <div class="flex flex-wrap items-center gap-2">
           <Checkbox size="sm" bind:checked={amend} onchange={toggleAmend}>Amend</Checkbox>
           <span
-            class="flex-1 font-mono text-meta {subjectLen > 72 ? 'text-warning' : 'text-muted-foreground'}"
-            title={subjectLen > 72 ? "Betreffzeile länger als 72 Zeichen" : "Länge der Betreffzeile"}
+            class="flex-1 font-mono text-meta {subjectLen > 72
+              ? 'text-destructive'
+              : subjectLen > 50
+                ? 'text-warning'
+                : 'text-muted-foreground'}"
+            title="Betreff: bis 50 Zeichen empfohlen, über 72 wird er in vielen Ansichten abgeschnitten"
           >
-            {subjectLen}/72
+            {subjectLen}/50
           </span>
           <!-- Wraps as one unit at narrow widths, and inside itself when even that is too wide; primary last as in dialog footers -->
           <div class="ml-auto flex flex-wrap justify-end gap-2">
