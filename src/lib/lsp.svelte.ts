@@ -26,6 +26,7 @@ import { fs } from "./files.ts";
 import { open, peek, setText } from "./editor.svelte.ts";
 import { inlayHints, refreshInlay } from "./components/editor/inlay.svelte.ts";
 import { lspNav, showPick } from "./components/editor/nav.ts";
+import { peek as peekDef } from "./components/editor/peek.ts";
 import { codeLens, refreshLens } from "./components/editor/codeLens.svelte.ts";
 import { docHighlight } from "./components/editor/docHighlight.ts";
 import { lspFolding } from "./components/editor/lspFold.ts";
@@ -336,6 +337,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
           { key: "Mod-.", run: actionsCmd, preventDefault: true },
         ]),
         lspNav,
+        peekDef,
         inlayHints,
         codeLens,
         docHighlight,
