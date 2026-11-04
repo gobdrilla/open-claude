@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct FileChange {
@@ -962,6 +962,127 @@ fn rebase_onto(repo: &str, onto: &str) -> Result<String, String> {
     tolerate(repo, git(repo).args(["rebase", arg(onto)?]))
 }
 
+/// One line of a scripted interactive rebase: op is pick, fixup or drop.
+#[derive(Deserialize, Debug, Clone)]
+pub struct Step {
+    op: String,
+    sha: String,
+    message: Option<String>,
+}
+
+/// Single-quoted for sh: git runs the sequence editor and exec lines through sh (Git for Windows too).
+fn sh_quote(p: &Path) -> String {
+    format!("'{}'", p.to_string_lossy().replace('\\', "/").replace('\'', "'\\''"))
+}
+
+fn range(base: Option<&str>) -> Result<String, String> {
+    Ok(match base {
+        Some(b) => format!("{}..HEAD", arg(b)?),
+        None => "HEAD".into(),
+    })
+}
+
+/// Rewrites base..HEAD (None = whole history) with `steps` in todo order, via rebase -i with a
+/// prepared todo. Conflicts pause it like any rebase (banner: continue/abort).
+fn rewrite(repo: &str, base: Option<&str>, steps: &[Step]) -> Result<String, String> {
+    if repo_state(repo)? != RepoState::Clean {
+        return Err("Erst den laufenden Vorgang abschließen oder abbrechen.".into());
+    }
+    if let Some(b) = base {
+        if !ok(git(repo).args(["merge-base", "--is-ancestor", arg(b)?, "HEAD"])) {
+            return Err("Commit liegt nicht im aktuellen Branch.".into());
+        }
+    }
+    let range = range(base)?;
+    if !out(git(repo).args(["rev-list", "--min-parents=2", &range, "--"]))?.trim().is_empty() {
+        return Err("Merge-Commits im Bereich werden nicht unterstützt.".into());
+    }
+    let mut want: Vec<String> = out(git(repo).args(["rev-list", &range, "--"]))?.lines().map(str::to_string).collect();
+    let mut got: Vec<String> = steps.iter().map(|s| s.sha.clone()).collect();
+    want.sort();
+    got.sort();
+    // Omitting a commit must never drop it silently.
+    if want != got {
+        return Err("Die Commit-Liste passt nicht mehr zum Branch – neu laden.".into());
+    }
+    if let Some(s) = steps.iter().find(|s| !matches!(s.op.as_str(), "pick" | "fixup" | "drop")) {
+        return Err(format!("Unbekannte Aktion: {}", s.op));
+    }
+    if steps.iter().find(|s| s.op != "drop").is_some_and(|s| s.op != "pick") {
+        return Err("Erster Commit kann nicht zusammengefasst werden.".into());
+    }
+    if steps.iter().any(|s| s.op != "drop" && s.message.as_deref().is_some_and(|m| m.trim().is_empty())) {
+        return Err("Nachricht ist leer.".into());
+    }
+    let dir = PathBuf::from(out(git(repo).args(["rev-parse", "--absolute-git-dir"]))?.trim()).join("ocui-rewrite");
+    // Cleared here, not at the end: a paused rebase still needs the message files.
+    let _ = std::fs::remove_dir_all(&dir);
+    let io = |e: std::io::Error| format!("Konnte {} nicht schreiben: {e}", dir.display());
+    std::fs::create_dir_all(&dir).map_err(io)?;
+    let mut todo = String::new();
+    for (i, s) in steps.iter().enumerate() {
+        todo += &format!("{} {}\n", s.op, s.sha);
+        if let (Some(m), false) = (&s.message, s.op == "drop") {
+            let f = dir.join(format!("msg-{i}"));
+            std::fs::write(&f, m).map_err(io)?;
+            // -F keeps '#' lines, like commit().
+            todo += &format!("exec git commit -q --amend --only --allow-empty -F {}\n", sh_quote(&f));
+        }
+    }
+    let list = dir.join("todo");
+    std::fs::write(&list, todo).map_err(io)?;
+    let mut cmd = git(repo);
+    // Env beats a sequence.editor from the user's config.
+    cmd.env("GIT_SEQUENCE_EDITOR", format!("cp {}", sh_quote(&list)))
+        .args(["rebase", "-i", "--autostash"])
+        .arg(match base {
+            Some(b) => arg(b)?,
+            None => "--root",
+        });
+    tolerate(repo, &mut cmd)
+}
+
+/// Base (parent of sha, None at the root) and all commits from sha to HEAD as picks.
+fn plan(repo: &str, sha: &str) -> Result<(Option<String>, Vec<Step>), String> {
+    arg(sha)?;
+    if !ok(git(repo).args(["merge-base", "--is-ancestor", sha, "HEAD"])) {
+        return Err("Commit liegt nicht im aktuellen Branch.".into());
+    }
+    let base = out(git(repo).args(["rev-parse", "--verify", "--quiet", &format!("{sha}^")]))
+        .ok()
+        .map(|s| s.trim().to_string());
+    let steps = out(git(repo).args(["rev-list", "--reverse", &range(base.as_deref())?, "--"]))?
+        .lines()
+        .map(|l| Step { op: "pick".into(), sha: l.to_string(), message: None })
+        .collect();
+    Ok((base, steps))
+}
+
+fn full_sha(repo: &str, rev: &str) -> Result<String, String> {
+    arg(rev)?;
+    out(git(repo).args(["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]))
+        .map(|s| s.trim().to_string())
+        .map_err(|_| format!("Commit „{rev}“ nicht gefunden."))
+}
+
+/// Folds sha into its parent; message becomes the message of the combined commit.
+fn squash(repo: &str, sha: &str, message: &str) -> Result<String, String> {
+    let sha = full_sha(repo, sha)?;
+    let parent = full_sha(repo, &format!("{sha}^")).map_err(|_| "Erster Commit hat keinen Vorgänger.".to_string())?;
+    let (base, mut steps) = plan(repo, &parent)?;
+    let step = steps.iter_mut().find(|s| s.sha == sha).ok_or("Commit liegt nicht im aktuellen Branch.")?;
+    step.op = "fixup".into();
+    step.message = Some(message.to_string());
+    rewrite(repo, base.as_deref(), &steps)
+}
+
+/// Is sha already on any remote-tracking branch?
+fn pushed(repo: &str, sha: &str) -> Result<bool, String> {
+    let refs = out(git(repo)
+        .args(["for-each-ref", "--count=1", "--format=%(refname)", "--contains", arg(sha)?, "refs/remotes"]))?;
+    Ok(!refs.trim().is_empty())
+}
+
 fn stash_ref(index: u32) -> String {
     format!("stash@{{{index}}}")
 }
@@ -1238,6 +1359,16 @@ pub async fn git_merge(repo: String, rev: String, no_ff: bool) -> Result<String,
 #[tauri::command]
 pub async fn git_rebase(repo: String, onto: String) -> Result<String, String> {
     blocking(move || rebase_onto(&repo, &onto)).await
+}
+
+#[tauri::command]
+pub async fn git_squash(repo: String, sha: String, message: String) -> Result<String, String> {
+    blocking(move || squash(&repo, &sha, &message)).await
+}
+
+#[tauri::command]
+pub async fn git_pushed(repo: String, sha: String) -> Result<bool, String> {
+    blocking(move || pushed(&repo, &sha)).await
 }
 
 #[tauri::command]
@@ -2671,5 +2802,126 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         put(&r, "b.log", "log\n");
         discard(&r, &v(&["b.log"])).unwrap_or(());
         assert!(Path::new(&r).join("b.log").exists());
+    }
+
+    fn st(op: &str, sha: &str, message: Option<&str>) -> Step {
+        Step { op: op.into(), sha: sha.into(), message: message.map(str::to_string) }
+    }
+
+    fn subjects(r: &str) -> Vec<String> {
+        log(r, Some("HEAD"), 0, 50).unwrap().into_iter().map(|c| c.subject).collect()
+    }
+
+    fn head(r: &str) -> String {
+        full_sha(r, "HEAD").unwrap()
+    }
+
+    #[test]
+    fn m_rewrite_validierung() {
+        let (_t, r) = fresh("rwval");
+        let a = ci(&r, "a.txt", "a\n", "a");
+        let b = ci(&r, "b.txt", "b\n", "b");
+        let c = ci(&r, "c.txt", "c\n", "c");
+        let before = head(&r);
+        let bad = [
+            vec![st("pick", &c, None)],
+            vec![st("pick", &b, None), st("pick", &a, None)],
+            vec![st("pick", &b, None), st("edit", &c, None)],
+            vec![st("fixup", &b, None), st("pick", &c, None)],
+            vec![st("drop", &b, None), st("fixup", &c, None)],
+            vec![st("pick", &b, Some("  \n")), st("pick", &c, None)],
+        ];
+        for steps in bad {
+            assert!(rewrite(&r, Some(&a), &steps).is_err(), "{steps:?}");
+            assert_eq!(head(&r), before);
+        }
+        // Base from another branch is not an ancestor of HEAD.
+        checkout(&r, "x", true, Some(&a)).unwrap();
+        let x = ci(&r, "x.txt", "x\n", "x");
+        checkout(&r, "main", false, None).unwrap();
+        assert!(rewrite(&r, Some(&x), &[]).is_err());
+        // Merge commit in range.
+        out(git(&r).args(["merge", "-q", "--no-ff", "--no-edit", "x"])).unwrap();
+        assert!(plan(&r, &b).and_then(|(base, steps)| rewrite(&r, base.as_deref(), &steps)).unwrap_err().contains("Merge"));
+    }
+
+    #[test]
+    fn m_rewrite_root_reihenfolge_und_nachricht() {
+        let (_t, r) = fresh("rwroot");
+        let a = ci(&r, "a.txt", "a\n", "a");
+        let b = ci(&r, "b.txt", "b\n", "b");
+        let c = ci(&r, "c.txt", "c\n", "c");
+        let d = ci(&r, "d.txt", "d\n", "d");
+        // Uncommitted change survives via autostash.
+        put(&r, "a.txt", "wt\n");
+        let steps = [
+            st("pick", &a, Some("neu a\n\n# Raute bleibt")),
+            st("pick", &c, None),
+            st("fixup", &b, None),
+            st("drop", &d, None),
+        ];
+        rewrite(&r, None, &steps).unwrap();
+        assert_eq!(status(&r).unwrap().state, RepoState::Clean);
+        assert_eq!(subjects(&r), ["c", "neu a"]);
+        let root = show(&r, "HEAD~1").unwrap();
+        assert_eq!(root.body, "# Raute bleibt");
+        assert!(Path::new(&r).join("b.txt").exists() && !Path::new(&r).join("d.txt").exists());
+        assert_eq!(std::fs::read_to_string(Path::new(&r).join("a.txt")).unwrap(), "wt\n");
+    }
+
+    #[test]
+    fn m_rewrite_konflikt() {
+        let (_t, r) = fresh("rwkonf");
+        let a = ci(&r, "a.txt", "1\n", "a");
+        let b = ci(&r, "a.txt", "2\n", "b");
+        let c = ci(&r, "a.txt", "3\n", "c");
+        let before = head(&r);
+        rewrite(&r, Some(&a), &[st("pick", &c, None), st("pick", &b, None)]).unwrap();
+        assert_eq!(status(&r).unwrap().state, RepoState::Rebase);
+        assert!(has_conflicts(&r));
+        sequencer(&r, "--abort").unwrap();
+        assert_eq!(head(&r), before);
+        // Leftover message files of an aborted run do not get in the way.
+        rewrite(&r, Some(&a), &[st("pick", &b, Some("b neu")), st("pick", &c, None)]).unwrap();
+        assert_eq!(subjects(&r), ["c", "b neu", "a"]);
+    }
+
+    #[test]
+    fn m_pushed() {
+        let (_t, r) = fresh("pushed");
+        let (_bt, _b) = bare(&r);
+        let a = ci(&r, "a.txt", "a\n", "a");
+        assert!(!pushed(&r, &a).unwrap());
+        push(&r, false).unwrap();
+        assert!(pushed(&r, &a).unwrap());
+        let b = ci(&r, "b.txt", "b\n", "b");
+        assert!(!pushed(&r, &b).unwrap());
+    }
+
+    #[test]
+    fn m_squash() {
+        let (_t, r) = fresh("squash");
+        let a = ci(&r, "a.txt", "a\n", "a");
+        ci(&r, "b.txt", "b\n", "b");
+        let c = ci(&r, "c.txt", "c\n", "c");
+        ci(&r, "d.txt", "d\n", "d");
+        put(&r, "a.txt", "wt\n");
+        squash(&r, &c, "bc\n\nBeides").unwrap();
+        assert_eq!(subjects(&r), ["d", "bc", "a"]);
+        assert_eq!(show(&r, "HEAD~1").unwrap().body, "Beides");
+        assert!(["b.txt", "c.txt", "d.txt"].iter().all(|f| Path::new(&r).join(f).exists()));
+        assert_eq!(std::fs::read_to_string(Path::new(&r).join("a.txt")).unwrap(), "wt\n");
+        assert!(squash(&r, &a, "x").unwrap_err().contains("Vorgänger"));
+        // Into the root commit works (rebase --root).
+        squash(&r, "HEAD~1", "abc").unwrap();
+        assert_eq!(subjects(&r), ["d", "abc"]);
+        // Commit of another branch.
+        checkout(&r, "x", true, None).unwrap();
+        ci(&r, "x.txt", "1\n", "x1");
+        let x2 = ci(&r, "x.txt", "2\n", "x2");
+        checkout(&r, "main", false, None).unwrap();
+        let before = head(&r);
+        assert!(squash(&r, &x2, "x").is_err());
+        assert_eq!(head(&r), before);
     }
 }

@@ -110,6 +110,10 @@ export const git = {
   cherryPick: (repo: string, sha: string) => call<string>("git_cherry_pick", { repo, sha }),
   revert: (repo: string, sha: string) => call<string>("git_revert", { repo, sha }),
   reset: (repo: string, sha: string, mode: ResetMode) => call<string>("git_reset", { repo, sha, mode }),
+  /** sha in seinen Vorgaenger falten; message wird die Nachricht des gemeinsamen Commits. */
+  squash: (repo: string, sha: string, message: string) => call<string>("git_squash", { repo, sha, message }),
+  /** Liegt sha schon auf einem Remote-Branch? Dann braucht Umschreiben einen Force-Push. */
+  pushed: (repo: string, sha: string) => call<boolean>("git_pushed", { repo, sha }),
 
   fetch: (repo: string) => call<string>("git_fetch", { repo }),
   pull: (repo: string, rebase: boolean) => call<string>("git_pull", { repo, rebase }),

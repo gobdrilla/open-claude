@@ -12,6 +12,7 @@
     oncancel,
     tone = "destructive",
     wide = false,
+    disabled = false,
     children,
   }: {
     open: boolean;
@@ -23,6 +24,8 @@
     // destructive fuer Loeschen/Verwerfen, default (Akzentfarbe) fuer harmlose Aktionen wie Installieren
     tone?: "destructive" | "default";
     wide?: boolean;
+    /** Action button disabled, e.g. while a field in children is empty. */
+    disabled?: boolean;
     children?: Snippet;
   } = $props();
 </script>
@@ -36,7 +39,7 @@
     {@render children?.()}
     <div class="flex justify-end gap-2">
       <Button variant="ghost" size="sm" onclick={oncancel}>Abbrechen</Button>
-      <Button variant={tone} size="sm" onclick={onconfirm}>{action}</Button>
+      <Button variant={tone} size="sm" onclick={onconfirm} {disabled}>{action}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

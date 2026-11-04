@@ -797,6 +797,8 @@ pub fn run() {
             git::git_branch_rename,
             git::git_merge,
             git::git_rebase,
+            git::git_squash,
+            git::git_pushed,
             git::git_abort,
             git::git_continue,
             git::git_cherry_pick,

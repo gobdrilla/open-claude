@@ -1,6 +1,6 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Badge, Button, ConfirmDialog, ContextItem, DiffDialog, Input, PromptDialog, Row, TextButton, fileIcon, menuContent } from "$lib/atelier-ui";
+  import { Badge, Button, ConfirmDialog, ContextItem, DiffDialog, Input, PromptDialog, Row, TextButton, Textarea, fileIcon, menuContent, menuSeparator } from "$lib/atelier-ui";
   import { age, cn } from "$lib/utils";
   import { tick, untrack } from "svelte";
   import { ContextMenu } from "bits-ui";
@@ -260,6 +260,38 @@
     if (value) await run(title, () => action(value));
   }
 
+  // Message dialog for squash and reword: prefilled text, destructive tone once the commit is on a remote.
+  const PUSHED = "Schon gepusht: danach ist ein Force-Push nötig, andere mit diesem Stand bekommen Konflikte.";
+  let msgDlg = $state<{ title: string; action: string; message?: string; pushed: boolean; run: (m: string) => Promise<unknown> } | null>(null);
+  let msgText = $state("");
+  let note = $state("");
+  const fullMessage = (d: CommitDetail) => d.commit.subject + (d.body ? "\n\n" + d.body : "");
+  async function doMsg() {
+    if (!msgDlg || !msgText.trim()) return;
+    const { title, pushed, run: action } = msgDlg;
+    const text = msgText;
+    msgDlg = null;
+    await run(title, () => action(text));
+    if (pushed && !error) note = "Verlauf geändert – zum Veröffentlichen Push ▾ → Force-Push.";
+  }
+
+  async function squash(c: Commit) {
+    const parent = c.parents[0];
+    try {
+      const [p, d, pushed] = await Promise.all([git.show(repo, parent), git.show(repo, c.sha), git.pushed(repo, parent)]);
+      msgText = fullMessage(p) + "\n\n" + fullMessage(d);
+      msgDlg = {
+        title: "Commits zusammenfassen",
+        action: "Zusammenfassen",
+        message: `${c.sha.slice(0, 8)} wird mit ${parent.slice(0, 8)} zu einem Commit.`,
+        pushed,
+        run: (m) => git.squash(repo, c.sha, m),
+      };
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   function copySha(sha: string) {
     navigator.clipboard?.writeText(sha);
   }
@@ -375,6 +407,11 @@
               run("Revert", () => git.revert(repo, c.sha)),
             )}
         />
+        {#if c.parents.length === 1}
+          <ContextMenu.Separator class={menuSeparator} />
+          <ContextItem label="Mit Vorgänger zusammenfassen …" onSelect={() => squash(c)} />
+        {/if}
+        <ContextMenu.Separator class={menuSeparator} />
         <ContextItem label="Reset: soft" onSelect={() => reset(c.sha, "soft")} />
         <ContextItem label="Reset: mixed" onSelect={() => reset(c.sha, "mixed")} />
         <ContextItem label="Reset: hard" onSelect={() => reset(c.sha, "hard")} destructive />
@@ -391,6 +428,7 @@
   </div>
 
   <Notice bind:text={error} />
+  {#if !error}<Notice bind:text={note} kind="note" />{/if}
 
   <!-- min-h-20: die Liste bleibt sichtbar, auch wenn die gespeicherte Detailhoehe nicht mehr ins Fenster passt -->
   <div class="flex min-h-20 flex-1 flex-col overflow-hidden">
@@ -516,6 +554,20 @@
   onconfirm={doConfirm}
   oncancel={() => (confirm = null)}
 />
+
+<ConfirmDialog
+  open={msgDlg !== null}
+  title={msgDlg?.title ?? ""}
+  message={msgDlg?.pushed ? PUSHED : msgDlg?.message}
+  action={msgDlg?.action ?? ""}
+  tone={msgDlg?.pushed ? "destructive" : "default"}
+  wide
+  disabled={!msgText.trim()}
+  onconfirm={doMsg}
+  oncancel={() => (msgDlg = null)}
+>
+  <Textarea bind:value={msgText} density="sm" class="h-32 field-sizing-fixed font-mono" aria-label="Commit-Nachricht" />
+</ConfirmDialog>
 
 <PromptDialog
   open={prompt !== null}
