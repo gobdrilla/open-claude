@@ -498,7 +498,7 @@
         {#if tickets.length}
           <ContextMenu.Separator class={menuSeparator} />
           {#each tickets as t (t.start)}
-            <ContextItem label="{t.id} öffnen" onSelect={() => forge.openUrl(t.url).catch((e) => (error = String(e)))} />
+            <ContextItem label="{c.subject.slice(t.start, t.end)} öffnen" onSelect={() => forge.openUrl(t.url).catch((e) => (error = String(e)))} />
           {/each}
         {/if}
         {#if oncommand && cmds.length}
