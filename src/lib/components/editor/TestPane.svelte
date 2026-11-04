@@ -210,7 +210,15 @@
                 }}><ChevronRightIcon class="size-3 transition-transform {r.open ? 'rotate-90' : ''}" /></IconButton
               >
               {@render status(st)}
-              <span class="min-w-0 flex-1 truncate {n.kind === 'file' ? 'font-mono text-meta' : ''}">{n.name}</span>
+              {#if n.kind === "file"}
+                <!-- Dateiname zuerst: im schmalen Panel blieb sonst nur das gemeinsame "src-tauri/src…" stehen -->
+                {@const cut = n.name.lastIndexOf("/") + 1}
+                <span class="min-w-0 flex-1 truncate font-mono text-meta"
+                  >{n.name.slice(cut)}<span class="text-muted-foreground ml-1.5">{n.name.slice(0, cut)}</span></span
+                >
+              {:else}
+                <span class="min-w-0 flex-1 truncate">{n.name}</span>
+              {/if}
               {#if n.kind === "file"}
                 <span
                   class="bg-muted text-muted-foreground shrink-0 rounded px-1 text-[10px]"
