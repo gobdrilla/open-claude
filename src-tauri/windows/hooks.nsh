@@ -20,6 +20,13 @@
   !insertmacro MigrateOldShortcut "$SMPROGRAMS"
   !insertmacro MigrateOldShortcut "$DESKTOP"
 
+  ; Update mode never creates shortcuts, so a lost Start menu entry would stay lost: always make sure it exists.
+  ${If} $NoShortcutMode <> 1
+  ${AndIfNot} ${FileExists} "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+    CreateShortcut "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    !insertmacro SetLnkAppUserModelId "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+  ${EndIf}
+
   ; A taskbar pin cannot be recreated by an installer: keep it and point it at the new executable.
   ${If} ${FileExists} "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\${OLD_PRODUCTNAME}.lnk"
     !insertmacro SetShortcutTarget "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\${OLD_PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
