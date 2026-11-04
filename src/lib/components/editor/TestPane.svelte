@@ -248,7 +248,7 @@
   </div>
 
   <Splitter bind:size={detailH} axis="y" min={60} invert key="tests-detail" />
-  <div class="border-border flex min-h-0 flex-col border-t" style="height:{detailH}px">
+  <div class="border-border flex min-h-0 flex-col border-t" style="height:{detailH}px; max-height:max(60px, 50%)">
     <Tabs
       dense
       tabs={[
