@@ -17,7 +17,9 @@
   import GitMergeIcon from "@lucide/svelte/icons/git-merge";
   import BoxesIcon from "@lucide/svelte/icons/boxes";
   import FolderIcon from "@lucide/svelte/icons/folder";
+  import XIcon from "@lucide/svelte/icons/x";
   import { refRows, type RefRow } from "$lib/reftree";
+  import { pruneSel, rangeSel, toggleSel } from "$lib/selection";
   import { age, cn } from "$lib/utils";
   import { ask } from "$lib/ask.svelte";
 
@@ -96,6 +98,59 @@
     remoteGroups.map(([r, list]) => [r, refRows(list, (b) => b.name.slice(r.length + 1), dirOpen(`r:${r}/`))] as const),
   );
   const tagRows = $derived(refRows(tags, (t) => t.name, dirOpen("t:")));
+
+  // Multi-select in the local or the remote list: Cmd/Ctrl+click toggles, Shift+click takes the visible range.
+  let pick = $state<{ remote: boolean; names: string[] }>({ remote: false, names: [] });
+  let pickAnchor = "";
+  const leaves = (rows: RefRow<Branch>[]) => rows.flatMap((r) => (r.dir ? [] : [r.ref.name]));
+  const localOrder = $derived(leaves(localRows));
+  const remoteOrder = $derived(remoteRows.flatMap(([, rows]) => leaves(rows)));
+  // Hidden by a closed folder or gone after a reload: no longer selected, so nothing invisible gets deleted.
+  const picked = $derived(pruneSel(pick.names, pick.remote ? remoteOrder : localOrder));
+  const pickedSet = $derived(new Set(picked));
+  const isPicked = (b: Branch, remote: boolean) => pick.remote === remote && pickedSet.has(b.name);
+
+  function clickBranch(e: MouseEvent, b: Branch, remote: boolean) {
+    const same = pick.remote === remote;
+    let next = [b.name];
+    if (e.shiftKey && same) next = rangeSel(remote ? remoteOrder : localOrder, pickAnchor, b.name);
+    else if ((e.ctrlKey || e.metaKey) && same) next = toggleSel(picked, b.name);
+    if (!e.shiftKey || !same) pickAnchor = b.name;
+    pick = { remote, names: next };
+    if (!e.shiftKey && !e.ctrlKey && !e.metaKey) onselectref(b.sha);
+  }
+
+  /** Delete local (never the checked-out one) or remote branches; unmerged local ones get a second, forced round. */
+  function deleteBranches(names: string[], remote: boolean) {
+    const list = remote ? names : names.filter((n) => n !== cur);
+    if (!list.length) return;
+    const shown = (l: string[]) => (l.length === 1 ? `„${l[0]}“` : `${l.length} Branches (${l.slice(0, 5).join(", ")}${l.length > 5 ? ", …" : ""})`);
+    const where = remote ? "auf dem Server" : "lokal";
+    askConfirm(`${remote ? "Remote-" : ""}${list.length > 1 ? "Branches" : "Branch"} löschen`, `${shown(list)} ${where} löschen?`, async () => {
+      const unmerged: string[] = [];
+      try {
+        // shortcut: one git call (remote: one push) per branch, batch in Rust if deleting dozens of remote branches is too slow.
+        for (const n of list) {
+          try {
+            await git.branchDelete(repo, n, false, remote);
+          } catch (e) {
+            if (remote || !String(e).includes("not fully merged")) throw e;
+            unmerged.push(n);
+          }
+        }
+      } finally {
+        pick = { remote, names: [] };
+      }
+      if (unmerged.length)
+        askConfirm(
+          "Branch nicht gemergt",
+          `${shown(unmerged)} ${unmerged.length === 1 ? "enthält" : "enthalten"} Commits, die in keinem anderen Branch liegen. Trotzdem löschen?`,
+          async () => {
+            for (const n of unmerged) await git.branchDelete(repo, n, true, false);
+          },
+        );
+    });
+  }
 
   const base = $derived(branches.find((b) => b.base)?.base ?? null);
   // Fest eingestellt (git config ocui.base) statt automatisch erkannt.
@@ -320,6 +375,23 @@
   </SectionToggle>
 {/snippet}
 
+{#snippet pickBar(remote: boolean)}
+  {#if pick.remote === remote && picked.length > 1}
+    <div class="bg-primary/10 mx-1 mb-1 flex items-center gap-1 rounded-md px-2 py-0.5">
+      <span class="text-muted-foreground flex-1 text-meta whitespace-nowrap">{picked.length} ausgewählt</span>
+      <Button variant="ghost-danger" size="2xs" disabled={busy} onclick={() => deleteBranches(picked, remote)}>Löschen …</Button>
+      <IconButton size="xs" label="Auswahl aufheben" onclick={() => (pick = { remote, names: [] })}><XIcon class="size-3" /></IconButton>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet pickItems(b: Branch, remote: boolean)}
+  {#if isPicked(b, remote) && picked.length > 1}
+    <ContextItem label="Ausgewählte löschen ({picked.length}) …" onSelect={() => deleteBranches(picked, remote)} destructive />
+    <ContextMenu.Separator class={menuSeparator} />
+  {/if}
+{/snippet}
+
 {#snippet choice(label: string, value: string | null)}
   <DropdownMenu.Item
     class={menuItem}
@@ -429,6 +501,7 @@
     </SectionToggle>
     {#if expanded.branches}
       <div class="px-1 pb-1">
+        {@render pickBar(false)}
         {#if locals.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
@@ -442,9 +515,10 @@
               <Row
                 style="padding-left:{24 + r.depth * 12}px"
                 active={b.current}
+                selected={isPicked(b, false)}
                 dim={merged(b)}
                 ondblclick={() => checkout(b)}
-                onclick={() => onselectref(b.sha)}
+                onclick={(e) => clickBranch(e, b, false)}
                 title={merged(b) ? `In ${base} gemergt` : undefined}
               >
                 <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{r.label}</span>
@@ -462,6 +536,7 @@
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
+                {@render pickItems(b, false)}
                 <ContextItem label="Auschecken" onSelect={() => checkout(b)} />
                 {#if !b.current}
                   <ContextItem label="In aktuellen mergen …" onSelect={() => openMerge(b.name)} />
@@ -489,23 +564,7 @@
                     })}
                 />
                 {#if !b.current}
-                  <ContextItem
-                    label="Löschen …"
-                    onSelect={() =>
-                      askConfirm("Branch löschen", `„${b.name}“ lokal löschen?`, async () => {
-                        try {
-                          await git.branchDelete(repo, b.name, false, false);
-                        } catch (e) {
-                          if (!String(e).includes("not fully merged")) throw e;
-                          askConfirm(
-                            "Branch nicht gemergt",
-                            `„${b.name}“ enthält Commits, die in keinem anderen Branch liegen. Trotzdem löschen?`,
-                            async () => void (await git.branchDelete(repo, b.name, true, false)),
-                          );
-                        }
-                      })}
-                    destructive
-                  />
+                  <ContextItem label="Löschen …" onSelect={() => deleteBranches([b.name], false)} destructive />
                 {/if}
                 {#if oncommand && cmds.length}
                   <ContextMenu.Separator class={menuSeparator} />
@@ -534,6 +593,7 @@
         {#if remoteGroups.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
+        {@render pickBar(true)}
         {#each remoteRows as [remote, rows] (remote)}
           <p class="text-muted-foreground px-2 pt-1 pl-6 font-mono text-meta">{remote}</p>
           {#each rows as r (r.dir ? r.path + "/" : r.path)}
@@ -545,9 +605,10 @@
               <ContextMenu.Trigger>
                 <Row
                   style="padding-left:{24 + r.depth * 12}px"
+                  selected={isPicked(b, true)}
                   dim={merged(b)}
                   ondblclick={() => checkout(b)}
-                  onclick={() => onselectref(b.sha)}
+                  onclick={(e) => clickBranch(e, b, true)}
                   title={merged(b) ? `In ${base} gemergt` : undefined}
                 >
                   <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{r.label}</span>
@@ -555,19 +616,13 @@
               </ContextMenu.Trigger>
               <ContextMenu.Portal>
                 <ContextMenu.Content class={menuContent}>
+                  {@render pickItems(b, true)}
                   <ContextItem label="Auschecken (Tracking-Branch)" onSelect={() => checkout(b)} />
                   <ContextItem label="In aktuellen mergen …" onSelect={() => openMerge(b.name)} />
                   {#if b.name !== base}
                     <ContextItem label="Als Production-Branch festlegen" onSelect={() => setBase(b.name)} />
                   {/if}
-                  <ContextItem
-                    label="Löschen (remote) …"
-                    onSelect={() =>
-                      askConfirm("Remote-Branch löschen", `„${b.name}“ auf dem Server löschen?`, async () => {
-                        await git.branchDelete(repo, b.name, false, true);
-                      })}
-                    destructive
-                  />
+                  <ContextItem label="Löschen (remote) …" onSelect={() => deleteBranches([b.name], true)} destructive />
                 </ContextMenu.Content>
               </ContextMenu.Portal>
             </ContextMenu.Root>
