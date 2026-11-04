@@ -140,12 +140,16 @@
     if (!ready || !host) return;
     const parent = host;
     const key = snapKey(repo, path);
+    const snap = untrack(() => snapshots.get(key));
     const v = untrack(() => {
-      const snap = snapshots.get(key);
       const state = snap?.state ?? fresh(f!.text);
       // Waehrend das Panel abgebaut war, kann die Datei nachgeladen worden sein.
       return new EditorView({ parent, state: sync(state, f!.text)?.state ?? state, scrollTo: snap?.scroll });
     });
+    // Svelte removes the DOM before the teardown below runs, where scrollTop already reads 0: keep it while scrolling.
+    let scroll = snap?.scroll;
+    const keepScroll = () => (scroll = v.scrollSnapshot());
+    v.scrollDOM.addEventListener("scroll", keepScroll, { passive: true });
     view = v;
     // Fokus nur fuer die aktive Datei, und nie aus Eingabefeldern (Umbenennen im Baum, Strg+P) heraus.
     if (untrack(() => s.active) === path && !document.activeElement?.closest("input, textarea, [role=dialog]")) v.focus();
@@ -159,7 +163,7 @@
     return () => {
       flush(repo, path);
       // Geschlossene/umbenannte Dateien hinterlassen nichts; peek statt editor: nach drop() darf nichts neu entstehen.
-      if (peek(repo)?.files[path]) snapshots.set(key, { state: v.state, scroll: v.scrollSnapshot() });
+      if (peek(repo)?.files[path]) snapshots.set(key, { state: v.state, scroll: v.dom.isConnected ? v.scrollSnapshot() : (scroll ?? v.scrollSnapshot()) });
       v.destroy();
       view = undefined;
     };
