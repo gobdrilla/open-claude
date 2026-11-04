@@ -505,11 +505,10 @@
 
   const sessionsLost = () => `${sessions.length} laufende Claude-Sitzung(en) werden dabei beendet.`;
 
-  /** Ohne Tray beendet Schliessen die App (lib.rs, on_window_event); Rust fragt nur nach ungespeicherten Dateien. */
-  /** byKey: per Esc ausgeloest; das beendet ohne Tray die App, darum dann immer nachfragen. */
+  /** Ohne Tray beendet Schliessen die App (lib.rs, on_window_event); Rust fragt bei laufenden Sitzungen und ungespeicherten Dateien (preview::quit). */
+  /** byKey: per Esc ausgeloest; das beendet ohne Tray die App, darum auch ohne Sitzung nachfragen. */
   async function closeWindow(byKey = false) {
-    const ask = sessions.length ? sessionsLost() : byKey ? "Esc schließt das Fenster und beendet die App." : "";
-    if (!mac && !tray && ask && !(await confirm(ask, "Beenden", "L'Atelier de Claude beenden?"))) return;
+    if (byKey && !tray && !sessions.length && !(await confirm("Esc schließt das Fenster und beendet die App.", "Beenden", "L'Atelier de Claude beenden?"))) return;
     getCurrentWindow().close();
   }
 

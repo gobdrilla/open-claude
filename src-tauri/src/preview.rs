@@ -232,20 +232,34 @@ pub fn editor_dirty(dirty: bool) {
     DIRTY.store(dirty, Ordering::Relaxed);
 }
 
-/// Beendet die App; bei ungespeicherten Aenderungen erst nach Rueckfrage.
+/// What quitting would lose, one line each; empty: quit right away.
+fn losses(dirty: bool, sessions: usize) -> String {
+    let mut lines = Vec::new();
+    if sessions > 0 {
+        lines.push(format!("{sessions} laufende Claude-Sitzung(en) werden beendet."));
+    }
+    if dirty {
+        lines.push("Ungespeicherte Änderungen im Editor gehen verloren.".to_string());
+    }
+    lines.join("\n")
+}
+
+/// Beendet die App; bei laufenden Sitzungen oder ungespeicherten Aenderungen erst nach Rueckfrage.
+/// Covers every way out: window close (also the native macOS button and Alt+F4), Cmd+Q, the tray menu.
 /// Nicht blockierend: beide Aufrufer laufen auf dem Haupt-Thread, dort wuerde ein blockierender Dialog haengen.
 pub fn quit(app: &tauri::AppHandle) {
-    if !DIRTY.load(Ordering::Relaxed) {
+    let lost = losses(DIRTY.load(Ordering::Relaxed), app.state::<crate::pty::Ptys>().count());
+    if lost.is_empty() {
         return app.exit(0);
     }
     // Aus dem Tray heraus ist das Fenster versteckt: zeigen, worum es geht.
     crate::reopen(app);
     let mut dialog = app
         .dialog()
-        .message("Ungespeicherte Änderungen im Editor verwerfen?")
-        .title("L'Atelier de Claude")
+        .message(lost)
+        .title("L'Atelier de Claude beenden?")
         .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom("Verwerfen".into(), "Abbrechen".into()));
+        .buttons(MessageDialogButtons::OkCancelCustom("Beenden".into(), "Abbrechen".into()));
     if let Some(w) = app.get_webview_window("main") {
         dialog = dialog.parent(&w);
     }
@@ -260,6 +274,13 @@ pub fn quit(app: &tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn beenden_fragt_bei_sitzungen_und_ungespeichertem() {
+        assert_eq!(losses(false, 0), "");
+        assert_eq!(losses(false, 2), "2 laufende Claude-Sitzung(en) werden beendet.");
+        assert_eq!(losses(true, 1), "1 laufende Claude-Sitzung(en) werden beendet.\nUngespeicherte Änderungen im Editor gehen verloren.");
+    }
 
     fn tmp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("ocui-preview-{name}-{}", std::process::id()));

@@ -78,6 +78,11 @@ impl Ptys {
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Running sessions; quitting asks first when there are any.
+    pub fn count(&self) -> usize {
+        self.lock().len()
+    }
+
     /// Beim Beenden: sonst ueberleben Shell und claude die App.
     pub fn close_all(&self) {
         let sessions: Vec<Session> = self.lock().drain().map(|(_, s)| s).collect();
