@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { Button, ConfirmBar, Dialog, IconButton, Row, Segmented, SettingRow, SettingsSection, Slider, Switch, TextButton } from "$lib/atelier-ui";
+  import { Button, ConfirmBar, Dialog, IconButton, Input, Row, Segmented, SettingRow, SettingsSection, Slider, Switch, TextButton } from "$lib/atelier-ui";
   import type { Update } from "@tauri-apps/plugin-updater";
   import { theme, setMode } from "$lib/theme.svelte";
   import { ASKS, noAsk, setNoAsk, type AskKey } from "$lib/ask.svelte";
+  import { gitCmds, setGitCmds } from "$lib/gitcmds.svelte";
+  import TrashIcon from "@lucide/svelte/icons/trash-2";
   import { prefs, toggleAi, togglePref } from "$lib/editor.svelte";
   import { readClaude, setClaude, type ClaudeCfg } from "$lib/claudeSettings";
   import { ZOOM_MAX, ZOOM_MIN } from "$lib/zoom";
@@ -90,6 +92,17 @@
   $effect(() => {
     if (open && tab === "terminal") loadClaudeCfg();
   });
+
+  // New custom Git command (Settings › Git).
+  let cmdName = $state("");
+  let cmdText = $state("");
+  const cmdTaken = $derived(gitCmds.some((c) => c.name === cmdName.trim()));
+  function addCmd() {
+    if (!cmdName.trim() || !cmdText.trim() || cmdTaken) return;
+    setGitCmds([...gitCmds, { name: cmdName.trim(), command: cmdText.trim() }]);
+    cmdName = cmdText = "";
+  }
+  const cmdEnter = (e: KeyboardEvent) => e.key === "Enter" && addCmd();
 
   // Rueckfragen (Deckel wach, Update) als Leiste hier drin. Gilt nur fuer den Reiter, in dem sie gestellt wurde.
   const asker = new Asker();
@@ -214,6 +227,31 @@
           <SettingsSection title="Konten">
             <SettingRow label="Git-Konten" description="GitHub- und GitLab-Zugänge für Klonen, Push/Pull und Pull Requests.">
               <Button variant="outline" size="sm" onclick={ongitaccounts}>Verwalten</Button>
+            </SettingRow>
+          </SettingsSection>
+          <SettingsSection title="Eigene Befehle">
+            {#each gitCmds as c (c.name)}
+              <SettingRow label={c.name} description={c.command}>
+                <IconButton
+                  size="md"
+                  tone="danger"
+                  label="Befehl {c.name} löschen"
+                  onclick={() => setGitCmds(gitCmds.filter((x) => x.name !== c.name))}><TrashIcon class="size-3.5" /></IconButton
+                >
+              </SettingRow>
+            {/each}
+            <SettingRow
+              label="Neuer Befehl"
+              description={'Läuft im Projektordner (Login-Shell, unter Windows PowerShell). Variablen: $REPO, $SHA, $BRANCH, $FILE – Pfade in Anführungszeichen, z. B. code "$FILE".'}
+            >
+              <div class="flex w-56 shrink-0 flex-col gap-1.5">
+                <Input bind:value={cmdName} density="sm" placeholder="Name, z. B. In VS Code öffnen" onkeydown={cmdEnter} />
+                <Input bind:value={cmdText} density="sm" class="font-mono" placeholder="git log -1 $SHA" onkeydown={cmdEnter} />
+                {#if cmdTaken}<p class="text-destructive text-meta">Name gibt es schon</p>{/if}
+                <Button variant="outline" size="sm" disabled={!cmdName.trim() || !cmdText.trim() || cmdTaken} onclick={addCmd}
+                  >Hinzufügen</Button
+                >
+              </div>
             </SettingRow>
           </SettingsSection>
         {:else if tab === "claude"}

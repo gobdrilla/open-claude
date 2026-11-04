@@ -1419,6 +1419,43 @@ pub async fn git_reword(repo: String, sha: String, message: String) -> Result<St
     blocking(move || reword(&repo, &sha, &message)).await
 }
 
+const VARS: [&str; 4] = ["REPO", "SHA", "BRANCH", "FILE"];
+
+/// User command from the settings, run in the repo. Values only as env vars, never spliced into the text:
+/// the shell does not re-parse expansion results, so no quoting and no injection via branch or file names.
+fn custom(repo: &str, command: &str, vars: &HashMap<String, String>) -> Result<String, String> {
+    if command.trim().is_empty() {
+        return Err("Leerer Befehl".into());
+    }
+    if let Some(k) = vars.keys().find(|k| !VARS.contains(&k.as_str())) {
+        return Err(format!("Unbekannte Variable: {k}"));
+    }
+    let mut cmd = if cfg!(windows) {
+        let ps = if crate::deps::on_path("pwsh") { "pwsh" } else { "powershell" };
+        let mut c = crate::quiet(ps);
+        c.args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &format!("$REPO=$env:REPO;$SHA=$env:SHA;$BRANCH=$env:BRANCH;$FILE=$env:FILE; {command}"),
+        ]);
+        c
+    } else {
+        let sh = std::env::var("SHELL").ok().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| crate::pty::UNIX_SHELL.into());
+        // -lc, not -lic like the run bar: no PTY here, an interactive bash would print job-control warnings.
+        let mut c = crate::quiet(&sh);
+        c.args(["-lc", command]);
+        c
+    };
+    talk(cmd.current_dir(repo).envs(vars).stdin(Stdio::null()))
+}
+
+#[tauri::command]
+pub async fn git_custom(repo: String, command: String, vars: HashMap<String, String>) -> Result<String, String> {
+    blocking(move || custom(&repo, &command, &vars)).await
+}
+
 #[tauri::command]
 pub async fn git_pushed(repo: String, sha: String) -> Result<bool, String> {
     blocking(move || pushed(&repo, &sha)).await
@@ -3095,5 +3132,48 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         reword(&r, "HEAD", "merge neu").unwrap();
         let m = show(&r, "HEAD").unwrap().commit;
         assert_eq!((m.subject.as_str(), m.parents.len()), ("merge neu", 2));
+    }
+
+    fn vars(x: &[(&str, &str)]) -> HashMap<String, String> {
+        x.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn custom_passes_values_without_injection() {
+        let (_t, r) = fresh("cmd-inject");
+        let evil = "a'b;$(touch x)`touch y`";
+        assert_eq!(custom(&r, "printf %s \"$SHA\"", &vars(&[("SHA", evil)])).unwrap(), evil);
+        assert!(!Path::new(&r).join("x").exists() && !Path::new(&r).join("y").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn custom_passes_values_without_injection() {
+        let (_t, r) = fresh("cmd-inject");
+        let evil = "a'b; New-Item x";
+        assert_eq!(custom(&r, "Write-Output $SHA", &vars(&[("SHA", evil)])).unwrap(), evil);
+        assert!(!Path::new(&r).join("x").exists());
+    }
+
+    #[test]
+    fn custom_rejects_unknown_var_and_empty() {
+        let (_t, r) = fresh("cmd-var");
+        assert!(custom(&r, "echo hi", &vars(&[("EVIL", "1")])).unwrap_err().contains("EVIL"));
+        assert!(custom(&r, "  ", &vars(&[])).is_err());
+    }
+
+    #[test]
+    fn custom_reports_exit() {
+        let (_t, r) = fresh("cmd-exit");
+        assert!(custom(&r, "echo boom; exit 3", &vars(&[])).unwrap_err().contains("boom"));
+    }
+
+    #[test]
+    fn custom_runs_in_repo() {
+        let (_t, r) = fresh("cmd-pwd");
+        let pwd = if cfg!(windows) { "(Get-Location).Path" } else { "pwd" };
+        let name = Path::new(&r).file_name().unwrap().to_str().unwrap();
+        assert!(custom(&r, pwd, &vars(&[])).unwrap().ends_with(name));
     }
 }

@@ -1,11 +1,12 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Badge, Button, ConfirmDialog, ContextItem, IconButton, PromptDialog, Row, SectionToggle, Select, TextButton, Textarea, menuContent, menuItem } from "$lib/atelier-ui";
+  import { Badge, Button, ConfirmDialog, ContextItem, IconButton, PromptDialog, Row, SectionToggle, Select, TextButton, Textarea, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import { untrack } from "svelte";
   import { ContextMenu, DropdownMenu } from "bits-ui";
   import SettingsIcon from "@lucide/svelte/icons/settings-2";
   import CheckIcon from "@lucide/svelte/icons/check";
   import { git, forge, type MergeMode, type Branch, type Tag, type Stash, type Submodule, type PullRequest, type Status } from "$lib/git";
+  import { gitCmds, usesFile, type GitCmd } from "$lib/gitcmds.svelte";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import CloudIcon from "@lucide/svelte/icons/cloud";
   import TagIcon from "@lucide/svelte/icons/tag";
@@ -29,8 +30,11 @@
     onselectref,
     onshowdiff,
     onsubmodule,
+    oncommand,
   }: {
     repo: string;
+    /** Run a custom command (Settings › Git) with these vars. */
+    oncommand?: (c: GitCmd, vars: Record<string, string>) => void;
     status: Status;
     refreshKey: number;
     /** Wie in GitView: Pull Requests kosten einen API-Call, nur bei HEAD-/Remote-/Kontowechsel neu laden. */
@@ -43,6 +47,8 @@
     onshowdiff: (title: string, diff: string) => void;
     onsubmodule: (path: string) => void;
   } = $props();
+
+  const cmds = $derived(gitCmds.filter((g) => !usesFile(g)));
 
   let branches = $state<Branch[]>([]);
   let tags = $state<Tag[]>([]);
@@ -461,6 +467,12 @@
                       })}
                     destructive
                   />
+                {/if}
+                {#if oncommand && cmds.length}
+                  <ContextMenu.Separator class={menuSeparator} />
+                  {#each cmds as g (g.name)}
+                    <ContextItem label={g.name} onSelect={() => oncommand(g, { BRANCH: b.name, SHA: b.sha })} />
+                  {/each}
                 {/if}
               </ContextMenu.Content>
             </ContextMenu.Portal>

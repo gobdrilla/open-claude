@@ -1,12 +1,13 @@
 <script lang="ts">
   import { confirm as ask } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, Checkbox, ConfirmDialog, DiffDialog, IconButton, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
+  import { Button, Checkbox, ConfirmDialog, Dialog, DiffDialog, IconButton, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
   import { tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
   import { FILES_APP, MOD, SHIFT } from "$lib/editor.logic";
   import { git, forge, accountId, type Account, type ForgeKind, type RepoAccount, type Status } from "$lib/git";
+  import { gitCmds, usesFile, type GitCmd } from "$lib/gitcmds.svelte";
   import Sidebar from "./Sidebar.svelte";
   import AskDialog from "./AskDialog.svelte";
   import TagDialog from "./TagDialog.svelte";
@@ -87,6 +88,9 @@
   // Notice blendet error aus; ohne eigenes Flag stuende danach ewig "Lese Status …".
   let loadError = $state(false);
   let note = $state("");
+  // Full output of the last action when note only shows its last 2 lines.
+  let cmdOut = $state<{ title: string; text: string } | null>(null);
+  let outOpen = $state(false);
   let shown = $state<{ title: string; diff: string } | null>(null);
   let confirm = $state<{ title: string; message: string; label: string; run: () => Promise<unknown> } | null>(null);
   // Offen-Flag getrennt, weil PromptDialog einen String bindet
@@ -184,9 +188,12 @@
     busy = label;
     error = "";
     note = "";
+    cmdOut = null;
     try {
       const out = await action();
-      if (typeof out === "string" && out.trim()) note = out.trim().split("\n").slice(-2).join(" · ");
+      const lines = typeof out === "string" ? out.trim().split("\n") : [];
+      if (lines[0]) note = lines.slice(-2).join(" · ");
+      if (lines.length > 2) cmdOut = { title: label, text: lines.join("\n") };
     } catch (e) {
       error = String(e);
     }
@@ -209,6 +216,9 @@
   // Only one filled action: pull first when behind (push would be rejected anyway), else push when ahead.
   // None during merge/rebase: git refuses both, the banner's Fortsetzen is the action then.
   const hot = $derived(status?.state !== "clean" ? null : status?.behind ? "pull" : status?.ahead ? "push" : null);
+
+  const runCmd = (c: GitCmd, vars: Record<string, string> = {}) =>
+    run(c.name, () => git.custom(cur, c.command, { REPO: cur, SHA: status?.head ?? "", BRANCH: status?.branch ?? "", ...vars }));
 
   const doFetch = () => run("Fetch", () => git.fetch(cur));
   const pull = (rebase = false) => run("Pull", () => git.pull(cur, rebase));
@@ -402,6 +412,12 @@
               {#if keys}<kbd class={menuShortcut}>{keys}</kbd>{/if}
             </DropdownMenu.Item>
           {/each}
+          <DropdownMenu.Separator class={menuSeparator} />
+          {#each gitCmds.filter((c) => !usesFile(c)) as c (c.name)}
+            <DropdownMenu.Item class={menuItem} onSelect={() => runCmd(c)}>{c.name}</DropdownMenu.Item>
+          {:else}
+            <DropdownMenu.Item class={menuItem} disabled>Eigene Befehle unter Einstellungen › Git</DropdownMenu.Item>
+          {/each}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -489,7 +505,12 @@
   {/if}
 
   <Notice bind:text={error} />
-  {#if !error}<Notice bind:text={note} kind="note" />{/if}
+  {#if !error}
+    <!-- Long output stays until closed: 5 s is too short to reach the button. -->
+    <Notice bind:text={note} kind="note" timeout={cmdOut ? 0 : 5000}>
+      {#if cmdOut}<TextButton class="shrink-0" onclick={() => (outOpen = true)}>Ausgabe anzeigen</TextButton>{/if}
+    </Notice>
+  {/if}
 
   {#if status}
     <!-- Sidebar und Inhalt in einer gemeinsamen Karte -->
@@ -506,6 +527,7 @@
           onselectref={selectRef}
           onshowdiff={(title, diff) => (shown = { title, diff })}
           onsubmodule={(p) => goto([...trail, p])}
+          oncommand={runCmd}
         />
       </div>
       <Splitter bind:size={side} min={160} max={480} key="git.side" />
@@ -540,10 +562,11 @@
                 {status}
                 onedit={edit}
                 onsubmodule={(p) => goto([...trail, p])}
+                oncommand={runCmd}
                 onchange={(remote = false) => refresh(remote, remote)} onconflict={(p) => (conflictPath = p)} />
             </div>
             <div class="h-full {tab === 'history' ? '' : 'hidden'}">
-              <HistoryPanel repo={cur} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} onedit={edit} />
+              <HistoryPanel repo={cur} {jumpTo} {refreshKey} busy={!!busy} {track} onchange={refresh} onedit={edit} oncommand={runCmd} />
             </div>
             {#if seen.releases}
               <div class="h-full {tab === 'releases' ? '' : 'hidden'}">
@@ -575,6 +598,18 @@
 </div>
 
 <AskDialog />
+
+<Dialog.Root bind:open={outOpen}>
+  <Dialog.Content class="sm:max-w-2xl">
+    <Dialog.Header>
+      <Dialog.Title>{cmdOut?.title}</Dialog.Title>
+    </Dialog.Header>
+    <pre class="max-h-96 overflow-auto font-mono text-meta whitespace-pre-wrap">{cmdOut?.text}</pre>
+    <div class="flex justify-end">
+      <Button variant="ghost" size="sm" onclick={() => (outOpen = false)}>Schließen</Button>
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
 
 <DiffDialog diff={shown?.diff ?? null} title={shown?.title ?? ""} onclose={() => (shown = null)} />
 

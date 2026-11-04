@@ -1,6 +1,7 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, Checkbox, ConfirmDialog, ContextItem, Empty, Row, Textarea, fileIcon, menuContent } from "$lib/atelier-ui";
+  import { Button, Checkbox, ConfirmDialog, ContextItem, Empty, Row, Textarea, fileIcon, menuContent, menuSeparator } from "$lib/atelier-ui";
+  import { gitCmds, usesFile, type GitCmd } from "$lib/gitcmds.svelte";
   import { dirname } from "$lib/tree";
   import { FILES_APP, MOD, SHIFT, atRef } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
@@ -24,8 +25,11 @@
     onconflict,
     onedit,
     onsubmodule,
+    oncommand,
   }: {
     repo: string;
+    /** Run a custom command (Settings › Git) with these vars. */
+    oncommand?: (c: GitCmd, vars: Record<string, string>) => void;
     status: Status;
     /** remote: Remote-Stand hat sich geaendert (Push), Seitenleiste und Verlauf neu laden. */
     onchange: (remote?: boolean) => void;
@@ -34,6 +38,7 @@
     onsubmodule: (path: string) => void;
   } = $props();
 
+  const fileCmds = $derived(gitCmds.filter(usesFile));
   const conflicts = $derived(status.files.filter((f) => f.conflict));
   const staged = $derived(status.files.filter((f) => !f.conflict && f.index !== "." && f.index !== "?"));
   const unstaged = $derived(status.files.filter((f) => !f.conflict && f.worktree !== "."));
@@ -473,6 +478,12 @@
               />
               <ContextItem label="Im {FILES_APP} zeigen" onSelect={() => reveal(f)} />
               <ContextItem label="Pfad kopieren" onSelect={() => navigator.clipboard.writeText(f.path)} />
+              {#if oncommand && !multi && fileCmds.length}
+                <ContextMenu.Separator class={menuSeparator} />
+                {#each fileCmds as g (g.name)}
+                  <ContextItem label={g.name} onSelect={() => oncommand(g, { FILE: f.path })} />
+                {/each}
+              {/if}
             </ContextMenu.Content>
           </ContextMenu.Portal>
         </ContextMenu.Root>

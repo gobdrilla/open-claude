@@ -119,6 +119,8 @@ export const git = {
   squash: (repo: string, sha: string, message: string) => call<string>("git_squash", { repo, sha, message }),
   /** Nur die Nachricht von sha aendern; HEAD direkt (Gestagtes bleibt gestaged), aeltere per Rebase. */
   reword: (repo: string, sha: string, message: string) => call<string>("git_reword", { repo, sha, message }),
+  /** User command from Settings › Git; vars arrive as env vars REPO, SHA, BRANCH, FILE. */
+  custom: (repo: string, command: string, vars: Record<string, string>) => call<string>("git_custom", { repo, command, vars }),
   /** Liegt sha schon auf einem Remote-Branch? Dann braucht Umschreiben einen Force-Push. */
   pushed: (repo: string, sha: string) => call<boolean>("git_pushed", { repo, sha }),
 

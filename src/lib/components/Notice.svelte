@@ -1,6 +1,7 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
   import XIcon from "@lucide/svelte/icons/x";
+  import type { Snippet } from "svelte";
   import { IconButton, TextButton } from "$lib/atelier-ui";
 
   // Kompakte Meldungsleiste: eine Zeile, Klick zeigt den ganzen Text, verschwindet nach timeout von selbst
@@ -9,7 +10,8 @@
     text = $bindable(""),
     kind = "error",
     timeout = kind === "error" ? 8000 : 5000,
-  }: { text: string; kind?: "error" | "note" | "ok"; timeout?: number } = $props();
+    children,
+  }: { text: string; kind?: "error" | "note" | "ok"; timeout?: number; /** Extra action before × */ children?: Snippet } = $props();
 
   let expanded = $state(false);
   let hover = $state(false);
@@ -45,6 +47,7 @@
       onclick={() => (expanded = !expanded)}
       title={expanded ? "Einklappen" : text}>{expanded ? text : text.replace(/\s+/g, " ")}</TextButton
     >
+    {@render children?.()}
     <IconButton size="bare" tone="inherit" class="mt-0.5" label="Meldung schließen" onclick={() => (text = "")}>
       <XIcon class="size-3" />
     </IconButton>

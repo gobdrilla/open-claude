@@ -811,6 +811,7 @@ pub fn run() {
             git::git_rewrite,
             git::git_squash,
             git::git_reword,
+            git::git_custom,
             git::git_pushed,
             git::git_abort,
             git::git_continue,

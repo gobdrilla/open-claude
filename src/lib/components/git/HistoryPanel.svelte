@@ -9,6 +9,7 @@
   import { fileDiff, parseDiff, stat, type FileStatus } from "$lib/diff";
   import { dirname } from "$lib/tree";
   import { ask } from "$lib/ask.svelte";
+  import { gitCmds, usesFile, type GitCmd } from "$lib/gitcmds.svelte";
   import { reviewCount, sendReview } from "$lib/review.svelte";
   import { theme } from "$lib/theme.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
@@ -18,8 +19,10 @@
   import SearchIcon from "@lucide/svelte/icons/search";
   import CopyIcon from "@lucide/svelte/icons/copy";
 
-  let { repo, onchange, busy, track, jumpTo = null, refreshKey = 0, onedit }: {
+  let { repo, onchange, busy, track, jumpTo = null, refreshKey = 0, onedit, oncommand }: {
     repo: string;
+    /** Run a custom command (Settings › Git) with these vars. */
+    oncommand?: (c: GitCmd, vars: Record<string, string>) => void;
     /** Open the current version of a file in the editor. */
     onedit?: (path: string, line?: number) => void;
     /** Laeuft gerade eine Git-Aktion: keine zweite starten. Anzeige macht GitView ueber track. */
@@ -31,6 +34,7 @@
     refreshKey?: number;
   } = $props();
 
+  const cmds = $derived(gitCmds.filter((g) => !usesFile(g)));
   const PAGE = 200;
   // Farben pro Graph-Spur, per Index zyklisch. Hell: gleiche Hues, oklch L 0.55.
   const DARK = ["#5aa9e6", "#e6875a", "#7ec850", "#c85fd6", "#e6c15a", "#5ae6c1", "#e65a7c", "#a9a9e6"];
@@ -460,6 +464,12 @@
         <ContextItem label="Reset: mixed" onSelect={() => reset(c.sha, "mixed")} />
         <ContextItem label="Reset: hard" onSelect={() => reset(c.sha, "hard")} destructive />
         <ContextItem label="SHA kopieren" onSelect={() => copySha(c.sha)} />
+        {#if oncommand && cmds.length}
+          <ContextMenu.Separator class={menuSeparator} />
+          {#each cmds as g (g.name)}
+            <ContextItem label={g.name} onSelect={() => oncommand(g, { SHA: c.sha })} />
+          {/each}
+        {/if}
       </ContextMenu.Content>
     </ContextMenu.Portal>
   </ContextMenu.Root>
