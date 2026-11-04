@@ -383,6 +383,12 @@ fn shutdown(app: &tauri::AppHandle) {
     app.state::<runner::Runs>().kill_all();
 }
 
+/// Current branch of each repo from .git/HEAD (file read only, cheap enough to poll).
+#[tauri::command]
+fn repo_branches(paths: Vec<String>) -> Vec<String> {
+    paths.iter().map(|p| read_branch(Path::new(p))).collect()
+}
+
 /// Vor update.install(): unter Windows beendet der Installer die App ohne RunEvent::Exit.
 #[tauri::command]
 fn before_update(app: tauri::AppHandle) {
@@ -745,6 +751,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             default_root,
             scan,
+            repo_branches,
             reveal,
             before_update,
             windows_build,

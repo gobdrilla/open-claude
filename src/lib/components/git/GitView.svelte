@@ -111,7 +111,7 @@
   const STATE_LABEL = { merge: "Merge", rebase: "Rebase", "cherry-pick": "Cherry-Pick", revert: "Revert" };
 
   /** Status neu lesen; refreshKey laesst Sidebar und Verlauf nachziehen. Beim Fokus nur, wenn HEAD sich bewegt hat. */
-  async function refresh(force = true, remote = false) {
+  export async function refresh(force = true, remote = false) {
     const before = `${status?.head}|${status?.branch}`;
     try {
       status = await git.status(cur);

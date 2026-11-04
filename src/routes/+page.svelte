@@ -711,7 +711,25 @@
         busy = false;
       }
     };
+    // Claude (or another tool) can switch branches without the app noticing: follow .git/HEAD of the open projects.
+    const followBranches = async () => {
+      const open = [...sessions.map((s) => s.repo), gitRepo, editRepo].filter((r): r is Repo => !!r?.path);
+      const paths = [...new Set(open.map((r) => r.path))];
+      if (!paths.length) return;
+      const heads = await invoke<string[]>("repo_branches", { paths }).catch(() => []);
+      const now = new Map(paths.map((p, i) => [p, heads[i]]));
+      let moved = false;
+      for (const r of [...open, ...repos]) {
+        const b = now.get(r.path);
+        if (b && b !== r.branch) {
+          r.branch = b;
+          moved ||= r.path === gitRepo?.path;
+        }
+      }
+      if (moved) gitView?.refresh(false);
+    };
     const poll = async () => {
+      followBranches().catch(() => {});
       const focused = document.hasFocus();
       let alert = false;
       for (const s of sessions) {
