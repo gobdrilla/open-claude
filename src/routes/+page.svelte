@@ -1857,6 +1857,7 @@
       {@render keys("Editor", [
         [`${mod} + S`, "Datei speichern"],
         [`${mod} + P`, "Datei suchen und öffnen"],
+        [`${mac ? "⌃" : "Strg"} + G`, "Zu Zeile springen"],
         ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
       ])}
       {@render keys("Git", [

@@ -1,18 +1,22 @@
 <script lang="ts">
   // Strg+P: Datei des Projekts per Fuzzy-Suche oeffnen. Die Liste kommt bei jedem Oeffnen frisch (git ls-files, ohne Git alle Dateien).
   // Praefix "@": Symbole der aktiven Datei (Strg+Umschalt+O), "#": Symbole im Projekt (Strg+T), beides ueber laufende Language-Server.
+  // ":": go to line in the active file (Strg+G).
   import { Command, fileIcon } from "$lib/atelier-ui";
   import { fuzzy } from "$lib/fuzzy";
   import { fs } from "$lib/files";
   import { editor, open as openFile } from "$lib/editor.svelte";
   import { documentSymbols, workspaceSymbols, type SymHit } from "$lib/lsp.svelte";
+  import { gotoLabel, parseGoto } from "$lib/gotoline.logic";
 
   let { repo, open = $bindable(false), initial = "" }: { repo: string; open: boolean; initial?: string } = $props();
 
   let files = $state<string[]>([]);
   let query = $state("");
   let syms = $state<SymHit[]>([]);
-  const mode = $derived(query[0] === "@" || query[0] === "#" ? query[0] : "");
+  const mode = $derived(query[0] === "@" || query[0] === "#" || query[0] === ":" ? query[0] : "");
+  const active = $derived(editor(repo).active);
+  const target = $derived(mode === ":" && active ? parseGoto(query) : null);
 
   $effect(() => {
     if (!open) return;
@@ -49,7 +53,7 @@
   });
 
   const symHits = $derived.by(() => {
-    if (mode !== "@") return mode ? syms.slice(0, 50) : [];
+    if (mode !== "@") return mode === "#" ? syms.slice(0, 50) : [];
     const q = query.slice(1).trim();
     return syms
       .flatMap((s) => {
@@ -81,6 +85,12 @@
     openFile(repo, path);
   }
 
+  // open() clamps to the document and records the jump for Back.
+  function pickLine(t: { line: number; col?: number }) {
+    open = false;
+    if (active) openFile(repo, active, t.line, t.col);
+  }
+
   function pickSym(s: SymHit) {
     open = false;
     openFile(repo, s.path, s.line, s.col);
@@ -88,9 +98,23 @@
 </script>
 
 <Command.Dialog bind:open shouldFilter={false} title="Datei öffnen" description="Datei im Projekt suchen">
-  <Command.Input bind:value={query} placeholder="Datei öffnen (@ Symbol in Datei, # Symbol im Projekt)" />
+  <Command.Input bind:value={query} placeholder="Datei öffnen (@ Symbol in Datei, # Symbol im Projekt, : Zeile)" />
   <Command.List>
-    <Command.Empty>{mode ? "Keine Symbole gefunden (Language-Server aktiv?)." : "Keine Datei gefunden."}</Command.Empty>
+    <Command.Empty>
+      {mode === ":"
+        ? active
+          ? "Zeilennummer eingeben, z. B. :42 oder :42:7"
+          : "Keine Datei geöffnet."
+        : mode
+          ? "Keine Symbole gefunden (Language-Server aktiv?)."
+          : "Keine Datei gefunden."}
+    </Command.Empty>
+    {#if target}
+      <Command.Item value="goto" onSelect={() => pickLine(target)}>
+        <span class="truncate">{gotoLabel(target)}</span>
+        <span class="text-muted-foreground min-w-0 flex-1 truncate text-ui">{active}</span>
+      </Command.Item>
+    {/if}
     {#each symHits as s, i (i)}
       <Command.Item value={`${i}:${s.path}:${s.line}:${s.name}`} onSelect={() => pickSym(s)}>
         <span class="truncate">{s.name}</span>

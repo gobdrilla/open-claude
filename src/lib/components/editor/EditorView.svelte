@@ -112,6 +112,12 @@
       else if (!e.ctrlKey && !e.metaKey) void runStart(repo);
       return;
     }
+    // Go to line like VS Code: Ctrl+G everywhere, also on the Mac (Cmd+G stays find next there). CodeMirror swallows it (gotoline.ts).
+    if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "g") {
+      e.preventDefault();
+      [quickInit, quick] = [":", true];
+      return;
+    }
     // CodeMirror speichert die eigene Datei selbst (Mod-s) und setzt dann defaultPrevented; Mod-Shift-m ebenso.
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     if (e.shiftKey) {

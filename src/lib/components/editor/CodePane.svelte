@@ -13,6 +13,7 @@
   import { ghost } from "./ghost";
   import { wordHighlight } from "./wordHighlight";
   import { bracketColors } from "./bracketColors";
+  import { gotoLineKey } from "./gotoline";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -59,6 +60,7 @@
           { key: "Alt-ArrowRight", mac: "Mod-Alt-ArrowRight", run: () => navigate(repo, true) },
           indentWithTab,
         ]),
+        gotoLineKey,
         basicSetup,
         theme,
         indentOf(detectIndent(doc)),
@@ -211,7 +213,9 @@
     if (!r || r.path !== path || !v) return;
     untrack(() => {
       const l = v.state.doc.line(Math.min(Math.max(1, r.line), v.state.doc.lines));
-      v.dispatch({ selection: { anchor: l.from + Math.min(r.col ?? 0, l.length) }, effects: EditorView.scrollIntoView(l.from, { y: "center" }) });
+      const pos = l.from + Math.min(r.col ?? 0, l.length);
+      // The caret, not the line start: a column past the visible width scrolls sideways (or down when wrapped).
+      v.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: "center" }) });
       v.focus();
       s.reveal = null;
     });
