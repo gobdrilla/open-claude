@@ -839,6 +839,7 @@ pub fn run() {
             files::fs_files,
             files::fs_diff,
             files::fs_gutter,
+            files::git_blame,
             files::fs_search,
             preview::preview_allow,
             preview::xaml_render,

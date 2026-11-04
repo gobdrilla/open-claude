@@ -53,10 +53,17 @@ export const fs = {
   diff: (repo: string, path: string, content: string) => call<string>("fs_diff", { repo, path, content }),
   /** Diff HEAD -> content ohne Kontext (-U0) fuer den Git-Gutter, Kopf wie diff(); "" wenn gleich oder untracked. */
   gutter: (repo: string, path: string, content: string, context = false) => call<string>("fs_gutter", { repo, path, content, context }),
+  /** git blame of the unsaved buffer (line numbers as in the editor); empty when untracked or without git. */
+  blame: (repo: string, path: string, content: string) => call<Blame>("git_blame", { repo, path, content }),
   /** Projektsuche wie files(), je Zeile der erste Treffer, hoechstens 2000. Fehler bei ungueltigem Regex. */
   search: (repo: string, query: string, regex: boolean, caseSensitive: boolean) =>
     call<Hit[]>("fs_search", { repo, query, regex, case: caseSensitive }),
 };
+
+/** time in seconds since 1970; the all-zero sha marks lines not committed yet. */
+export type BlameCommit = { sha: string; author: string; time: number; summary: string };
+/** lines[i] = index into commits for editor line i + 1. */
+export type Blame = { commits: BlameCommit[]; lines: number[] };
 
 /** line ab 1, col in UTF-16 (wie CodeMirror), text getrimmt und auf 200 Zeichen gekuerzt. */
 export type Hit = { path: string; line: number; col: number; text: string };

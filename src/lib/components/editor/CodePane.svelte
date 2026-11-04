@@ -7,7 +7,7 @@
   import { lintGutter, setDiagnostics } from "@codemirror/lint";
   import { Button, DiffDialog, Empty } from "$lib/atelier-ui";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
-  import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
+  import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, gitHook, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
   import { detectIndent, gutterMarks, huge, span } from "$lib/editor.logic";
   import { gitGutter, indentFolding, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
   import { ghost } from "./ghost";
@@ -18,6 +18,7 @@
   import { lens } from "./lens";
   import { ruler } from "./ruler";
   import { stickyScroll } from "./sticky";
+  import { inlineBlame, syncBlame } from "./blame";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -43,6 +44,8 @@
       (d) => (head = d),
       (e) => (s.error = String(e)),
     );
+
+  const openCommit = (sha: string) => gitHook.showCommit(repo, sha);
 
   // Die Callbacks greifen nur auf den Store zu, nie auf die Komponente: der EditorState ueberlebt sie.
   const fresh = (doc: string) =>
@@ -84,6 +87,7 @@
         gitGutter((v) => v.dom.dispatchEvent(new CustomEvent("gitdiff", { bubbles: true }))),
         ghost(path, () => prefs.ai),
         stickyScroll,
+        inlineBlame(prefs.blame, repo, path, openCommit),
         EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
         EditorView.updateListener.of((u) => {
           if (!u.selectionSet && !(u.focusChanged && u.view.hasFocus)) return;
@@ -212,6 +216,12 @@
   $effect(() => {
     const w = prefs.wrap;
     view?.dispatch({ effects: wrap.reconfigure(w ? EditorView.lineWrapping : []) });
+  });
+
+  // Blame setting is global too.
+  $effect(() => {
+    const on = prefs.blame;
+    if (view) syncBlame(view, on, repo, path, openCommit);
   });
 
   // Sprungziel (Stack-Link, Testdetails): Cursor auf die Zeile, mittig zeigen, Ziel verbrauchen.

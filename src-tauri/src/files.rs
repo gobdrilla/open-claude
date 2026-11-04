@@ -334,6 +334,79 @@ fn gutter(repo: &str, path: &str, content: &str, context: bool) -> Result<String
     diff_texts(repo, path, &lf(&String::from_utf8_lossy(&o.stdout)), content, !context)
 }
 
+#[derive(Serialize, Default, Debug, PartialEq)]
+pub struct Blame {
+    /// Each commit once; the all-zero sha marks uncommitted lines.
+    commits: Vec<BlameCommit>,
+    /// Index into `commits` per line of the buffer (0-based line).
+    lines: Vec<u32>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+struct BlameCommit {
+    sha: String,
+    author: String,
+    /// Seconds since 1970.
+    time: i64,
+    summary: String,
+}
+
+/// `git blame --porcelain` output: a header "<sha> <orig> <final> [<n>]" per line, commit fields only the first time.
+fn parse_blame(out: &str) -> Blame {
+    let mut b = Blame::default();
+    let mut cur = 0usize;
+    for l in out.lines() {
+        if l.starts_with('\t') {
+            continue;
+        }
+        let mut words = l.split(' ');
+        let first = words.next().unwrap_or("");
+        if first.len() >= 40 && first.bytes().all(|c| c.is_ascii_hexdigit()) {
+            let Some(line) = words.nth(1).and_then(|n| n.parse::<usize>().ok()) else { continue };
+            cur = b.commits.iter().position(|c| c.sha == first).unwrap_or_else(|| {
+                b.commits.push(BlameCommit { sha: first.into(), author: String::new(), time: 0, summary: String::new() });
+                b.commits.len() - 1
+            });
+            if b.lines.len() < line {
+                b.lines.resize(line, 0);
+            }
+            b.lines[line - 1] = cur as u32;
+        } else if let Some(c) = b.commits.get_mut(cur) {
+            if let Some(v) = l.strip_prefix("author ") {
+                c.author = v.into();
+            } else if let Some(v) = l.strip_prefix("author-time ") {
+                c.time = v.parse().unwrap_or(0);
+            } else if let Some(v) = l.strip_prefix("summary ") {
+                c.summary = v.into();
+            }
+        }
+    }
+    b
+}
+
+/// Blame of the unsaved buffer (`--contents -`), so line numbers match the editor. Untracked or no git: empty.
+fn blame(repo: &str, path: &str, content: &str) -> Result<Blame, String> {
+    let file = within(repo, path)?;
+    // The buffer is LF without BOM; give git the file's own line endings back, else every line would count as changed.
+    // Unchanged buffer: the file itself, so mixed line endings stay as they are.
+    let disk = std::fs::read_to_string(file).ok();
+    let text = match disk {
+        Some(d) if lf(&d) == content => d,
+        d => {
+            let mut text = if d.as_ref().is_some_and(|d| d.contains("\r\n")) { content.replace('\n', "\r\n") } else { content.to_string() };
+            if d.as_ref().is_some_and(|d| d.starts_with(BOM)) {
+                text.insert_str(0, BOM);
+            }
+            text
+        }
+    };
+    let o = exec(git(repo).args(["blame", "--porcelain", "--contents", "-", "--"]).arg(path), Some(text.as_bytes()))?;
+    if !o.status.success() {
+        return Ok(Blame::default());
+    }
+    Ok(parse_blame(&String::from_utf8_lossy(&o.stdout)))
+}
+
 /// Bildtyp nach Endung; nur was Browser und API sicher anzeigen.
 fn image_type(path: &str) -> Option<&'static str> {
     match Path::new(path).extension()?.to_str()?.to_ascii_lowercase().as_str() {
@@ -413,6 +486,11 @@ pub async fn fs_diff(repo: String, path: String, content: String) -> Result<Stri
 #[tauri::command]
 pub async fn fs_gutter(repo: String, path: String, content: String, context: Option<bool>) -> Result<String, String> {
     blocking(move || gutter(&repo, &path, &content, context.unwrap_or(false))).await
+}
+
+#[tauri::command]
+pub async fn git_blame(repo: String, path: String, content: String) -> Result<Blame, String> {
+    blocking(move || blame(&repo, &path, &content)).await
 }
 
 #[tauri::command]
@@ -621,6 +699,43 @@ mod tests {
         // Untracked: keine Marken.
         assert_eq!(gutter(&repo, "neu.txt", "x\n", false).unwrap(), "");
         assert!(gutter(&repo, "../a.txt", "x", false).is_err());
+    }
+
+    #[test]
+    fn blame_des_puffers() {
+        let repo = tmp("blame");
+        let git_ok = |args: &[&str]| assert!(exec(git(&repo).args(args), None).unwrap().status.success(), "{args:?}");
+        let commit = |m: &str| git_ok(&["-c", "core.autocrlf=false", "-c", "user.name=Anna Beispiel", "-c", "user.email=a@b", "commit", "-qam", m]);
+        git_ok(&["init"]);
+        std::fs::write(Path::new(&repo).join("a.txt"), "eins\r\nzwei\r\n").unwrap();
+        git_ok(&["-c", "core.autocrlf=false", "add", "a.txt"]);
+        commit("Erster");
+        std::fs::write(Path::new(&repo).join("a.txt"), "eins\r\nzwei\r\ndrei\r\n").unwrap();
+        commit("Zweiter");
+        // LF buffer against CRLF file; line 2 edited and a line inserted before it, unsaved.
+        let b = blame(&repo, "a.txt", "eins\nneu\nZWEI\ndrei\n").unwrap();
+        assert_eq!(b.lines.len(), 4, "{b:?}");
+        let c = |i: usize| &b.commits[b.lines[i] as usize];
+        assert_eq!((c(0).summary.as_str(), c(0).author.as_str()), ("Erster", "Anna Beispiel"));
+        assert!(c(0).time > 1_600_000_000);
+        assert!(c(1).sha.bytes().all(|x| x == b'0') && c(2).sha == c(1).sha);
+        assert_eq!(c(3).summary, "Zweiter");
+        // Each commit once.
+        assert_eq!(b.commits.len(), 3);
+        // Mixed line endings, buffer unchanged: the LF lines are not uncommitted.
+        std::fs::write(Path::new(&repo).join("m.txt"), "eins\r\nzwei\ndrei\r\n").unwrap();
+        git_ok(&["-c", "core.autocrlf=false", "add", "m.txt"]);
+        commit("Gemischt");
+        let b = blame(&repo, "m.txt", "eins\nzwei\ndrei\n").unwrap();
+        assert!(b.lines.iter().all(|&i| b.commits[i as usize].summary == "Gemischt"), "{b:?}");
+        // Untracked file: nothing, no error.
+        std::fs::write(Path::new(&repo).join("neu.txt"), "x\n").unwrap();
+        assert_eq!(blame(&repo, "neu.txt", "x\n").unwrap(), Blame::default());
+        assert!(blame(&repo, "../a.txt", "x").is_err());
+        // No git at all: nothing either.
+        let plain = tmp("blame-ohne-git");
+        std::fs::write(Path::new(&plain).join("a.txt"), "x\n").unwrap();
+        assert_eq!(blame(&plain, "a.txt", "x\n").unwrap(), Blame::default());
     }
 
     #[test]

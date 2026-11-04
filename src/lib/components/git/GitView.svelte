@@ -36,12 +36,15 @@
     onaccounts,
     unity = false,
     onedit,
+    commit = null,
   }: {
     repo: string;
     accounts: Account[];
     onaccounts: () => void;
     unity?: boolean;
     onedit?: (path: string, line?: number) => void;
+    /** Open with this commit selected in the history (inline blame in the editor). */
+    commit?: string | null;
   } = $props();
 
   const isUnity = $derived(unity);
@@ -68,7 +71,7 @@
   // Forge-Panels kosten API-Calls: nur nachziehen, wenn sich HEAD/Branch bewegt oder das Remote angefasst wurde.
   let forgeKey = $state(0);
   let side = $state(stored("git.side", 240));
-  let tab = $state<"changes" | "history" | "releases" | "ci" | "unity">("changes");
+  let tab = $state<"changes" | "history" | "releases" | "ci" | "unity">(untrack(() => (commit ? "history" : "changes")));
   // Forge-Tabs erst beim ersten Oeffnen mounten: sonst API-Calls, obwohl nie hingeschaut wird.
   let seen = $state({ releases: false, ci: false, unity: false });
   let ciKind = $state<ForgeKind | null>(null);
@@ -76,7 +79,7 @@
     if (tab !== "changes" && tab !== "history") seen[tab] = true;
   });
   let conflictPath = $state<string | null>(null);
-  let jumpTo = $state<string | null>(null);
+  let jumpTo = $state<string | null>(untrack(() => commit));
   let busy = $state("");
   let error = $state("");
   // Notice blendet error aus; ohne eigenes Flag stuende danach ewig "Lese Status …".

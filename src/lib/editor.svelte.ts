@@ -416,10 +416,11 @@ export function setText(repo: string, path: string, text: string): void {
 }
 
 /** Zeilenumbruch (Alt+Z), global fuer alle Projekte; localStorage "editor:wrap". */
-export const prefs = $state({ wrap: false, ai: true });
+export const prefs = $state({ wrap: false, ai: true, blame: true });
 try {
   prefs.wrap = localStorage.getItem("editor:wrap") === "1";
   prefs.ai = localStorage.getItem("editor:ai") !== "0";
+  prefs.blame = localStorage.getItem("editor:blame") !== "0";
 } catch {
   // Ohne localStorage: kein Umbruch, KI-Vorschlaege an.
 }
@@ -432,6 +433,18 @@ export function toggleAi(): void {
     // Gilt dann nur fuer diese Sitzung.
   }
 }
+
+export function toggleBlame(): void {
+  prefs.blame = !prefs.blame;
+  try {
+    localStorage.setItem("editor:blame", prefs.blame ? "1" : "0");
+  } catch {
+    // Gilt dann nur fuer diese Sitzung.
+  }
+}
+
+/** Show a commit in the git view (click on the inline blame); set by +page, which owns the views. */
+export const gitHook = { showCommit: (() => {}) as (repo: string, sha: string) => void };
 
 export function toggleWrap(): void {
   prefs.wrap = !prefs.wrap;

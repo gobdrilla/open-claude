@@ -44,7 +44,7 @@
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
-  import { drop, isDirty, open as openFile } from "$lib/editor.svelte";
+  import { drop, gitHook, isDirty, open as openFile } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
   import { claudeTarget, ide, listenIde } from "$lib/ide.svelte";
   import { testCancel } from "$lib/testing.svelte";
@@ -790,13 +790,17 @@
   }
 
   /** Git-Ansicht fuer das Projekt; ein laufendes Terminal bleibt im Hintergrund. */
-  function openGit(repo?: Repo) {
+  function openGit(repo?: Repo, commit: string | null = null) {
     // Gast-Sitzung: kein Ordner auf diesem Rechner
     if (!repo?.path) return;
     active = null;
     editRepo = null;
+    gitCommit = commit;
     gitRepo = repo;
   }
+  /** Commit the git view opens with (blame click in the editor). */
+  let gitCommit = $state<string | null>(null);
+  gitHook.showCommit = (repo, sha) => editRepo?.path === repo && openGit(editRepo, sha);
 
   /** Genau diese Sitzung im Terminal zeigen: wie launch, ohne nach Projekt oder Gruppe aufzuloesen. */
   async function openSessionTab(id: string) {
@@ -1702,6 +1706,7 @@
         <GitView
           bind:this={gitView}
           repo={gitRepo.path}
+          commit={gitCommit}
           unity={isUnity(gitRepo)}
           onedit={async (path, line) => {
             const repo = gitRepo!;
