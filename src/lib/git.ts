@@ -13,6 +13,7 @@ export type FileChange = {
   conflict: boolean;
 };
 
+export type MergeMode = "default" | "no-ff" | "ff-only" | "squash";
 export type RepoState = "clean" | "merge" | "rebase" | "cherry-pick" | "revert";
 
 export type Status = {
@@ -103,7 +104,8 @@ export const git = {
     call<string>("git_branch_delete", { repo, name, force, remote }),
   branchRename: (repo: string, from: string, to: string) =>
     call<void>("git_branch_rename", { repo, from, to }),
-  merge: (repo: string, rev: string, noFf: boolean) => call<string>("git_merge", { repo, rev, noFf }),
+  merge: (repo: string, rev: string, mode: MergeMode, message: string | null) =>
+    call<string>("git_merge", { repo, rev, mode, message }),
   rebase: (repo: string, onto: string) => call<string>("git_rebase", { repo, onto }),
   /** Laufenden merge/rebase/cherry-pick/revert abbrechen bzw. fortsetzen (je nach Status.state). */
   abort: (repo: string) => call<string>("git_abort", { repo }),

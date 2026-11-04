@@ -949,13 +949,32 @@ fn branches(repo: &str) -> Result<Vec<Branch>, String> {
     Ok(parse_branches(&list(BRANCH_FMT.to_string())?, None))
 }
 
-fn merge(repo: &str, rev: &str, no_ff: bool) -> Result<String, String> {
+/// mode: default (honours merge.ff) | no-ff | ff-only | squash; squash ends in one regular commit.
+fn merge(repo: &str, rev: &str, mode: &str, message: Option<&str>) -> Result<String, String> {
+    let flag = match mode {
+        "default" => None,
+        "no-ff" => Some("--no-ff"),
+        "ff-only" => Some("--ff-only"),
+        "squash" => Some("--squash"),
+        _ => return Err("Unbekannter Merge-Modus".into()),
+    };
+    let message = message.filter(|m| !m.trim().is_empty() && mode != "ff-only");
     let mut cmd = git(repo);
-    cmd.args(["merge", "--no-edit"]);
-    if no_ff {
-        cmd.arg("--no-ff");
+    cmd.args(["merge", "--no-edit"]).args(flag);
+    if let Some(m) = message.filter(|_| mode != "squash") {
+        cmd.arg(format!("--message={m}"));
     }
-    tolerate(repo, cmd.arg(arg(rev)?))
+    let res = tolerate(repo, cmd.arg(arg(rev)?))?;
+    // --squash only stages; nothing staged = already up to date.
+    if mode != "squash" || has_conflicts(repo) || ok(git(repo).args(["diff", "--cached", "--quiet", "HEAD", "--"])) {
+        return Ok(res);
+    }
+    match message {
+        Some(m) => commit(repo, m, false)?,
+        // Without -F git takes .git/SQUASH_MSG ("Squashed commit of the following: ...").
+        None => out(git(repo).args(["commit", "-q"]))?,
+    };
+    Ok(res)
 }
 
 fn rebase_onto(repo: &str, onto: &str) -> Result<String, String> {
@@ -1368,8 +1387,8 @@ pub async fn git_branch_rename(repo: String, from: String, to: String) -> Result
 }
 
 #[tauri::command]
-pub async fn git_merge(repo: String, rev: String, no_ff: bool) -> Result<String, String> {
-    blocking(move || merge(&repo, &rev, no_ff)).await
+pub async fn git_merge(repo: String, rev: String, mode: String, message: Option<String>) -> Result<String, String> {
+    blocking(move || merge(&repo, &rev, &mode, message.as_deref())).await
 }
 
 #[tauri::command]
@@ -1800,7 +1819,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         write("a.txt", "eins\nMAIN\ndrei\n");
         stage(r, &all(&["a.txt"])).unwrap();
         commit(r, "main", false).unwrap();
-        merge(r, "feature/ü", false).unwrap();
+        merge(r, "feature/ü", "default", None).unwrap();
         let st = status(r).unwrap();
         assert_eq!(st.state, RepoState::Merge);
         assert!(st.files.iter().any(|f| f.path == "a.txt" && f.conflict));
@@ -2292,7 +2311,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         stage(&r, &v(&["weg.txt"])).unwrap();
         commit(&r, "m loescht", false).unwrap();
 
-        merge(&r, "f", false).unwrap();
+        merge(&r, "f", "default", None).unwrap();
         assert_eq!(status(&r).unwrap().state, RepoState::Merge);
         assert!(sequencer(&r, "--continue").is_err());
         sequencer(&r, "--abort").unwrap();
@@ -2300,7 +2319,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         assert_eq!(s.state, RepoState::Clean);
         assert!(s.files.is_empty());
 
-        merge(&r, "f", true).unwrap();
+        merge(&r, "f", "no-ff", None).unwrap();
         let st = status(&r).unwrap();
         assert!(file(&st, "weg.txt").unwrap().conflict, "{:?}", st.files);
         let c = conflict(&r, "weg.txt").unwrap();
@@ -2317,8 +2336,57 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         ci(&r, "a.txt", "G\n", "g");
         checkout(&r, "main", false, None).unwrap();
         put(&r, "a.txt", "lokal\n");
-        assert!(merge(&r, "g", false).is_err());
+        assert!(merge(&r, "g", "default", None).is_err());
         assert_eq!(status(&r).unwrap().state, RepoState::Clean);
+    }
+
+    #[test]
+    fn m_merge_modi() {
+        let (_t, r) = fresh("mergemodi");
+        let reset = |r: &str, rev: &str| out(git(r).args(["reset", "-q", "--hard", rev])).unwrap();
+        let head = |r: &str| log(r, Some("HEAD"), 0, 1).unwrap().remove(0);
+        let start = ci(&r, "a.txt", "1\n2\n3\n", "start");
+        checkout(&r, "f", true, None).unwrap();
+        let f = ci(&r, "f.txt", "f\n", "f");
+        checkout(&r, "main", false, None).unwrap();
+        assert!(merge(&r, "f", "x", None).is_err());
+
+        // Fast-forward possible: default moves, no-ff makes a merge commit with the own message
+        merge(&r, "f", "default", Some("ignoriert")).unwrap();
+        assert_eq!(head(&r).sha, f);
+        reset(&r, &start);
+        merge(&r, "f", "no-ff", Some("Eigener Merge\n\nmit Text")).unwrap();
+        let h = head(&r);
+        assert_eq!((h.parents.len(), h.subject.as_str()), (2, "Eigener Merge"));
+        assert_eq!(show(&r, &h.sha).unwrap().body.trim(), "mit Text");
+
+        // Diverged: ff-only fails without leaving a state behind
+        reset(&r, &start);
+        ci(&r, "m.txt", "m\n", "m");
+        assert!(merge(&r, "f", "ff-only", None).is_err());
+        assert_eq!(status(&r).unwrap().state, RepoState::Clean);
+
+        // Squash: one regular commit, with and without own message
+        merge(&r, "f", "squash", Some("Alles von f")).unwrap();
+        let h = head(&r);
+        assert_eq!((h.parents.len(), h.subject.as_str()), (1, "Alles von f"));
+        assert!(Path::new(&r).join("f.txt").exists());
+        reset(&r, "HEAD~1");
+        merge(&r, "f", "squash", None).unwrap();
+        assert_eq!(head(&r).subject, "Squashed commit of the following:");
+        assert!(status(&r).unwrap().files.is_empty());
+
+        // Own message survives a conflict and --continue
+        reset(&r, "HEAD~1");
+        ci(&r, "a.txt", "1\nM\n3\n", "m2");
+        checkout(&r, "f", false, None).unwrap();
+        ci(&r, "a.txt", "1\nF\n3\n", "f2");
+        checkout(&r, "main", false, None).unwrap();
+        merge(&r, "f", "no-ff", Some("Nach Konflikt")).unwrap();
+        assert_eq!(status(&r).unwrap().state, RepoState::Merge);
+        resolve(&r, "a.txt", "1\nMF\n3\n").unwrap();
+        sequencer(&r, "--continue").unwrap();
+        assert_eq!(head(&r).subject, "Nach Konflikt");
     }
 
     #[test]
@@ -2335,7 +2403,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         put(&r, "b.bin", [0u8, 7, 7]);
         stage(&r, &v(&["b.bin"])).unwrap();
         commit(&r, "m", false).unwrap();
-        merge(&r, "f", false).unwrap();
+        merge(&r, "f", "default", None).unwrap();
         assert!(file(&status(&r).unwrap(), "b.bin").unwrap().conflict);
         assert!(conflict(&r, "b.bin").is_err());
         assert!(resolve_side(&r, "nicht-im-konflikt.txt", true).is_err());
@@ -2425,7 +2493,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         checkout(&r, "g", true, Some("f")).unwrap();
         ci(&r, "g.txt", "g\n", "g");
         checkout(&r, "main", false, None).unwrap();
-        merge(&r, "g", true).unwrap();
+        merge(&r, "g", "no-ff", None).unwrap();
         let mc = log(&r, Some("main"), 0, 1).unwrap()[0].sha.clone();
         pick(&r, "revert", &mc).unwrap();
         assert!(!Path::new(&r).join("g.txt").exists());
@@ -2722,7 +2790,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         assert!(reset("--hard", "--all").is_err());
         assert!(log(&r, Some("--all"), 0, 1).is_err());
         assert!(show(&r, "-p").is_err());
-        assert!(merge(&r, "--abort", false).is_err());
+        assert!(merge(&r, "--abort", "default", None).is_err());
         assert!(pick(&r, "cherry-pick", "-n").is_err());
         assert!(conflict(&r, "../x").is_err());
         assert!(resolve(&r, "a.txt", "x").is_err());

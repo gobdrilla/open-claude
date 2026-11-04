@@ -1,11 +1,11 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Badge, Button, ConfirmDialog, ContextItem, IconButton, PromptDialog, Row, SectionToggle, TextButton, menuContent, menuItem } from "$lib/atelier-ui";
+  import { Badge, Button, ConfirmDialog, ContextItem, IconButton, PromptDialog, Row, SectionToggle, Select, TextButton, Textarea, menuContent, menuItem } from "$lib/atelier-ui";
   import { untrack } from "svelte";
   import { ContextMenu, DropdownMenu } from "bits-ui";
   import SettingsIcon from "@lucide/svelte/icons/settings-2";
   import CheckIcon from "@lucide/svelte/icons/check";
-  import { git, forge, type Branch, type Tag, type Stash, type Submodule, type PullRequest, type Status } from "$lib/git";
+  import { git, forge, type MergeMode, type Branch, type Tag, type Stash, type Submodule, type PullRequest, type Status } from "$lib/git";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import CloudIcon from "@lucide/svelte/icons/cloud";
   import TagIcon from "@lucide/svelte/icons/tag";
@@ -221,6 +221,40 @@
     if (value) await run(title, () => action(value));
   }
 
+  // Merge dialog; the chosen mode is remembered across merges.
+  const MERGE_MODES = [
+    ["Standard (Fast-Forward wenn möglich)", "default"],
+    ["Immer Merge-Commit (--no-ff)", "no-ff"],
+    ["Nur Fast-Forward (--ff-only)", "ff-only"],
+    ["Squash (ein Commit, ohne Merge-Verknüpfung)", "squash"],
+  ] as const;
+  let mergeRev = $state<string | null>(null);
+  let mergeMsg = $state("");
+  let mergeMode = $state<MergeMode>(readMode());
+  function readMode(): MergeMode {
+    try {
+      const m = localStorage.getItem("git.mergeMode");
+      return MERGE_MODES.some(([, v]) => v === m) ? (m as MergeMode) : "default";
+    } catch {
+      return "default";
+    }
+  }
+  function openMerge(rev: string) {
+    mergeRev = rev;
+    mergeMsg = "";
+  }
+  async function doMerge() {
+    if (!mergeRev) return;
+    const [rev, mode, msg] = [mergeRev, mergeMode, mergeMsg.trim() ? mergeMsg : null];
+    mergeRev = null;
+    try {
+      localStorage.setItem("git.mergeMode", mode);
+    } catch {
+      // Ohne localStorage gilt die Wahl nur fuer diese Sitzung.
+    }
+    await run("Merge", () => git.merge(repo, rev, mode, mode === "ff-only" ? null : msg));
+  }
+
   // Lokal wie remote: das Backend wechselt auf einen vorhandenen lokalen Branch oder legt den
   // Tracking-Branch an (Name ueber die echten Remotes, auch bei "up/stream/x").
   function checkout(b: Branch) {
@@ -385,13 +419,7 @@
               <ContextMenu.Content class={menuContent}>
                 <ContextItem label="Auschecken" onSelect={() => checkout(b)} />
                 {#if !b.current}
-                  <ContextItem
-                    label="In aktuellen mergen"
-                    onSelect={() =>
-                      ask("merge", "Mergen", `„${b.name}“ in ${status.branch ?? "HEAD"} mergen?`, () =>
-                        run("Merge", () => git.merge(repo, b.name, false)),
-                      )}
-                  />
+                  <ContextItem label="In aktuellen mergen …" onSelect={() => openMerge(b.name)} />
                   <ContextItem
                     label="Aktuellen darauf rebasen"
                     onSelect={() =>
@@ -472,6 +500,7 @@
               <ContextMenu.Portal>
                 <ContextMenu.Content class={menuContent}>
                   <ContextItem label="Auschecken (Tracking-Branch)" onSelect={() => checkout(b)} />
+                  <ContextItem label="In aktuellen mergen …" onSelect={() => openMerge(b.name)} />
                   {#if b.name !== base}
                     <ContextItem label="Als Production-Branch festlegen" onSelect={() => setBase(b.name)} />
                   {/if}
@@ -670,6 +699,24 @@
   onconfirm={doConfirm}
   oncancel={() => (confirm = null)}
 />
+
+<ConfirmDialog
+  open={mergeRev !== null}
+  title="„{mergeRev}“ in {status.branch ?? "HEAD"} mergen"
+  message={mergeMode === "squash" ? "Bei Konflikten: lösen, dann im Tab Änderungen committen." : undefined}
+  action="Mergen"
+  tone="default"
+  wide
+  onconfirm={doMerge}
+  oncancel={() => (mergeRev = null)}
+>
+  <div class="flex flex-col gap-2">
+    <Select bind:value={mergeMode} options={MERGE_MODES} class="h-7 w-full" aria-label="Merge-Modus" />
+    {#if mergeMode !== "ff-only"}
+      <Textarea bind:value={mergeMsg} density="sm" class="h-24 field-sizing-fixed font-mono" placeholder="Eigene Nachricht (optional)" aria-label="Merge-Nachricht" />
+    {/if}
+  </div>
+</ConfirmDialog>
 
 <PromptDialog
   open={prompt !== null}

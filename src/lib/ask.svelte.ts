@@ -3,7 +3,6 @@
 /** Aktionen mit abschaltbarer Rueckfrage; Label fuer die Einstellungen. */
 export const ASKS = {
   checkout: "Branch wechseln",
-  merge: "Mergen",
   rebase: "Rebasen",
   pick: "Cherry-Pick / Revert",
   stash: "Stash anwenden",
