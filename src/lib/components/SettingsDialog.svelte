@@ -152,6 +152,9 @@
             <SettingRow label="Inlay-Hinweise" description="Typen und Parameternamen grau im Code, vom Language-Server.">
               <Switch label="Inlay-Hinweise" on={prefs.inlay} onclick={() => togglePref("inlay")} />
             </SettingRow>
+            <SettingRow label="Beim Speichern formatieren" description="{mod}+S formatiert die Datei vorher über den Language-Server.">
+              <Switch label="Beim Speichern formatieren" on={prefs.format} onclick={() => togglePref("format")} />
+            </SettingRow>
           </SettingsSection>
           <SettingsSection title="Darstellung">
             <SettingRow label="Zoom" description="Gilt für alle Ansichten. Auch mit {mod} + / − / 0.">

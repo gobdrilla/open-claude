@@ -5,6 +5,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
 import { ChangeSet, Prec, StateEffect, StateField, Text, type Extension } from "@codemirror/state";
 import { EditorView, keymap, showDialog, showTooltip, type Command } from "@codemirror/view";
+import { getIndentUnit, indentUnit } from "@codemirror/language";
 import { forEachDiagnostic, type Diagnostic } from "@codemirror/lint";
 import {
   LSPClient,
@@ -376,6 +377,33 @@ export async function disk(repo: string, path: string) {
   }
   conn.client.sync();
   conn.client.notification("textDocument/didSave", { textDocument: { uri: f.uri } });
+}
+
+/**
+ * Format on save: textDocument/formatting for the file's open editor, applied as one undoable change.
+ * Only via a running server, never starts one; after 2 s, on any error or if typed meanwhile the text stays as is.
+ */
+export async function formatFile(repo: string, path: string): Promise<void> {
+  if (!peek(repo)?.lsp) return;
+  const ask = async () => {
+    const view = (await connOf(repo, path))?.ws.byPath(path)?.view;
+    const plugin = view && LSPPlugin.get(view);
+    if (!view || !plugin?.client.serverCapabilities?.documentFormattingProvider) return null;
+    plugin.client.sync();
+    const doc = view.state.doc;
+    const edits = await plugin.client.request<unknown, { range: { start: LspPos; end: LspPos }; newText: string }[] | null>("textDocument/formatting", {
+      textDocument: { uri: plugin.uri },
+      options: { tabSize: getIndentUnit(view.state), insertSpaces: !view.state.facet(indentUnit).includes("\t") },
+    });
+    return { view, plugin, doc, edits };
+  };
+  const r = await Promise.race([ask().catch(() => null), new Promise<null>((done) => setTimeout(() => done(null), 2000))]);
+  if (!r?.edits?.length || !r.view.state.doc.eq(r.doc)) return;
+  const { view, plugin, doc } = r;
+  view.dispatch({
+    changes: r.edits.map((e) => ({ from: plugin.fromPosition(e.range.start, doc), to: plugin.fromPosition(e.range.end, doc), insert: e.newText })),
+    userEvent: "format",
+  });
 }
 
 /** Tab geschlossen bzw. Datei umbenannt/geloescht: beim Server schliessen, Befunde weg. */

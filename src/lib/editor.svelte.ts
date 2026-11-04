@@ -35,7 +35,7 @@ import { pushRunState, redetect, run as runOf, runStop } from "./run.svelte.ts";
 import { BUILTIN, type CustomRun, type Profile } from "./run.logic.ts";
 import { rescan, testCancel } from "./testing.svelte.ts";
 // Zirkulaer (lsp.svelte.ts nutzt open/peek/setText): beide Seiten greifen erst zur Laufzeit zu, nie auf Modulebene.
-import { closed, disk, stop as stopLsp } from "./lsp.svelte.ts";
+import { closed, disk, formatFile, stop as stopLsp } from "./lsp.svelte.ts";
 import { pushEditor } from "./ide.svelte.ts";
 
 /** Platte weicht vom Puffer ab, waehrend lokale Aenderungen offen sind. */
@@ -376,12 +376,13 @@ export async function save(repo: string, path?: string, force = false): Promise<
   const f = p === null ? undefined : s.files[p];
   if (p === null || !f) return false;
   permanent(repo, p);
-  flush(repo, p);
-  const text = f.text;
   const key = snapKey(repo, p);
   if (saving.has(key)) return false;
   saving.add(key);
   try {
+    if (prefs.format) await formatFile(repo, p);
+    flush(repo, p);
+    const text = f.text;
     f.mtime = await fs.write(repo, p, text, f.crlf, f.bom, f.mtime, force);
     f.saved = text;
     // Waehrend des Schreibens kann weitergetippt worden sein.
@@ -453,18 +454,19 @@ export function setText(repo: string, path: string, text: string): void {
 }
 
 /** Zeilenumbruch (Alt+Z), global fuer alle Projekte; localStorage "editor:wrap". */
-export const prefs = $state({ wrap: false, ai: true, inlay: true, blame: true });
+export const prefs = $state({ wrap: false, ai: true, inlay: true, format: false, blame: true });
 try {
   prefs.wrap = localStorage.getItem("editor:wrap") === "1";
   prefs.ai = localStorage.getItem("editor:ai") !== "0";
   prefs.inlay = localStorage.getItem("editor:inlay") !== "0";
+  prefs.format = localStorage.getItem("editor:format") === "1";
   prefs.blame = localStorage.getItem("editor:blame") !== "0";
 } catch {
   // Ohne localStorage: kein Umbruch, KI-Vorschlaege an.
 }
 
-/** Settings switches for inlay hints and git blame; localStorage "editor:<key>". */
-export function togglePref(key: "inlay" | "blame"): void {
+/** Settings switches for inlay hints and format on save; localStorage "editor:<key>". */
+export function togglePref(key: "inlay" | "format" | "blame"): void {
   prefs[key] = !prefs[key];
   try {
     localStorage.setItem(`editor:${key}`, prefs[key] ? "1" : "0");
@@ -481,6 +483,7 @@ export function toggleAi(): void {
     // Gilt dann nur fuer diese Sitzung.
   }
 }
+
 
 /** Show a commit in the git view (click on the inline blame); set by +page, which owns the views. */
 export const gitHook = { showCommit: (() => {}) as (repo: string, sha: string) => void };
