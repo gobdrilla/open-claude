@@ -256,6 +256,7 @@
   let subjects = $state<string[]>([]);
   $effect(() => {
     const r = repo;
+    status.head; // reload after each commit or refresh
     git
       .log(r, null, 0, 200)
       .then((cs) => r === repo && (subjects = cs.map((c) => c.subject)))
