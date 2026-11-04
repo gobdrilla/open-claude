@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { EditorView } from "codemirror";
   import { basicSetup } from "./setup";
+  import { expandSelection } from "./expandSel";
   import { EditorState, Transaction } from "@codemirror/state";
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";
@@ -88,6 +89,7 @@
           indentWithTab,
         ]),
         gotoLineKey,
+        expandSelection,
         basicSetup,
         findPanel,
         theme,
