@@ -215,8 +215,14 @@
               onkeydown={(e) => key(e, n, id)}
             >
               {#if t.icon}<t.icon class="size-3.5 shrink-0 {t.tint ?? ''}" />{/if}
-              <!-- Narrow bar: fixed panels (Dateien, Suche, Tests) show only their icon unless active; the hidden scrollbar would cut them off. -->
-              <span class="whitespace-nowrap {t.preview ? 'italic' : ''} {t.icon && t.closable === false && n.active !== id ? '@max-[16rem]:hidden' : ''}">{t.title}</span>
+              <!-- Narrow bar: fixed panels (Dateien, Suche, Tests) show only their icon unless active, and even then when very narrow; the hidden scrollbar would cut them off. -->
+              <span
+                class="whitespace-nowrap {t.preview ? 'italic' : ''} {t.icon && t.closable === false
+                  ? n.active === id
+                    ? '@max-[11rem]:hidden'
+                    : '@max-[16rem]:hidden'
+                  : ''}">{t.title}</span
+              >
               {#if t.closable !== false}
                 <!-- Ungespeichert: Punkt, der beim Ueberfahren zum x wird. Per Tastatur schliesst Entf auf dem Tab. -->
                 <IconButton
