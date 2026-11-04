@@ -105,6 +105,20 @@ export function editsOf(r: { changes?: Record<string, TextEdit[]>; documentChang
   return Object.entries(r.changes ?? {}).map(([uri, edits]) => ({ uri, edits }));
 }
 
+/** Rename preview: one entry per file (path, count, lines), sorted by path; files outside the project show their URI. */
+export function renameSummary(repo: string, all: Edit[]): { files: { name: string; detail: string }[]; count: number } {
+  const files = all
+    .filter((e) => e.edits.length)
+    .map((e) => {
+      const lines = [...new Set(e.edits.map((x) => x.range.start.line + 1))].sort((a, b) => a - b);
+      const n = e.edits.length;
+      const shown = lines.slice(0, 8).join(", ") + (lines.length > 8 ? ", …" : "");
+      return { name: uriPath(repo, e.uri) ?? e.uri, detail: `${n} ${n === 1 ? "Stelle" : "Stellen"} · Zeile ${shown}` };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { files, count: all.reduce((n, e) => n + e.edits.length, 0) };
+}
+
 type Diag = { range: { start: LspPos }; severity?: number };
 
 /** Befunde eines Projekts aus lsp.diags (Schluessel repo+"\n"+path) als Liste: Fehler zuerst, dann Pfad, dann Zeile. */

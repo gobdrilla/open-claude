@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyEdits, editsOf, fileUri, flatSymbols, offsetAt, problems, projectScan, serverFor, uriPath } from "./lsp.logic.ts";
+import { applyEdits, editsOf, fileUri, flatSymbols, offsetAt, problems, projectScan, renameSummary, serverFor, uriPath } from "./lsp.logic.ts";
 
 test("Server nach Endung, Gross-/Kleinschreibung egal", () => {
   assert.deepEqual(serverFor("src/App.TSX"), { server: "typescript", languageId: "typescriptreact" });
@@ -97,4 +97,21 @@ test("projectScan: TS/Svelte/Python/C# oeffnen, Rust/Go nur starten, gedeckelt",
   const files = ["a.ts", "b.svelte", "c.py", "d.cs", "e.rs", "f.go", "g.json", "h.css", "i.c", "README.md"];
   assert.deepEqual(projectScan(files), { open: ["a.ts", "b.svelte", "c.py", "d.cs"], start: ["rust", "go"], capped: 0 });
   assert.deepEqual(projectScan(["a.ts", "b.ts", "c.ts"], 2), { open: ["a.ts", "b.ts"], start: [], capped: 1 });
+});
+
+test("renameSummary lists files with count and lines", () => {
+  const repo = "/a/b";
+  const at = (line: number) => ({ range: { start: { line, character: 0 }, end: { line, character: 3 } }, newText: "x" });
+  const s = renameSummary(repo, [
+    { uri: fileUri(repo, "z.ts"), edits: [at(3)] },
+    { uri: fileUri(repo, "src/a.ts"), edits: [at(9), at(0), at(9)] },
+    { uri: fileUri(repo, "empty.ts"), edits: [] },
+    { uri: fileUri(repo, "many.ts"), edits: [0, 1, 2, 3, 4, 5, 6, 7, 8].map(at) },
+  ]);
+  assert.equal(s.count, 13);
+  assert.deepEqual(s.files, [
+    { name: "many.ts", detail: "9 Stellen · Zeile 1, 2, 3, 4, 5, 6, 7, 8, …" },
+    { name: "src/a.ts", detail: "3 Stellen · Zeile 1, 10" },
+    { name: "z.ts", detail: "1 Stelle · Zeile 4" },
+  ]);
 });

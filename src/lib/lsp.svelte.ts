@@ -32,7 +32,9 @@ import { lspFolding } from "./components/editor/lspFold.ts";
 import { breadcrumbs } from "./components/editor/breadcrumbs.ts";
 import { semanticTokens } from "./components/editor/semantic.ts";
 import { INIT_OPTIONS, SETTINGS } from "./inlay.logic.ts";
-import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
+import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, renameSummary, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
+import { confirm } from "./confirm.svelte.ts";
+import type { LspRange } from "./nav.logic.ts";
 
 type Out = { t: "msg"; m: string } | { t: "exit"; code: number | null; err: string };
 export type LspDiag = { range: { start: LspPos; end: LspPos }; severity?: number; message: string; source?: string };
@@ -653,41 +655,72 @@ export async function workspaceSymbols(repo: string, query: string): Promise<Sym
 
 // ---------- Umbenennen ueber Dateien (F2) ----------
 
+type PrepareRename = LspRange | { range: LspRange; placeholder: string } | { defaultBehavior: boolean } | null;
+
 const renameCmd: Command = (view) => {
   const plugin = LSPPlugin.get(view);
   const word = view.state.wordAt(view.state.selection.main.head);
   const caps = plugin?.client.serverCapabilities;
   if (!plugin || !word || (caps && !caps.renameProvider)) return false;
+  void rename(view, plugin, word);
+  return true;
+};
+
+async function rename(view: EditorView, plugin: LSPPlugin, word: { from: number; to: number }) {
   const ws = plugin.client.workspace as StoreWorkspace;
+  let from = word.from;
+  let value = view.state.sliceDoc(word.from, word.to);
+  // Ask first where the server supports it: keywords, literals and library symbols get a message, not a dialog.
+  const prov = plugin.client.serverCapabilities?.renameProvider;
+  if (typeof prov === "object" && prov.prepareProvider) {
+    plugin.client.sync();
+    const doc = plugin.syncedDoc;
+    const r = await plugin.client
+      .request<unknown, PrepareRename>("textDocument/prepareRename", { position: plugin.toPosition(word.from, doc), textDocument: { uri: plugin.uri } })
+      .catch(() => undefined);
+    if (r === null) return void showDialog(view, { label: "Hier lässt sich nichts umbenennen", top: true });
+    const range = r && ("range" in r ? r.range : "start" in r ? r : null);
+    if (range && doc === plugin.syncedDoc) {
+      from = plugin.unsyncedChanges.mapPos(plugin.fromPosition(range.start, doc));
+      value = r && "placeholder" in r ? r.placeholder : view.state.sliceDoc(from, plugin.unsyncedChanges.mapPos(plugin.fromPosition(range.end, doc)));
+    }
+  }
   const { close, result } = showDialog(view, {
     label: "Neuer Name",
-    input: { name: "name", value: view.state.sliceDoc(word.from, word.to) },
+    input: { name: "name", value },
     focus: true,
     submitLabel: "Umbenennen",
     class: "cm-lsp-rename-panel",
   });
-  void result.then(async (form) => {
-    view.dispatch({ effects: close });
-    const name = (form?.elements.namedItem("name") as HTMLInputElement | null)?.value;
-    if (!name) return;
-    try {
-      plugin.client.sync();
-      // Mapping ab hier: Syncs bis zur Antwort (autoSync, disk) verschieben sonst die Positionen.
-      const n = await plugin.client.withMapping(async (m) => {
-        const res = await plugin.client.request<unknown, Parameters<typeof editsOf>[0]>("textDocument/rename", {
-          newName: name,
-          position: plugin.toPosition(word.from),
-          textDocument: { uri: plugin.uri },
-        });
-        return applyWorkspaceEdit(ws, editsOf(res), m);
+  const form = await result;
+  view.dispatch({ effects: close });
+  const name = (form?.elements.namedItem("name") as HTMLInputElement | null)?.value;
+  if (!name || name === value) return;
+  try {
+    plugin.client.sync();
+    // Mapping ab hier: Syncs bis zur Antwort (autoSync, disk) und waehrend der Vorschau verschieben sonst die Positionen.
+    const n = await plugin.client.withMapping(async (m) => {
+      const res = await plugin.client.request<unknown, Parameters<typeof editsOf>[0]>("textDocument/rename", {
+        newName: name,
+        position: plugin.toPosition(from),
+        textDocument: { uri: plugin.uri },
       });
-      showDialog(view, { label: `In ${n} ${n === 1 ? "Datei" : "Dateien"} umbenannt`, top: true });
-    } catch (e) {
-      plugin.reportError("Umbenennen fehlgeschlagen", e);
-    }
-  });
-  return true;
-};
+      const edits = editsOf(res);
+      const sum = renameSummary(ws.repo, edits);
+      // Other files change too: show where before touching them, as Rider's rename preview.
+      if (sum.files.length > 1) {
+        const ok = await confirm(`${sum.count} Stellen in ${sum.files.length} Dateien werden geändert.`, "Umbenennen", `„${value}“ in „${name}“ umbenennen?`, { items: sum.files, tone: "default" });
+        if (!ok) return -1;
+      }
+      return applyWorkspaceEdit(ws, edits, m);
+    });
+    if (n === 0) showDialog(view, { label: "Nichts zum Umbenennen gefunden", top: true });
+    else if (n > 0) showDialog(view, { label: `In ${n} ${n === 1 ? "Datei" : "Dateien"} umbenannt`, top: true });
+    view.focus();
+  } catch (e) {
+    plugin.reportError("Umbenennen fehlgeschlagen", e);
+  }
+}
 
 /** Offene Editoren per Transaktion (Undo), Puffer ohne Editor im Store, alles andere direkt auf der Platte. */
 async function applyWorkspaceEdit(ws: StoreWorkspace, all: Edit[], m: WorkspaceMapping): Promise<number> {
