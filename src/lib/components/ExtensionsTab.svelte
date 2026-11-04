@@ -14,6 +14,13 @@
   const info = (e: Entry) => (e.source === "user" ? `Eigene Erweiterung · ${base(e.dir!)}` : e.manifest?.description);
   // Link patterns broken by their manifest defaults (own settings are checked while editing).
   const problems = (m: Manifest) => linkerProblems(m, resolve(m.contributes.settings, exts.settings[m.id] ?? {}, {}));
+  // Once per section instead of under every row; names the settings only when not all of them are per project.
+  function repoHint(m: Manifest) {
+    const s = m.contributes.settings;
+    const r = s.filter((d) => d.scope === "repo");
+    if (!r.length) return "";
+    return `${r.length === s.length ? "Alle Werte" : r.map((d) => d.title).join(", ")} pro Projekt überschreibbar: Git-Ansicht › ⋯ › Erweiterungen für dieses Projekt …`;
+  }
   async function openDir() {
     error = "";
     try {
@@ -41,6 +48,7 @@
   {@const m = e.manifest!}
   <SettingsSection title={m.name}>
     <ExtensionSettingRows ext={m} />
+    {#if repoHint(m)}<p class="text-muted-foreground text-meta px-2 py-1.5">{repoHint(m)}</p>{/if}
     {#each problems(m) as p (p)}<p class="text-destructive text-meta px-2 py-1.5">{p}</p>{/each}
   </SettingsSection>
 {/each}

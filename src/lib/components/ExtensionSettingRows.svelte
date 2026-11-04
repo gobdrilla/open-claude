@@ -19,8 +19,6 @@
   };
   const placeholder = (d: SettingDecl) =>
     repo ? (global[d.key] !== "" ? `Global: ${global[d.key]}` : (d.placeholder ?? "")) : typeof d.default === "string" && d.default ? d.default : (d.placeholder ?? "");
-  const description = (d: SettingDecl) =>
-    [d.description, !repo && d.scope === "repo" ? "Pro Projekt überschreibbar: Git-Ansicht › ⋯ › Erweiterungen." : ""].filter(Boolean).join(" ") || undefined;
 
   async function save(d: SettingDecl, v: string | boolean) {
     const text = typeof v === "string" ? v.trim() : v;
@@ -39,7 +37,7 @@
 </script>
 
 {#each decls as d (d.key)}
-  <SettingRow label={d.title} description={description(d)}>
+  <SettingRow label={d.title} description={d.description}>
     <div class="flex w-64 shrink-0 flex-col items-end gap-1">
       {#if d.type === "string"}
         <Input
