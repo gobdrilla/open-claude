@@ -976,7 +976,14 @@ fn merge(repo: &str, rev: &str, mode: &str, message: Option<&str>) -> Result<Str
     if let Some(m) = message.filter(|_| mode != "squash") {
         cmd.arg(format!("--message={m}"));
     }
-    let res = tolerate(repo, cmd.arg(arg(rev)?))?;
+    let res = tolerate(repo, cmd.arg(arg(rev)?)).map_err(|e| {
+        // git's first line is a "hint:", the real reason comes last.
+        if mode == "ff-only" && e.contains("Not possible to fast-forward") {
+            "Fast-Forward nicht möglich: Die Branches sind auseinandergelaufen. Anderen Merge-Modus wählen oder erst rebasen.".into()
+        } else {
+            e
+        }
+    })?;
     // --squash only stages; nothing staged = already up to date.
     if mode != "squash" || has_conflicts(repo) || ok(git(repo).args(["diff", "--cached", "--quiet", "HEAD", "--"])) {
         return Ok(res);
@@ -2437,7 +2444,7 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         // Diverged: ff-only fails without leaving a state behind
         reset(&r, &start);
         ci(&r, "m.txt", "m\n", "m");
-        assert!(merge(&r, "f", "ff-only", None).is_err());
+        assert!(merge(&r, "f", "ff-only", None).unwrap_err().starts_with("Fast-Forward nicht möglich"));
         assert_eq!(status(&r).unwrap().state, RepoState::Clean);
 
         // Squash: one regular commit, with and without own message
