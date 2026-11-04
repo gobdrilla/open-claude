@@ -111,8 +111,9 @@ export function parseManifest(text: string): Parsed {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
-  } catch (e) {
-    return { error: `Manifest ist kein gültiges JSON: ${e instanceof Error ? e.message : e}` };
+  } catch {
+    // User manifests are checked with position in Rust (ext_scan); the engine message would be English.
+    return { error: "Manifest ist kein gültiges JSON" };
   }
   if (!isObj(raw)) return { error: "Manifest ungültig: kein JSON-Objekt" };
   const mv = raw.manifestVersion;

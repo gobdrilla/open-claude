@@ -34,7 +34,11 @@ fn scan(dir: &Path) -> Vec<ExtFile> {
                     return Err("Manifest ist größer als 256 KiB".into());
                 }
                 let bytes = std::fs::read(&f).map_err(|e| format!("Manifest nicht lesbar: {e}"))?;
-                String::from_utf8(bytes).map_err(|_| "Manifest ist kein UTF-8".to_string())
+                let text = String::from_utf8(bytes).map_err(|_| "Manifest ist kein UTF-8".to_string())?;
+                // Checked here because serde_json knows the position; the webview's JSON.parse message is English and has none (WebKit).
+                serde_json::from_str::<serde_json::Value>(&text)
+                    .map_err(|e| format!("Manifest ist kein gültiges JSON (Zeile {}, Spalte {})", e.line(), e.column()))?;
+                Ok(text)
             };
             let (text, error) = match read() {
                 Ok(t) => (Some(t), None),
@@ -70,23 +74,25 @@ mod tests {
     fn scan_liest_nur_ordner_mit_manifest() {
         let t = std::env::temp_dir().join(format!("ocui-ext-scan-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&t);
-        for d in ["b-ok", "a-big", "c-leer"] {
+        for d in ["b-ok", "a-big", "c-leer", "e-json"] {
             std::fs::create_dir_all(t.join(d)).unwrap();
         }
         std::fs::write(t.join("b-ok/manifest.json"), "{\"id\":\"x\"}").unwrap();
         std::fs::write(t.join("a-big/manifest.json"), vec![b' '; MAX_MANIFEST as usize + 1]).unwrap();
+        std::fs::write(t.join("e-json/manifest.json"), "{\n  \"id\": \"x\",\n  name: 1\n}").unwrap();
         std::fs::write(t.join("datei.json"), "{}").unwrap();
         std::fs::create_dir_all(t.join("d-bin")).unwrap();
         std::fs::write(t.join("d-bin/manifest.json"), [0xff, 0xfe]).unwrap();
 
         let r = scan(&t);
         let names: Vec<_> = r.iter().map(|e| Path::new(&e.dir).file_name().unwrap().to_string_lossy().into_owned()).collect();
-        assert_eq!(names, ["a-big", "b-ok", "d-bin"]);
+        assert_eq!(names, ["a-big", "b-ok", "d-bin", "e-json"]);
         assert_eq!(r[0].error.as_deref(), Some("Manifest ist größer als 256 KiB"));
         assert!(r[0].text.is_none());
         assert_eq!(r[1].text.as_deref(), Some("{\"id\":\"x\"}"));
         assert!(r[1].error.is_none());
         assert_eq!(r[2].error.as_deref(), Some("Manifest ist kein UTF-8"));
+        assert_eq!(r[3].error.as_deref(), Some("Manifest ist kein gültiges JSON (Zeile 3, Spalte 3)"));
         // Missing folder: empty, no error.
         assert!(scan(&t.join("fehlt")).is_empty());
         std::fs::remove_dir_all(&t).unwrap();

@@ -57,7 +57,7 @@ test("parseManifest: gültiges Manifest", () => {
 });
 
 test("parseManifest: Fehler", () => {
-  assert.match((parseManifest("{kaputt") as { error: string }).error, /^Manifest ist kein gültiges JSON: /);
+  assert.equal((parseManifest("{kaputt") as { error: string }).error, "Manifest ist kein gültiges JSON");
   assert.match((parseManifest("[]") as { error: string }).error, /^Manifest ungültig/);
   assert.match(err((m) => delete m.id), /Manifest ungültig: id/);
   for (const id of ["ABC", "a.b", "-x", "1a", ""]) assert.match(err((m) => (m.id = id)), /Manifest ungültig: id/, id);
