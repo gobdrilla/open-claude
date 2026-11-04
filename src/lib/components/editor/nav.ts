@@ -5,7 +5,7 @@ import { Prec, StateEffect, StateField, type Extension, type Range } from "@code
 import { Decoration, EditorView, ViewPlugin, keymap, showDialog, showTooltip, type Command, type DecorationSet } from "@codemirror/view";
 import { LSPPlugin, jumpToDefinition, type Workspace, type WorkspaceMapping } from "@codemirror/lsp-client";
 import { uriPath } from "$lib/lsp.logic";
-import { toLocs, uniqueLocs, type Loc } from "$lib/nav.logic";
+import { toLocs, uniqueLocs, type Loc, type LspRange } from "$lib/nav.logic";
 
 export type PickItem = { label: string; detail?: string; run: (view: EditorView) => void };
 type Pick = { pos: number; title?: string; items: PickItem[]; sel: number } | null;
@@ -149,6 +149,48 @@ export const showUsages = (view: EditorView, pos: number) =>
     pos,
   );
 
+type HierItem = { name: string; uri: string; range: LspRange; selectionRange: LspRange };
+
+/**
+ * Two-step hierarchy requests (prepare at the cursor, then ask for the related items) shown as locations.
+ * pick turns the answer into locations; false: no server or capability.
+ */
+function hierarchy<T>(view: EditorView, kind: "call" | "type", method: string, pick: (res: T[]) => Loc[], title: (n: number) => string, none: string): boolean {
+  const plugin = LSPPlugin.get(view);
+  const caps = plugin?.client.serverCapabilities as Record<string, unknown> | null | undefined;
+  if (!plugin || (caps && !caps[`${kind}HierarchyProvider`])) return false;
+  const pos = view.state.selection.main.head;
+  plugin.client.sync();
+  void plugin.client
+    .withMapping(async (m) => {
+      const items = await plugin.client.request<unknown, HierItem[] | null>(`textDocument/prepare${kind === "call" ? "Call" : "Type"}Hierarchy`, {
+        textDocument: { uri: plugin.uri },
+        position: plugin.toPosition(pos),
+      });
+      if (!items?.length) return void showDialog(view, { label: none, top: true });
+      const res = (await Promise.all(items.map((item) => plugin.client.request<unknown, T[] | null>(method, { item })))).flatMap((r) => r ?? []);
+      const locs = uniqueLocs(pick(res));
+      await showLocations(view, pos, locs, title(locs.length), none, m);
+    })
+    .catch((e) => plugin.reportError(none, e));
+  return true;
+}
+
+/** Call sites of the function at the cursor (Rider: Ctrl+Alt+H). */
+export const showCallers: Command = (view) =>
+  hierarchy<{ from: HierItem; fromRanges: LspRange[] }>(
+    view,
+    "call",
+    "callHierarchy/incomingCalls",
+    (res) => res.flatMap((c) => (c.fromRanges.length ? c.fromRanges : [c.from.selectionRange]).map((range) => ({ uri: c.from.uri, range }))),
+    (n) => `${n} Aufrufe`,
+    "Keine Aufrufer gefunden",
+  );
+
+/** Base types of the type at the cursor (Rider: Go to Base, Cmd/Ctrl+U); the other way is Implementations. */
+export const gotoBase: Command = (view) =>
+  hierarchy<HierItem>(view, "type", "typeHierarchy/supertypes", (res) => res.map((t) => ({ uri: t.uri, range: t.selectionRange })), (n) => `${n} Basistypen`, "Kein Basistyp im Projekt");
+
 // ---------- Cmd/Ctrl+click ----------
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -223,7 +265,10 @@ const theme = EditorView.baseTheme({
   ".cm-pick-detail": { opacity: "0.6", flexShrink: "0" },
 });
 
-/** Pick list, Cmd/Ctrl+click and the keys: Mod+F12 (VS Code) and Mod+Alt+B (Rider) implementation, Mod+Shift+B type. */
+/**
+ * Pick list, Cmd/Ctrl+click and the keys: Mod+F12 (VS Code) and Mod+Alt+B (Rider) implementation, Mod+Shift+B type,
+ * Ctrl+Alt+H callers, Mod+U base types (both Rider).
+ */
 export const lspNav: Extension = [
   pickList,
   hintField,
@@ -232,9 +277,12 @@ export const lspNav: Extension = [
   // Cmd/Ctrl+click jumps now: extra cursors with Alt+click as in VS Code.
   EditorView.clickAddsSelectionRange.of((e) => e.altKey),
   theme,
-  keymap.of([
+  // Above basicSetup: on the Mac its Emacs bindings take Ctrl+Alt+H (delete word), and Mod+U is undoSelection.
+  Prec.high(keymap.of([
     { key: "Mod-F12", run: gotoImplementation, preventDefault: true },
     { key: "Mod-Alt-b", run: gotoImplementation, preventDefault: true },
     { key: "Mod-Shift-b", run: gotoTypeDefinition, preventDefault: true },
-  ]),
+    { key: "Ctrl-Alt-h", run: showCallers, preventDefault: true },
+    { key: "Mod-u", run: gotoBase, preventDefault: true },
+  ])),
 ];
