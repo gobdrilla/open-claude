@@ -292,6 +292,23 @@
     }
   }
 
+  async function reword(c: Commit) {
+    const head = c.refs.some((r) => r === "HEAD" || r.startsWith("HEAD -> "));
+    try {
+      const [d, pushed] = await Promise.all([git.show(repo, c.sha), git.pushed(repo, c.sha)]);
+      msgText = fullMessage(d);
+      msgDlg = {
+        title: "Commit-Nachricht bearbeiten",
+        action: "Speichern",
+        message: head ? undefined : `${c.sha.slice(0, 8)} und alle späteren Commits bekommen neue SHAs.`,
+        pushed,
+        run: (m) => git.reword(repo, c.sha, m),
+      };
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   function copySha(sha: string) {
     navigator.clipboard?.writeText(sha);
   }
@@ -407,8 +424,9 @@
               run("Revert", () => git.revert(repo, c.sha)),
             )}
         />
+        <ContextMenu.Separator class={menuSeparator} />
+        <ContextItem label="Nachricht bearbeiten …" onSelect={() => reword(c)} />
         {#if c.parents.length === 1}
-          <ContextMenu.Separator class={menuSeparator} />
           <ContextItem label="Mit Vorgänger zusammenfassen …" onSelect={() => squash(c)} />
         {/if}
         <ContextMenu.Separator class={menuSeparator} />

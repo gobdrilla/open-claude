@@ -1076,6 +1076,22 @@ fn squash(repo: &str, sha: &str, message: &str) -> Result<String, String> {
     rewrite(repo, base.as_deref(), &steps)
 }
 
+/// New message for sha; HEAD directly (staged changes stay staged), older ones via rewrite.
+fn reword(repo: &str, sha: &str, message: &str) -> Result<String, String> {
+    if message.trim().is_empty() {
+        return Err("Nachricht ist leer.".into());
+    }
+    let sha = full_sha(repo, sha)?;
+    if sha == full_sha(repo, "HEAD")? {
+        // --only without paths: message only, the index is not committed.
+        let o = exec(git(repo).args(["commit", "-q", "--amend", "--only", "--allow-empty", "-F", "-"]), Some(message.as_bytes()))?;
+        return if o.status.success() { Ok(String::new()) } else { Err(fail(&o)) };
+    }
+    let (base, mut steps) = plan(repo, &sha)?;
+    steps[0].message = Some(message.to_string());
+    rewrite(repo, base.as_deref(), &steps)
+}
+
 /// Is sha already on any remote-tracking branch?
 fn pushed(repo: &str, sha: &str) -> Result<bool, String> {
     let refs = out(git(repo)
@@ -1364,6 +1380,11 @@ pub async fn git_rebase(repo: String, onto: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn git_squash(repo: String, sha: String, message: String) -> Result<String, String> {
     blocking(move || squash(&repo, &sha, &message)).await
+}
+
+#[tauri::command]
+pub async fn git_reword(repo: String, sha: String, message: String) -> Result<String, String> {
+    blocking(move || reword(&repo, &sha, &message)).await
 }
 
 #[tauri::command]
@@ -2923,5 +2944,37 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         let before = head(&r);
         assert!(squash(&r, &x2, "x").is_err());
         assert_eq!(head(&r), before);
+    }
+
+    #[test]
+    fn m_reword() {
+        let (_t, r) = fresh("reword");
+        let a = ci(&r, "a.txt", "a\n", "a");
+        ci(&r, "b.txt", "b\n", "b");
+        ci(&r, "c.txt", "c\n", "c");
+        let tree = out(git(&r).args(["rev-parse", "HEAD^{tree}"])).unwrap();
+        put(&r, "s.txt", "s\n");
+        stage(&r, &v(&["s.txt"])).unwrap();
+        // HEAD: message only, staged file stays staged.
+        reword(&r, "HEAD", "neu\n\n# Raute").unwrap();
+        assert_eq!(subjects(&r), ["neu", "b", "a"]);
+        assert_eq!(show(&r, "HEAD").unwrap().body, "# Raute");
+        assert_eq!(out(git(&r).args(["rev-parse", "HEAD^{tree}"])).unwrap(), tree);
+        assert_eq!(file(&status(&r).unwrap(), "s.txt").unwrap().index, "A");
+        // Older commit: later ones keep their messages, staged change survives (autostash).
+        reword(&r, &a, "alt neu").unwrap();
+        assert_eq!(subjects(&r), ["neu", "b", "alt neu"]);
+        assert!(file(&status(&r).unwrap(), "s.txt").is_some_and(|f| f.index == "A"));
+        assert!(reword(&r, "HEAD", " \n").is_err());
+        commit(&r, "s", false).unwrap();
+        checkout(&r, "x", true, None).unwrap();
+        let x = ci(&r, "x.txt", "x\n", "x");
+        checkout(&r, "main", false, None).unwrap();
+        assert!(reword(&r, &x, "y").is_err());
+        // Merge commit at HEAD: fast path keeps both parents.
+        out(git(&r).args(["merge", "-q", "--no-ff", "--no-edit", "x"])).unwrap();
+        reword(&r, "HEAD", "merge neu").unwrap();
+        let m = show(&r, "HEAD").unwrap().commit;
+        assert_eq!((m.subject.as_str(), m.parents.len()), ("merge neu", 2));
     }
 }

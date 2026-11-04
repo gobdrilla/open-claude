@@ -112,6 +112,8 @@ export const git = {
   reset: (repo: string, sha: string, mode: ResetMode) => call<string>("git_reset", { repo, sha, mode }),
   /** sha in seinen Vorgaenger falten; message wird die Nachricht des gemeinsamen Commits. */
   squash: (repo: string, sha: string, message: string) => call<string>("git_squash", { repo, sha, message }),
+  /** Nur die Nachricht von sha aendern; HEAD direkt (Gestagtes bleibt gestaged), aeltere per Rebase. */
+  reword: (repo: string, sha: string, message: string) => call<string>("git_reword", { repo, sha, message }),
   /** Liegt sha schon auf einem Remote-Branch? Dann braucht Umschreiben einen Force-Push. */
   pushed: (repo: string, sha: string) => call<boolean>("git_pushed", { repo, sha }),
 

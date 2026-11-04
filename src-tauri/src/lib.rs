@@ -798,6 +798,7 @@ pub fn run() {
             git::git_merge,
             git::git_rebase,
             git::git_squash,
+            git::git_reword,
             git::git_pushed,
             git::git_abort,
             git::git_continue,
