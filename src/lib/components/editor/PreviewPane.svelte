@@ -94,7 +94,8 @@
   });
 </script>
 
-<div class="flex h-full min-h-0 flex-col text-ui">
+<div class="@container flex h-full min-h-0 flex-col text-ui">
+  <!-- Schmal: Knopftexte weg, sonst drueckt die Leiste das Adressfeld auf null und das Panel scrollt quer -->
   <div class={paneBar}>
     <Input
       bind:value={draft}
@@ -121,7 +122,7 @@
           : "Kein dev-, start- oder serve-Script in package.json gefunden"}
       onclick={toggleDev}
     >
-      {#if running}<SquareIcon class="fill-current" />{:else}<PlayIcon />{/if} Dev-Server
+      {#if running}<SquareIcon class="fill-current" />{:else}<PlayIcon />{/if} <span class="@max-[26rem]:hidden">Dev-Server</span>
     </Button>
     <Button
       variant="quiet"
@@ -131,7 +132,7 @@
       title={s.pin ? `Angeheftet: ${s.pin} – lösen, um der aktiven Datei zu folgen` : "Vorschau an diese Datei heften"}
       onclick={() => setPin(repo, s.pin ? null : target)}
     >
-      {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if} Anheften
+      {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if} <span class="@max-[26rem]:hidden">Anheften</span>
     </Button>
     <IconButton size="md" label="Neu laden" onclick={() => n++}><RefreshCwIcon class="size-3.5" /></IconButton>
   </div>
@@ -159,7 +160,7 @@
         <img {src} alt={target} class="max-w-full" />
       </div>
     {:else if kind === null}
-      <Empty icon={EyeOffIcon}>Keine Vorschau für {target}.</Empty>
+      <Empty icon={EyeOffIcon}>Keine Vorschau für <span class="[overflow-wrap:anywhere]">{target}</span>.</Empty>
     {:else if !f}
       <Empty>Lädt …</Empty>
     {:else if kind === "markdown"}
