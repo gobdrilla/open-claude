@@ -25,7 +25,9 @@
   import { attach, dismiss, lsp, lspDiagnostics, retry } from "$lib/lsp.svelte";
   import { serverFor } from "$lib/lsp.logic";
   import { fs } from "$lib/files";
-  import { parseDiff } from "$lib/diff";
+  import { parseDiff, type DiffFile, type Hunk } from "$lib/diff";
+  import { revertHunk } from "$lib/revert.logic";
+  import type { HunkAction } from "$lib/components/git/DiffView.svelte";
 
   // path bleibt fuer die Lebensdauer der Instanz gleich (Dock mountet je Panel-ID neu).
   let { repo, path }: { repo: string; path: string } = $props();
@@ -38,12 +40,29 @@
   let compare = $state<string | null>(null);
   /** Buffer vs HEAD with context, after a click on a git gutter mark; null = dialog closed. */
   let head = $state<string | null>(null);
-  const showHead = () =>
+  /** The diff no longer matched the buffer when reverting; it was reloaded. */
+  let stale = $state(false);
+  /** reverted: refresh the open dialog, close it when nothing is left. */
+  const loadHead = (reverted: boolean) =>
     view &&
     fs.gutter(repo, path, view.state.doc.toString(), true).then(
-      (d) => (head = d),
+      (d) => {
+        // Closed meanwhile: do not reopen.
+        if (reverted && head === null) return;
+        head = reverted && !d ? null : d;
+      },
       (e) => (s.error = String(e)),
     );
+  const showHead = () => ((stale = false), loadHead(false));
+  // Into the buffer as one undoable change, not saved; only when the hunk still matches the buffer.
+  const revert = (_: DiffFile, hunk: Hunk, sel: Set<number>) => {
+    if (!view) return;
+    const c = revertHunk(view.state.doc.toString(), hunk, sel);
+    stale = !c;
+    if (c) view.dispatch({ changes: c, annotations: isolateHistory.of("full") });
+    void loadHead(true);
+  };
+  const revertActions: HunkAction[] = [{ label: "Zurücksetzen", lineLabel: "Zeilen zurücksetzen", run: revert }];
 
   const openCommit = (sha: string) => gitHook.showCommit(repo, sha);
 
@@ -286,6 +305,10 @@
     <div bind:this={host} class="min-h-0 flex-1 overflow-hidden"></div>
   </div>
 
-  <DiffDialog diff={head} title={path.split("/").pop() ?? path} description="Änderungen seit dem letzten Commit" {repo} empty="Kein Unterschied." onclose={() => (head = null)} />
+  <DiffDialog diff={head} title={path.split("/").pop() ?? path} description="Änderungen seit dem letzten Commit" {repo} empty="Kein Unterschied." actions={revertActions} onclose={() => (head = null)}>
+    {#if stale}
+      <span class="text-warning ml-auto shrink-0 text-ui">Datei wurde inzwischen geändert – Diff neu geladen, bitte erneut wählen.</span>
+    {/if}
+  </DiffDialog>
   <DiffDialog diff={compare} title="Platte → meine Änderungen" description={path} empty="Kein Unterschied." onclose={() => (compare = null)} />
 {/if}

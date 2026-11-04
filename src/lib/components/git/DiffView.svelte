@@ -155,12 +155,13 @@
             </Button>
           {/if}
           {#each actions as a (a.label)}
+            <!-- detail: the second click of a double click would hit the next hunk's button once the diff reloaded. -->
             <Button
               variant={a.destructive ? "destructive" : "ghost"}
               size="2xs"
               class="font-sans"
               disabled={busy}
-              onclick={() => a.run(file, hunk, sel)}
+              onclick={(e) => e.detail < 2 && a.run(file, hunk, sel)}
             >
               {sel.size && a.lineLabel ? a.lineLabel : a.label}
             </Button>

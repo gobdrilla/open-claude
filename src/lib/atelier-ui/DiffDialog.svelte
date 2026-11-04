@@ -3,7 +3,7 @@
   import type { Snippet } from "svelte";
   import * as Dialog from "./primitives/dialog/index.js";
   import { Button } from "./primitives/button/index.js";
-  import DiffView from "$lib/components/git/DiffView.svelte";
+  import DiffView, { type HunkAction } from "$lib/components/git/DiffView.svelte";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 
@@ -17,6 +17,7 @@
     repo,
     rev,
     onopen,
+    actions,
     children,
   }: {
     diff: string | null;
@@ -31,6 +32,8 @@
     rev?: string;
     /** Open the file in the editor (see DiffView) */
     onopen?: (path: string, line?: number) => void;
+    /** Per-hunk buttons (see DiffView) */
+    actions?: HunkAction[];
     children?: Snippet;
   } = $props();
 
@@ -62,7 +65,7 @@
       {#if description}<Dialog.Description class="truncate font-mono text-meta">{description}</Dialog.Description>{/if}
     </Dialog.Header>
     <div class="border-border/60 min-h-0 flex-1 overflow-hidden rounded-lg border">
-      <DiffView diff={diff ?? ""} {empty} {repo} {rev} {onopen} />
+      <DiffView diff={diff ?? ""} {empty} {repo} {rev} {onopen} {actions} />
     </div>
   </Dialog.Content>
 </Dialog.Root>
