@@ -1,6 +1,7 @@
 // Vertrag zwischen Frontend und src-tauri/src/git.rs + forge.rs.
 // Namen und Felder hier sind verbindlich; Rust serialisiert exakt diese Formen (snake_case-Felder).
 import { invoke } from "@tauri-apps/api/core";
+import type { RebaseStep } from "./rebase.logic.ts";
 
 /** Eine Datei aus `git status --porcelain=v2`. index/worktree = XY-Zeichen ("." = unveraendert, "?" = untracked). */
 export type FileChange = {
@@ -110,6 +111,8 @@ export const git = {
   cherryPick: (repo: string, sha: string) => call<string>("git_cherry_pick", { repo, sha }),
   revert: (repo: string, sha: string) => call<string>("git_revert", { repo, sha }),
   reset: (repo: string, sha: string, mode: ResetMode) => call<string>("git_reset", { repo, sha, mode }),
+  /** base..HEAD (base null = ganze Historie) nach steps (aelteste zuerst) neu aufbauen; Konflikte pausieren wie jeder Rebase. */
+  rewrite: (repo: string, base: string | null, steps: RebaseStep[]) => call<string>("git_rewrite", { repo, base, steps }),
   /** sha in seinen Vorgaenger falten; message wird die Nachricht des gemeinsamen Commits. */
   squash: (repo: string, sha: string, message: string) => call<string>("git_squash", { repo, sha, message }),
   /** Nur die Nachricht von sha aendern; HEAD direkt (Gestagtes bleibt gestaged), aeltere per Rebase. */

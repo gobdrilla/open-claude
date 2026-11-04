@@ -1378,6 +1378,11 @@ pub async fn git_rebase(repo: String, onto: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn git_rewrite(repo: String, base: Option<String>, steps: Vec<Step>) -> Result<String, String> {
+    blocking(move || rewrite(&repo, base.as_deref(), &steps)).await
+}
+
+#[tauri::command]
 pub async fn git_squash(repo: String, sha: String, message: String) -> Result<String, String> {
     blocking(move || squash(&repo, &sha, &message)).await
 }

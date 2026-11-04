@@ -12,6 +12,8 @@
   import { reviewCount, sendReview } from "$lib/review.svelte";
   import { theme } from "$lib/theme.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
+  import RebaseDialog from "./RebaseDialog.svelte";
+  import type { RebaseStep } from "$lib/rebase.logic";
   import SearchIcon from "@lucide/svelte/icons/search";
   import CopyIcon from "@lucide/svelte/icons/copy";
 
@@ -309,6 +311,13 @@
     }
   }
 
+  let rebaseFrom = $state<Commit | null>(null);
+  async function startRebase(base: string | null, steps: RebaseStep[], pushed: boolean) {
+    rebaseFrom = null;
+    await run("Rebase", () => git.rewrite(repo, base, steps));
+    if (pushed && !error) note = "Verlauf geändert – zum Veröffentlichen Push ▾ → Force-Push.";
+  }
+
   function copySha(sha: string) {
     navigator.clipboard?.writeText(sha);
   }
@@ -428,6 +437,16 @@
         <ContextItem label="Nachricht bearbeiten …" onSelect={() => reword(c)} />
         {#if c.parents.length === 1}
           <ContextItem label="Mit Vorgänger zusammenfassen …" onSelect={() => squash(c)} />
+        {/if}
+        <ContextItem
+          label="Aktuellen Branch hierauf rebasen"
+          onSelect={() =>
+            ask("rebase", "Rebasen", `Aktuellen Branch auf ${c.sha.slice(0, 8)} rebasen?`, () =>
+              run("Rebase", () => git.rebase(repo, c.sha)),
+            )}
+        />
+        {#if c.parents.length <= 1}
+          <ContextItem label="Interaktiv ab hier …" onSelect={() => (rebaseFrom = c)} />
         {/if}
         <ContextMenu.Separator class={menuSeparator} />
         <ContextItem label="Reset: soft" onSelect={() => reset(c.sha, "soft")} />
@@ -586,6 +605,8 @@
 >
   <Textarea bind:value={msgText} density="sm" class="h-32 field-sizing-fixed font-mono" aria-label="Commit-Nachricht" />
 </ConfirmDialog>
+
+<RebaseDialog {repo} from={rebaseFrom} onclose={() => (rebaseFrom = null)} onstart={startRebase} />
 
 <PromptDialog
   open={prompt !== null}

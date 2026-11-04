@@ -797,6 +797,7 @@ pub fn run() {
             git::git_branch_rename,
             git::git_merge,
             git::git_rebase,
+            git::git_rewrite,
             git::git_squash,
             git::git_reword,
             git::git_pushed,
