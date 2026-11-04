@@ -14,7 +14,7 @@
   import SquareIcon from "@lucide/svelte/icons/square";
   import { ptyResize } from "$lib/files";
   import { MOD, SHIFT } from "$lib/editor.logic";
-  import { DARK, LIGHT, LINKS, clipboardKey, contrast, windowsPty } from "$lib/termtheme";
+  import { LINKS, clipboardKey, look, windowsPty } from "$lib/termtheme";
   import { theme } from "$lib/theme.svelte";
   import { attach, clearOutput, run, runRestart, runStart, runStop, runWrite, tailOutput } from "$lib/run.svelte";
   import { sendToClaude } from "$lib/ide.svelte";
@@ -52,8 +52,8 @@
   };
 
   $effect(() => {
-    const t = theme.dark ? DARK : LIGHT;
-    if (term) (term.options.theme = t), (term.options.minimumContrastRatio = contrast(theme.dark));
+    const l = look(theme.dark);
+    if (term) Object.assign(term.options, l);
   });
 
   onMount(() => {
@@ -68,11 +68,9 @@
       fontSize: 12,
       lineHeight: 1.2,
       letterSpacing: 0.3,
-      fontWeightBold: "600",
       drawBoldTextInBrightColors: false,
       scrollback: 5000,
-      theme: theme.dark ? DARK : LIGHT,
-      minimumContrastRatio: contrast(theme.dark),
+      ...look(theme.dark),
     });
     term = t;
     windowsPty().then((p) => p && (t.options.windowsPty = p));

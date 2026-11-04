@@ -17,7 +17,7 @@
   import ClaudeLoader from "./ClaudeLoader.svelte";
   import { evenCell } from "$lib/termcell";
   import { theme } from "$lib/theme.svelte";
-  import { DARK, LIGHT, LINKS, clipboardKey, contrast, windowsPty } from "$lib/termtheme";
+  import { DARK, LIGHT, LINKS, clipboardKey, look, windowsPty } from "$lib/termtheme";
   import { effortOf, modeOf } from "$lib/claudemode";
   import { pasted } from "$lib/pasteimg.svelte";
   import { keep, pathHits } from "$lib/termlinks";
@@ -239,13 +239,11 @@
       fontFamily: css.getPropertyValue("--font-mono") || "monospace",
       fontSize: 13,
       ...base,
-      fontWeightBold: "600",
       scrollback: 10000,
       smoothScrollDuration: 90,
       drawBoldTextInBrightColors: false,
       // Live-Wechsel nur, wenn claude mitzieht (notify), sonst bliebe sein Text in den alten Farben unlesbar.
-      theme: theme.dark ? DARK : LIGHT,
-      minimumContrastRatio: contrast(theme.dark),
+      ...look(theme.dark),
     });
     term = t;
     windowsPty().then((p) => p && (t.options.windowsPty = p));
@@ -416,8 +414,7 @@
     const dark = theme.dark;
     // Gast: der Host bestimmt claudes Farben.
     if (!term || !notify || guest) return;
-    term.options.theme = dark ? DARK : LIGHT;
-    term.options.minimumContrastRatio = contrast(dark);
+    Object.assign(term.options, look(dark));
     invoke("pty_write", { id, data: `\x1b[?997;${dark ? 1 : 2}n` }).catch(() => {});
   });
 

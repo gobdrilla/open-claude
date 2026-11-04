@@ -61,9 +61,17 @@ export const LIGHT = {
   brightWhite: "#5e636f", // --muted-foreground
 };
 
-// Hell: Mindestkontrast (WCAG AA) fuer Fremdfarben, die fuer dunkle Terminals gedacht sind (Statuszeile, Hooks,
-// claudes Truecolor). xterm dunkelt sie dann nach; dunkel bleiben die Farben exakt.
-export const contrast = (dark: boolean) => (dark ? 1 : 4.5);
+/** Theme-abhaengige xterm-Optionen fuer Terminal und RunPane.
+ *  Hell: Mindestkontrast fuer Fremdfarben, die fuer dunkle Terminals gedacht sind (Statuszeile, Hooks, claudes
+ *  Truecolor); xterm dunkelt sie nach. 7 statt 4.5, weil xterm fuer gedimmten Text (claudes Nebentext) nur die
+ *  Haelfte verlangt, sonst grau auf weiss. Dazu kraeftigere Schrift: WebGL-Glyphen ohne Subpixel wirken auf hellem
+ *  Grund duenn. Dunkel bleibt alles exakt. */
+export const look = (dark: boolean) => ({
+  theme: dark ? DARK : LIGHT,
+  minimumContrastRatio: dark ? 1 : 7,
+  fontWeight: (dark ? "normal" : "500") as "normal" | "500",
+  fontWeightBold: (dark ? "600" : "700") as "600" | "700",
+});
 
 let pty: Promise<{ backend: "conpty"; buildNumber: number } | undefined> | undefined;
 /** Windows: ConPTY samt Build fuer xterm (Reflow erst ab Build 21376, sonst doppelte Zeilen nach Resize); sonst undefined. */
