@@ -27,6 +27,7 @@ import { open, peek, setText } from "./editor.svelte.ts";
 import { inlayHints, refreshInlay } from "./components/editor/inlay.svelte.ts";
 import { lspNav, showPick } from "./components/editor/nav.ts";
 import { codeLens, refreshLens } from "./components/editor/codeLens.svelte.ts";
+import { docHighlight } from "./components/editor/docHighlight.ts";
 import { INIT_OPTIONS, SETTINGS } from "./inlay.logic.ts";
 import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
 
@@ -332,6 +333,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
         lspNav,
         inlayHints,
         codeLens,
+        docHighlight,
         { clientCapabilities: ACTION_CAPS },
       ],
     });
