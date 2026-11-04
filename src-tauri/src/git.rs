@@ -2820,6 +2820,9 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         let d = show(&r, &c).unwrap();
         assert_eq!(d.commit.subject, "# kein Kommentar");
         assert_eq!(d.body, "Body mit # Raute");
+        // Jump by SHA prefix resolves through ^{commit}
+        assert_eq!(show(&r, &format!("{}^{{commit}}", &c[..7])).unwrap().commit.sha, c);
+        assert!(show(&r, "abcdef12^{commit}").err().unwrap().contains("bad revision"));
         assert!(commit(&r, "   \n", true).is_err());
         assert_eq!(log(&r, None, 0, 10).unwrap().len(), 1);
     }

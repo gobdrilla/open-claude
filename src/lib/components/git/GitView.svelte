@@ -1,7 +1,7 @@
 <script lang="ts">
   import { confirm as ask } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
-  import { Button, Checkbox, ConfirmDialog, DiffDialog, IconButton, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
+  import { Button, Checkbox, ConfirmDialog, DiffDialog, IconButton, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
   import { tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
   import { invoke } from "@tauri-apps/api/core";
@@ -29,6 +29,7 @@
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import RefreshIcon from "@lucide/svelte/icons/refresh-cw";
+  import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 
   let {
     repo,
@@ -90,6 +91,8 @@
   // Offen-Flag getrennt, weil PromptDialog einen String bindet
   let branchOpen = $state(false);
   let branchName = $state("");
+  let jumpOpen = $state(false);
+  let jumpRev = $state("");
   let stashOpen = $state(false);
   let stash = $state({ message: "", untracked: true });
 
@@ -236,6 +239,20 @@
     await run("Stash", () => git.stashPush(cur, s.message.trim() || null, s.untracked));
   }
 
+  const openJump = () => ((jumpRev = ""), (jumpOpen = true));
+  function doJump() {
+    if (!jumpOpen) return; // doppeltes Enter
+    const rev = jumpRev.trim();
+    jumpOpen = false;
+    // ^{commit}: a tag name jumps to its commit
+    if (rev) selectRef(`${rev}^{commit}`);
+  }
+
+  // Header overflow ⋯: [label, action, shortcut label?]; further entries just go into this list.
+  const more: [string, () => void, string?][] = [
+    ["Zu Commit springen …", openJump, `${MOD}+G`],
+  ];
+
   /** Gleiche Ref zweimal anklicken soll erneut springen, daher kurz auf null. */
   async function selectRef(ref: string) {
     if (!(await canLeave())) return;
@@ -259,6 +276,7 @@
     else if (ctrl && e.shiftKey && k === "f") doFetch();
     else if (ctrl && e.shiftKey && k === "p") push();
     else if (ctrl && e.shiftKey && k === "l") pull();
+    else if (ctrl && !e.shiftKey && k === "g") openJump();
     else if (e.key === "F5") reload();
     else return;
     e.preventDefault();
@@ -359,6 +377,23 @@
       <span class="max-lg:hidden">{FILES_APP}</span>
     </Button>
     <IconButton size="md" class="mx-0.5" label="Aktualisieren" title="Aktualisieren (F5)" onclick={reload}><RefreshIcon class="size-3.5" /></IconButton>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <IconButton {...props} size="md" class="mx-0.5" label="Weitere Aktionen"><EllipsisIcon class="size-3.5" /></IconButton>
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" class={menuContent}>
+          {#each more as [label, onSelect, keys] (label)}
+            <DropdownMenu.Item class={menuItem} {onSelect}>
+              {label}
+              {#if keys}<kbd class={menuShortcut}>{keys}</kbd>{/if}
+            </DropdownMenu.Item>
+          {/each}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
     {#if acct}
       <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
         <DropdownMenu.Trigger
@@ -551,6 +586,18 @@
   mono
   onsubmit={createBranch}
   oncancel={() => (branchOpen = false)}
+/>
+
+<PromptDialog
+  open={jumpOpen}
+  title="Zu Commit springen"
+  description="SHA (auch gekürzt), Tag oder Branch."
+  bind:value={jumpRev}
+  placeholder="a1b2c3d"
+  action="Springen"
+  mono
+  onsubmit={doJump}
+  oncancel={() => (jumpOpen = false)}
 />
 
 <PromptDialog

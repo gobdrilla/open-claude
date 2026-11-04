@@ -168,6 +168,8 @@
   // Sprung aus der Sidebar: Ref/SHA aufloesen, begrenzt nachladen, dann anzeigen und hinscrollen.
   async function jump(ref: string) {
     await select(ref);
+    // git's "fatal: bad revision" reads like a usage error; ambiguous short prefixes keep git's own text.
+    if (detailError.includes("bad revision") && !detailError.includes("ambiguous")) detailError = `Kein Commit zu „${ref.replace(/\^\{commit\}$/, "")}“ gefunden.`;
     const sha = selected;
     if (!sha || detailError || sha !== detail?.commit.sha) return;
     for (let i = 0; i < JUMP_PAGES && !done && !error && !commits.some((c) => c.sha === sha); i++) await loadMore();
@@ -461,7 +463,20 @@
 <div class="flex h-full min-h-0 flex-col text-ui">
   <div class="flex items-center gap-2 px-2 py-1.5">
     <SearchIcon class="text-muted-foreground size-3.5 shrink-0" />
-    <Input bind:value={query} placeholder="Verlauf durchsuchen" density="sm" class="rounded-full" />
+    <Input
+      bind:value={query}
+      placeholder="Verlauf durchsuchen · SHA + Enter springt"
+      density="sm"
+      class="rounded-full"
+      onkeydown={(e: KeyboardEvent) => {
+        const q = query.trim();
+        // Search only filters loaded pages; Enter on a SHA also finds older commits. ^{commit} peels tags.
+        if (e.key === "Enter" && /^[0-9a-f]{4,64}$/i.test(q)) {
+          query = "";
+          jump(q + "^{commit}");
+        }
+      }}
+    />
   </div>
 
   <Notice bind:text={error} />
