@@ -216,6 +216,21 @@
           };
   }
 
+  // Staged: back to HEAD. A staged new file becomes untracked and is deleted; renames restore the old path too.
+  function discardStaged(f: FileChange) {
+    confirm = {
+      title: "Unstagen und verwerfen?",
+      message:
+        f.index === "A"
+          ? `${f.path} ist neu und wird gelöscht.`
+          : `Alle Änderungen in ${f.path} (gestaget und nicht gestaget) gehen verloren.`,
+      run: async () => {
+        await git.unstage(repo, [f.path]);
+        await git.discard(repo, f.orig ? [f.path, f.orig] : [f.path]);
+      },
+    };
+  }
+
   function reveal(f: FileChange) {
     const dir = f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
     const p = dir ? `${repo}/${dir}` : repo;
@@ -300,6 +315,11 @@
         <!-- Narrow column: "stagen"/"unstagen", so the list title stays readable. -->
         <span class="@max-[15rem]:hidden">Alles</span>{isStaged ? "unstagen" : "stagen"}
       </Button>
+      {#if !isStaged}
+        <Button variant="ghost-danger" size="2xs" class="shrink-0" disabled={files.length === 0 || busy} onclick={() => discard(files)}>
+          <span class="@max-[15rem]:hidden">Alle</span>verwerfen …
+        </Button>
+      {/if}
     </div>
     {#if picked.length > 1}
       <div class="bg-primary/10 mx-1 mt-1 flex flex-wrap items-center gap-1 rounded-md px-2 py-0.5">
@@ -396,6 +416,8 @@
                 <ContextItem label={isStaged ? "Unstagen" : "Stagen"} onSelect={() => move([f], isStaged)} />
                 {#if !isStaged}
                   <ContextItem label="Änderungen verwerfen …" onSelect={() => discard([f])} destructive />
+                {:else}
+                  <ContextItem label="Unstagen und verwerfen …" onSelect={() => discardStaged(f)} destructive />
                 {/if}
               {/if}
               {#if onedit && code !== "D"}

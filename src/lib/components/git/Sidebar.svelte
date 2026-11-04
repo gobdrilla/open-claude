@@ -542,6 +542,7 @@
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
+                <ContextItem label="Pushen" onSelect={() => run("Tag-Push", () => git.tagPush(repo, t.name))} />
                 <ContextItem
                   label="Löschen …"
                   onSelect={() => askConfirm("Tag löschen", `Tag „${t.name}“ löschen?`, () => git.tagDelete(repo, t.name))}

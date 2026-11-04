@@ -820,6 +820,7 @@ pub fn run() {
             git::git_tags,
             git::git_tag_create,
             git::git_tag_delete,
+            git::git_tag_push,
             git::git_get_base,
             git::git_nesting,
             git::git_set_base,

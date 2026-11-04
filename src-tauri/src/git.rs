@@ -831,13 +831,7 @@ fn push(repo: &str, force: bool) -> Result<String, String> {
     let mut target = vec![];
     if st.upstream.is_none() {
         let branch = st.branch.ok_or("Detached HEAD: kein Branch zum Pushen.")?;
-        let list = remotes(repo)?;
-        let remote = list
-            .iter()
-            .find(|r| r.name == "origin")
-            .or(list.first())
-            .ok_or("Kein Remote eingerichtet.")?;
-        target = vec!["-u".to_string(), remote.name.clone(), branch];
+        target = vec!["-u".to_string(), default_remote(repo)?, branch];
     }
     // --force-if-includes: after a mere fetch the lease alone would silently drop foreign commits.
     let flags: &[&str] = if force { &["--force-with-lease", "--force-if-includes"] } else { &[] };
@@ -846,6 +840,18 @@ fn push(repo: &str, force: bool) -> Result<String, String> {
         Err(e) if force && e.contains("force-if-includes") => talk(net(repo).args(["push", "--force-with-lease"]).args(&target)),
         res => res,
     }
+}
+
+/// origin, else the first remote.
+fn default_remote(repo: &str) -> Result<String, String> {
+    let list = remotes(repo)?;
+    let remote = list.iter().find(|r| r.name == "origin").or(list.first()).ok_or("Kein Remote eingerichtet.")?;
+    Ok(remote.name.clone())
+}
+
+fn tag_push(repo: &str, name: &str) -> Result<String, String> {
+    let tag = format!("refs/tags/{}", arg(name)?);
+    talk(net(repo).args(["push", &default_remote(repo)?, &tag]))
 }
 
 /// origin setzen und erster Push (push() setzt -u selbst).
@@ -1537,6 +1543,11 @@ pub async fn git_tag_create(
     message: Option<String>,
 ) -> Result<(), String> {
     blocking(move || tag_create(&repo, &name, &sha, message.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn git_tag_push(repo: String, name: String) -> Result<String, String> {
+    blocking(move || tag_push(&repo, &name)).await
 }
 
 #[tauri::command]
@@ -2578,6 +2589,28 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         checkout(&r, "main", false, None).unwrap();
         checkout(&r, "gleich", false, None).unwrap();
         assert_eq!(status(&r).unwrap().branch.as_deref(), Some("gleich"));
+        // Tag push: annotated tag reaches the remote; no remote / option-like name fail
+        assert_eq!(tag_push(&r, "v1.0").unwrap_err(), "Kein Remote eingerichtet.");
+        let (_bt, b) = bare(&r);
+        assert_eq!(out(git(&r).args(["cat-file", "-t", "v1.0"])).unwrap().trim(), "tag");
+        tag_push(&r, "v1.0").unwrap();
+        assert!(tag_push(&r, "-x").is_err());
+        assert!(out(git(&r).args(["ls-remote", "--tags", &b])).unwrap().contains("refs/tags/v1.0"));
+    }
+
+    #[test]
+    fn m_unstage_und_verwerfen() {
+        let (_t, r) = fresh("discardvar");
+        ci(&r, "a.txt", "1\n", "start");
+        // What "Unstagen und verwerfen" does: unstage, then discard
+        put(&r, "neu.txt", "n\n");
+        put(&r, "a.txt", "geaendert\n");
+        stage(&r, &v(&["neu.txt", "a.txt"])).unwrap();
+        unstage(&r, &v(&["neu.txt", "a.txt"])).unwrap();
+        discard(&r, &v(&["neu.txt", "a.txt"])).unwrap();
+        assert!(!Path::new(&r).join("neu.txt").exists());
+        assert_eq!(std::fs::read_to_string(Path::new(&r).join("a.txt")).unwrap(), "1\n");
+        assert!(status(&r).unwrap().files.is_empty());
     }
 
     #[test]

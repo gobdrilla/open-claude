@@ -13,6 +13,7 @@
   import { theme } from "$lib/theme.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import RebaseDialog from "./RebaseDialog.svelte";
+  import TagDialog from "./TagDialog.svelte";
   import type { RebaseStep } from "$lib/rebase.logic";
   import SearchIcon from "@lucide/svelte/icons/search";
   import CopyIcon from "@lucide/svelte/icons/copy";
@@ -238,6 +239,16 @@
     }
   }
 
+  let tagSha = $state<string | null>(null);
+  function doTag(name: string, message: string | null, push: boolean) {
+    const sha = tagSha!;
+    tagSha = null;
+    run("Tag", async () => {
+      await git.tagCreate(repo, name, sha, message);
+      if (push) await git.tagPush(repo, name);
+    });
+  }
+
   type Tone = "destructive" | "default";
   let confirm = $state<{ title: string; message: string; label: string; tone: Tone; run: () => Promise<void> } | null>(null);
   function askConfirm(title: string, message: string, label: string, tone: Tone, action: () => Promise<void>) {
@@ -407,13 +418,7 @@
               await git.checkout(repo, v, true, c.sha);
             })}
         />
-        <ContextItem
-          label="Tag erstellen"
-          onSelect={() =>
-            askPrompt("Tag ab " + c.sha.slice(0, 8), "v1.0.0", "", async (v) => {
-              await git.tagCreate(repo, v, c.sha, null);
-            })}
-        />
+        <ContextItem label="Tag erstellen …" onSelect={() => (tagSha = c.sha)} />
         <ContextItem
           label="Auschecken (detached)"
           onSelect={() =>
@@ -622,6 +627,8 @@
 </ConfirmDialog>
 
 <RebaseDialog {repo} from={rebaseFrom} onclose={() => (rebaseFrom = null)} onstart={startRebase} />
+
+<TagDialog target={tagSha?.slice(0, 8) ?? null} onsubmit={doTag} oncancel={() => (tagSha = null)} />
 
 <PromptDialog
   open={prompt !== null}

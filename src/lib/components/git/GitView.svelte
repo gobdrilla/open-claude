@@ -9,6 +9,7 @@
   import { git, forge, accountId, type Account, type ForgeKind, type RepoAccount, type Status } from "$lib/git";
   import Sidebar from "./Sidebar.svelte";
   import AskDialog from "./AskDialog.svelte";
+  import TagDialog from "./TagDialog.svelte";
   import ChangesPanel from "./ChangesPanel.svelte";
   import HistoryPanel from "./HistoryPanel.svelte";
   import ReleasesPanel from "./ReleasesPanel.svelte";
@@ -93,6 +94,7 @@
   let branchName = $state("");
   let jumpOpen = $state(false);
   let jumpRev = $state("");
+  let tagOpen = $state(false);
   let stashOpen = $state(false);
   let stash = $state({ message: "", untracked: true });
 
@@ -189,7 +191,7 @@
       error = String(e);
     }
     busy = "";
-    await refresh(true, ["Fetch", "Pull", "Push", "Force-Push"].includes(label));
+    await refresh(true, ["Fetch", "Pull", "Push", "Force-Push", "Tag-Push"].includes(label));
   }
 
   /** Ladeanzeige fuer Aktionen aus Sidebar und Verlauf; Fehler und Refresh bleiben beim Aufrufer. */
@@ -251,7 +253,16 @@
   // Header overflow ⋯: [label, action, shortcut label?]; further entries just go into this list.
   const more: [string, () => void, string?][] = [
     ["Zu Commit springen …", openJump, `${MOD}+G`],
+    ["Tag erstellen …", () => (tagOpen = true)],
   ];
+
+  function doTag(name: string, message: string | null, push: boolean) {
+    tagOpen = false;
+    run(push ? "Tag-Push" : "Tag", async () => {
+      await git.tagCreate(cur, name, "HEAD", message);
+      if (push) return git.tagPush(cur, name);
+    });
+  }
 
   /** Gleiche Ref zweimal anklicken soll erneut springen, daher kurz auf null. */
   async function selectRef(ref: string) {
@@ -599,6 +610,8 @@
   onsubmit={doJump}
   oncancel={() => (jumpOpen = false)}
 />
+
+<TagDialog target={tagOpen ? "HEAD" : null} onsubmit={doTag} oncancel={() => (tagOpen = false)} />
 
 <PromptDialog
   open={stashOpen}

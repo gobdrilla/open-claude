@@ -142,6 +142,7 @@ export const git = {
   tagCreate: (repo: string, name: string, sha: string, message: string | null) =>
     call<void>("git_tag_create", { repo, name, sha, message }),
   tagDelete: (repo: string, name: string) => call<void>("git_tag_delete", { repo, name }),
+  tagPush: (repo: string, name: string) => call<string>("git_tag_push", { repo, name }),
 
   /** Welche der names stecken schon in anderen aus names? Name -> enthaltende Namen (nur enthaltene als Key). */
   nesting: (repo: string, names: string[]) =>
