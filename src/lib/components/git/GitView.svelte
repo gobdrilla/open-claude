@@ -423,7 +423,7 @@
           ? ` – ${conflicts} ${conflicts === 1 ? "Konflikt" : "Konflikte"} offen`
           : " – keine Konflikte mehr"}
       </span>
-      <Button size="xs" variant={conflicts ? "secondary" : "default"} disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(repo))}
+      <Button size="xs" variant={conflicts ? "secondary" : "default"} disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(cur))}
         >Fortsetzen</Button
       >
       <Button
@@ -435,7 +435,7 @@
             title: `${STATE_LABEL[status!.state as keyof typeof STATE_LABEL]} abbrechen`,
             message: "Zum Stand vor dem Vorgang zurückkehren? Bereits gelöste Konflikte gehen verloren.",
             label: `${STATE_LABEL[status!.state as keyof typeof STATE_LABEL]} abbrechen`,
-            run: () => git.abort(repo),
+            run: () => git.abort(cur),
           })}>Abbrechen</Button
       >
     </div>
