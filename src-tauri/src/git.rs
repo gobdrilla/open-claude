@@ -828,11 +828,7 @@ fn pick(repo: &str, op: &str, sha: &str) -> Result<String, String> {
 
 fn push(repo: &str, force: bool) -> Result<String, String> {
     let st = status(repo)?;
-    let mut cmd = net(repo);
-    cmd.arg("push");
-    if force {
-        cmd.arg("--force-with-lease");
-    }
+    let mut target = vec![];
     if st.upstream.is_none() {
         let branch = st.branch.ok_or("Detached HEAD: kein Branch zum Pushen.")?;
         let list = remotes(repo)?;
@@ -841,9 +837,15 @@ fn push(repo: &str, force: bool) -> Result<String, String> {
             .find(|r| r.name == "origin")
             .or(list.first())
             .ok_or("Kein Remote eingerichtet.")?;
-        cmd.args(["-u", remote.name.as_str(), branch.as_str()]);
+        target = vec!["-u".to_string(), remote.name.clone(), branch];
     }
-    talk(&mut cmd)
+    // --force-if-includes: after a mere fetch the lease alone would silently drop foreign commits.
+    let flags: &[&str] = if force { &["--force-with-lease", "--force-if-includes"] } else { &[] };
+    match talk(net(repo).arg("push").args(flags).args(&target)) {
+        // git < 2.30 does not know the option: lease only.
+        Err(e) if force && e.contains("force-if-includes") => talk(net(repo).args(["push", "--force-with-lease"]).args(&target)),
+        res => res,
+    }
 }
 
 /// origin setzen und erster Push (push() setzt -u selbst).
@@ -2613,11 +2615,19 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         let s = status(&r).unwrap();
         assert_eq!((s.state, s.ahead, s.behind), (RepoState::Clean, 1, 0));
         push(&r, false).unwrap();
-        // Abgelehnter Push ist Fehler; force-with-lease klappt nach fetch
+        // Abgelehnter Push ist Fehler; nach blossem fetch lehnt auch Force-Push ab (--force-if-includes)
         ci(&r2, "c.txt", "c\n", "klon2");
         assert!(push(&r2, false).is_err());
         talk(git(&r2).args(["fetch", "--all", "--prune"])).unwrap();
+        assert!(push(&r2, true).is_err());
+        talk(git(&r2).args(["rebase", "origin/main"])).unwrap();
         push(&r2, true).unwrap();
+        // Nach Umschreiben eines gepushten Commits: nur Force-Push
+        let head = out(git(&r2).args(["rev-parse", "HEAD"])).unwrap();
+        reword(&r2, head.trim(), "klon2 neu").unwrap();
+        assert!(push(&r2, false).is_err());
+        push(&r2, true).unwrap();
+        assert_eq!(out(git(&b).args(["rev-parse", "main"])).unwrap(), out(git(&r2).args(["rev-parse", "HEAD"])).unwrap());
         // Remote-Branch mit Slashes loeschen
         branch_delete(&r2, "origin/team/x/y", false, true).unwrap();
         talk(git(&r).args(["fetch", "--all", "--prune"])).unwrap();

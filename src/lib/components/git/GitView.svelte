@@ -211,7 +211,7 @@
   const forcePush = () =>
     (confirm = {
       title: "Force-Push",
-      message: "Remote-Branch mit dem lokalen Stand überschreiben (--force-with-lease)? Fremde Commits, die du schon kennst, gehen dort verloren.",
+      message: `${status?.branch ?? "HEAD"} → ${status?.upstream ?? "origin"} überschreiben? Commits auf dem Server, die lokal fehlen, werden abgelehnt statt gelöscht. Andere müssen danach neu aufsetzen.`,
       label: "Force-Push",
       run: () => git.push(cur, true),
     });
@@ -282,12 +282,13 @@
 {/snippet}
 
 <!-- Third tuple field: checkmark state; when any item has one, all items reserve the check column. -->
-{#snippet menu(items: [string, () => void, boolean?][])}
+{#snippet menu(items: [string, () => void, boolean?][], title = "Weitere Optionen")}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger
       class="text-muted-foreground hover:bg-secondary hover:text-foreground -ml-1 grid h-7 w-4 place-items-center rounded-full disabled:opacity-50"
       disabled={!!busy}
-      aria-label="Weitere Optionen"><ChevronDownIcon class="size-3" /></DropdownMenu.Trigger
+      {title}
+      aria-label={title}><ChevronDownIcon class="size-3" /></DropdownMenu.Trigger
     >
     <DropdownMenu.Portal>
       <DropdownMenu.Content
@@ -345,9 +346,9 @@
     {@render menu([
       ["Pull (Merge)", () => pull(false), true],
       ["Pull (Rebase)", () => pull(true), false],
-    ])}
+    ], "Pull-Optionen")}
     {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", `Push (${MOD}+${SHIFT}+P)`, push, UploadIcon, hot === "push")}
-    {@render menu([["Force-Push …", forcePush]])}
+    {@render menu([["Force-Push (--force-with-lease) …", forcePush]], "Push-Optionen")}
     <span class="bg-border mx-1.5 h-4 w-px"></span>
     {@render tool("Stash", "Änderungen stashen", () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
     {@render tool("Branch", "Neuer Branch ab HEAD", () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
