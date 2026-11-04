@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cargoConfigs, configs, customConfig, dotnetRunnable, npmConfigs, parseArgs, pickDefault, profileOf, scan, tailText } from "./run.logic.ts";
+import { cargoConfigs, configs, customConfig, dotnetRunnable, npmConfigs, parseArgs, pickDefault, profileOf, runLines, scan, tailText } from "./run.logic.ts";
 import { serverUrl } from "./editor.logic.ts";
 
 const labels = (c: { label: string }[]) => c.map((x) => x.label);
@@ -114,4 +114,26 @@ test("tailText: ohne ANSI, nur der Stand nach dem letzten \\r, letzte n Zeilen",
   assert.equal(tailText("a\r\nb\r", 5), "a\nb");
   assert.equal(tailText("", 5), "");
   assert.equal(tailText("abc\ndef", 5, 4), "…\ndef");
+});
+
+test("runLines finds scripts, Main, top-level Program.cs and fn main", () => {
+  const pkg = '{\n  "name": "x",\n  "scripts": {\n    "dev": "vite",\n    "build": "vite build",\n    "lint": { "nested": 1 }\n  },\n  "dev": "not a script"\n}';
+  const cfgs = configs(["package.json", "package-lock.json", "app/App.csproj", "Cargo.toml", "src/main.rs", "src/bin/tool.rs"], {
+    "package.json": pkg,
+    "app/App.csproj": "<Project><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup></Project>",
+    "Cargo.toml": "[package]\nname = \"x\"",
+  });
+  assert.deepEqual(runLines("package.json", pkg, cfgs), [
+    { line: 4, label: "npm run dev" },
+    { line: 5, label: "npm run build" },
+  ]);
+  assert.deepEqual(runLines("other/package.json", pkg, cfgs), [], "scripts of another package");
+  const main = "using System;\n\nclass P\n{\n    static async Task Main(string[] args)\n    {\n    }\n}";
+  assert.deepEqual(runLines("app/P.cs", main, cfgs), [{ line: 5, label: "dotnet run (app)" }]);
+  assert.deepEqual(runLines("app/Program.cs", "// top\nusing Lab;\n\nvar x = 1;\n", cfgs), [{ line: 4, label: "dotnet run (app)" }]);
+  assert.deepEqual(runLines("app/Shapes.cs", "namespace Lab;\nclass A {}\n", cfgs), [], "no Main, not Program.cs");
+  assert.deepEqual(runLines("lib/Program.cs", "var x = 1;", cfgs), [], "outside the project");
+  assert.deepEqual(runLines("src/main.rs", "use x;\n\nfn main() {\n}", cfgs), [{ line: 3, label: "cargo run" }]);
+  assert.deepEqual(runLines("src/bin/tool.rs", "pub fn main() {}", cfgs), [{ line: 1, label: "cargo run --bin tool" }]);
+  assert.deepEqual(runLines("src/lib.rs", "fn main() {}", cfgs), [], "not a binary");
 });

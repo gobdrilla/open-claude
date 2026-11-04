@@ -170,3 +170,53 @@ export function tailText(s: string, n: number, max = 18000): string {
   const t = lines.slice(-n).join("\n");
   return t.length > max ? `…${t.slice(-max)}` : t;
 }
+
+const inDir = (path: string, dir: string) => !dir || path.startsWith(`${dir}/`);
+
+/**
+ * Lines (1-based) of a file that start a run config, for the ▶ in the gutter as in Rider: script names in a
+ * package.json, Main (or the first top-level statement of Program.cs) in a .NET project, fn main of a Cargo binary.
+ * Configs of the innermost project win; `dotnet watch` is left to the toolbar.
+ */
+export function runLines(path: string, text: string, cfgs: RunConfig[]): { line: number; label: string }[] {
+  const lines = text.split("\n");
+  const inner = (kind: Target["kind"]) =>
+    cfgs.filter((c) => c.target.kind === kind && inDir(path, c.dir)).sort((a, b) => b.dir.length - a.dir.length);
+  if (PKG.test(path)) {
+    const dir = dirOf(path);
+    const npm = cfgs.filter((c) => c.target.kind === "npm" && c.dir === dir);
+    const out: { line: number; label: string }[] = [];
+    let depth = -1;
+    lines.forEach((l, i) => {
+      if (depth < 0) {
+        if (/^\s*"scripts"\s*:\s*\{/.test(l)) depth = 0;
+        return;
+      }
+      const name = depth === 0 ? /^\s*"([^"]+)"\s*:/.exec(l)?.[1] : undefined;
+      const c = name && npm.find((c) => c.target.kind === "npm" && c.target.script === name);
+      if (c) out.push({ line: i + 1, label: c.label });
+      depth += (l.match(/\{/g)?.length ?? 0) - (l.match(/\}/g)?.length ?? 0);
+      if (depth < 0) depth = -2;
+    });
+    return out;
+  }
+  if (/\.cs$/.test(path)) {
+    const c = inner("dotnet").find((c) => c.target.kind === "dotnet" && !c.target.watch);
+    if (!c) return [];
+    let i = lines.findIndex((l) => /\bstatic\s+(async\s+)?[\w<>]+\s+Main\s*\(/.test(l));
+    // Top-level statements: the first line that is not a using, namespace, comment or blank.
+    if (i < 0 && /(^|\/)Program\.cs$/.test(path)) i = lines.findIndex((l) => !/^\s*($|\/\/|using\b|namespace\b|#|\[assembly)/.test(l));
+    return i < 0 ? [] : [{ line: i + 1, label: c.label }];
+  }
+  if (/\.rs$/.test(path)) {
+    const i = lines.findIndex((l) => /^\s*(pub\s+)?(async\s+)?fn\s+main\s*\(/.test(l));
+    // Same file-to-binary rule as cargoConfigs, relative to the crate.
+    const binOf = (dir: string) => {
+      const rel = dir ? path.slice(dir.length + 1) : path;
+      return rel === "src/main.rs" ? null : (/^src\/bin\/([^/]+?)(?:\.rs|\/main\.rs)$/.exec(rel)?.[1] ?? undefined);
+    };
+    const c = i < 0 ? undefined : inner("cargo").find((c) => c.target.kind === "cargo" && c.target.bin === binOf(c.dir));
+    return c ? [{ line: i + 1, label: c.label }] : [];
+  }
+  return [];
+}

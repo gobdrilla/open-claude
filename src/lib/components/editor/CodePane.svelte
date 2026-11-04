@@ -11,7 +11,9 @@
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, gitHook, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
   import { detectIndent, gutterMarks, huge, span } from "$lib/editor.logic";
-  import { gitGutter, indentFolding, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
+  import { gitGutter, indentFolding, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setRunMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
+  import { allConfigs, detect, run, runStart } from "$lib/run.svelte";
+  import { runLines } from "$lib/run.logic";
   import { ghost } from "./ghost";
   import { wordHighlight } from "./wordHighlight";
   import { bracketColors } from "./bracketColors";
@@ -104,7 +106,13 @@
         lens,
         ruler,
         wrap.of(prefs.wrap ? EditorView.lineWrapping : []),
-        testGutter((id) => void testRun(repo, id)),
+        testGutter(
+          (id) => void testRun(repo, id),
+          (label) => {
+            const c = allConfigs(repo).find((c) => c.label === label);
+            if (c) void runStart(repo, c);
+          },
+        ),
         // The state outlives this component (snapshots): reach the current one through a DOM event.
         gitGutter((v) => v.dom.dispatchEvent(new CustomEvent("gitdiff", { bubbles: true }))),
         ghost(path, () => prefs.ai),
@@ -216,6 +224,26 @@
         .map((x) => ({ from: doc.line(x.line).from, to: doc.line(x.line).to, severity: "error" as const, message: x.msg }));
       v.dispatch(setDiagnostics(v.state, [...diags, ...ld]), { effects: setTestMarks.of(m) });
     });
+  });
+
+  // ▶ at entry points (package.json scripts, Main, fn main), 500 ms after the last change. Own derived: a RepoRun
+  // created inside this effect would not be tracked by it.
+  const runs = $derived(run(repo));
+  let runMarked = false;
+  $effect(() => {
+    const v = view;
+    const text = f?.text;
+    if (!v || plain || text === undefined) return;
+    void detect(repo);
+    const cfgs = runs.configs.length ? allConfigs(repo) : [];
+    const live = new Set(runs.runs.filter((x) => x.state === "running").map((x) => x.cfg.label));
+    const t = setTimeout(() => {
+      const m = runLines(path, text, cfgs).map((x) => ({ ...x, running: live.has(x.label) }));
+      if (!v.dom.isConnected || (!m.length && !runMarked)) return;
+      runMarked = m.length > 0;
+      v.dispatch({ effects: setRunMarks.of(m) });
+    }, 500);
+    return () => clearTimeout(t);
   });
 
   // Git-Gutter: 800 ms nach der letzten Aenderung gegen HEAD vergleichen; nicht bei grossen Dateien.

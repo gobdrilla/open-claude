@@ -228,19 +228,60 @@ const testMarks = StateField.define<RangeSet<GutterMarker>>({
   },
 });
 
-/** Gutter mit ▶/✓/✗ an Testdefinitionen; Klick startet den Test ueber run(id). */
-export function testGutter(run: (id: string) => void): Extension {
+/** ▶ at an entry point (script, Main, fn main): starts the run config with this label. */
+class RunMarker extends GutterMarker {
+  readonly label: string;
+  readonly running: boolean;
+  constructor(label: string, running: boolean) {
+    super();
+    this.label = label;
+    this.running = running;
+  }
+  eq(o: RunMarker) {
+    return o.label === this.label && o.running === this.running;
+  }
+  toDOM() {
+    const s = document.createElement("span");
+    s.className = this.running ? "cm-run-on" : "cm-test-idle";
+    s.textContent = "▶";
+    s.title = this.running ? `${this.label} läuft – Ausgabe zeigen` : `${this.label} starten`;
+    return s;
+  }
+}
+
+/** Run markers, replaced as a whole (lines 1-based); they move with edits. */
+export const setRunMarks = StateEffect.define<{ line: number; label: string; running: boolean }[]>();
+
+const runMarks = StateField.define<RangeSet<GutterMarker>>({
+  create: () => RangeSet.empty,
+  update(set, tr) {
+    set = set.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setRunMarks)) continue;
+      const doc = tr.state.doc;
+      set = RangeSet.of(e.value.filter((m) => m.line <= doc.lines).map((m) => new RunMarker(m.label, m.running).range(doc.line(m.line).from)), true);
+    }
+    return set;
+  },
+});
+
+/** Gutter mit ▶/✓/✗ an Testdefinitionen (Klick: run(id)) und ▶ an Startpunkten (Klick: start(label)). */
+export function testGutter(run: (id: string) => void, start: (label: string) => void): Extension {
   return [
     testMarks,
+    runMarks,
     gutter({
       class: "cm-test-gutter",
-      markers: (v) => v.state.field(testMarks),
+      markers: (v) => [v.state.field(testMarks), v.state.field(runMarks)],
       domEventHandlers: {
         mousedown(view, line) {
           let id: string | null = null;
+          let label: string | null = null;
           view.state.field(testMarks).between(line.from, line.from, (_a, _b, m) => void (id = (m as TestMarker).id));
-          if (id === null) return false;
-          run(id);
+          view.state.field(runMarks).between(line.from, line.from, (_a, _b, m) => void (label = (m as RunMarker).label));
+          if (id !== null) run(id);
+          else if (label !== null) start(label);
+          else return false;
           return true;
         },
       },
@@ -251,6 +292,7 @@ export function testGutter(run: (id: string) => void): Extension {
       ".cm-test-skipped": { color: "var(--warning)" },
       ".cm-test-passed": { color: "var(--success)" },
       ".cm-test-failed": { color: "var(--destructive)" },
+      ".cm-run-on": { color: "var(--success)" },
     }),
   ];
 }
