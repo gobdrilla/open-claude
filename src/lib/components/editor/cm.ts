@@ -28,7 +28,8 @@ const chrome = EditorView.theme(
       color: "color-mix(in oklch, var(--muted-foreground) 55%, transparent)",
       border: "none",
     },
-    ".cm-lineNumbers .cm-gutterElement": { padding: "0 8px 0 12px" },
+    // Fold arrows sit right next to the number, as in Rider.
+    ".cm-lineNumbers .cm-gutterElement": { padding: "0 2px 0 12px" },
     ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--foreground)" },
     // Faltpfeile nur beim Ueberfahren der Gutter
     ".cm-foldGutter .cm-gutterElement": { opacity: 0, transition: "opacity .15s" },
