@@ -714,7 +714,7 @@
   <div class="flex flex-col gap-2">
     <Select bind:value={mergeMode} options={MERGE_MODES} class="h-7 w-full" aria-label="Merge-Modus" />
     {#if mergeMode !== "ff-only"}
-      <Textarea bind:value={mergeMsg} density="sm" class="h-24 field-sizing-fixed font-mono" placeholder="Eigene Nachricht (optional)" aria-label="Merge-Nachricht" />
+      <Textarea bind:value={mergeMsg} density="sm" class="h-24 field-sizing-fixed font-mono" spellcheck={true} placeholder="Eigene Nachricht (optional)" aria-label="Merge-Nachricht" />
     {/if}
   </div>
 </ConfirmDialog>

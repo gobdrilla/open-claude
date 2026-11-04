@@ -8,6 +8,8 @@
 		class: className,
 		density = "default",
 		bare = false,
+		// Off unless a field opts in: the OS-level check is enabled globally (lib.rs) and would mark names and paths.
+		spellcheck = false,
 		"data-slot": dataSlot = "textarea",
 		...restProps
 	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> & {
@@ -34,5 +36,6 @@
 		bare && BARE,
 		className
 	)}
+	{spellcheck}
 	bind:value
 	{...restProps}></textarea>

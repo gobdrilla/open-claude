@@ -445,7 +445,10 @@
     };
     // Natives WebView-Kontextmenue nie zeigen (Browser-Eintraege, auf Links "In neuem Fenster oeffnen").
     // Bubble-Phase: eigene Menues (bits-ui) haben ihr contextmenu da schon verarbeitet.
-    const onMenu = (e: MouseEvent) => e.preventDefault();
+    // Opt-in spellcheck fields keep the native menu: it carries the correction suggestions.
+    const onMenu = (e: MouseEvent) => {
+      if (!(e.target as Element | null)?.closest?.('[spellcheck="true"]')) e.preventDefault();
+    };
     window.addEventListener("click", onClick);
     window.addEventListener("auxclick", onClick);
     window.addEventListener("contextmenu", onMenu);

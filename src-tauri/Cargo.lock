@@ -4029,6 +4029,7 @@ dependencies = [
  "keyring",
  "libc",
  "libloading",
+ "objc2-foundation",
  "portable-pty",
  "reedline",
  "regex",
@@ -4048,6 +4049,7 @@ dependencies = [
  "tokio-tungstenite",
  "trash",
  "walkdir",
+ "webkit2gtk",
 ]
 
 [[package]]

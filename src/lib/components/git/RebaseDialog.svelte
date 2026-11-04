@@ -102,7 +102,7 @@
             >
           </div>
           {#if r.edit !== null && r.op !== "drop"}
-            <Textarea bind:value={r.edit} density="xs" class="mt-1 h-20 field-sizing-fixed font-mono" aria-label="Commit-Nachricht" />
+            <Textarea bind:value={r.edit} density="xs" class="mt-1 h-20 field-sizing-fixed font-mono" spellcheck={true} aria-label="Commit-Nachricht" />
           {/if}
         </div>
       {/each}

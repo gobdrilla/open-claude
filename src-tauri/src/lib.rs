@@ -699,6 +699,17 @@ pub fn run() {
     if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() && Path::new("/proc/driver/nvidia/version").exists() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
+    // Before any webview exists: WKWebView reads this at first use, default NO.
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_foundation::{ns_string, NSUserDefaults};
+        let d = NSUserDefaults::standardUserDefaults();
+        let k = ns_string!("WebContinuousSpellCheckingEnabled");
+        // Only seed it so a later user toggle wins. Not WebAutomaticSpellingCorrectionEnabled: it would rewrite words like "refactor".
+        if d.objectForKey(k).is_none() {
+            d.setBool_forKey(true, k);
+        }
+    }
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
     let builder = builder.menu(menu).on_menu_event(|app, event| {
@@ -893,6 +904,17 @@ pub fn run() {
             deps::auto_update();
             // Kontenliste fuer git fetch/pull/push mit automatisch gewaehltem Konto (forge::repo_auth).
             forge::known(app.handle());
+            // WebKitGTK spellchecks per context, off by default; the context is shared, so one call covers all windows.
+            // Config windows already exist here (tauri's setup builds them before calling this hook).
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|wv| {
+                    use webkit2gtk::{WebContextExt, WebViewExt};
+                    if let Some(ctx) = wv.inner().context() {
+                        ctx.set_spell_checking_enabled(true);
+                    }
+                });
+            }
             // Ohne Tray (Linux ohne AppIndicator-Bibliothek) weiterstarten, Schliessen beendet dann.
             let ok = tray_supported() && tray(app.handle()).map_err(|e| eprintln!("Tray nicht verfügbar: {e}")).is_ok();
             TRAY_OK.store(ok, Ordering::Relaxed);

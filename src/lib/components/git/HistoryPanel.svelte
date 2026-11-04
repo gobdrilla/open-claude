@@ -623,7 +623,7 @@
   onconfirm={doMsg}
   oncancel={() => (msgDlg = null)}
 >
-  <Textarea bind:value={msgText} density="sm" class="h-32 field-sizing-fixed font-mono" aria-label="Commit-Nachricht" />
+  <Textarea bind:value={msgText} density="sm" class="h-32 field-sizing-fixed font-mono" spellcheck={true} aria-label="Commit-Nachricht" />
 </ConfirmDialog>
 
 <RebaseDialog {repo} from={rebaseFrom} onclose={() => (rebaseFrom = null)} onstart={startRebase} />

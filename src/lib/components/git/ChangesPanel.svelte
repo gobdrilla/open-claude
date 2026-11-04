@@ -468,6 +468,7 @@
           density="xs"
           class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono [@media(max-height:640px)]:h-14"
           placeholder="Commit-Nachricht ({MOD}+Enter · mit {SHIFT} auch pushen)"
+          spellcheck={true}
           bind:value={message}
           onkeydown={(e) => {
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

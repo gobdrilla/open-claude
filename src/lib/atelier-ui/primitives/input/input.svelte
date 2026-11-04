@@ -23,6 +23,8 @@
 		files = $bindable(),
 		class: className,
 		density = "default",
+		// Off unless a field opts in: the OS-level check is enabled globally (lib.rs) and would mark names and paths.
+		spellcheck = false,
 		"data-slot": dataSlot = "input",
 		...restProps
 	}: Props = $props();
@@ -39,6 +41,7 @@
 		)}
 		type="file"
 		bind:files
+		{spellcheck}
 		bind:value
 		{...restProps}
 	/>
@@ -52,6 +55,7 @@
 			className
 		)}
 		{type}
+		{spellcheck}
 		bind:value
 		{...restProps}
 	/>

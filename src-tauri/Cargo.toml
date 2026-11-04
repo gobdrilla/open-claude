@@ -51,6 +51,8 @@ keyring = { version = "3", features = ["windows-native"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
+# Rechtschreibpruefung der WKWebView einschalten (src/lib.rs, run); schon ueber wry im Lock
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSUserDefaults", "NSString"] }
 
 # Secret Service (GNOME-Keyring/KWallet) ueberlebt Neustarts, keyutils allein nicht
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -58,6 +60,8 @@ keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 # Tray nur, wenn AppIndicator ladbar ist und ein StatusNotifierWatcher laeuft (src/lib.rs, tray_supported)
 libloading = "0.7"
 gio = "0.18"
+# Rechtschreibpruefung im WebKitGTK-Kontext (src/lib.rs, setup); dieselbe Version wie in wry
+webkit2gtk = "2.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
