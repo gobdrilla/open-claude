@@ -37,6 +37,15 @@
     children?: Snippet;
   } = $props();
 
+  let content = $state<HTMLElement | null>(null);
+  // With actions (e.g. "Zurücksetzen") the first button would get the focus, so a stray Enter would run it:
+  // start on the close button instead. Next frame like bits-ui itself, the content is only then in place.
+  const autoFocus = (e: Event) => {
+    if (!actions?.length) return;
+    e.preventDefault();
+    requestAnimationFrame(() => content?.querySelector<HTMLElement>('[data-slot="dialog-close"]')?.focus({ preventScroll: true }));
+  };
+
   function onkeydown(e: KeyboardEvent) {
     const d = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
     if (!step || !d || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -46,7 +55,7 @@
 </script>
 
 <Dialog.Root open={diff !== null} onOpenChange={(o) => !o && onclose()}>
-  <Dialog.Content class="flex h-[80vh] flex-col gap-3 sm:max-w-4xl" {onkeydown}>
+  <Dialog.Content bind:ref={content} class="flex h-[80vh] flex-col gap-3 sm:max-w-4xl" {onkeydown} onOpenAutoFocus={autoFocus}>
     <Dialog.Header>
       <div class="flex min-w-0 items-center gap-2 pr-8">
         <Dialog.Title class="min-w-0 truncate">{title}</Dialog.Title>
