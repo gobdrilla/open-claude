@@ -201,7 +201,7 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-2xl">
+  <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-3xl">
     <Dialog.Header>
       <Dialog.Title>Repository klonen</Dialog.Title>
       <Dialog.Description>Von GitHub/GitLab suchen oder eine Git-URL einfügen.</Dialog.Description>
@@ -218,7 +218,8 @@
           {a.user}<span class="ml-1 font-mono text-meta opacity-70">@{a.host}</span>
         </Button>
       {/each}
-      <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
+      <!-- Kurz, damit "URL einfügen" mit zwei Konten noch in derselben Zeile steht -->
+      <Button variant="outline" size="sm" title="Konto hinzufügen" onclick={onaccounts}>+ Konto</Button>
       <span class="flex-1"></span>
       <Button
         variant="toggle"
@@ -285,9 +286,12 @@
               {#if r.fork}<GitForkIcon class="text-muted-foreground size-3" />{/if}
               {#if r.archived}<ArchiveIcon class="text-muted-foreground size-3" />{/if}
               <span class="text-muted-foreground w-12 shrink-0 text-right font-mono text-meta whitespace-nowrap tabular-nums">{age(r.updated_at)}</span>
-              {#if isExisting}
-                <Badge variant="outline" class="text-primary gap-0.5 text-meta"><CheckIcon class="size-3" />lokal</Badge>
-              {/if}
+              <!-- Feste Breite, auch ohne Badge: sonst springen Schloss und Zeit je Zeile -->
+              <span class="flex w-14 shrink-0 justify-end">
+                {#if isExisting}
+                  <Badge variant="outline" class="text-primary gap-0.5 text-meta"><CheckIcon class="size-3" />lokal</Badge>
+                {/if}
+              </span>
             </Row>
           {/each}
           {#if !searched && own.length && !loading && !ownDone}
