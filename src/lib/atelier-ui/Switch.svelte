@@ -4,7 +4,7 @@
 </script>
 
 <button
-  class="relative h-3.5 w-6 shrink-0 rounded-full transition-colors disabled:opacity-50 {on
+  class="relative h-3.5 w-6 shrink-0 rounded-full transition-colors disabled:opacity-50 dark:disabled:ring-muted-foreground {on
     ? 'bg-primary'
     : 'bg-secondary ring-border ring-1'}"
   role="switch"
