@@ -19,6 +19,16 @@ export const inlaySide = (h: InlayHint): number => (h.kind === 2 ? -1 : 1);
  * rust-analyzer and clangd enable them by default.
  */
 export const INIT_OPTIONS: Record<string, unknown> = {
+  // Code Vision: usage and implementation counts; Run/Debug lenses would need commands this client does not run.
+  rust: {
+    lens: {
+      enable: true,
+      run: { enable: false },
+      debug: { enable: false },
+      implementations: { enable: true },
+      references: { adt: { enable: true }, method: { enable: true }, trait: { enable: true } },
+    },
+  },
   typescript: {
     preferences: {
       includeInlayParameterNameHints: "literals",
@@ -28,4 +38,15 @@ export const INIT_OPTIONS: Record<string, unknown> = {
       includeInlayFunctionLikeReturnTypeHints: false,
     },
   },
+};
+
+const TS_LENS = {
+  referencesCodeLens: { enabled: true, showOnAllFunctions: true },
+  implementationsCodeLens: { enabled: true, showOnInterfaceMethods: true },
+};
+
+/** workspace/didChangeConfiguration settings per server key, sent once after initialize: Code Vision is opt-in there. */
+export const SETTINGS: Record<string, unknown> = {
+  typescript: { typescript: TS_LENS, javascript: TS_LENS },
+  svelte: { typescript: TS_LENS, javascript: TS_LENS },
 };

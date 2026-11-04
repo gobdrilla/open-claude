@@ -134,11 +134,13 @@ export function locate(view: EditorView, how: How, pos = view.state.selection.ma
   return true;
 }
 
-export const gotoImplementation: Command = (view) =>
-  locate(view, { method: "textDocument/implementation", cap: "implementationProvider", title: (n) => `${n} Implementierungen`, none: "Keine Implementierung gefunden" });
+export const gotoImplementation: Command = (view) => showImplementations(view, view.state.selection.main.head);
 
 export const gotoTypeDefinition: Command = (view) =>
   locate(view, { method: "textDocument/typeDefinition", cap: "typeDefinitionProvider", title: (n) => `${n} Typdefinitionen`, none: "Kein Typ im Projekt gefunden" });
+
+export const showImplementations = (view: EditorView, pos: number) =>
+  locate(view, { method: "textDocument/implementation", cap: "implementationProvider", title: (n) => `${n} Implementierungen`, none: "Keine Implementierung gefunden" }, pos);
 
 export const showUsages = (view: EditorView, pos: number) =>
   locate(

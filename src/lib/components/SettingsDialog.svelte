@@ -168,6 +168,9 @@
             <SettingRow label="Inlay-Hinweise" description="Typen und Parameternamen grau im Code, vom Language-Server.">
               <Switch label="Inlay-Hinweise" on={prefs.inlay} onclick={() => togglePref("inlay")} />
             </SettingRow>
+            <SettingRow label="Code Vision" description="Verwendungen und Implementierungen über Klassen und Methoden, vom Language-Server; Klick zeigt sie.">
+              <Switch label="Code Vision" on={prefs.lens} onclick={() => togglePref("lens")} />
+            </SettingRow>
             <SettingRow label="Beim Speichern formatieren" description="{mod}+S formatiert die Datei vorher über den Language-Server.">
               <Switch label="Beim Speichern formatieren" on={prefs.format} onclick={() => togglePref("format")} />
             </SettingRow>

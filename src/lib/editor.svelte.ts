@@ -454,19 +454,20 @@ export function setText(repo: string, path: string, text: string): void {
 }
 
 /** Zeilenumbruch (Alt+Z), global fuer alle Projekte; localStorage "editor:wrap". */
-export const prefs = $state({ wrap: false, ai: true, inlay: true, format: false, blame: true });
+export const prefs = $state({ wrap: false, ai: true, inlay: true, format: false, blame: true, lens: true });
 try {
   prefs.wrap = localStorage.getItem("editor:wrap") === "1";
   prefs.ai = localStorage.getItem("editor:ai") !== "0";
   prefs.inlay = localStorage.getItem("editor:inlay") !== "0";
   prefs.format = localStorage.getItem("editor:format") === "1";
   prefs.blame = localStorage.getItem("editor:blame") !== "0";
+  prefs.lens = localStorage.getItem("editor:lens") !== "0";
 } catch {
   // Ohne localStorage: kein Umbruch, KI-Vorschlaege an.
 }
 
-/** Settings switches for inlay hints and format on save; localStorage "editor:<key>". */
-export function togglePref(key: "inlay" | "format" | "blame"): void {
+/** Settings switches for inlay hints, Code Vision and format on save; localStorage "editor:<key>". */
+export function togglePref(key: "inlay" | "format" | "blame" | "lens"): void {
   prefs[key] = !prefs[key];
   try {
     localStorage.setItem(`editor:${key}`, prefs[key] ? "1" : "0");
