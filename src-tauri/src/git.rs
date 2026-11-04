@@ -966,6 +966,10 @@ fn merge(repo: &str, rev: &str, mode: &str, message: Option<&str>) -> Result<Str
         "squash" => Some("--squash"),
         _ => return Err("Unbekannter Merge-Modus".into()),
     };
+    // Squash commits the whole index below; git only refuses staged changes when it cannot fast-forward.
+    if mode == "squash" && has_head(repo) && !ok(git(repo).args(["diff", "--cached", "--quiet", "HEAD", "--"])) {
+        return Err("Erst die gestagten Änderungen committen oder unstagen.".into());
+    }
     let message = message.filter(|m| !m.trim().is_empty() && mode != "ff-only");
     let mut cmd = git(repo);
     cmd.args(["merge", "--no-edit"]).args(flag);
@@ -2409,6 +2413,14 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         let h = head(&r);
         assert_eq!((h.parents.len(), h.subject.as_str()), (2, "Eigener Merge"));
         assert_eq!(show(&r, &h.sha).unwrap().body.trim(), "mit Text");
+
+        // Squash with something unrelated staged: refused, nothing committed, the file stays staged
+        reset(&r, &start);
+        put(&r, "s.txt", "s\n");
+        stage(&r, &v(&["s.txt"])).unwrap();
+        assert!(merge(&r, "f", "squash", None).unwrap_err().contains("gestagten"));
+        assert_eq!(head(&r).sha, start);
+        assert!(file(&status(&r).unwrap(), "s.txt").is_some_and(|f| f.index == "A"));
 
         // Diverged: ff-only fails without leaving a state behind
         reset(&r, &start);
