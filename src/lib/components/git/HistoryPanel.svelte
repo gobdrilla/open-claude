@@ -212,6 +212,18 @@
   const total = $derived(stats.reduce((t, s) => ({ a: t.a + s.a, d: t.d + s.d }), { a: 0, d: 0 }));
   const cur = $derived(shown === null ? null : (files[shown] ?? null));
   const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
+  // Commits reachable from HEAD (--topo-order lists children before parents). null: HEAD not loaded, allow everything.
+  const onHead = $derived.by(() => {
+    if (!commits.some((c) => c.refs.some((r) => r === "HEAD" || r.startsWith("HEAD -> ")))) return null;
+    const s = new Set<string>();
+    for (const c of commits) {
+      if (c.refs.some((r) => r === "HEAD" || r.startsWith("HEAD -> ")) || s.has(c.sha)) {
+        s.add(c.sha);
+        for (const p of c.parents) s.add(p);
+      }
+    }
+    return s;
+  });
 
   function refBadges(refs: string[]) {
     return refs.map((r) => {
@@ -445,9 +457,10 @@
             )}
         />
         <ContextMenu.Separator class={menuSeparator} />
-        <ContextItem label="Nachricht bearbeiten …" onSelect={() => reword(c)} />
+        {@const own = !onHead || onHead.has(c.sha)}
+        <ContextItem label="Nachricht bearbeiten …" disabled={!own} onSelect={() => reword(c)} />
         {#if c.parents.length === 1}
-          <ContextItem label="Mit Vorgänger zusammenfassen …" onSelect={() => squash(c)} />
+          <ContextItem label="Mit Vorgänger zusammenfassen …" disabled={!own} onSelect={() => squash(c)} />
         {/if}
         <ContextItem
           label="Aktuellen Branch hierauf rebasen"
@@ -457,7 +470,7 @@
             )}
         />
         {#if c.parents.length <= 1}
-          <ContextItem label="Interaktiv ab hier …" onSelect={() => (rebaseFrom = c)} />
+          <ContextItem label="Interaktiv ab hier …" disabled={!own} onSelect={() => (rebaseFrom = c)} />
         {/if}
         <ContextMenu.Separator class={menuSeparator} />
         <ContextItem label="Reset: soft" onSelect={() => reset(c.sha, "soft")} />
