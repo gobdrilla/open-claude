@@ -171,7 +171,8 @@ pub(crate) fn exec(cmd: &mut Command, input: Option<&[u8]>) -> Result<Output, St
                 // stdin schliessen (drop), sonst wartet git ewig
                 let written = child.stdin.take().map(|mut s| s.write_all(data));
                 let out = child.wait_with_output()?;
-                written.transpose()?;
+                // git exited before reading stdin (e.g. not a repo): its status and stderr carry the real error.
+                written.transpose().or_else(|e| if e.kind() == std::io::ErrorKind::BrokenPipe { Ok(None) } else { Err(e) })?;
                 Ok(out)
             }),
     };
