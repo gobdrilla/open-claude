@@ -210,6 +210,11 @@ export function compileLinker(p: LinkDecl, v: Values): Linker | string | null {
   return { title: p.title, re: new RegExp(pattern, "g"), prefixes, url };
 }
 
+/** Errors of providers broken by the manifest, each once: the settings tab keys its list by the text. */
+export function linkerProblems(m: Manifest, v: Values): string[] {
+  return [...new Set(m.contributes.linkProviders.map((p) => compileLinker(p, v)).filter((l) => typeof l === "string"))];
+}
+
 /** id: the matched key ($1, else $0), shown as "ABC-123 öffnen". */
 export type Link = { start: number; end: number; id: string; url: string; title: string };
 export const MAX_TEXT = 20_000;

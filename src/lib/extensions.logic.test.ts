@@ -13,6 +13,7 @@ import {
   parseManifest,
   resolve,
   segments,
+  linkerProblems,
   serial,
   type LinkDecl,
   type Linker,
@@ -143,6 +144,15 @@ test("compileLinker: leer = inaktiv, ungültig = Hinweis", () => {
   assert.match(compileLinker(provider, { pattern: "(", url: "https://x/$1" }) as string, /^Jira-Ticket: Ungültiger regulärer Ausdruck/);
   assert.match(compileLinker(provider, { pattern: "x", url: "javascript:$1" }) as string, /http\(s\)/);
   assert.equal(typeof jira({}), "object");
+});
+
+test("linkerProblems: gleicher Fehler zweier Provider nur einmal", () => {
+  const broken = (id: string) => ({ id, title: "Ticket", pattern: "(", url: "https://x/$1" });
+  const m = parseManifest(JSON.stringify({ manifestVersion: 1, id: "a", name: "A", version: "1.0.0", contributes: { linkProviders: [broken("a"), broken("b")] } }));
+  assert.ok("manifest" in m);
+  const p = linkerProblems(m.manifest, {});
+  assert.equal(p.length, 1);
+  assert.match(p[0], /^Ticket: Ungültiger regulärer Ausdruck/);
 });
 
 test("findLinks: Treffer und URL", () => {

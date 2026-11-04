@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button, RefreshButton, SettingRow, SettingsSection, Switch } from "$lib/atelier-ui";
   import { invoke } from "@tauri-apps/api/core";
-  import { compileLinker, resolve, type Manifest } from "$lib/extensions.logic";
+  import { linkerProblems, resolve, type Manifest } from "$lib/extensions.logic";
   import { exts, isOn, rescan, setEnabled, type Entry } from "$lib/extensions.svelte";
   import ExtensionSettingRows from "./ExtensionSettingRows.svelte";
 
@@ -13,10 +13,7 @@
   const label = (e: Entry) => (e.manifest ? `${e.manifest.name} ${e.manifest.version}` : base(e.dir ?? e.key));
   const info = (e: Entry) => (e.source === "user" ? `Eigene Erweiterung · ${base(e.dir!)}` : e.manifest?.description);
   // Link patterns broken by their manifest defaults (own settings are checked while editing).
-  const problems = (m: Manifest) => {
-    const v = resolve(m.contributes.settings, exts.settings[m.id] ?? {}, {});
-    return m.contributes.linkProviders.map((p) => compileLinker(p, v)).filter((l) => typeof l === "string");
-  };
+  const problems = (m: Manifest) => linkerProblems(m, resolve(m.contributes.settings, exts.settings[m.id] ?? {}, {}));
   async function openDir() {
     error = "";
     try {
