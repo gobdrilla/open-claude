@@ -16,6 +16,8 @@
   import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import GitMergeIcon from "@lucide/svelte/icons/git-merge";
   import BoxesIcon from "@lucide/svelte/icons/boxes";
+  import FolderIcon from "@lucide/svelte/icons/folder";
+  import { refRows, type RefRow } from "$lib/reftree";
   import { age, cn } from "$lib/utils";
   import { ask } from "$lib/ask.svelte";
 
@@ -85,6 +87,15 @@
     }
     return [...by];
   });
+
+  const cur = $derived(locals.find((b) => b.current)?.name);
+  // Ref folders share the expanded record via prefixed keys. Unset: closed, except folders holding the checked-out branch.
+  const dirOpen = (pre: string, auto?: string) => (p: string) => expanded[pre + p] ?? !!auto?.startsWith(p + "/");
+  const localRows = $derived(refRows(locals, (b) => b.name, dirOpen("b:", cur)));
+  const remoteRows = $derived(
+    remoteGroups.map(([r, list]) => [r, refRows(list, (b) => b.name.slice(r.length + 1), dirOpen(`r:${r}/`))] as const),
+  );
+  const tagRows = $derived(refRows(tags, (t) => t.name, dirOpen("t:")));
 
   const base = $derived(branches.find((b) => b.base)?.base ?? null);
   // Fest eingestellt (git config ocui.base) statt automatisch erkannt.
@@ -285,6 +296,21 @@
   }
 </script>
 
+{#snippet folder(r: RefRow<unknown> & { dir: true }, key: string)}
+  <SectionToggle
+    variant="item"
+    class="rounded-md py-1 text-meta"
+    style="padding-left:{4 + r.depth * 12}px"
+    open={r.open}
+    onclick={() => (expanded[key] = !r.open)}
+    title={r.path + "/"}
+  >
+    <FolderIcon class="text-muted-foreground size-3 shrink-0" />
+    <span class="min-w-0 flex-1 truncate font-mono">{r.label}</span>
+    <span class="text-muted-foreground font-mono text-meta">{r.count}</span>
+  </SectionToggle>
+{/snippet}
+
 {#snippet choice(label: string, value: string | null)}
   <DropdownMenu.Item
     class={menuItem}
@@ -397,18 +423,22 @@
         {#if locals.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
-        {#each locals as b (b.name)}
+        {#each localRows as r (r.dir ? r.path + "/" : r.path)}
+          {#if r.dir}
+            {@render folder(r, "b:" + r.path)}
+          {:else}
+          {@const b = r.ref}
           <ContextMenu.Root>
             <ContextMenu.Trigger>
               <Row
-                indent
+                style="padding-left:{24 + r.depth * 12}px"
                 active={b.current}
                 dim={merged(b)}
                 ondblclick={() => checkout(b)}
                 onclick={() => onselectref(b.sha)}
                 title={merged(b) ? `In ${base} gemergt` : undefined}
               >
-                <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{b.name}</span>
+                <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{r.label}</span>
                 {#if b.ahead}
                   <span class="text-primary flex items-center font-mono text-meta"
                     ><ArrowUpIcon class="size-2.5" />{b.ahead}</span
@@ -477,6 +507,7 @@
               </ContextMenu.Content>
             </ContextMenu.Portal>
           </ContextMenu.Root>
+          {/if}
         {/each}
       </div>
     {/if}
@@ -494,19 +525,23 @@
         {#if remoteGroups.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
-        {#each remoteGroups as [remote, list] (remote)}
+        {#each remoteRows as [remote, rows] (remote)}
           <p class="text-muted-foreground px-2 pt-1 pl-6 font-mono text-meta">{remote}</p>
-          {#each list as b (b.name)}
+          {#each rows as r (r.dir ? r.path + "/" : r.path)}
+            {#if r.dir}
+              {@render folder(r, `r:${remote}/${r.path}`)}
+            {:else}
+            {@const b = r.ref}
             <ContextMenu.Root>
               <ContextMenu.Trigger>
                 <Row
-                  indent
+                  style="padding-left:{24 + r.depth * 12}px"
                   dim={merged(b)}
                   ondblclick={() => checkout(b)}
                   onclick={() => onselectref(b.sha)}
                   title={merged(b) ? `In ${base} gemergt` : undefined}
                 >
-                  <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{b.name.slice(remote.length + 1)}</span>
+                  <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{r.label}</span>
                 </Row>
               </ContextMenu.Trigger>
               <ContextMenu.Portal>
@@ -527,6 +562,7 @@
                 </ContextMenu.Content>
               </ContextMenu.Portal>
             </ContextMenu.Root>
+            {/if}
           {/each}
         {/each}
       </div>
@@ -545,11 +581,15 @@
         {#if tags.length === 0}
           <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
         {/if}
-        {#each tags as t (t.name)}
+        {#each tagRows as r (r.dir ? r.path + "/" : r.path)}
+          {#if r.dir}
+            {@render folder(r, "t:" + r.path)}
+          {:else}
+          {@const t = r.ref}
           <ContextMenu.Root>
             <ContextMenu.Trigger>
-              <Row indent onclick={() => onselectref(t.sha)}>
-                <span class="min-w-0 flex-1 truncate font-mono" title={t.name}>{t.name}</span>
+              <Row style="padding-left:{24 + r.depth * 12}px" onclick={() => onselectref(t.sha)}>
+                <span class="min-w-0 flex-1 truncate font-mono" title={t.name}>{r.label}</span>
               </Row>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
@@ -563,6 +603,7 @@
               </ContextMenu.Content>
             </ContextMenu.Portal>
           </ContextMenu.Root>
+          {/if}
         {/each}
       </div>
     {/if}
