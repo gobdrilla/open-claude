@@ -173,12 +173,22 @@ function httpUrl(s: string): string | null {
     return null;
   }
 }
+// Engine messages are English and differ (WebKit "missing )", V8 "Unterminated group"); the common ones get a German hint.
+const REGEX_HINTS: [RegExp, string][] = [
+  [/missing \)|unterminated group/i, "„(“ ohne schließende „)“"],
+  [/unmatched/i, "„)“ ohne öffnende „(“"],
+  [/missing terminating \]|unterminated character class/i, "„[“ ohne schließende „]“"],
+  [/nothing to repeat/i, "*, + oder ? ohne Zeichen davor"],
+  [/\\ at end of pattern/i, "„\\“ am Ende"],
+  [/out of order/i, "Bereich in falscher Reihenfolge, z. B. [z-a] oder {3,1}"],
+];
 const regexError = (v: string) => {
   try {
     new RegExp(v, "g");
     return null;
   } catch (e) {
-    return `Ungültiger regulärer Ausdruck: ${e instanceof Error ? e.message : e}`;
+    const hint = REGEX_HINTS.find(([re]) => re.test(String(e)))?.[1];
+    return hint ? `Ungültiger regulärer Ausdruck: ${hint}` : "Ungültiger regulärer Ausdruck";
   }
 };
 const URL_ERROR = "Muss nach dem Einsetzen eine http(s)-Adresse ergeben, z. B. https://firma.atlassian.net/browse/$1";

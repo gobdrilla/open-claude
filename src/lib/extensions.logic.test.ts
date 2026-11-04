@@ -120,7 +120,13 @@ test("resolve: Projekt > global > default", () => {
 
 test("checkValue", () => {
   const [url, pattern] = decls;
-  assert.match(checkValue(pattern, "([A-Z]")!, /Ungültiger regulärer Ausdruck/);
+  assert.equal(checkValue(pattern, "([A-Z]+-\\d+")!, "Ungültiger regulärer Ausdruck: „(“ ohne schließende „)“");
+  assert.equal(checkValue(pattern, "a)")!, "Ungültiger regulärer Ausdruck: „)“ ohne öffnende „(“");
+  assert.equal(checkValue(pattern, "[a")!, "Ungültiger regulärer Ausdruck: „[“ ohne schließende „]“");
+  assert.equal(checkValue(pattern, "*a")!, "Ungültiger regulärer Ausdruck: *, + oder ? ohne Zeichen davor");
+  assert.equal(checkValue(pattern, "a\\")!, "Ungültiger regulärer Ausdruck: „\\“ am Ende");
+  assert.equal(checkValue(pattern, "[z-a]")!, "Ungültiger regulärer Ausdruck: Bereich in falscher Reihenfolge, z. B. [z-a] oder {3,1}");
+  assert.equal(checkValue(pattern, "(?<1>x)")!, "Ungültiger regulärer Ausdruck");
   assert.equal(checkValue(pattern, "#(\\d+)"), null);
   assert.ok(checkValue(url, "javascript:alert($1)"));
   assert.ok(checkValue(url, "firma.atlassian.net/browse/$1"));
