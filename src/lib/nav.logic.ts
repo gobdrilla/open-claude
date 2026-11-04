@@ -53,3 +53,33 @@ export function lineLenses(all: Lens[]): Map<number, Lens[]> {
   for (const list of out.values()) list.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "refs" ? -1 : 1));
   return out;
 }
+
+export type SymNode = { name: string; kind: number; range: LspRange; selectionRange: LspRange; children?: SymNode[] };
+type FlatSym = { name: string; kind: number; location: { range: LspRange } };
+/** A breadcrumb: the symbol around the cursor and the ones beside it (for the pick list). */
+export type Crumb = { sym: SymNode; siblings: SymNode[] };
+
+const FILE_KIND = 1;
+const before = (a: LspPos, b: LspPos) => a.line < b.line || (a.line === b.line && a.character <= b.character);
+const contains = (r: LspRange, p: LspPos) => before(r.start, p) && before(p, r.end);
+const size = (r: LspRange) => (r.end.line - r.start.line) * 1e6 + r.end.character - r.start.character;
+
+/** documentSymbol answer as a tree: flat SymbolInformation (old servers) becomes one level. */
+export function symbolTree(list: (SymNode | FlatSym)[] | null | undefined): SymNode[] {
+  return (list ?? []).map((s) => ("location" in s ? { name: s.name, kind: s.kind, range: s.location.range, selectionRange: s.location.range } : s));
+}
+
+/**
+ * Symbols around the position, outermost first. A file symbol (csharp-ls wraps everything in one) is skipped. Several
+ * containing symbols on one level (flat answers: class and method side by side) go in from the largest.
+ */
+export function crumbsAt(tree: SymNode[], pos: LspPos): Crumb[] {
+  const out: Crumb[] = [];
+  let level = tree;
+  for (;;) {
+    const hit = level.filter((s) => contains(s.range, pos)).sort((a, b) => size(b.range) - size(a.range));
+    if (!hit.length) return out;
+    for (const s of hit) if (s.kind !== FILE_KIND) out.push({ sym: s, siblings: level.filter((x) => x.kind !== FILE_KIND) });
+    level = hit.at(-1)!.children ?? [];
+  }
+}
