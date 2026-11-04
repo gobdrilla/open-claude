@@ -17,6 +17,8 @@
   import PipelinesPanel from "./PipelinesPanel.svelte";
   import UnityPanel from "$lib/components/unity/UnityPanel.svelte";
   import MergeEditor from "./MergeEditor.svelte";
+  import RepoExtensionsDialog from "./RepoExtensionsDialog.svelte";
+  import { active } from "$lib/extensions.svelte";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import GitBranchPlusIcon from "@lucide/svelte/icons/git-branch-plus";
@@ -265,10 +267,14 @@
   }
 
   // Header overflow ⋯: [label, action, shortcut label?]; further entries just go into this list.
-  const more: [string, () => void, string?][] = [
+  const more: [string, () => void, string?][] = $derived([
     ["Zu Commit springen …", openJump, `${MOD}+G`],
     ["Tag erstellen …", () => (tagOpen = true)],
-  ];
+    ...(active().some((m) => m.contributes.settings.some((d) => d.scope === "repo"))
+      ? [["Erweiterungen für dieses Projekt …", () => (extOpen = true)] as [string, () => void]]
+      : []),
+  ]);
+  let extOpen = $state(false);
 
   function doTag(name: string, message: string | null, push: boolean) {
     tagOpen = false;
@@ -651,6 +657,8 @@
 />
 
 <TagDialog target={tagOpen ? "HEAD" : null} onsubmit={doTag} oncancel={() => (tagOpen = false)} />
+
+<RepoExtensionsDialog bind:open={extOpen} repo={cur} name={[repo.split(/[\\/]/).filter(Boolean).pop(), ...trail].join(" › ")} />
 
 <PromptDialog
   open={stashOpen}

@@ -14,6 +14,8 @@
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
   import BotIcon from "@lucide/svelte/icons/bot";
   import InfoIcon from "@lucide/svelte/icons/info";
+  import PuzzleIcon from "@lucide/svelte/icons/puzzle";
+  import ExtensionsTab from "./ExtensionsTab.svelte";
 
   // App settings; state and side effects stay in +page.svelte. Sub-dialogs replace this one (openSub there),
   // questions show as a bar inside it.
@@ -73,6 +75,7 @@
     ["Terminal", "terminal", TerminalIcon],
     ["Git", "git", GitBranchIcon],
     ["Claude", "claude", BotIcon],
+    ["Erweiterungen", "extensions", PuzzleIcon],
     ["Info", "info", InfoIcon],
   ] as const;
   let tab = $state<(typeof TABS)[number][1]>("general");
@@ -266,6 +269,8 @@
               <Button variant="outline" size="sm" onclick={onprofiles}>Bearbeiten</Button>
             </SettingRow>
           </SettingsSection>
+        {:else if tab === "extensions"}
+          <ExtensionsTab />
         {:else}
           <SettingsSection title="L'Atelier de Claude">
             <SettingRow

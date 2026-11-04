@@ -20,6 +20,7 @@ Missing a variant? Add it here (small, generic), not as ad-hoc classes in a view
 | `Tabs` | Tab bar with optional counts. |
 | `Row`, `SectionToggle` | Clickable list row, collapsible section header. |
 | `FolderField` | Path field with folder picker. |
+| `LinkedText` | Text with link ranges (`Link[]` from `extensions.logic`) as `<a href>`; the global click handler opens them. |
 | `SectionHead` | Thin header strip of a pane section. |
 | `Empty` | Empty state (icon, one sentence, optional action and hint). |
 | `SettingsSection`, `SettingRow` | Settings layout: heading + framed rows, label/description left, control right. |
@@ -57,4 +58,5 @@ Tokens in `src/app.css` (`@theme`), registered in `cn()` so tailwind-merge treat
 | --- | --- | --- |
 | Sitzung | Session | Everywhere in UI text, including tab labels and buttons ("+ Sitzung"). Identifiers in code may stay `session`. |
 | Projekt | Repo | When it means the project the user works on. "Repository"/"Repo" only where the Git object itself is meant (e.g. "Neues Repo anlegen", remote URL). |
+| Erweiterung | Plugin, Mod | App extensions (Einstellungen › Erweiterungen). "Plugin" means Claude Code plugins, "Mod" the Claude Code mods. |
 | CI | Actions, Pipelines | Tab label and headings. Provider names (GitHub Actions, GitLab CI) only in descriptions. |

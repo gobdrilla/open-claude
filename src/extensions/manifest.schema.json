@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "L'Atelier de Claude – Erweiterung (manifest.json, v1)",
+  "description": "Declarative app extension: settings and link patterns, no code. Checked by src/lib/extensions.logic.ts.",
+  "type": "object",
+  "required": ["manifestVersion", "id", "name", "version"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "manifestVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "maxLength": 64, "description": "Also part of the git config key ocui.ext.<id>.<key>." },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$" },
+    "description": { "type": "string", "maxLength": 200 },
+    "author": { "type": "string", "maxLength": 100 },
+    "homepage": { "type": "string", "maxLength": 300 },
+    "contributes": {
+      "type": "object",
+      "properties": {
+        "settings": { "type": "array", "items": { "$ref": "#/$defs/setting" } },
+        "linkProviders": { "type": "array", "items": { "$ref": "#/$defs/linkProvider" } }
+      }
+    },
+    "main": { "description": "Reserved for code extensions; v1 rejects manifests that set it." },
+    "permissions": { "type": "array", "maxItems": 0, "description": "Reserved for code extensions; must be empty in v1." },
+    "engines": { "type": "object", "description": "Reserved: API semver range for code extensions (not the app version)." }
+  },
+  "$defs": {
+    "ident": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "maxLength": 64 },
+    "setting": {
+      "type": "object",
+      "required": ["key", "type", "title"],
+      "properties": {
+        "key": { "$ref": "#/$defs/ident" },
+        "type": { "enum": ["string", "boolean", "enum"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 300 },
+        "default": { "type": ["string", "boolean"] },
+        "enum": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "string" }], "minItems": 2, "maxItems": 2 }
+        },
+        "placeholder": { "type": "string", "maxLength": 200 },
+        "format": { "enum": ["url-template", "regex"] },
+        "scope": { "enum": ["global", "repo"], "default": "global" }
+      }
+    },
+    "linkProvider": {
+      "type": "object",
+      "required": ["id", "title", "pattern", "url"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ident" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "pattern": { "type": "string", "description": "JS regex, flags always g. Group 1 is $1, without a group $1 = $0. ${config:<key>} inserts a setting." },
+        "prefixes": { "type": "string", "description": "Comma-separated; only matches whose $1 starts with <KEY>-." },
+        "url": { "type": "string", "description": "Template: $0–$9, %BUGID% (= $1), ${config:<key>}. Must give an http(s) URL." }
+      }
+    }
+  }
+}

@@ -23,6 +23,7 @@ export { default as Segmented } from "./Segmented.svelte";
 export { default as Select } from "./Select.svelte";
 export { default as Tabs } from "./Tabs.svelte";
 export { default as FolderField } from "./FolderField.svelte";
+export { default as LinkedText } from "./LinkedText.svelte";
 
 // Structure and dialogs
 export { default as SectionHead } from "./SectionHead.svelte";

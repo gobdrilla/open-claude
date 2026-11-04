@@ -914,6 +914,53 @@ fn set_base(repo: &str, base: Option<&str>) -> Result<(), String> {
     }
 }
 
+/// Extension id/setting key: [a-z][a-z0-9-]*. A leading "-" or a dot would hit options or other config sections.
+fn ext_ident(s: &str) -> Result<&str, String> {
+    let mut c = s.chars();
+    if c.next().is_some_and(|f| f.is_ascii_lowercase()) && c.all(|x| x.is_ascii_lowercase() || x.is_ascii_digit() || x == '-') {
+        Ok(s)
+    } else {
+        Err(format!("Ungültiger Name: {s}"))
+    }
+}
+
+/// Per-project extension settings (local git config ocui.ext.<id>.<key>) as (id, key, value).
+fn ext_repo_get(repo: &str) -> Result<Vec<(String, String, String)>, String> {
+    let o = exec(git(repo).args(["config", "--local", "--null", "--get-regexp", r"^ocui\.ext\."]), None)?;
+    // Exit 1 = no match.
+    if o.status.code() == Some(1) {
+        return Ok(vec![]);
+    }
+    if !o.status.success() {
+        return Err(fail(&o));
+    }
+    Ok(text(&o.stdout)
+        .split('\0')
+        .filter_map(|e| {
+            let (name, value) = e.split_once('\n')?;
+            let (id, key) = name.strip_prefix("ocui.ext.")?.rsplit_once('.')?;
+            Some((id.to_string(), key.to_string(), value.to_string()))
+        })
+        .collect())
+}
+
+/// None removes the project value, so the global one applies again.
+fn ext_repo_set(repo: &str, id: &str, key: &str, value: Option<&str>) -> Result<(), String> {
+    let name = format!("ocui.ext.{}.{}", ext_ident(id)?, ext_ident(key)?);
+    match value {
+        Some(v) => out(git(repo).args(["config", "--local", "--", &name, v])).map(|_| ()),
+        None => {
+            let o = exec(git(repo).args(["config", "--local", "--unset", "--", &name]), None)?;
+            // Exit 5 = was not set.
+            if o.status.success() || o.status.code() == Some(5) {
+                Ok(())
+            } else {
+                Err(fail(&o))
+            }
+        }
+    }
+}
+
 /// Hauptbranch, gegen den "noch nicht gemergt" gezaehlt wird: eingestellt, sonst origin/HEAD, sonst die ueblichen Namen.
 fn base_branch(repo: &str) -> Option<String> {
     // Geloeschter oder umbenannter Branch in der Config: auf automatisch zurueckfallen.
@@ -1681,6 +1728,16 @@ pub async fn git_get_base(repo: String) -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn git_set_base(repo: String, base: Option<String>) -> Result<(), String> {
     blocking(move || set_base(&repo, base.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn git_ext_get(repo: String) -> Result<Vec<(String, String, String)>, String> {
+    blocking(move || ext_repo_get(&repo)).await
+}
+
+#[tauri::command]
+pub async fn git_ext_set(repo: String, id: String, key: String, value: Option<String>) -> Result<(), String> {
+    blocking(move || ext_repo_set(&repo, &id, &key, value.as_deref())).await
 }
 
 #[tauri::command]
@@ -2754,6 +2811,36 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         // Zweimal entfernen schadet nicht.
         clear_identity(&r);
         assert_eq!(config(&r, "ocui.base"), None);
+    }
+
+    #[test]
+    fn m_ext_repo_rundlauf() {
+        let (_t, r) = fresh("ext");
+        assert!(ext_repo_get(&r).unwrap().is_empty());
+        for (k, v) in [("url", "https://x/browse/$1 a=b"), ("keys", "-ABC, OPS"), ("pattern", "\\b([A-Z]+-\\d+)\\b")] {
+            ext_repo_set(&r, "jira", k, Some(v)).unwrap();
+        }
+        ext_repo_set(&r, "my-ext", "on", Some("true")).unwrap();
+        let mut got = ext_repo_get(&r).unwrap();
+        got.sort();
+        let t = |a: &str, b: &str, c: &str| (a.to_string(), b.to_string(), c.to_string());
+        assert_eq!(
+            got,
+            [
+                t("jira", "keys", "-ABC, OPS"),
+                t("jira", "pattern", "\\b([A-Z]+-\\d+)\\b"),
+                t("jira", "url", "https://x/browse/$1 a=b"),
+                t("my-ext", "on", "true")
+            ]
+        );
+        // ocui.base is not an extension setting.
+        out(git(&r).args(["config", "ocui.base", "main"])).unwrap();
+        ext_repo_set(&r, "jira", "url", None).unwrap();
+        ext_repo_set(&r, "jira", "fehlt", None).unwrap();
+        assert_eq!(ext_repo_get(&r).unwrap().len(), 3);
+        for (id, k) in [("jira", "-x"), ("jira", "a.b"), ("jira", "A"), ("a.b", "url"), ("-x", "url"), ("", "url")] {
+            assert!(ext_repo_set(&r, id, k, Some("v")).is_err(), "{id}.{k}");
+        }
     }
 
     #[test]

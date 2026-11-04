@@ -31,6 +31,7 @@
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import ClaudeSettingsDialog from "$lib/components/ClaudeSettingsDialog.svelte";
   import SettingsDialog from "$lib/components/SettingsDialog.svelte";
+  import { initExtensions } from "$lib/extensions.svelte";
   import { ContextMenu, DropdownMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
@@ -543,6 +544,8 @@
     pins = (await store.get<string[]>("pins")) ?? [];
     repoGroups = (await store.get<RepoGroup[]>("repoGroups")) ?? [];
     accounts = (await store.get<Account[]>("accounts")) ?? [];
+    // Not awaited: the extension scan must not delay the start.
+    initExtensions(store);
     autostart = await isEnabled().catch(() => false);
     // Linux: Tray-Icons brauchen unter GNOME eine Erweiterung, ohne sie waere das versteckte Fenster weg.
     tray = (await store.get<boolean>("tray")) ?? !navigator.userAgent.includes("Linux");

@@ -1,10 +1,12 @@
 <script lang="ts">
   import Notice from "$lib/components/Notice.svelte";
-  import { Badge, Button, ConfirmDialog, ContextItem, DiffDialog, Input, PromptDialog, Row, TextButton, Textarea, fileIcon, menuContent, menuSeparator } from "$lib/atelier-ui";
+  import { Badge, Button, ConfirmDialog, ContextItem, DiffDialog, Input, LinkedText, PromptDialog, Row, TextButton, Textarea, fileIcon, menuContent, menuSeparator } from "$lib/atelier-ui";
   import { age, cn } from "$lib/utils";
   import { tick, untrack } from "svelte";
   import { ContextMenu } from "bits-ui";
-  import { git, type Commit, type CommitDetail, type ResetMode } from "$lib/git";
+  import { forge, git, type Commit, type CommitDetail, type ResetMode } from "$lib/git";
+  import { findLinks } from "$lib/extensions.logic";
+  import { linkers, loadRepo } from "$lib/extensions.svelte";
   import { layout, type Row as GraphRow } from "$lib/graph";
   import { fileDiff, parseDiff, stat, type FileStatus } from "$lib/diff";
   import { dirname } from "$lib/tree";
@@ -205,6 +207,21 @@
         c.author.toLowerCase().includes(q) ||
         c.sha.startsWith(q),
     );
+  });
+
+  // Ticket links (Einstellungen › Erweiterungen): only in the details and the row's context menu, never per list row.
+  const links = $derived(linkers(repo));
+  $effect(() => {
+    loadRepo(repo);
+  });
+  const subjectLinks = $derived(detail ? findLinks(detail.commit.subject, links) : []);
+  const bodyLinks = $derived(detail?.body ? findLinks(detail.body, links) : []);
+  // "Mehr" only when the clamped body actually hides something.
+  let bodyEl = $state<HTMLDivElement | null>(null);
+  let clamped = $state(false);
+  $effect(() => {
+    void detail;
+    if (bodyEl && !full) clamped = bodyEl.scrollHeight > bodyEl.clientHeight + 1;
   });
 
   const files = $derived(detail ? parseDiff(detail.diff) : []);
@@ -477,6 +494,13 @@
         <ContextItem label="Reset: mixed" onSelect={() => reset(c.sha, "mixed")} />
         <ContextItem label="Reset: hard" onSelect={() => reset(c.sha, "hard")} destructive />
         <ContextItem label="SHA kopieren" onSelect={() => copySha(c.sha)} />
+        {@const tickets = findLinks(c.subject, links).slice(0, 3)}
+        {#if tickets.length}
+          <ContextMenu.Separator class={menuSeparator} />
+          {#each tickets as t (t.start)}
+            <ContextItem label="{t.id} öffnen" onSelect={() => forge.openUrl(t.url).catch((e) => (error = String(e)))} />
+          {/each}
+        {/if}
         {#if oncommand && cmds.length}
           <ContextMenu.Separator class={menuSeparator} />
           {#each cmds as g (g.name)}
@@ -561,7 +585,7 @@
       <p class="text-destructive px-2 py-2 text-meta">{detailError}</p>
     {:else if detail}
       <div class="space-y-1 px-3 pt-2 pb-1.5">
-        <p class="truncate text-ui font-medium" title={detail.commit.subject}>{detail.commit.subject}</p>
+        <p class="truncate text-ui font-medium" title={detail.commit.subject}><LinkedText text={detail.commit.subject} links={subjectLinks} /></p>
         <div class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta">
           <TextButton class="font-mono" title="SHA kopieren" onclick={() => copySha(detail!.commit.sha)}
             >{detail.commit.sha.slice(0, 8)}<CopyIcon class="size-2.5" /></TextButton
@@ -582,12 +606,11 @@
           </span>
         </div>
         {#if detail.body}
-          <TextButton
-            size="sm"
-            class="block w-full whitespace-pre-wrap"
-            title={full ? "Weniger" : "Ganz anzeigen"}
-            onclick={() => (full = !full)}><span class={full ? "" : "line-clamp-2"}>{detail.body}</span></TextButton
-          >
+          <!-- Not inside a button: the body can hold links. -->
+          <div bind:this={bodyEl} class="text-muted-foreground text-meta whitespace-pre-wrap {full ? '' : 'line-clamp-2'}"><LinkedText text={detail.body} links={bodyLinks} /></div>
+          {#if full || clamped}
+            <TextButton size="sm" underline onclick={() => (full = !full)}>{full ? "Weniger" : "Mehr"}</TextButton>
+          {/if}
         {/if}
       </div>
       {#if files.length}

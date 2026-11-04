@@ -41,6 +41,8 @@ mod workflows;
 mod runner;
 // Sitzung teilen: PTY und Aktivitaets-Panel per iroh an Gaeste.
 mod share;
+// App extensions (declarative manifests).
+mod extensions;
 
 #[derive(Serialize)]
 struct Repo {
@@ -836,6 +838,10 @@ pub fn run() {
             git::git_get_base,
             git::git_nesting,
             git::git_set_base,
+            git::git_ext_get,
+            git::git_ext_set,
+            extensions::ext_dir,
+            extensions::ext_scan,
             git::git_conflict,
             git::git_resolve,
             git::git_resolve_side,
