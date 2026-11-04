@@ -3,8 +3,8 @@
 // beim Server geoeffnete Dokumente bleiben. didClose erst, wenn der Tab zugeht (closed) oder das Projekt (stop).
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
-import { ChangeSet, Prec, StateEffect, StateField, Text, type Extension } from "@codemirror/state";
-import { EditorView, hoverTooltip, keymap, showDialog, showTooltip, type Command } from "@codemirror/view";
+import { ChangeSet, Text, type Extension } from "@codemirror/state";
+import { EditorView, hoverTooltip, keymap, showDialog, type Command } from "@codemirror/view";
 import { getIndentUnit, indentUnit } from "@codemirror/language";
 import { forEachDiagnostic, type Diagnostic } from "@codemirror/lint";
 import {
@@ -25,6 +25,7 @@ import DOMPurify from "dompurify";
 import { fs } from "./files.ts";
 import { open, peek, setText } from "./editor.svelte.ts";
 import { inlayHints, refreshInlay } from "./components/editor/inlay.svelte.ts";
+import { lspNav, showPick } from "./components/editor/nav.ts";
 import { INIT_OPTIONS } from "./inlay.logic.ts";
 import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
 
@@ -321,7 +322,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
           { key: "Alt-Enter", run: actionsCmd, preventDefault: true },
           { key: "Mod-.", run: actionsCmd, preventDefault: true },
         ]),
-        actionsMenu,
+        lspNav,
         inlayHints,
         { clientCapabilities: ACTION_CAPS },
       ],
@@ -717,7 +718,6 @@ async function applyWorkspaceEdit(ws: StoreWorkspace, all: Edit[], m: WorkspaceM
 
 type Cmd = { title: string; command: string; arguments?: unknown[] };
 type Action = { title: string; isPreferred?: boolean; edit?: Parameters<typeof editsOf>[0]; command?: Cmd; data?: unknown };
-type Menu = { pos: number; items: Action[]; sel: number } | null;
 
 const ACTION_CAPS = {
   textDocument: {
@@ -733,57 +733,6 @@ const ACTION_CAPS = {
   },
   workspace: { applyEdit: true, workspaceEdit: { documentChanges: true } },
 };
-
-const setMenu = StateEffect.define<Menu>();
-const menuField = StateField.define<Menu>({
-  create: () => null,
-  update(m, tr) {
-    for (const e of tr.effects) if (e.is(setMenu)) return e.value;
-    return m && (tr.docChanged || tr.selection) ? null : m;
-  },
-  provide: (f) => showTooltip.from(f, (m) => m && { pos: m.pos, create: (view) => ({ dom: menuDom(view, m) }) }),
-});
-
-function menuDom(view: EditorView, m: NonNullable<Menu>) {
-  const dom = document.createElement("ul");
-  dom.className = "cm-lsp-actions";
-  dom.setAttribute("role", "listbox");
-  m.items.forEach((a, i) => {
-    const li = dom.appendChild(document.createElement("li"));
-    li.textContent = a.title;
-    li.setAttribute("role", "option");
-    if (i === m.sel) li.setAttribute("aria-selected", "true");
-    li.onmousedown = (e) => (e.preventDefault(), pick(view, i));
-  });
-  return dom;
-}
-
-function pick(view: EditorView, i: number) {
-  const m = view.state.field(menuField);
-  const plugin = LSPPlugin.get(view);
-  view.dispatch({ effects: setMenu.of(null) });
-  if (m && plugin) void runAction(plugin, m.items[i]).catch((e) => plugin.reportError("Quick-Fix fehlgeschlagen", e));
-}
-
-const menuKeys = (f: (view: EditorView, m: NonNullable<Menu>) => void): Command => (view) => {
-  const m = view.state.field(menuField, false);
-  if (!m) return false;
-  f(view, m);
-  return true;
-};
-const move = (d: number) => menuKeys((v, m) => v.dispatch({ effects: setMenu.of({ ...m, sel: (m.sel + d + m.items.length) % m.items.length }) }));
-
-const actionsMenu: Extension = [
-  menuField,
-  Prec.highest(
-    keymap.of([
-      { key: "ArrowDown", run: move(1) },
-      { key: "ArrowUp", run: move(-1) },
-      { key: "Enter", run: menuKeys((v, m) => pick(v, m.sel)) },
-      { key: "Escape", run: menuKeys((v) => v.dispatch({ effects: setMenu.of(null) })) },
-    ]),
-  ),
-];
 
 const actionsCmd: Command = (view) => {
   const plugin = LSPPlugin.get(view);
@@ -808,7 +757,11 @@ const actionsCmd: Command = (view) => {
       .map((a): Action => (typeof a.command === "string" ? { title: a.title, command: a as Cmd } : (a as Action)))
       .sort((a, b) => Number(!!b.isPreferred) - Number(!!a.isPreferred));
     if (!items.length) return void showDialog(view, { label: "Keine Quick-Fixes an dieser Stelle", top: true });
-    view.dispatch({ effects: setMenu.of({ pos: head, items, sel: 0 }) });
+    showPick(
+      view,
+      head,
+      items.map((a) => ({ label: a.title, run: () => void runAction(plugin, a).catch((e) => plugin.reportError("Quick-Fix fehlgeschlagen", e)) })),
+    );
   })().catch((e) => plugin.reportError("Quick-Fixes konnten nicht geladen werden", e));
   return true;
 };
