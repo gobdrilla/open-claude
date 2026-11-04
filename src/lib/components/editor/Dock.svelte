@@ -1,7 +1,8 @@
 <script lang="ts" module>
   import XIcon from "@lucide/svelte/icons/x";
   import { IconButton } from "$lib/atelier-ui";
-  export type TabInfo = { title: string; hint?: string; dirty?: boolean; closable?: boolean; icon?: typeof XIcon; tint?: string };
+  // preview: title in italics (preview tab, replaced by the next file opened from the tree).
+  export type TabInfo = { title: string; hint?: string; dirty?: boolean; closable?: boolean; icon?: typeof XIcon; tint?: string; preview?: boolean };
 </script>
 
 <script lang="ts">
@@ -19,6 +20,7 @@
     tab,
     onclose,
     onfocus,
+    ontabdblclick,
     empty,
   }: {
     layout: Layout;
@@ -27,6 +29,7 @@
     tab: (id: PanelId) => TabInfo;
     onclose: (id: PanelId) => void;
     onfocus?: (panel: PanelId, group: string) => void;
+    ontabdblclick?: (id: PanelId) => void;
     empty?: Snippet;
   } = $props();
 
@@ -207,12 +210,13 @@
               onpointermove={move}
               onpointerup={up}
               onclick={() => (dragged ? (dragged = false) : select(id, n.id))}
+              ondblclick={() => ontabdblclick?.(id)}
               onauxclick={(e) => e.button === 1 && t.closable !== false && onclose(id)}
               onkeydown={(e) => key(e, n, id)}
             >
               {#if t.icon}<t.icon class="size-3.5 shrink-0 {t.tint ?? ''}" />{/if}
               <!-- Narrow bar: fixed panels (Dateien, Suche, Tests) show only their icon unless active; the hidden scrollbar would cut them off. -->
-              <span class="whitespace-nowrap {t.icon && t.closable === false && n.active !== id ? '@max-[16rem]:hidden' : ''}">{t.title}</span>
+              <span class="whitespace-nowrap {t.preview ? 'italic' : ''} {t.icon && t.closable === false && n.active !== id ? '@max-[16rem]:hidden' : ''}">{t.title}</span>
               {#if t.closable !== false}
                 <!-- Ungespeichert: Punkt, der beim Ueberfahren zum x wird. Per Tastatur schliesst Entf auf dem Tab. -->
                 <IconButton

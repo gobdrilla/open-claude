@@ -28,7 +28,8 @@
 
   async function pick(path: string) {
     cancel();
-    await open(repo, path);
+    // preview: switching to the preview tab must not make it permanent.
+    await open(repo, path, undefined, undefined, true);
     await tick();
     // A tab already visible in another group is not remounted and would not take focus by itself.
     document.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"] .cm-content`)?.focus();

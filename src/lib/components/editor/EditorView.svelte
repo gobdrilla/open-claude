@@ -24,7 +24,7 @@
   import RunConfigsDialog from "./RunConfigsDialog.svelte";
   import ListPlusIcon from "@lucide/svelte/icons/list-plus";
   import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, mainGroup, panelPath, splitAt, type PanelId } from "$lib/dock";
-  import { closeTab, editor, focus, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
+  import { closeTab, editor, focus, permanent, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
   import { allConfigs, chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
   import { MOD } from "$lib/editor.logic";
@@ -85,7 +85,9 @@
     // Auf der Platte geloescht, Puffer hat noch Aenderungen: der Tab bleibt und sagt es.
     const gone = f?.conflict === "deleted" ? " (gelöscht)" : "";
     const { icon, tint } = fileIcon(path);
-    return { title: path.slice(path.lastIndexOf("/") + 1) + gone, hint: path + gone, dirty: f?.dirty, icon, tint };
+    const preview = s.preview === path;
+    const hint = path + gone + (preview ? " – Vorschau, Doppelklick behält den Tab" : "");
+    return { title: path.slice(path.lastIndexOf("/") + 1) + gone, hint, dirty: f?.dirty, icon, tint, preview };
   }
 
   // Output docks at the bottom like runStart does; closing asks first while something runs.
@@ -299,6 +301,7 @@
       onlayout={(l) => setLayout(repo, l)}
       onclose={(p) => closeTab(repo, p)}
       onfocus={(p) => focus(repo, p)}
+      ontabdblclick={(p) => permanent(repo, panelPath(p) ?? "")}
       tab={info}
       {panel}
       {empty}

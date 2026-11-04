@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { EditorView, basicSetup } from "codemirror";
-  import { EditorState } from "@codemirror/state";
+  import { EditorState, Transaction } from "@codemirror/state";
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";
   import { lintGutter, setDiagnostics } from "@codemirror/lint";
@@ -107,7 +107,11 @@
         ghost(path, () => prefs.ai),
         stickyScroll,
         inlineBlame(prefs.blame, repo, path, openCommit),
-        EditorView.updateListener.of((u) => u.docChanged && edited(repo, path, () => u.view.state.doc.toString())),
+        EditorView.updateListener.of(
+          (u) =>
+            u.docChanged &&
+            edited(repo, path, () => u.view.state.doc.toString(), u.transactions.some((t) => t.docChanged && !t.annotation(Transaction.remote))),
+        ),
         EditorView.updateListener.of((u) => {
           if (!u.selectionSet && !(u.focusChanged && u.view.hasFocus)) return;
           selectionChanged(repo, path, u.view);
@@ -121,7 +125,8 @@
   /** Zustand, dessen Dokument `text` ist. Nur die geaenderte Mitte wird ersetzt, als eigener Undo-Schritt. */
   const sync = (state: EditorState, text: string) => {
     const old = state.doc.toString();
-    return old === text ? null : state.update({ changes: span(old, text), annotations: isolateHistory.of("full") });
+    // remote: reloaded from disk, not typed (a preview tab stays one).
+    return old === text ? null : state.update({ changes: span(old, text), annotations: [isolateHistory.of("full"), Transaction.remote.of(true)] });
   };
 
   // f wird beim Nachladen als Ganzes ersetzt: der Aufbau haengt nur daran, ob die Datei geladen ist.

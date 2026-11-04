@@ -1864,6 +1864,7 @@
         [`${mod} + P`, "Datei suchen und öffnen"],
         [`${mac ? "⌃" : "Strg"} + G`, "Zu Zeile springen"],
         [`${mac ? "⌃" : "Strg"} + Tab / ${mac ? "⌃" : "Strg"} + ⇧ + Tab`, "Zuletzt verwendete Dateien durchgehen, Loslassen öffnet"],
+        ["Doppelklick auf Tab", "Vorschau-Tab (kursiv) behalten"],
         ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
       ])}
       {@render keys("Git", [

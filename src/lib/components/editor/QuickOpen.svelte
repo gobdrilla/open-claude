@@ -85,15 +85,16 @@
     openFile(repo, path);
   }
 
-  // open() clamps to the document and records the jump for Back.
+  // open() clamps to the document and records the jump for Back. preview: a jump inside the open file keeps its tab
+  // kind, as in VS Code.
   function pickLine(t: { line: number; col?: number }) {
     open = false;
-    if (active) openFile(repo, active, t.line, t.col);
+    if (active) openFile(repo, active, t.line, t.col, true);
   }
 
   function pickSym(s: SymHit) {
     open = false;
-    openFile(repo, s.path, s.line, s.col);
+    openFile(repo, s.path, s.line, s.col, s.path === active);
   }
 </script>
 

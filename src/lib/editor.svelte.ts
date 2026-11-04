@@ -1,6 +1,6 @@
 // Zustand des eingebauten Editors je Projekt. Lebt auf Modulebene, nicht in Komponenten: Panels werden beim
 // Andocken neu gemountet und die Editor-Ansicht beim Wechsel zu Terminal/Git abgebaut, Puffer bleiben trotzdem.
-// Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, lsp, noLsp, run.
+// Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, lsp, noLsp, run, preview.
 // Ungespeicherte Inhalte ueberleben keinen Neustart der App.
 import { confirm } from "./confirm.svelte";
 import { untrack } from "svelte";
@@ -69,6 +69,8 @@ export type RepoEditor = {
   active: string | null;
   /** Vorschau an diese Datei geheftet; null = folgt active. */
   pin: string | null;
+  /** File in the preview tab (italic, like VS Code): the next single click in the tree replaces it; null = none. */
+  preview: string | null;
   /** Dev-Server-URL der Vorschau; "" = Datei anzeigen. */
   url: string;
   /** WPF-Vorschau fuer dieses Projekt erlaubt: XAML laden kann Code ausfuehren, darum erst nach Rueckfrage. */
@@ -124,8 +126,8 @@ const NEVER = "\0";
 
 function persist(s: RepoEditor) {
   try {
-    const { layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles, custom } = s;
-    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, url, wpf, lsp, noLsp, run, profile, profiles, custom }));
+    const { layout, active, expanded, pin, preview, url, wpf, lsp, noLsp, run, profile, profiles, custom } = s;
+    localStorage.setItem(`editor:${s.repo}`, JSON.stringify({ layout, active, expanded, pin, preview, url, wpf, lsp, noLsp, run, profile, profiles, custom }));
   } catch {
     // Ohne localStorage gilt das Layout nur fuer diese Sitzung.
   }
@@ -135,8 +137,8 @@ function persist(s: RepoEditor) {
  * Datei von der Platte in den Store lesen. Gibt es den Puffer schon, wird er ersetzt (rev++), ausser er hat
  * inzwischen lokale Aenderungen und force fehlt: dann nur Konflikt melden.
  */
-async function load(s: RepoEditor, path: string, force = false) {
-  const t = await fs.read(s.repo, path);
+async function load(s: RepoEditor, path: string, force = false, read = fs.read(s.repo, path)) {
+  const t = await read;
   // Waehrend des Lesens geschlossen: sonst bliebe ein Puffer ohne Tab in files.
   if (store.get(s.repo) !== s || !openPaths(s).includes(path)) return;
   const f = s.files[path];
@@ -169,6 +171,7 @@ function forget(s: RepoEditor, path: string) {
   snapshots.delete(snapKey(s.repo, path));
   closed(s.repo, path);
   if (s.pin === path) s.pin = null;
+  if (s.preview === path) s.preview = null;
   if (s.active === path) {
     const next = [groups(s.layout).find((g) => g.id === group)?.active, ...panels(s.layout)].find(
       (p) => p && panelPath(p) !== null,
@@ -203,12 +206,14 @@ export function editor(repo: string): RepoEditor {
   const layout = parse(p.layout ? JSON.stringify(p.layout) : null);
   const paths = panels(layout).flatMap((x) => panelPath(x) ?? []);
   const active = str(p.active);
+  const preview = str(p.preview);
   const s: RepoEditor = $state({
     repo,
     layout,
     files: {},
     active: active !== null && paths.includes(active) ? active : (paths[0] ?? null),
     pin: str(p.pin),
+    preview: preview !== null && paths.includes(preview) ? preview : null,
     url: str(p.url) ?? "",
     wpf: p.wpf === true,
     lsp: p.lsp === true,
@@ -258,15 +263,17 @@ export function editor(repo: string): RepoEditor {
  * Datei als Tab zeigen (laedt sie beim ersten Mal) und zur aktiven machen; line = dorthin springen. Binaere Bilder (files.isBinaryImage)
  * bekommen keinen Tab: sie werden an die Vorschau geheftet und die Vorschau geoeffnet. Fehler landen in error.
  * Neue Tabs kommen in die Gruppe der aktiven Datei, sonst in die main-Gruppe (nie zu Baum oder Vorschau).
+ * preview: a new tab becomes the preview tab and takes the place of the current one (single click in the tree);
+ * an already open tab keeps its kind. Without it the file's tab becomes permanent.
  */
-export function open(repo: string, path: string, line?: number, col?: number): Promise<void> {
+export function open(repo: string, path: string, line?: number, col?: number, preview = false): Promise<void> {
   const s = editor(repo);
   // Datei- oder Zeilensprung: von hier geht Zurueck wieder hin.
   if (s.at && (line !== undefined || path !== s.at.path)) {
     s.back = pushNav(s.back, s.at);
     s.fwd = [];
   }
-  return go(s, path, line, col);
+  return go(s, path, line, col, preview);
 }
 
 /** Zurueck (fwd = false) bzw. Vor (true) im Sprungverlauf; false = Stapel leer. */
@@ -290,7 +297,7 @@ export function cursorAt(repo: string, path: string, line: number, col: number):
   if (s) s.at = { path, line, col };
 }
 
-async function go(s: RepoEditor, path: string, line?: number, col?: number): Promise<void> {
+async function go(s: RepoEditor, path: string, line?: number, col?: number, preview = false): Promise<void> {
   s.error = "";
   if (line !== undefined) s.reveal = { path, line, col };
   if (isBinaryImage(path)) {
@@ -301,12 +308,32 @@ async function go(s: RepoEditor, path: string, line?: number, col?: number): Pro
     persist(s);
     return;
   }
+  // A new preview tab replaces the old one only once the file could be read: an unreadable one keeps the old.
+  let read: ReturnType<typeof fs.read> | undefined;
+  if (preview && !groupOf(s.layout, filePanel(path))) {
+    read = fs.read(s.repo, path);
+    try {
+      await read;
+    } catch (e) {
+      s.error = String(e);
+      return;
+    }
+  }
+  const old = s.preview;
+  const fresh = !groupOf(s.layout, filePanel(path));
+  // Replaced in place (same group and position); a dirty preview stays as a normal tab.
+  if (preview && fresh && old !== null && !s.files[old]?.dirty && groupOf(s.layout, filePanel(old))) {
+    s.layout = renamePanel(s.layout, filePanel(old), filePanel(path));
+    forget(s, old);
+  }
+  if (preview && fresh) s.preview = path;
+  else if (!preview && s.preview === path) s.preview = null;
   s.layout = openPanel(s.layout, filePanel(path), s.active === null ? null : groupOf(s.layout, filePanel(s.active))?.id);
   s.active = path;
   persist(s);
   if (s.files[path]) return;
   try {
-    await load(s, path);
+    await load(s, path, false, read);
   } catch (e) {
     forget(s, path);
     persist(s);
@@ -348,6 +375,7 @@ export async function save(repo: string, path?: string, force = false): Promise<
   const p = path ?? s.active;
   const f = p === null ? undefined : s.files[p];
   if (p === null || !f) return false;
+  permanent(repo, p);
   flush(repo, p);
   const text = f.text;
   const key = snapKey(repo, p);
@@ -467,11 +495,16 @@ export function toggleWrap(): void {
 /** Ausstehende Texte aus CodePane: toString ist O(Datei), darum hoechstens einmal pro Frame. */
 const pending = new Map<string, () => string>();
 
-/** Von CodePane bei jeder Aenderung: dirty sofort, text im naechsten Frame (oder frueher ueber flush). */
-export function edited(repo: string, path: string, read: () => string): void {
-  const f = peek(repo)?.files[path];
+/**
+ * Von CodePane bei jeder Aenderung: dirty sofort, text im naechsten Frame (oder frueher ueber flush). user = typed, not
+ * reloaded from disk: only that makes a preview tab permanent.
+ */
+export function edited(repo: string, path: string, read: () => string, user = true): void {
+  const s = peek(repo);
+  const f = s?.files[path];
   if (!f) return;
   f.dirty = true;
+  if (user && s!.preview === path) permanent(repo, path);
   const key = snapKey(repo, path);
   if (!pending.has(key)) requestAnimationFrame(() => flush(repo, path));
   pending.set(key, read);
@@ -544,6 +577,14 @@ export function setExpanded(repo: string, dir: string, open: boolean): void {
   const s = editor(repo);
   s.expanded = s.expanded.filter((d) => d !== dir);
   if (open) s.expanded.push(dir);
+  persist(s);
+}
+
+/** The preview tab of `path` becomes a normal one (edited, saved, double-clicked). */
+export function permanent(repo: string, path: string): void {
+  const s = peek(repo);
+  if (s?.preview !== path) return;
+  s.preview = null;
   persist(s);
 }
 
@@ -622,6 +663,7 @@ export function renamed(repo: string, from: string, to: string): void {
   }
   if (s.active !== null) s.active = moved(s.active, from, to) ?? s.active;
   if (s.pin !== null) s.pin = moved(s.pin, from, to) ?? s.pin;
+  if (s.preview !== null) s.preview = moved(s.preview, from, to) ?? s.preview;
   s.expanded = s.expanded.map((d) => moved(d, from, to) ?? d);
   const move = (p: Spot) => ({ ...p, path: moved(p.path, from, to) ?? p.path });
   s.back = s.back.map(move);

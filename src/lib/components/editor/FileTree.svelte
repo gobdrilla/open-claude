@@ -10,7 +10,7 @@
   import FolderIcon from "@lucide/svelte/icons/folder";
   import FolderXIcon from "@lucide/svelte/icons/folder-x";
   import { fs, type Entry } from "$lib/files";
-  import { editor, open, setExpanded, renamed, removed, poll } from "$lib/editor.svelte";
+  import { editor, open, permanent, setExpanded, renamed, removed, poll } from "$lib/editor.svelte";
   import { rows, join, dirname, treeKey, type Row } from "$lib/tree";
   import { FILES_APP, atRef, under } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
@@ -56,7 +56,8 @@
 
   function click(r: Row) {
     if (r.dir) setExpanded(repo, r.path, !r.open);
-    else open(repo, r.path);
+    // Single click: preview tab (like VS Code), double click keeps it.
+    else open(repo, r.path, undefined, undefined, true);
   }
 
   let box = $state<HTMLElement>();
@@ -171,6 +172,7 @@
             text="md" selected={r.path === s.active} class="h-6 pr-2"
             style="padding-left:{4 + r.depth * 12}px"
             onclick={(e) => ((e.currentTarget as HTMLElement).focus(), click(r))}
+            ondblclick={() => !r.dir && permanent(repo, r.path)}
             data-tree-row
             aria-expanded={r.dir ? r.open : undefined}
             title={r.path}
