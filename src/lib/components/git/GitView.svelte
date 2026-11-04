@@ -447,7 +447,7 @@
   {#if status}
     <!-- Sidebar und Inhalt in einer gemeinsamen Karte -->
     <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex min-h-0 flex-1 overflow-hidden">
-      <div class="border-border/60 shrink-0 border-r" style="width:{side}px; max-width:40%">
+      <div class="border-border/60 shrink-0 border-r" style="width:{side}px; max-width:max(160px, 25%)">
         <Sidebar
           repo={cur}
           {status}
