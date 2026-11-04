@@ -705,7 +705,7 @@ mod tests {
     fn blame_des_puffers() {
         let repo = tmp("blame");
         let git_ok = |args: &[&str]| assert!(exec(git(&repo).args(args), None).unwrap().status.success(), "{args:?}");
-        let commit = |m: &str| git_ok(&["-c", "core.autocrlf=false", "-c", "user.name=Anna Beispiel", "-c", "user.email=a@b", "commit", "-qam", m]);
+        let commit = |m: &str| git_ok(&["-c", "core.autocrlf=false", "-c", "user.name=Anna Beispiel", "-c", "user.email=a@b", "commit", "--author=Anna Beispiel <a@b>", "-qam", m]);
         git_ok(&["init"]);
         std::fs::write(Path::new(&repo).join("a.txt"), "eins\r\nzwei\r\n").unwrap();
         git_ok(&["-c", "core.autocrlf=false", "add", "a.txt"]);
