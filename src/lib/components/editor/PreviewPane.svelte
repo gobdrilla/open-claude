@@ -26,17 +26,18 @@
   // Gespeicherte URL nochmal pruefen: nur http(s) darf in den iframe.
   // Eine von Hand eingetragene Adresse gewinnt gegen die erkannte des eigenen Dev-Servers.
   const r = $derived(run(repo));
-  const url = $derived(devUrl(s.url) || r.current?.url || "");
+  const url = $derived(devUrl(s.url) || r.runs.find((x) => x.url)?.url || "");
 
   // Dev-Server: was der Start-Knopf starten wuerde (liest nur). Ausgabe und Rueckfragen zeigt das Panel "Ausgabe".
   $effect(() => void detect(repo));
   const dev = $derived(devConfig(r.configs, target ?? ""));
-  // Nur ein npm-Lauf ist der Dev-Server; cargo run/dotnet watch stoppt die Vorschau nicht.
-  const busy = $derived(r.current?.state === "running");
-  const running = $derived(busy && r.current?.cfg.target.kind === "npm");
+  // Nur ein npm-Lauf ist der Dev-Server (cargo run/dotnet watch stoppt die Vorschau nicht): der mit Adresse oder das
+  // dev-Script, andere npm-Scripts daneben zaehlen nicht.
+  const npm = $derived(r.runs.find((x) => x.state === "running" && x.cfg.target.kind === "npm" && (!!x.url || x.cfg.label === dev?.label)));
+  const running = $derived(!!npm);
   function toggleDev() {
-    if (running) return void runStop(repo);
-    if (dev && !busy) void runStart(repo, dev);
+    if (npm) return void runStop(repo, npm.cfg.label);
+    if (dev) void runStart(repo, dev);
   }
 
   // Zaehler des Neu-laden-Knopfs: haengt an ?v= bzw. baut den iframe neu auf.
@@ -99,7 +100,7 @@
   <div class={paneBar}>
     <Input
       bind:value={draft}
-      placeholder={r.current?.url || (target ?? "http://localhost:5173")}
+      placeholder={r.runs.find((x) => x.url)?.url || (target ?? "http://localhost:5173")}
       title="Adresse eines laufenden Dev-Servers; leer = Datei bzw. gestarteten Dev-Server anzeigen (Enter übernimmt)"
       aria-label="Adresse der Vorschau"
       aria-invalid={bad}
@@ -112,12 +113,10 @@
       variant="quiet"
       size="xs"
       class={running ? "text-foreground" : ""}
-      disabled={!running && (!dev || busy)}
+      disabled={!running && !dev}
       title={running
-        ? `Stoppen (${r.current?.cfg.label})`
-        : busy
-          ? `Es läuft bereits ${r.current?.cfg.label}`
-          : dev
+        ? `Stoppen (${npm?.cfg.label})`
+        : dev
           ? `Dev-Server starten: ${dev.label} – führt Code aus dem Projekt aus`
           : "Kein dev-, start- oder serve-Script in package.json gefunden"}
       onclick={toggleDev}

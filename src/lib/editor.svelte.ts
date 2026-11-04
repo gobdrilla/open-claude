@@ -356,7 +356,7 @@ export async function closeTab(repo: string, panel: PanelId): Promise<boolean> {
   const path = panelPath(panel);
   if (path !== null) return close(repo, path);
   // Schliessen stoppt den Prozess (s. u.): nicht ohne Rueckfrage.
-  if (panel === RUN && runOf(repo).current?.state === "running" && !(await confirm("Prozess stoppen?", "Stoppen"))) return false;
+  if (panel === RUN && runOf(repo).busy && !(await confirm("Laufende Prozesse stoppen?", "Stoppen"))) return false;
   const s = editor(repo);
   s.layout = closePanel(s.layout, panel);
   persist(s);

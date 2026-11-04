@@ -62,9 +62,12 @@
   // Run-Leiste: Ziele einmal je Sitzung erkennen (liest nur). Gestartet wird allein per Klick oder F5.
   $effect(() => void detect(repo));
   const r = $derived(run(repo));
-  const cfg = $derived(chosen(repo));
-  const cfgs = $derived(allConfigs(repo));
-  const running = $derived(r.current?.state === "running");
+  // Read r first: a RepoRun created inside one of these deriveds would not be tracked by it (Svelte skips state a
+  // reaction created itself), and the target list would stay empty after the detection on a cold start.
+  const cfg = $derived(r && chosen(repo));
+  const cfgs = $derived(r && allConfigs(repo));
+  // Toolbar buttons act on the selected target; other targets keep running (tabs in the output).
+  const running = $derived(!!cfg && r.of(cfg.label)?.state === "running");
   const kinds: [RunConfig["target"]["kind"], string][] = [
     ["npm", "npm-Scripts"],
     ["dotnet", ".NET"],
@@ -110,8 +113,9 @@
     // Wie VS Code: F5 startet, Umschalt+F5 stoppt, Strg+Umschalt+F5 startet neu. Sonst laedt die WebView die Seite neu.
     if (e.key === "F5" && !e.altKey) {
       e.preventDefault();
-      if (e.shiftKey && (e.ctrlKey || e.metaKey)) void runRestart(repo);
-      else if (e.shiftKey) void runStop(repo);
+      const c = chosen(repo);
+      if (e.shiftKey && (e.ctrlKey || e.metaKey)) void runRestart(repo, c?.label);
+      else if (e.shiftKey) void (c && runStop(repo, c.label));
       else if (!e.ctrlKey && !e.metaKey) void runStart(repo);
       return;
     }
@@ -251,14 +255,14 @@
         class={running ? "text-destructive hover:text-destructive" : ""}
         disabled={!running}
         title="Stoppen (Umschalt+F5)"
-        onclick={() => runStop(repo)}><SquareIcon class="fill-current" /> <span class="@max-[72rem]:hidden">Stoppen</span></Button
+        onclick={() => cfg && runStop(repo, cfg.label)}><SquareIcon class="fill-current" /> <span class="@max-[72rem]:hidden">Stoppen</span></Button
       >
       <Button
         variant="quiet"
         size="xs"
-        disabled={!r.current}
+        disabled={!r.of(cfg?.label)}
         title="Neu starten ({MOD}+{SHIFT}+F5)"
-        onclick={() => runRestart(repo)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">Neu starten</span></Button
+        onclick={() => runRestart(repo, cfg?.label)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">Neu starten</span></Button
       >
     </span>
     <span class="flex-1"></span>

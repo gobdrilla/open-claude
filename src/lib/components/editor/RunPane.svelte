@@ -6,17 +6,17 @@
   import { FitAddon } from "@xterm/addon-fit";
   import { Unicode11Addon } from "@xterm/addon-unicode11";
   import "@xterm/xterm/css/xterm.css";
-  import { Button, paneBar } from "$lib/atelier-ui";
+  import { Button, IconButton, TextButton, paneBar } from "$lib/atelier-ui";
   import EraserIcon from "@lucide/svelte/icons/eraser";
+  import XIcon from "@lucide/svelte/icons/x";
   import MessageSquareShareIcon from "@lucide/svelte/icons/message-square-share";
   import PlayIcon from "@lucide/svelte/icons/play";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { ptyResize } from "$lib/files";
-  import { MOD, SHIFT } from "$lib/editor.logic";
   import { LINKS, clipboardKey, look, windowsPty } from "$lib/termtheme";
   import { theme } from "$lib/theme.svelte";
-  import { attach, clearOutput, run, runRestart, runStart, runStop, runWrite, tailOutput } from "$lib/run.svelte";
+  import { attach, clearOutput, closeRun, focusRun, run, runRestart, runStart, runStop, runWrite, tailOutput, type Run } from "$lib/run.svelte";
   import { sendToClaude } from "$lib/ide.svelte";
 
   let { repo }: { repo: string } = $props();
@@ -35,8 +35,15 @@
     const c = r.current;
     if (c?.state !== "running") return;
     sized = c.id;
-    ptyResize(c.id, term.cols, term.rows).catch(() => {});
+    // No PTY yet (the run was just put in, the spawn follows): the first output tries again.
+    ptyResize(c.id, term.cols, term.rows).catch(() => sized === c.id && (sized = ""));
   }
+
+  // Background runs keep the size they started with: the shown one gets the real size on switch.
+  const shownId = $derived(cur?.id);
+  $effect(() => {
+    if (shownId && shownId !== sized) refit();
+  });
 
   // Laufzeit im Sekundentakt, nur waehrend ein Prozess laeuft.
   let now = $state(Date.now());
@@ -101,17 +108,47 @@
   });
 </script>
 
+{#snippet dot(x: Run)}
+  <span
+    class="size-1.5 shrink-0 rounded-full {x.state === 'running'
+      ? 'bg-success animate-pulse'
+      : x.state === 'exited' && x.exit !== 0
+        ? 'bg-destructive'
+        : 'bg-muted-foreground'}"
+  ></span>
+{/snippet}
+
 <div class="flex h-full min-h-0 flex-col text-ui">
   <div class={paneBar}>
-    {#if cur}
-      <span
-        class="size-1.5 shrink-0 rounded-full {cur.state === 'running'
-          ? 'bg-success animate-pulse'
-          : cur.state === 'exited' && cur.exit !== 0
-            ? 'bg-destructive'
-            : 'bg-muted-foreground'}"
-      ></span>
+    {#if r.runs.length > 1}
+      <!-- One tab per started target; the toolbar starts more, the x stops and removes one. -->
+      <div class="flex min-w-0 shrink items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="Läufe">
+        {#each r.runs as x (x.cfg.label)}
+          {@const on = x.cfg.label === cur?.cfg.label}
+          <span
+            class="group/run flex h-6 shrink-0 items-center gap-1.5 rounded-md pr-0.5 pl-2 {on
+              ? 'bg-accent text-foreground'
+              : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}"
+          >
+            <TextButton tone="inherit" role="tab" aria-selected={on} class="gap-1.5" title={x.cfg.label} onclick={() => focusRun(repo, x.cfg.label)}>
+              {@render dot(x)}
+              <span class="max-w-40 truncate font-mono text-meta">{x.cfg.label}</span>
+            </TextButton>
+            <IconButton
+              size="xs"
+              tone="inherit"
+              class={on ? "" : "opacity-0 group-hover/run:opacity-100 focus-visible:opacity-100"}
+              label={x.state === "running" ? `${x.cfg.label} stoppen und schließen` : `${x.cfg.label} schließen`}
+              onclick={() => closeRun(repo, x.cfg.label)}><XIcon class="size-3" /></IconButton
+            >
+          </span>
+        {/each}
+      </div>
+    {:else if cur}
+      {@render dot(cur)}
       <span class="truncate font-mono text-meta" title={cur.cfg.label}>{cur.cfg.label}</span>
+    {/if}
+    {#if cur}
       <span class="text-muted-foreground shrink-0 text-meta" role="status">
         {#if cur.state === "running"}
           läuft {clock(now - cur.started)}
@@ -128,16 +165,16 @@
     {/if}
     <span class="flex-1"></span>
     {#if cur?.state === "running"}
-      <Button variant="ghost" size="icon-xs" title="Stoppen (Umschalt+F5)" onclick={() => runStop(repo)}><SquareIcon /></Button>
+      <Button variant="ghost" size="icon-xs" title="Stoppen" onclick={() => cur && runStop(repo, cur.cfg.label)}><SquareIcon /></Button>
     {:else}
       <Button
         variant="ghost"
         size="icon-xs"
-        title="Starten (F5) – führt Code aus dem Projekt aus"
+        title="{cur ? `${cur.cfg.label} erneut starten` : "Starten (F5)"} – führt Code aus dem Projekt aus"
         onclick={() => runStart(repo, cur?.cfg)}><PlayIcon /></Button
       >
     {/if}
-    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten ({MOD}+{SHIFT}+F5)" onclick={() => runRestart(repo)}>
+    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten" onclick={() => runRestart(repo, cur?.cfg.label)}>
       <RotateCcwIcon />
     </Button>
     <Button
