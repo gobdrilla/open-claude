@@ -4,7 +4,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
 import { ChangeSet, Prec, StateEffect, StateField, Text, type Extension } from "@codemirror/state";
-import { EditorView, keymap, showDialog, showTooltip, type Command } from "@codemirror/view";
+import { EditorView, hoverTooltip, keymap, showDialog, showTooltip, type Command } from "@codemirror/view";
 import { getIndentUnit, indentUnit } from "@codemirror/language";
 import { forEachDiagnostic, type Diagnostic } from "@codemirror/lint";
 import {
@@ -13,7 +13,6 @@ import {
   Workspace,
   findReferencesKeymap,
   formatKeymap,
-  hoverTooltips,
   jumpToDefinitionKeymap,
   serverCompletion,
   serverDiagnostics,
@@ -200,6 +199,44 @@ const aborted = new WeakSet<Promise<Conn | null>>();
 // dann keine Diagnostics beim Tippen. Gilt fuer @codemirror/lsp-client 6.3.0, bei Updates pruefen.
 const INIT = /^\{"jsonrpc":"2\.0","id":\d+,"method":"initialize",/;
 
+type Marked = string | { language: string; value: string };
+type Hover = { contents: Marked | Marked[] | { kind: "markdown" | "plaintext"; value: string }; range?: { start: LspPos; end: LspPos } };
+const markdown = (m: Marked) => (typeof m === "string" ? m : "```" + m.language + "\n" + m.value + "\n```");
+
+// hoverTooltips() of lsp-client anchors at the pointer when the server sends no range (csharp-ls): every move
+// across the word then reopens the tooltip a bit further along. Fall back to the word under the pointer.
+const hover = hoverTooltip(
+  async (view, pos) => {
+    const plugin = LSPPlugin.get(view);
+    if (!plugin?.client.serverCapabilities?.hoverProvider) return null;
+    plugin.client.sync();
+    const res = await plugin.client.request<{ position: LspPos; textDocument: { uri: string } }, Hover | null>("textDocument/hover", {
+      position: plugin.toPosition(pos),
+      textDocument: { uri: plugin.uri },
+    });
+    if (!res?.contents || (Array.isArray(res.contents) && !res.contents.length)) return null;
+    const word = view.state.wordAt(pos);
+    const { contents: c, range } = res;
+    const html = Array.isArray(c)
+      ? c.map((m) => plugin.docToHTML(markdown(m), "markdown")).join("<br>")
+      : typeof c === "string" || "language" in c
+        ? plugin.docToHTML(markdown(c), "markdown")
+        : plugin.docToHTML(c);
+    return {
+      pos: range ? plugin.fromPosition(range.start) : (word?.from ?? pos),
+      end: range ? plugin.fromPosition(range.end) : (word?.to ?? pos),
+      above: true,
+      create() {
+        const dom = document.createElement("div");
+        dom.className = "cm-lsp-hover-tooltip cm-lsp-documentation";
+        dom.innerHTML = html;
+        return { dom };
+      },
+    };
+  },
+  { hideOn: (tr) => tr.docChanged },
+);
+
 function connect(repo: string, server: string): Promise<Conn | null> {
   const key = k(repo, server);
   const handlers = new Set<(m: string) => void>();
@@ -271,7 +308,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
       },
       extensions: [
         serverCompletion(),
-        hoverTooltips(),
+        hover,
         signatureHelp(),
         // Nur wegen des automatischen Syncs nach 500 ms; Diagnostics zeichnet CodePane (lspDiagnostics).
         serverDiagnostics(),

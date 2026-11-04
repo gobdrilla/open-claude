@@ -60,6 +60,9 @@ const chrome = EditorView.theme(
       boxShadow: "0 8px 24px rgb(0 0 0 / 0.12)",
       overflow: "hidden",
     },
+    // Fixed width: shrink-to-fit made it depend on where the tooltip stood, so every re-measure moved it.
+    ".cm-tooltip.cm-tooltip-hover": { width: "max-content", maxWidth: "min(44rem, calc(100vw - 2rem))" },
+    ".cm-lsp-hover-tooltip pre": { whiteSpace: "pre-wrap" },
     ".cm-ghost": { color: "var(--muted-foreground)", opacity: "0.7", whiteSpace: "pre" },
     ".cm-lsp-actions": { margin: 0, padding: "4px", listStyle: "none", maxHeight: "16rem", overflowY: "auto", fontSize: "12px" },
     ".cm-lsp-actions > li": { padding: "3px 8px", borderRadius: "4px", cursor: "pointer", whiteSpace: "nowrap" },
