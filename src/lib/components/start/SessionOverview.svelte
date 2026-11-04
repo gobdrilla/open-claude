@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import type { TabState } from "$lib/claudemode";
 
-  // Subset of the mod's session panel (claude_panel), see src-tauri/mods/open-claude/types/index.d.ts.
+  // Subset of the mod's session panel (claude_panel), see src-tauri/mods/atelier/types/index.d.ts.
   export type Panel = {
     context?: { tokens: number | null; window: number; percent: number | null };
     active?: { tool: string; target: string; state: string }[];

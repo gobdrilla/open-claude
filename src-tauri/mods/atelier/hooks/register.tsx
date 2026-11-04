@@ -28,7 +28,7 @@ const fresh = (startedAt: number): Panel => ({
   waitingFor: null,
   filled: 0,
 })
-const panel = atom({ plugin: 'open-claude', key: 'panel' } as const, fresh(0))
+const panel = atom({ plugin: 'atelier', key: 'panel' } as const, fresh(0))
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -170,7 +170,7 @@ const brainTurn = (): BrainTurn => ({ recall: false, remember: false, hinted: ne
 let brainOn = false
 
 // App-Tools (MCP-Server der App, Plugin-Präfix): Hinweis nur, wenn sie in der Sitzung verbunden sind.
-const ATELIER_TOOL = 'mcp__plugin_open-claude_open-claude__'
+const ATELIER_TOOL = 'mcp__plugin_atelier_atelier__'
 export const ATELIER_RULE =
   `Atelier-Tools (${ATELIER_TOOL}*): Bei Bezug auf die offene Datei oder Auswahl zuerst editor_state aufrufen. ` +
   'Fundstellen mit open_file im Editor zeigen. ' +
@@ -270,7 +270,7 @@ export const register: Register = on => {
   // Die App raeumt auf (MCP-Tool clean_images); "hier" braucht die eigene Sitzungs-ID.
   on('command.run', { command: 'clean-images' }, async ($, e) => {
     const r = await $.mcp
-      .call('plugin:open-claude:open-claude', 'clean_images', { args: e.args, session: await $.session.id() })
+      .call('plugin:atelier:atelier', 'clean_images', { args: e.args, session: await $.session.id() })
       .catch((err: unknown) => ({ isError: true, content: [{ type: 'text' as const, text: `L'Atelier de Claude nicht erreichbar: ${err}` }] }))
     const text = r.content.map(c => (c.type === 'text' ? c.text : '')).join('')
     $.ui.toast(text)
@@ -376,9 +376,9 @@ export const register: Register = on => {
     const r = await next(e)
     brainOn = e.tools.includes('mcp__brain__recall')
     const sections = [...r.sections]
-    sections.push({ id: 'open-claude:shell', text: SHELL_RULE, scope: 'session' as const })
-    if (brainOn) sections.push({ id: 'open-claude:brain', text: BRAIN_RULE, scope: 'session' as const })
-    if (e.tools.includes(`${ATELIER_TOOL}editor_state`)) sections.push({ id: 'open-claude:atelier', text: ATELIER_RULE, scope: 'session' as const })
+    sections.push({ id: 'atelier:shell', text: SHELL_RULE, scope: 'session' as const })
+    if (brainOn) sections.push({ id: 'atelier:brain', text: BRAIN_RULE, scope: 'session' as const })
+    if (e.tools.includes(`${ATELIER_TOOL}editor_state`)) sections.push({ id: 'atelier:atelier', text: ATELIER_RULE, scope: 'session' as const })
     return { sections }
   })
 

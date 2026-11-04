@@ -76,6 +76,6 @@ test("pickAvailable: ohne Installierte, nach installCount, Suche, limit", () => 
 });
 
 test("groupInstalled: Session-Plugins (--plugin-dir) bleiben draussen", () => {
-  const session = { ...inst("open-claude@inline", "user"), scope: "session" } as unknown as InstalledPlugin;
+  const session = { ...inst("atelier@inline", "user"), scope: "session" } as unknown as InstalledPlugin;
   assert.deepEqual(groupInstalled([session, inst("x@y", "user")]).map((g) => g.id), ["x@y"]);
 });

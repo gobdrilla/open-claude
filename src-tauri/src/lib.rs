@@ -902,6 +902,11 @@ pub fn run() {
         )
         .setup(|app| {
             awake::start(app.handle());
+            // Plugin was renamed open-claude -> atelier: fix the stored theme key, drop the stale release copy.
+            skills::migrate_theme(&skills::home());
+            if let Ok(d) = app.path().app_data_dir() {
+                let _ = std::fs::remove_dir_all(d.join("mods/open-claude"));
+            }
             deps::auto_update();
             // Kontenliste fuer git fetch/pull/push mit automatisch gewaehltem Konto (forge::repo_auth).
             forge::known(app.handle());

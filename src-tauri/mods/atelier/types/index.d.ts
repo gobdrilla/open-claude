@@ -28,6 +28,6 @@ export type Panel = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'open-claude': { panel: Panel }
+    'atelier': { panel: Panel }
   }
 }

@@ -10,7 +10,7 @@
   import { Button, Select } from "$lib/atelier-ui";
   import { MODES } from "$lib/claudemode";
 
-  // Steuert claude im Terminal: Slash-Commands gehen ueber die open-claude-Mod (claude_command), der Modus per Umschalt+Tab.
+  // Steuert claude im Terminal: Slash-Commands gehen ueber die atelier-Mod (claude_command), der Modus per Umschalt+Tab.
   // mode: aus der Terminal-Fusszeile (Terminal.svelte), undefined bis claude sie zeigt
   // guest: claude runs at the host, so only the view actions on the right are shown.
   // share/onnew/onskills: missing = not offered for this session (guest, group, no project).

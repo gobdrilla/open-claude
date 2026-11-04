@@ -43,7 +43,7 @@ test('pane', async ($, on) => {
     rateLimits: [{ kind: 'five_hour', percentUsed: 38 }, { kind: 'seven_day', percentUsed: 21 }],
     changed: ['context', 'rateLimits'],
   })
-  const ui = await $.ui.mount({ plugin: 'open-claude', surface: 'terminal', component: 'Pane', props: PROPS, requestId: 'session' })
+  const ui = await $.ui.mount({ plugin: 'atelier', surface: 'terminal', component: 'Pane', props: PROPS, requestId: 'session' })
   expect(await ui.find({ text: /62%/ })).toBeDefined()
   expect(await ui.find({ text: /WOCHE/ })).toBeDefined()
   expect(await ui.find({ text: /─{5}/ })).toBeDefined()
@@ -278,7 +278,7 @@ test('tool.check unveraendert, banner beim rechte-dialog', async ($, on) => {
   on('classic.PermissionRequest', () => ({}) as never)
   on('tool.check', () => ({ decision: 'allow' }) as never)
   const pr = { method: 'POST', path: '/repos/a/b/pulls', body: { title: 't' } }
-  expect(await $.tool.check({ tool: 'mcp__plugin_open-claude_open-claude__forge_write', input: pr } as never)).toMatchObject({ decision: 'allow' })
+  expect(await $.tool.check({ tool: 'mcp__plugin_atelier_atelier__forge_write', input: pr } as never)).toMatchObject({ decision: 'allow' })
   expect(await $.tool.check({ tool: 'Bash', input: { command: 'git push --force origin x' } } as never)).toMatchObject({ decision: 'allow' })
   expect(w).toHaveLength(0)
   await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'git push --force origin x' } } as never)
@@ -288,6 +288,6 @@ test('tool.check unveraendert, banner beim rechte-dialog', async ($, on) => {
 test('shell-regel immer, atelier-regel nur mit editor_state', async ($, on) => {
   on('prompt.compose', () => ({ sections: [] }))
   const ids = async (tools: string[]) => (await $.prompt.compose({ tools, model: 'm', promptModel: 'm', surfaces: [], outputStyle: null, traits: [] })).sections.map(s => s.id)
-  expect(await ids(['mcp__plugin_open-claude_open-claude__editor_state'])).toEqual(['open-claude:shell', 'open-claude:atelier'])
-  expect(await ids(['Bash'])).toEqual(['open-claude:shell'])
+  expect(await ids(['mcp__plugin_atelier_atelier__editor_state'])).toEqual(['atelier:shell', 'atelier:atelier'])
+  expect(await ids(['Bash'])).toEqual(['atelier:shell'])
 })

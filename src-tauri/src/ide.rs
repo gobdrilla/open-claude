@@ -347,7 +347,7 @@ async fn rpc<R: Runtime>(ctx: &Ctx<R>, msg: &Value, ide: bool) -> Option<Value> 
         "initialize" => Ok(json!({
             "protocolVersion": params["protocolVersion"].as_str().unwrap_or("2025-06-18"),
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "open-claude", "version": env!("CARGO_PKG_VERSION") },
+            "serverInfo": { "name": "atelier", "version": env!("CARGO_PKG_VERSION") },
         })),
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": if ide { ide_tools() } else { tools(ctx) } })),

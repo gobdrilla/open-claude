@@ -58,7 +58,7 @@
   type Img = { id: number; at: number; kind: string; label: string; missing?: boolean };
   type Prompt = { at: number; text: string };
   type Entry = { at: number; kind: "prompt" | "text" | "tool"; tool: string; summary: string; body: string; output: string | null; error: boolean };
-  // Kopie aus src-tauri/mods/open-claude/types/index.d.ts (Import scheitert an `declare module 'claude-code'`).
+  // Kopie aus src-tauri/mods/atelier/types/index.d.ts (Import scheitert an `declare module 'claude-code'`).
   type Limit = { kind: string; percentUsed: number; resetsAt?: string };
   type Panel = {
     startedAt: number;

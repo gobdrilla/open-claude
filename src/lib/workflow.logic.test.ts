@@ -198,7 +198,7 @@ test("problems: jede Regel", () => {
 test("Skill-Beispiel ist exakt Generator-Ausgabe", () => {
   const md = readFileSync(
     new URL(
-      "../../src-tauri/mods/open-claude/skills/workflow-templates/SKILL.md",
+      "../../src-tauri/mods/atelier/skills/workflow-templates/SKILL.md",
       import.meta.url,
     ),
     "utf8",

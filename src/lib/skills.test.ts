@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { profileFor, resolve, localPayload, adjust, emptyProject, pkey, managed, renameProfile, touched, fromProject, profileOf, type Layers } from "./skills.ts";
+import { profileFor, resolve, localPayload, adjust, emptyProject, pkey, managed, renameProfile, touched, fromProject, profileOf, migrateNamespace, type Layers } from "./skills.ts";
 
 const none = { skillOverrides: {}, enabledPlugins: {} };
 
@@ -125,4 +125,21 @@ test("fromProject: Profil plus Projekt-Anpassung, geloeschtes Profil = keins", (
   };
   assert.deepEqual(fromProject(s, "/a", "Tauri"), { overrides: { a: "off", b: "on" }, plugins: { p: true } });
   assert.equal(profileOf(s, "/x", "Tauri"), null);
+});
+
+test("migrateNamespace: open-claude:* wird atelier:*, Rest bleibt", () => {
+  const s = {
+    profiles: { web: { overrides: { "open-claude:forge-pr": "off" as const, "caveman:caveman": "off" as const }, plugins: { "x@y": false } } },
+    kindProfiles: { node: "web" },
+    projects: {
+      "/a": { overrides: { "open-claude:smart-tests": "on" as const }, plugins: {}, profile: null },
+      "/b": { overrides: { mine: "off" as const }, plugins: {} },
+    },
+  };
+  const m = migrateNamespace(s);
+  assert.deepEqual(m.profiles.web, { overrides: { "atelier:forge-pr": "off", "caveman:caveman": "off" }, plugins: { "x@y": false } });
+  assert.deepEqual(m.projects["/a"], { overrides: { "atelier:smart-tests": "on" }, plugins: {}, profile: null });
+  assert.equal(m.projects["/b"], s.projects["/b"]);
+  assert.deepEqual(m.kindProfiles, s.kindProfiles);
+  assert.deepEqual(migrateNamespace(m), m);
 });

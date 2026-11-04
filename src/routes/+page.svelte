@@ -62,7 +62,7 @@
   import UnityCloseDialog from "$lib/components/unity/UnityCloseDialog.svelte";
   import ProfilesDialog from "$lib/components/skills/ProfilesDialog.svelte";
   import SkillsDialog from "$lib/components/skills/SkillsDialog.svelte";
-  import { sync, touched, profileFor, managed, pkey, emptyProject, type SkillStore, type ProjectSkills } from "$lib/skills";
+  import { sync, touched, profileFor, managed, pkey, emptyProject, migrateNamespace, type SkillStore, type ProjectSkills } from "$lib/skills";
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import DownloadIcon from "@lucide/svelte/icons/download";
   import FolderPlusIcon from "@lucide/svelte/icons/folder-plus";
@@ -551,11 +551,14 @@
     const awakeErr = await invoke<string | null>("set_awake", { on: lidAwake });
     if (awakeErr) notice = awakeErr;
     amongUs = { ...amongUs, ...(await store.get<typeof amongUs>("amongUs")) };
-    skillStore = {
+    const storedSkills: SkillStore = {
       profiles: (await store.get<SkillStore["profiles"]>("skillProfiles")) ?? {},
       kindProfiles: (await store.get<SkillStore["kindProfiles"]>("kindProfiles")) ?? {},
       projects: (await store.get<SkillStore["projects"]>("projectSkills")) ?? {},
     };
+    skillStore = migrateNamespace(storedSkills);
+    // settings.local.json follows on the next sync (terminal start)
+    if (JSON.stringify(skillStore) !== JSON.stringify(storedSkills)) await saveSkills();
     await invoke("set_tray", { on: tray });
 
     // Erster Start: Dev-Ordner erst bestaetigen lassen, dann einlesen.

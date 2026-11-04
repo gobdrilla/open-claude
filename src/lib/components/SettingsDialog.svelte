@@ -192,12 +192,12 @@
             <SettingsSection title="Claude (neue Sitzungen)">
               <SettingRow label="Terminal-Theme" description="Auto wechselt Hell/Dunkel live mit der App, Lila erst in neuen Sitzungen.">
                 <Segmented
-                  value={String(claudeCfg.theme ?? "dark").startsWith("custom:open-claude:open-claude")
-                    ? "custom:open-claude:open-claude"
+                  value={String(claudeCfg.theme ?? "dark").startsWith("custom:atelier:atelier")
+                    ? "custom:atelier:atelier"
                     : claudeCfg.theme === "auto"
                       ? "auto"
                       : ""}
-                  options={[["Std", "", "Standard von Claude Code oder ein anderes Theme aus den Claude-Einstellungen"], ["Auto", "auto"], ["Lila", "custom:open-claude:open-claude"]] as const}
+                  options={[["Std", "", "Standard von Claude Code oder ein anderes Theme aus den Claude-Einstellungen"], ["Auto", "auto"], ["Lila", "custom:atelier:atelier"]] as const}
                   onchange={(v) => setClaudeCfg("theme", v || undefined)}
                 />
               </SettingRow>

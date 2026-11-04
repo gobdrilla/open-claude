@@ -220,6 +220,17 @@ pub(crate) fn user_read(home: &Path) -> Result<String, String> {
     }
 }
 
+/// Theme key from before the rename (plugin "open-claude"); the prefix also covers "-light". Writes only on change.
+/// A text replace keeps Claude Code's formatting and key order.
+// shortcut: one-time migration, remove a few releases after 1.6
+pub(crate) fn migrate_theme(home: &Path) {
+    let Ok(text) = user_read(home) else { return };
+    let new = text.replace("\"custom:open-claude:open-claude", "\"custom:atelier:atelier");
+    if new != text {
+        let _ = atomic_write(&home.join(".claude").join("settings.json"), &new);
+    }
+}
+
 /// Schreibt nur, wenn die Datei seit dem Lesen unveraendert ist (expected), sonst gingen Aenderungen von Claude Code verloren.
 pub(crate) fn user_write(home: &Path, text: &str, expected: &str) -> Result<(), String> {
     if !matches!(serde_json::from_str::<Value>(text), Ok(Value::Object(_))) {
@@ -341,9 +352,9 @@ pub async fn skills_list(app: tauri::AppHandle, path: String) -> Result<SkillsIn
     blocking(move || {
         let mut info = list(&home(), Path::new(&path));
         // Skills der eingebauten Mod (kein installiertes Plugin): wie eigene Skills pro Projekt schaltbar,
-        // Key mit Namensraum wie in Claude Code (open-claude:smart-tests).
+        // Key mit Namensraum wie in Claude Code (atelier:smart-tests).
         if let Some(dir) = crate::pty::builtin_mod(&app) {
-            info.skills.extend(scan(&dir.join("skills"), "plugin", None).into_iter().map(|s| Skill { key: format!("open-claude:{}", s.key), ..s }));
+            info.skills.extend(scan(&dir.join("skills"), "plugin", None).into_iter().map(|s| Skill { key: format!("atelier:{}", s.key), ..s }));
         }
         Ok(info)
     })

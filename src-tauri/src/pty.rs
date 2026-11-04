@@ -288,24 +288,24 @@ fn settings_json(mode: &str, user: Option<&serde_json::Value>, dirs: &[String]) 
 /// Nur zwischen den eigenen Themes wechseln; wer etwas anderes gewaehlt hat (auch auto), bleibt dabei.
 fn theme_for(cur: &str, mode: &str) -> Option<&'static str> {
     let want = match mode {
-        "light" => "custom:open-claude:open-claude-light",
-        "dark" => "custom:open-claude:open-claude",
+        "light" => "custom:atelier:atelier-light",
+        "dark" => "custom:atelier:atelier",
         _ => return None,
     };
-    (cur.starts_with("custom:open-claude:open-claude") && cur != want).then_some(want)
+    (cur.starts_with("custom:atelier:atelier") && cur != want).then_some(want)
 }
 
 /// Dateien der eingebauten Mod fuer Release (Test mod_files_vollstaendig prueft, dass keine fehlt).
 const FILES: &[(&str, &str)] = &[
-    (".claude-plugin/plugin.json", include_str!("../mods/open-claude/.claude-plugin/plugin.json")),
-    ("hooks/hooks.json", include_str!("../mods/open-claude/hooks/hooks.json")),
-    ("skills/smart-tests/SKILL.md", include_str!("../mods/open-claude/skills/smart-tests/SKILL.md")),
-    ("skills/workflow-templates/SKILL.md", include_str!("../mods/open-claude/skills/workflow-templates/SKILL.md")),
-    ("skills/forge-pr/SKILL.md", include_str!("../mods/open-claude/skills/forge-pr/SKILL.md")),
-    ("hooks/register.tsx", include_str!("../mods/open-claude/hooks/register.tsx")),
-    ("types/index.d.ts", include_str!("../mods/open-claude/types/index.d.ts")),
-    ("themes/open-claude.json", include_str!("../mods/open-claude/themes/open-claude.json")),
-    ("themes/open-claude-light.json", include_str!("../mods/open-claude/themes/open-claude-light.json")),
+    (".claude-plugin/plugin.json", include_str!("../mods/atelier/.claude-plugin/plugin.json")),
+    ("hooks/hooks.json", include_str!("../mods/atelier/hooks/hooks.json")),
+    ("skills/smart-tests/SKILL.md", include_str!("../mods/atelier/skills/smart-tests/SKILL.md")),
+    ("skills/workflow-templates/SKILL.md", include_str!("../mods/atelier/skills/workflow-templates/SKILL.md")),
+    ("skills/forge-pr/SKILL.md", include_str!("../mods/atelier/skills/forge-pr/SKILL.md")),
+    ("hooks/register.tsx", include_str!("../mods/atelier/hooks/register.tsx")),
+    ("types/index.d.ts", include_str!("../mods/atelier/types/index.d.ts")),
+    ("themes/atelier.json", include_str!("../mods/atelier/themes/atelier.json")),
+    ("themes/atelier-light.json", include_str!("../mods/atelier/themes/atelier-light.json")),
 ];
 
 /// Eingebaute Mod. Debug: Quellordner direkt (Hot-Reload). Release: eingebettet und nach
@@ -313,9 +313,9 @@ const FILES: &[(&str, &str)] = &[
 /// und das signierte .app-Bundle dabei kaputt ginge.
 pub(crate) fn builtin_mod(app: &AppHandle) -> Option<PathBuf> {
     if cfg!(debug_assertions) {
-        return Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("mods/open-claude"));
+        return Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("mods/atelier"));
     }
-    let dir = app.path().app_data_dir().ok()?.join("mods/open-claude");
+    let dir = app.path().app_data_dir().ok()?.join("mods/atelier");
     for (rel, text) in FILES {
         let p = dir.join(rel);
         // Nur bei Aenderung schreiben, sonst laedt claude die Mod bei jedem Terminal neu.
@@ -342,7 +342,8 @@ fn plugin_dirs(prev: Option<String>, mods: impl Iterator<Item = std::path::PathB
         return None;
     }
     let prev = prev.unwrap_or_default();
-    let own = |p: &Path| mods.iter().any(|m| m.file_name() == p.file_name());
+    // shortcut: also drops the pre-rename mod dir name (an Atelier <= 1.5 session would load both), drop after 1.6
+    let own = |p: &Path| p.file_name().is_some_and(|n| n == "open-claude") || mods.iter().any(|m| m.file_name() == p.file_name());
     let all = std::env::split_paths(&prev).filter(|p| !p.as_os_str().is_empty() && !own(p)).chain(mods.iter().cloned());
     std::env::join_paths(all).ok().map(|s| s.to_string_lossy().into_owned())
 }
@@ -1040,7 +1041,7 @@ mod tests {
                 if p.is_dir() { walk(&p, root, out) } else { out.push(rel) }
             }
         }
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mods/open-claude");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mods/atelier");
         let mut found = Vec::new();
         walk(&root, &root, &mut found);
         let missing: Vec<_> = found.iter().filter(|f| !super::FILES.iter().any(|(r, _)| r == f)).collect();
@@ -1159,7 +1160,9 @@ mod tests {
         assert_eq!(plugin_dirs(Some(String::new()), m(&["/a"])), Some("/a".into()));
         assert_eq!(plugin_dirs(Some(format!("/x{sep}/y")), m(&["/a"])), Some(format!("/x{sep}/y{sep}/a")));
         // Geerbte Release-Mod gleichen Namens wird durch die eigene ersetzt
-        assert_eq!(plugin_dirs(Some(format!("/rel/open-claude{sep}/x")), m(&["/dev/open-claude"])), Some(format!("/x{sep}/dev/open-claude")));
+        assert_eq!(plugin_dirs(Some(format!("/rel/atelier{sep}/x")), m(&["/dev/atelier"])), Some(format!("/x{sep}/dev/atelier")));
+        // Mod dir from before the rename is dropped as well
+        assert_eq!(plugin_dirs(Some(format!("/rel/open-claude{sep}/x")), m(&["/dev/atelier"])), Some(format!("/x{sep}/dev/atelier")));
     }
 
     fn tmp(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
@@ -1389,12 +1392,12 @@ mod tests {
 
     #[test]
     fn theme_nur_zwischen_eigenen() {
-        assert_eq!(theme_for("custom:open-claude:open-claude", "light"), Some("custom:open-claude:open-claude-light"));
-        assert_eq!(theme_for("custom:open-claude:open-claude-light", "dark"), Some("custom:open-claude:open-claude"));
-        assert_eq!(theme_for("custom:open-claude:open-claude", "dark"), None);
+        assert_eq!(theme_for("custom:atelier:atelier", "light"), Some("custom:atelier:atelier-light"));
+        assert_eq!(theme_for("custom:atelier:atelier-light", "dark"), Some("custom:atelier:atelier"));
+        assert_eq!(theme_for("custom:atelier:atelier", "dark"), None);
         assert_eq!(theme_for("auto", "light"), None);
         assert_eq!(theme_for("dark", "light"), None);
-        assert_eq!(theme_for("custom:open-claude:open-claude", "system"), None);
+        assert_eq!(theme_for("custom:atelier:atelier", "system"), None);
     }
 
     #[test]

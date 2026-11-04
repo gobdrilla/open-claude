@@ -104,7 +104,7 @@ liegt. Fehlt sie, nimmt die App Git-Bash, `pwsh` oder `cmd`.
 *Aktivität* in der Titelleiste blendet rechts das Panel zur Sitzung ein: Kontext, Limits, Kosten und
 Todos der laufenden Session, Workflows mit Phasen und Agents, Agent-Aufrufe und Bilder. Gespeicherte
 Workflow-Vorlagen lassen sich dort bearbeiten und starten. Die Daten liefert die eingebaute Mod
-(`src-tauri/mods/open-claude`), die jedes gestartete `claude` mitbekommt; eigene Mods kommen aus
+(`src-tauri/mods/atelier`), die jedes gestartete `claude` mitbekommt; eigene Mods kommen aus
 `~/.claude/open-claude-mods`.
 
 Das Zahnrad rechts in der Suchleiste enthält Zoom, Hell/Dunkel/System, die Rückfragen bei

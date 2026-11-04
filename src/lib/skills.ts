@@ -204,6 +204,16 @@ export type SkillStore = {
   projects: Record<string, ProjectSkills>;
 };
 
+/** Skill overrides of the built-in mod were stored as "open-claude:<skill>" before the plugin was renamed to atelier. */
+// shortcut: one-time migration, remove a few releases after 1.6
+export function migrateNamespace(s: SkillStore): SkillStore {
+  const old = (p: Profile) => Object.keys(p.overrides ?? {}).some((k) => k.startsWith("open-claude:"));
+  const fix = <T extends Profile>(p: T): T =>
+    old(p) ? { ...p, overrides: Object.fromEntries(Object.entries(p.overrides).map(([k, v]) => [k.replace(/^open-claude:/, "atelier:"), v])) } : p;
+  const all = <T extends Profile>(r: Record<string, T>) => Object.fromEntries(Object.entries(r).map(([n, p]) => [n, fix(p)]));
+  return { ...s, profiles: all(s.profiles), projects: all(s.projects) };
+}
+
 /** Store-Key eines Projekts: unabhaengig von Trenner, Schlusstrenner und (Windows) Gross/Klein des Dev-Ordners. */
 export function pkey(path: string) {
   const p = path.replace(/\\/g, "/").replace(/(.)\/+$/, "$1");

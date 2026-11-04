@@ -274,3 +274,23 @@ fn globale_config_nur_erlaubte_keys() {
     let all: Value = serde_json::from_str(&std::fs::read_to_string(h.join(".claude.json")).unwrap()).unwrap();
     assert_eq!(all, json!({"oauthAccount": {"x": 1}, "projects": {}, "diffTool": "terminal"}));
 }
+
+#[test]
+fn theme_key_von_vor_der_umbenennung_wird_migriert() {
+    let h = tmp("theme");
+    migrate_theme(&h); // missing file: no-op
+    assert!(!h.join(".claude").exists());
+    let f = h.join(".claude/settings.json");
+    std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+    let old = "{\n  \"model\": \"opus\",\n  \"theme\": \"custom:open-claude:open-claude-light\",\n  \"x\": [1, 2]\n}\n";
+    std::fs::write(&f, old).unwrap();
+    migrate_theme(&h);
+    assert_eq!(std::fs::read_to_string(&f).unwrap(), old.replace("custom:open-claude:open-claude-light", "custom:atelier:atelier-light"));
+    // Without the old key the file is not rewritten
+    let past = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+    std::fs::File::options().write(true).open(&f).unwrap().set_modified(past).unwrap();
+    let before = std::fs::read_to_string(&f).unwrap();
+    migrate_theme(&h);
+    assert_eq!(std::fs::read_to_string(&f).unwrap(), before);
+    assert_eq!(std::fs::metadata(&f).unwrap().modified().unwrap(), past);
+}
