@@ -1,0 +1,41 @@
+{
+  "$schema": "../manifest.schema.json",
+  "manifestVersion": 1,
+  "id": "jira",
+  "name": "Ticket-Links (Jira)",
+  "version": "1.0.0",
+  "description": "Ticket-Schlüssel wie ABC-123 in Commit-Nachrichten werden zu Links.",
+  "contributes": {
+    "settings": [
+      {
+        "key": "url",
+        "type": "string",
+        "scope": "repo",
+        "format": "url-template",
+        "title": "Ticket-URL",
+        "description": "$1 steht für den Schlüssel. Leer: keine Links.",
+        "placeholder": "https://firma.atlassian.net/browse/$1"
+      },
+      {
+        "key": "keys",
+        "type": "string",
+        "scope": "repo",
+        "title": "Projektschlüssel",
+        "description": "Kommagetrennt, z. B. ABC, OPS. Leer: jeder Schlüssel wie ABC-123 (auch UTF-8 oder SHA-256).",
+        "placeholder": "ABC, OPS"
+      },
+      {
+        "key": "pattern",
+        "type": "string",
+        "scope": "repo",
+        "format": "regex",
+        "title": "Muster (Regex)",
+        "description": "Nur für Sonderfälle, z. B. andere Tracker. Die erste Gruppe ist $1.",
+        "default": "\\b([A-Z][A-Z0-9_]+-[1-9][0-9]*)\\b"
+      }
+    ],
+    "linkProviders": [
+      { "id": "ticket", "title": "Jira-Ticket", "pattern": "${config:pattern}", "prefixes": "${config:keys}", "url": "${config:url}" }
+    ]
+  }
+}
