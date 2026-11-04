@@ -16,6 +16,7 @@
   import { gotoLineKey } from "./gotoline";
   import { findPanel } from "./findpanel";
   import { lens } from "./lens";
+  import { ruler } from "./ruler";
   import { peek as peekTests, testRun } from "$lib/testing.svelte";
   import { fails, marks } from "$lib/testing.logic";
   import { mention, selectionChanged } from "$lib/ide.svelte";
@@ -75,6 +76,7 @@
         lspExt.of([]),
         lintGutter(),
         lens,
+        ruler,
         wrap.of(prefs.wrap ? EditorView.lineWrapping : []),
         testGutter((id) => void testRun(repo, id)),
         // The state outlives this component (snapshots): reach the current one through a DOM event.

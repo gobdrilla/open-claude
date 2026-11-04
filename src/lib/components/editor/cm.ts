@@ -248,7 +248,7 @@ export function testGutter(run: (id: string) => void): Extension {
 
 // --- Git-Gutter: Aenderungen gegenueber HEAD ---
 
-class GitMarker extends GutterMarker {
+export class GitMarker extends GutterMarker {
   readonly kind: GitMark["kind"];
   constructor(kind: GitMark["kind"]) {
     super();
@@ -268,7 +268,7 @@ const gitMarker = { add: new GitMarker("add"), mod: new GitMarker("mod"), del: n
 /** Marken ersetzen (Zeilen 1-basiert); bis zum naechsten Ersetzen wandern sie mit den Aenderungen mit. */
 export const setGitMarks = StateEffect.define<GitMark[]>();
 
-const gitMarks = StateField.define<RangeSet<GutterMarker>>({
+export const gitMarks = StateField.define<RangeSet<GutterMarker>>({
   create: () => RangeSet.empty,
   update(set, tr) {
     set = set.map(tr.changes);
