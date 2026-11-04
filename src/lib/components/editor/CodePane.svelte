@@ -302,7 +302,7 @@
     {#if plain}
       <div class="text-muted-foreground border-border/60 shrink-0 border-b px-3 py-1 text-ui">Große Datei: ohne Highlighting</div>
     {/if}
-    <div bind:this={host} class="min-h-0 flex-1 overflow-hidden"></div>
+    <div bind:this={host} data-path={path} class="min-h-0 flex-1 overflow-hidden"></div>
   </div>
 
   <DiffDialog diff={head} title={path.split("/").pop() ?? path} description="Änderungen seit dem letzten Commit" {repo} empty="Kein Unterschied." actions={revertActions} onclose={() => (head = null)}>

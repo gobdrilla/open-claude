@@ -30,6 +30,7 @@ import {
 } from "./dock.ts";
 import { KONFLIKT, fs, isBinaryImage, previewAllow } from "./files.ts";
 import { moved, pushNav, under, verdict, type Spot } from "./editor.logic.ts";
+import { follow, touch } from "./mru.logic.ts";
 import { pushRunState, redetect, run as runOf, runStop } from "./run.svelte.ts";
 import { BUILTIN, type CustomRun, type Profile } from "./run.logic.ts";
 import { rescan, testCancel } from "./testing.svelte.ts";
@@ -95,6 +96,8 @@ export type RepoEditor = {
   back: Spot[];
   fwd: Spot[];
   at: Spot | null;
+  /** Open files, most recently active first (Ctrl+Tab); not persisted. */
+  recent: string[];
 };
 
 // Bewusst eine Map mit je einem eigenen $state-Objekt statt eines $state-Records: editor() wird auch aus
@@ -162,6 +165,7 @@ function forget(s: RepoEditor, path: string) {
   const group = groupOf(s.layout, panel)?.id;
   s.layout = closePanel(s.layout, panel);
   delete s.files[path];
+  s.recent = s.recent.filter((p) => p !== path);
   snapshots.delete(snapKey(s.repo, path));
   closed(s.repo, path);
   if (s.pin === path) s.pin = null;
@@ -224,6 +228,7 @@ export function editor(repo: string): RepoEditor {
     back: [],
     fwd: [],
     at: null,
+    recent: paths,
   });
   store.set(repo, s);
   // Nicht synchron: editor() laeuft auch in $derived.
@@ -232,6 +237,10 @@ export function editor(repo: string): RepoEditor {
     if (store.get(repo) !== s) return;
     // Liest nur active/path/dirty/conflict, nicht text: Tippen pusht erst, wenn dirty umspringt.
     const off = $effect.root(() => {
+      $effect(() => {
+        const a = s.active;
+        if (a !== null) untrack(() => (s.recent = touch(s.recent, a)));
+      });
       $effect(() => pushEditor(repo, { active: s.active, files: Object.values(s.files).map((f) => ({ path: f.path, dirty: f.dirty, conflict: f.conflict })) }));
     });
     unwatch.set(repo, off);
@@ -618,6 +627,7 @@ export function renamed(repo: string, from: string, to: string): void {
   s.back = s.back.map(move);
   s.fwd = s.fwd.map(move);
   if (s.at) s.at = move(s.at);
+  s.recent = follow(s.recent, from, to);
   persist(s);
 }
 

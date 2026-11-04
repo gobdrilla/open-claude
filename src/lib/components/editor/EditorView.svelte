@@ -32,6 +32,7 @@
   import FileTree from "./FileTree.svelte";
   import CodePane from "./CodePane.svelte";
   import QuickOpen from "./QuickOpen.svelte";
+  import TabSwitcher from "./TabSwitcher.svelte";
   import PreviewPane from "./PreviewPane.svelte";
   import TestPane from "./TestPane.svelte";
   import RunPane from "./RunPane.svelte";
@@ -144,6 +145,7 @@
 <svelte:window onkeydown={onKey} />
 
 <QuickOpen {repo} bind:open={quick} initial={quickInit} />
+<TabSwitcher {repo} />
 
 {#snippet panel(id: PanelId)}
   {#if id === FILES}
