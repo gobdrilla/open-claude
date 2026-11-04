@@ -1052,12 +1052,24 @@ fn rewrite(repo: &str, base: Option<&str>, steps: &[Step]) -> Result<String, Str
     std::fs::create_dir_all(&dir).map_err(io)?;
     let mut todo = String::new();
     for (i, s) in steps.iter().enumerate() {
+        let msg = s.message.as_ref().filter(|_| s.op != "drop");
+        // A pick that ends up empty (after a drop/reorder or a conflict resolved to nothing) commits nothing
+        // on --continue; its amend would then rename the previous commit. A fixup amends that one by design.
+        let mark = sh_quote(&dir.join(format!("head-{i}")));
+        if msg.is_some() && s.op == "pick" {
+            todo += &format!("exec git rev-parse HEAD > {mark}\n");
+        }
         todo += &format!("{} {}\n", s.op, s.sha);
-        if let (Some(m), false) = (&s.message, s.op == "drop") {
+        if let Some(m) = msg {
             let f = dir.join(format!("msg-{i}"));
             std::fs::write(&f, m).map_err(io)?;
             // -F keeps '#' lines, like commit().
-            todo += &format!("exec git commit -q --amend --only --allow-empty -F {}\n", sh_quote(&f));
+            let amend = format!("git commit -q --amend --only --allow-empty -F {}", sh_quote(&f));
+            todo += &if s.op == "pick" {
+                format!("exec test \"$(git rev-parse HEAD)\" = \"$(cat {mark})\" || {amend}\n")
+            } else {
+                format!("exec {amend}\n")
+            };
         }
     }
     let list = dir.join("todo");
@@ -3073,6 +3085,20 @@ refs/remotes/origin/feature/x\x1f \x1f\x1f\x1fs3\x1fd\x1fsub: mit doppelpunkt\n"
         // Leftover message files of an aborted run do not get in the way.
         rewrite(&r, Some(&a), &[st("pick", &b, Some("b neu")), st("pick", &c, None)]).unwrap();
         assert_eq!(subjects(&r), ["c", "b neu", "a"]);
+    }
+
+    #[test]
+    fn m_rewrite_leerer_pick() {
+        let (_t, r) = fresh("rwleer");
+        let a = ci(&r, "a.txt", "1\n", "a");
+        let b = ci(&r, "a.txt", "2\n", "b");
+        let c = ci(&r, "a.txt", "1\n", "c");
+        // Without b, c changes nothing: git pauses; continuing must not give a the new message of c.
+        let _ = rewrite(&r, Some(&a), &[st("drop", &b, None), st("pick", &c, Some("c neu"))]);
+        assert_eq!(status(&r).unwrap().state, RepoState::Rebase);
+        sequencer(&r, "--continue").unwrap();
+        assert_eq!(status(&r).unwrap().state, RepoState::Clean);
+        assert_eq!(subjects(&r), ["a"]);
     }
 
     #[test]
