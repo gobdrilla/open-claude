@@ -55,6 +55,8 @@ keyring = { version = "3", features = ["windows-native"] }
 keyring = { version = "3", features = ["apple-native"] }
 # Rechtschreibpruefung der WKWebView einschalten (src/lib.rs, run); schon ueber wry im Lock
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSUserDefaults", "NSString"] }
+# Dev builds: switch off WebKit occlusion detection for tests in the background (src/devbridge.rs); already in the lock via wry
+objc2 = "0.6"
 
 # Secret Service (GNOME-Keyring/KWallet) ueberlebt Neustarts, keyutils allein nicht
 [target.'cfg(target_os = "linux")'.dependencies]

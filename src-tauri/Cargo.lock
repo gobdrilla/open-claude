@@ -4029,6 +4029,7 @@ dependencies = [
  "keyring",
  "libc",
  "libloading",
+ "objc2",
  "objc2-foundation",
  "portable-pty",
  "reedline",

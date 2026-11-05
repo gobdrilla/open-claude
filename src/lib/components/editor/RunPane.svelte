@@ -87,6 +87,8 @@
     t.loadAddon(new Unicode11Addon());
     t.unicode.activeVersion = "11";
     t.open(el);
+    // scripts/ui.mjs reads and types into terminals without focus.
+    if (import.meta.env.DEV) Object.assign(el, { xterm: t });
     // F5 & Co. gehoeren der Run-Leiste (EditorView), nicht dem Prozess. Kopieren/Einfuegen wie im Terminal,
     // ohne Auswahl bleibt Strg+C der Abbruch fuer den Prozess.
     t.attachCustomKeyEventHandler((e) => e.key !== "F5" && !clipboardKey(t, e, navigator.userAgent.includes("Mac")));

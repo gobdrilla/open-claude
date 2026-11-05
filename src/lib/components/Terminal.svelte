@@ -297,6 +297,8 @@
       },
     });
     t.open(el);
+    // scripts/ui.mjs reads and types into terminals without focus.
+    if (import.meta.env.DEV) Object.assign(el, { xterm: t });
     // Cmd+V: Bilddaten liegen nur im paste-Event, claude holt sich das Bild selbst aus der Zwischenablage.
     el.addEventListener(
       "paste",

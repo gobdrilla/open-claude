@@ -27,6 +27,9 @@ mod skills;
 mod files;
 // Claude-Sessions: IDE-Protokoll (Diffs, Auswahl) und MCP-Server mit Git/GitHub/GitLab-Tools.
 mod ide;
+// Debug builds: test bridge for scripts/ui.mjs (eval in the webview, no focus needed).
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
+mod devbridge;
 // Language-Server fuer den Editor (stdio), Diagnostics auch fuer Claude.
 mod debug;
 mod lsp;
@@ -736,6 +739,9 @@ pub fn run() {
         }
     }
     let builder = tauri::Builder::default();
+    // Dev builds started by scripts/dev-bg.mjs: launch behind the app in front instead of taking focus.
+    #[cfg(all(target_os = "macos", debug_assertions))]
+    let builder = builder.activate_ignoring_other_apps(std::env::var_os("OCUI_BACKGROUND").is_none());
     #[cfg(target_os = "macos")]
     let builder = builder.menu(menu).on_menu_event(|app, event| {
         if event.id().as_ref() == "quit" {
@@ -915,6 +921,7 @@ pub fn run() {
             ide::ide_notify,
             ide::ide_reply,
             ide::ide_answer,
+            devbridge::dev_bridge_reply,
             ide::ide_editor_state,
             ide::ide_run_state,
             debug::dbg_build,
@@ -936,6 +943,8 @@ pub fn run() {
         )
         .setup(|app| {
             awake::start(app.handle());
+            #[cfg(debug_assertions)]
+            devbridge::start(app.handle());
             // Plugin was renamed open-claude -> atelier: fix the stored theme key, drop the stale release copy.
             skills::migrate_theme(&skills::home());
             if let Ok(d) = app.path().app_data_dir() {
