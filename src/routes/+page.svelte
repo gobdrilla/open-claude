@@ -131,6 +131,9 @@
   let repos = $state<Repo[]>([]);
   let query = $state("");
   let selected = $state("");
+  // Command always keeps one row selected; show it only once the user navigates, hovers or types.
+  let navigated = $state(false);
+  const showSelected = $derived(navigated || query !== "");
   let error = $state("");
   let scanning = $state(true);
   let scannedAt = $state(0);
@@ -1085,6 +1088,7 @@
     active = null;
     leaveGit();
     if (from && flat.some((h) => h.repo.path === from)) selected = from;
+    navigated = false;
     await tick();
     input?.focus();
   }
@@ -1397,6 +1401,9 @@
     shouldFilter={false}
     bind:value={selected}
     loop
+    onkeydown={(e) => {
+      if (/^(Arrow(Up|Down)|Home|End|Page(Up|Down))$/.test(e.key)) navigated = true;
+    }}
     class="flex-1 rounded-none! bg-transparent p-0 {view !== 'list' ? 'hidden!' : ''}"
   >
     <div class="border-border flex items-center gap-2 border-b py-1 pr-2 pl-2">
@@ -1449,7 +1456,13 @@
       </div>
     </div>
 
-    <Command.List class="max-h-none flex-1 overflow-y-auto">
+    <Command.List
+      class="max-h-none flex-1 overflow-y-auto {showSelected
+        ? ''
+        : '[&_[data-selected]]:bg-transparent! [&_[data-selected]_.row-actions]:hidden! [&_[data-selected]_.row-meta]:flex!'}"
+      onpointermove={() => (navigated = true)}
+      onpointerleave={() => (navigated = false)}
+    >
       {#if error}
         <p class="text-destructive px-4 py-6 text-body">{error}</p>
       {:else if scanning && repos.length === 0}
@@ -1572,7 +1585,7 @@
 
                       {@const prof = profileName(item.repo)}
                       <!-- Meta gives way to the view actions on hover/keyboard selection -->
-                      <span class="flex items-center gap-3 group-data-selected/command-item:hidden">
+                      <span class="row-meta flex items-center gap-3 group-data-selected/command-item:hidden">
                         {#if prof}
                           <Badge variant="outline" class="text-muted-foreground gap-1 text-meta" title={t("Skill-Profil")}>
                             <SparklesIcon class="size-3" />
@@ -1623,7 +1636,7 @@
                       </span>
                       <!-- Only the selected row renders its actions: 3 buttons per row cost ~24k nodes at 300 projects. -->
                       {#if selected === item.repo.path}
-                      <div class="-my-1 hidden items-center gap-0.5 group-data-selected/command-item:flex">
+                      <div class="row-actions -my-1 hidden items-center gap-0.5 group-data-selected/command-item:flex">
                         {#each ROW_VIEWS as [name, key, Icon, n] (key)}
                           <Button
                             variant="ghost"
