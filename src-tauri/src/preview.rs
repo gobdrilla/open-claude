@@ -232,11 +232,20 @@ pub fn editor_dirty(dirty: bool) {
     DIRTY.store(dirty, Ordering::Relaxed);
 }
 
+/// Quit without the native question: the frontend already asked (Esc on the start page, +page.svelte closeWindow),
+/// in its own dialog where Cancel has the focus. The native one preselects Quit, so Enter would end all sessions.
+#[tauri::command]
+pub fn quit_now(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 /// What quitting would lose, one line each; empty: quit right away.
 fn losses(dirty: bool, sessions: usize) -> String {
     let mut lines = Vec::new();
-    if sessions > 0 {
-        lines.push(tr!("{sessions} laufende Claude-Sitzung(en) werden beendet.", "{sessions} running Claude session(s) will be ended."));
+    if sessions == 1 {
+        lines.push(tr!("1 laufende Claude-Sitzung wird beendet.", "1 running Claude session will be ended."));
+    } else if sessions > 1 {
+        lines.push(tr!("{sessions} laufende Claude-Sitzungen werden beendet.", "{sessions} running Claude sessions will be ended."));
     }
     if dirty {
         lines.push(tr!("Ungespeicherte Änderungen im Editor gehen verloren.", "Unsaved changes in the editor will be lost."));
@@ -278,8 +287,8 @@ mod tests {
     #[test]
     fn beenden_fragt_bei_sitzungen_und_ungespeichertem() {
         assert_eq!(losses(false, 0), "");
-        assert_eq!(losses(false, 2), "2 laufende Claude-Sitzung(en) werden beendet.");
-        assert_eq!(losses(true, 1), "1 laufende Claude-Sitzung(en) werden beendet.\nUngespeicherte Änderungen im Editor gehen verloren.");
+        assert_eq!(losses(false, 2), "2 laufende Claude-Sitzungen werden beendet.");
+        assert_eq!(losses(true, 1), "1 laufende Claude-Sitzung wird beendet.\nUngespeicherte Änderungen im Editor gehen verloren.");
     }
 
     fn tmp(name: &str) -> PathBuf {

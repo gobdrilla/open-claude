@@ -516,13 +516,19 @@
     installingDeps = false;
   }
 
-  const sessionsLost = () => t("{n} laufende Claude-Sitzung(en) werden dabei beendet.", { n: sessions.length });
+  const sessionsLost = () =>
+    sessions.length === 1 ? t("1 laufende Claude-Sitzung wird dabei beendet.") : t("{n} laufende Claude-Sitzungen werden dabei beendet.", { n: sessions.length });
 
   /** Ohne Tray beendet Schliessen die App (lib.rs, on_window_event); Rust fragt bei laufenden Sitzungen und ungespeicherten Dateien (preview::quit). */
-  /** byKey: per Esc ausgeloest; das beendet ohne Tray die App, darum auch ohne Sitzung nachfragen. */
+  /**
+   * byKey: per Esc ausgeloest; das beendet ohne Tray die App, darum immer hier fragen. Die native Rueckfrage in Rust
+   * waehlt "Beenden" vor, ein zweites Enter beendete alle Sitzungen; hier hat Abbrechen den Fokus.
+   */
   async function closeWindow(byKey = false) {
-    if (byKey && !tray && !sessions.length && !(await confirm(t("Esc schließt das Fenster und beendet die App."), t("Beenden"), t("L'Atelier de Claude beenden?")))) return;
-    getCurrentWindow().close();
+    if (!byKey || tray) return void getCurrentWindow().close();
+    const lost = [sessions.length ? sessionsLost() : "", isDirty() ? t("Ungespeicherte Änderungen im Editor gehen dabei verloren.") : ""].filter(Boolean);
+    const message = [t("Esc schließt das Fenster und beendet die App."), ...lost].join(" ");
+    if (await confirm(message, t("Beenden"), t("L'Atelier de Claude beenden?"))) await invoke("quit_now");
   }
 
   async function installUpdate(ask = confirm) {

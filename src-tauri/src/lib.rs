@@ -898,6 +898,7 @@ pub fn run() {
             preview::preview_allow,
             preview::xaml_render,
             preview::editor_dirty,
+            preview::quit_now,
             skills::skills_list,
             skills::skills_write_local,
             skills::claude_settings_read,
