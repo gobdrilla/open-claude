@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, IconButton, Segmented, Select, SettingRow, SettingsSection, Slider, Switch, Textarea } from "$lib/atelier-ui";
+  import { Button, IconButton, Input, Segmented, Select, SettingRow, SettingsSection, Slider, Switch, TextButton, Textarea } from "$lib/atelier-ui";
   import CheckIcon from "@lucide/svelte/icons/check";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
@@ -59,9 +59,10 @@
     <div class="grid grid-cols-3 gap-2 p-2">
       {#each all as x (x.id)}
         {@const l = look(x)}
-        <button
-          class="ring-foreground/10 hover:ring-foreground/25 flex h-16 flex-col justify-between overflow-hidden rounded-lg p-2 text-left ring-1 {x.id === th.id ? 'ring-ring! ring-2' : ''}"
-          style:background={l.bg}
+        <TextButton
+          tone="plain"
+          class="ring-foreground/10 hover:ring-foreground/25 flex h-16 flex-col items-stretch justify-between overflow-hidden rounded-lg p-2 ring-1 {x.id === th.id ? 'ring-ring! ring-2' : ''}"
+          style="background: {l.bg}"
           aria-pressed={x.id === th.id}
           onclick={() => ((note = ""), selectTheme(x.id))}
         >
@@ -70,7 +71,7 @@
             <span class="h-1.5 w-8 rounded-full" style:background={l.card}></span>
           </span>
           <span class="text-ui truncate font-medium" style:color={l.fg}>{x.name}</span>
-        </button>
+        </TextButton>
       {/each}
     </div>
     <SettingRow label={t("Modus")} description={t("Hell, dunkel oder wie das System. Jedes Theme hat beide Varianten.")}>
@@ -78,10 +79,11 @@
     </SettingRow>
     <div class="flex flex-wrap items-center gap-2 px-2 py-2">
       {#if !preset}
-        <input
-          class="bg-secondary border-border h-7 w-44 rounded border px-2 text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        <Input
+          density="sm"
+          class="w-44"
           aria-label={t("Name")}
-          maxlength="40"
+          maxlength={40}
           value={th.name}
           oninput={(e) => editTheme((x) => (x.name = e.currentTarget.value))}
         />

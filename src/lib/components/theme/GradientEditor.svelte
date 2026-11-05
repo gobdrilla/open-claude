@@ -84,7 +84,8 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="relative mx-2 my-1 h-6 cursor-copy rounded ring-1 ring-foreground/10" style:background="{preview}, {CHECKER}" bind:this={bar} onclick={add}>
     {#each g.stops as s, k (k)}
-      <button
+      <div
+        tabindex="0"
         class="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 shadow {k === i ? 'border-ring ring-2 ring-ring/40' : 'border-white'}"
         style:left="{s.pos}%"
         style:background={"ref" in s.color ? `var(--${s.color.ref})` : css(s.color)}
@@ -97,7 +98,7 @@
         onpointerdown={(e) => drag(e, k)}
         onkeydown={(e) => key(e, k)}
         onfocus={() => (sel = k)}
-      ></button>
+      ></div>
     {/each}
   </div>
   <p class="text-muted-foreground text-meta px-2">{t("Klick auf die Leiste fügt einen Stopp hinzu; Pfeiltasten verschieben, Entf entfernt.")}</p>
@@ -111,7 +112,7 @@
     <label class="text-muted-foreground flex items-center gap-1.5 text-meta"
       >{t("Deckkraft")}
       <Slider min={0} max={100} value={stop.alpha} oninput={(e) => setStop(i, (s) => (s.alpha = +e.currentTarget.value))} />
-      <span class="w-8 font-mono">{Math.round(stop.alpha)} %</span></label
+      <span class="w-10 font-mono">{Math.round(stop.alpha)} %</span></label
     >
     <IconButton size="md" tone="danger" label={t("Stopp {n} entfernen", { n: i + 1 })} disabled={g.stops.length <= 2} onclick={() => remove(i)}
       ><TrashIcon class="size-3.5" /></IconButton
@@ -130,12 +131,12 @@
       <label class="text-muted-foreground flex items-center gap-1.5 text-meta"
         >{t("Mitte X")}
         <Slider min={0} max={100} value={g.x} oninput={(e) => change((gr) => (gr.x = +e.currentTarget.value))} />
-        <span class="w-8 font-mono">{Math.round(g.x)} %</span></label
+        <span class="w-10 font-mono">{Math.round(g.x)} %</span></label
       >
       <label class="text-muted-foreground flex items-center gap-1.5 text-meta"
         >{t("Mitte Y")}
         <Slider min={0} max={100} value={g.y} oninput={(e) => change((gr) => (gr.y = +e.currentTarget.value))} />
-        <span class="w-8 font-mono">{Math.round(g.y)} %</span></label
+        <span class="w-10 font-mono">{Math.round(g.y)} %</span></label
       >
     {/if}
   </div>

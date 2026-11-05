@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Popover } from "bits-ui";
-  import { menuContent } from "$lib/atelier-ui";
+  import { Input, Slider, menuContent } from "$lib/atelier-ui";
   import { css, fromHex, hex, type Oklch } from "$lib/color";
   import { t } from "$lib/i18n";
 
@@ -44,23 +44,23 @@
       {#if lightness}
         <label class="flex flex-col gap-0.5 text-meta">
           <span class="text-muted-foreground flex justify-between">{t("Helligkeit")}<span class="font-mono">{Math.round(value.l * 100)}</span></span>
-          <input class="track" type="range" min="0" max="1" step="0.005" value={value.l} style:--track={tracks.l} oninput={(e) => set("l", +e.currentTarget.value)} />
+          <Slider class="picker-track w-full" min={0} max="1" step="0.005" value={value.l} style="--track: {tracks.l}" oninput={(e) => set("l", +e.currentTarget.value)} />
         </label>
       {/if}
       <label class="flex flex-col gap-0.5 text-meta">
         <span class="text-muted-foreground flex justify-between">{t("Sättigung")}<span class="font-mono">{value.c.toFixed(3)}</span></span>
-        <input class="track" type="range" min="0" max={maxC} step="0.002" value={value.c} style:--track={tracks.c} oninput={(e) => set("c", +e.currentTarget.value)} />
+        <Slider class="picker-track w-full" min={0} max={maxC} step="0.002" value={value.c} style="--track: {tracks.c}" oninput={(e) => set("c", +e.currentTarget.value)} />
       </label>
       <label class="flex flex-col gap-0.5 text-meta">
         <span class="text-muted-foreground flex justify-between">{t("Farbton")}<span class="font-mono">{Math.round(value.h)}°</span></span>
-        <input class="track" type="range" min="0" max="360" step="1" value={value.h} style:--track={tracks.h} oninput={(e) => set("h", +e.currentTarget.value)} />
+        <Slider class="picker-track w-full" min={0} max="360" step="1" value={value.h} style="--track: {tracks.h}" oninput={(e) => set("h", +e.currentTarget.value)} />
       </label>
       <label class="flex items-center gap-2 text-meta">
         <span class="text-muted-foreground">Hex</span>
-        <input
-          class="bg-secondary border-border h-6 min-w-0 flex-1 rounded border px-1.5 font-mono text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        <Input
+          density="xs"
+          class="flex-1 font-mono"
           bind:value={text}
-          spellcheck="false"
           onchange={typed}
           onkeydown={(e) => e.key === "Enter" && typed()}
         />
@@ -70,7 +70,8 @@
 </Popover.Root>
 
 <style>
-  .track {
+  /* Global: the input sits inside <Slider>, outside this component's scope. */
+  :global(.picker-track) {
     appearance: none;
     height: 0.75rem;
     border-radius: 9999px;
@@ -78,7 +79,7 @@
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 12%, transparent);
     cursor: pointer;
   }
-  .track::-webkit-slider-thumb {
+  :global(.picker-track::-webkit-slider-thumb) {
     appearance: none;
     width: 0.875rem;
     height: 0.875rem;
@@ -87,7 +88,7 @@
     border: 2px solid oklch(0.2 0 0);
     box-shadow: 0 0 0 1px white;
   }
-  .track:focus-visible::-webkit-slider-thumb {
+  :global(.picker-track:focus-visible::-webkit-slider-thumb) {
     box-shadow: 0 0 0 3px var(--ring);
   }
 </style>
