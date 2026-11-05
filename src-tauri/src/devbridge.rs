@@ -104,7 +104,12 @@ async fn conn(mut s: TcpStream, app: &AppHandle, token: &str) -> std::io::Result
     let header = |name: &str| {
         head.lines().find_map(|l| l.split_once(':').filter(|(k, _)| k.trim().eq_ignore_ascii_case(name)).map(|(_, v)| v.trim().to_string()))
     };
-    let len: usize = header("content-length").and_then(|v| v.parse().ok()).unwrap_or(0).min(8 << 20);
+    let want = format!("Bearer {token}");
+    let got = header("authorization").unwrap_or_default();
+    // Constant time: no timing hint about how much of the token matched.
+    let auth = got.len() == want.len() && got.bytes().zip(want.bytes()).fold(0, |a, (x, y)| a | (x ^ y)) == 0;
+    // Without the token no body is read, so unauthenticated clients cannot make it buffer.
+    let len: usize = if auth { header("content-length").and_then(|v| v.parse().ok()).unwrap_or(0).min(8 << 20) } else { 0 };
     while buf.len() < body_at + len {
         let n = s.read(&mut chunk).await?;
         if n == 0 {
@@ -114,10 +119,6 @@ async fn conn(mut s: TcpStream, app: &AppHandle, token: &str) -> std::io::Result
     }
     let body = String::from_utf8_lossy(&buf[body_at..(body_at + len).min(buf.len())]).into_owned();
     let target = head.split_whitespace().nth(1).unwrap_or("").to_string();
-    let want = format!("Bearer {token}");
-    let got = header("authorization").unwrap_or_default();
-    // Constant time: no timing hint about how much of the token matched.
-    let auth = got.len() == want.len() && got.bytes().zip(want.bytes()).fold(0, |a, (x, y)| a | (x ^ y)) == 0;
     let (status, out) = if !auth {
         ("401 Unauthorized", json!({ "ok": false, "value": "token" }))
     } else if let Some(q) = target.strip_prefix("/size?") {

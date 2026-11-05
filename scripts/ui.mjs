@@ -244,11 +244,12 @@ function page() {
       const landmark = ["dialog", "alertdialog", "menu", "listbox", "tablist", "tree", "heading", "tooltip", "alert"].includes(r);
       let d = depth;
       if (inter || landmark) {
-        // Landmarks (tree, tablist, dialog …) only by their label, their text follows as children.
-        out.push(`${pad}- ${r} "${name(el, inter)}" @${ref(el)}${state(el)}`);
+        // Landmarks (tree, tablist, dialog …) only by their label, their text follows as children; headings by their text.
+        const leaf = inter || r === "heading";
+        out.push(`${pad}- ${r} "${name(el, leaf)}" @${ref(el)}${state(el)}`);
         d++;
         // Children of a button-like leaf only repeat its name.
-        if (inter && !el.querySelector(INTERACTIVE)) return;
+        if (leaf && !el.querySelector(INTERACTIVE)) return;
       } else if (!el.querySelector(`${INTERACTIVE},.cm-editor,[role=dialog],[role=heading],h1,h2,h3,h4`) && ![...el.querySelectorAll("*")].some((e) => e.xterm)) {
         // Plain subtree: one line (also joins per-letter highlight spans).
         const text = norm(el.innerText);
