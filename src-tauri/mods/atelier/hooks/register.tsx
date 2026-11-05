@@ -363,12 +363,16 @@ export const register: Register = on => {
     const target = [input.file_path, input.pattern, input.command, input.description].find(v => typeof v === 'string')
     const id = e.tool_use_id ?? String(await $.clock.now())
     const entry = { id, tool: String(e.tool), target: typeof target === 'string' ? target : '', state: 'run' as const }
-    // Tool laeuft = Rechte-Dialog beantwortet; AskUserQuestion wartet selbst.
-    if (e.tool !== 'AskUserQuestion' && (await read($, panel)).waiting) await setBusy($, true)
     await put($, s => ({ ...s, active: [...s.active, entry].slice(-4) }))
+    // The permission dialog runs inside next(e) (core: "the permission prompt, the tool itself"), and no event marks
+    // the user's answer. So the earliest sure end of the wait is this call resolving: allowed and run, or refused.
+    // PermissionRequest carries no tool_use_id: match its tool and summary. AskUserQuestion clears its own wait.
+    const mine = { tool: String(e.tool), summary: summarize(String(e.tool), input) }
     const ran = await next(e)
     const state = ran.isError || 'deny' in ran ? ('err' as const) : ('ok' as const)
     await put($, s => ({ ...s, active: s.active.map(a => (a.id === id ? { ...a, state } : a)) }))
+    const w = (await read($, panel)).waitingFor
+    if (e.tool !== 'AskUserQuestion' && w?.tool === mine.tool && w.summary === mine.summary) await setBusy($, true)
     return ran
   })
 

@@ -87,9 +87,14 @@ test('busy fuer den wach-halt', async ($, on) => {
   on('session.usage', () => ({ value: { context: {} } }) as never)
   let agents = [{ status: 'running' }]
   on('agent.list', () => ({ value: agents }) as never)
-  on('tool.check', () => ({ decision: 'ask' }) as never)
-  on('classic.PermissionRequest', () => ({}) as never)
-  on('tool.call', () => ({ result: '' }) as never)
+  // Read is allowed by rule, everything else asks
+  on('tool.check', (_$, e) => ({ decision: e.tool === 'Read' ? 'allow' : 'ask' }) as never)
+  // The dialog's answer. Set explicitly: macOS auto-allows sandboxed Bash and Linux without bubblewrap and Windows
+  // ask, so a test leaning on the platform passed on the Mac alone.
+  let answer: object = {}
+  on('classic.PermissionRequest', () => answer as never)
+  const seen: unknown[] = []
+  on('tool.call', () => (seen.push(JSON.parse(w.at(-1)!.text)), { result: '' }) as never)
   const done = { turnId: 't1', reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false } as const
   await $.turn.start({ text: 'los', turnId: 't1' })
   expect(busy()).toBe(true)
@@ -108,12 +113,22 @@ test('busy fuer den wach-halt', async ($, on) => {
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: false, waiting: true, waitingFor: { tool: 'Bash', summary: 'ls' } })
   await $.turn.complete(done)
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ waiting: false, waitingFor: null })
-  // Freigabe: Tool laeuft, waitingFor leer
+  // Freigabe: der Dialog kommt erst innerhalb von tool.call; erst wenn das Tool fertig ist, ist das Warten sicher vorbei
   await $.turn.start({ text: 'los', turnId: 't1' })
-  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'npm i' } } as never)
-  expect(JSON.parse(w.at(-1)!.text).waitingFor).toEqual({ tool: 'Bash', summary: 'npm i' })
+  answer = { decision: { behavior: 'allow' } }
   await $.tool.call({ tool: 'Bash', command: 'npm i' } as never)
+  // Tool lief nach der Freigabe (kein Ereignis markiert sie, darum noch "wartet")
+  expect(seen.at(-1)).toMatchObject({ waiting: true, waitingFor: { tool: 'Bash', summary: 'npm i' } })
   expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: true, waiting: false, waitingFor: null })
+  // Abgelehnt: der Turn laeuft weiter (Claude liest die Ablehnung), nicht mehr wartend
+  answer = { decision: { behavior: 'deny', message: 'nein' } }
+  await $.tool.call({ tool: 'Bash', command: 'rm -r x' } as never)
+  expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ busy: true, waiting: false, waitingFor: null })
+  // Ein anderer Dialog bleibt offen, wenn ein fremdes Tool fertig wird (parallele Calls)
+  answer = {}
+  await $.classic.PermissionRequest({ tool_name: 'Edit', tool_input: { file_path: 'a.ts' } } as never)
+  await $.tool.call({ tool: 'Read', file_path: 'b.ts' } as never)
+  expect(JSON.parse(w.at(-1)!.text)).toMatchObject({ waiting: true, waitingFor: { tool: 'Edit', summary: 'a.ts' } })
 })
 
 test('befehle aus der app', async ($, on) => {
