@@ -24,7 +24,7 @@ import {
 } from "@codemirror/lsp-client";
 import DOMPurify from "dompurify";
 import { fs } from "./files.ts";
-import { open, peek, setText } from "./editor.svelte.ts";
+import { editor, open, peek, poll, save, setText } from "./editor.svelte.ts";
 import { inlayHints, refreshInlay } from "./components/editor/inlay.svelte.ts";
 import { lspNav, showPick } from "./components/editor/nav.ts";
 import { peek as peekDef } from "./components/editor/peek.ts";
@@ -35,9 +35,9 @@ import { breadcrumbs } from "./components/editor/breadcrumbs.ts";
 import { semanticTokens } from "./components/editor/semantic.ts";
 import { linkedEditing } from "./components/editor/linked.ts";
 import { INIT_OPTIONS, SETTINGS } from "./inlay.logic.ts";
-import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, renameSummary, serverFor, uriPath, type Edit, type LspPos, type Sym } from "./lsp.logic.ts";
+import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, renameSummary, serverFor, uriPath, type Edit, type LspPos, type Sym, type TextEdit } from "./lsp.logic.ts";
 import { confirm } from "./confirm.svelte.ts";
-import type { LspRange } from "./nav.logic.ts";
+import { toLocs, uniqueLocs, type Loc, type LspRange } from "./nav.logic.ts";
 
 type Out = { t: "msg"; m: string } | { t: "exit"; code: number | null; err: string };
 export type LspDiag = { range: { start: LspPos; end: LspPos }; severity?: number; message: string; source?: string };
@@ -817,14 +817,13 @@ const actionsCmd: Command = (view) => {
     showPick(
       view,
       head,
-      items.map((a) => ({ label: a.title, run: () => void runAction(plugin, a).catch((e) => plugin.reportError(t("Quick-Fix fehlgeschlagen"), e)) })),
+      items.map((a) => ({ label: a.title, run: () => void runAction(plugin.client, a).catch((e) => plugin.reportError(t("Quick-Fix fehlgeschlagen"), e)) })),
     );
   })().catch((e) => plugin.reportError(t("Quick-Fixes konnten nicht geladen werden"), e));
   return true;
 };
 
-async function runAction(plugin: LSPPlugin, a: Action) {
-  const client = plugin.client;
+async function runAction(client: LSPClient, a: Action) {
   const caps = client.serverCapabilities?.codeActionProvider;
   if (!a.edit && !a.command && typeof caps === "object" && caps.resolveProvider) a = await client.request<Action, Action>("codeAction/resolve", a);
   const edit = a.edit;
@@ -842,4 +841,192 @@ async function serverEdit(conn: Conn, transport: Transport, id: number | string,
     result = { applied: false, failureReason: e instanceof Error ? e.message : String(e) };
   }
   transport.send(JSON.stringify({ jsonrpc: "2.0", id, result }));
+}
+
+// ---------- Tool "lsp" for Claude (MCP, src-tauri/src/ide.rs via agent.svelte.ts) ----------
+
+export type LspArgs = {
+  operation?: string;
+  path?: string;
+  line?: number;
+  end_line?: number;
+  symbol?: string;
+  column?: number;
+  query?: string;
+  new_name?: string;
+  title?: string;
+};
+
+/** Connection with the file open at its server, synced to the editor buffer or, without an editor, to the disk. */
+async function fileAt(repo: string, path: string): Promise<{ conn: Conn; f: File }> {
+  // Same consent as the editor: language servers run project code.
+  if (!editor(repo).lsp) throw new Error(t("Language-Server sind für dieses Projekt nicht erlaubt: der Nutzer muss sie im Editor zulassen."));
+  const sv = serverFor(path);
+  if (!sv) throw new Error(t("Kein Language-Server für {path}.", { path }));
+  const key = k(repo, sv.server);
+  const conn = key in lsp.status ? null : await (clients.get(key) ?? connect(repo, sv.server));
+  if (!conn) throw new Error(lsp.status[key] || t("Language-Server {server} läuft nicht.", { server: sv.server }));
+  const disk = await fs.read(repo, path);
+  let f = conn.ws.byPath(path);
+  if (!f) {
+    conn.ws.openBackground(path, disk.content, disk.mtime);
+    f = conn.ws.byPath(path)!;
+  } else if (!f.view && !peek(repo)?.files[path]?.dirty && f.doc.toString() !== disk.content) {
+    // Changed on disk since (Claude's own edits): the server must see the new text.
+    f.pending = Text.of(disk.content.split("\n"));
+    f.stale = true;
+    if (f.mtime !== undefined) f.mtime = disk.mtime;
+  }
+  await conn.client.initializing;
+  conn.client.sync();
+  return { conn, f };
+}
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 1-based line plus symbol (first whole-word hit, else first hit) or 1-based column as an LSP position. */
+function posOf(doc: Text, a: LspArgs): LspPos {
+  if (!a.line || a.line < 1 || a.line > doc.lines) throw new Error(t("line fehlt oder liegt außerhalb der Datei (1–{n}).", { n: doc.lines }));
+  const text = doc.line(a.line).text;
+  if (!a.symbol) return { line: a.line - 1, character: Math.min(Math.max(0, (a.column ?? 1) - 1), text.length) };
+  const m = new RegExp(`(?<![\\w$])${esc(a.symbol)}(?![\\w$])`).exec(text);
+  const i = m ? m.index : text.indexOf(a.symbol);
+  if (i < 0) throw new Error(t("„{symbol}“ steht nicht in Zeile {line}: {text}", { symbol: a.symbol, line: a.line, text: text.trim() }));
+  return { line: a.line - 1, character: i };
+}
+
+/** Locations as "path:line:col  code" (1-based), at most 200. */
+async function where(repo: string, ws: StoreWorkspace, locs: Loc[]): Promise<string> {
+  if (!locs.length) return t("Nichts gefunden.");
+  const docs = new Map<string, Promise<WorkspaceFile | null>>();
+  const all = uniqueLocs(locs);
+  const out = await Promise.all(
+    all.slice(0, 200).map(async (l) => {
+      if (!docs.has(l.uri)) docs.set(l.uri, ws.requestFile(l.uri));
+      const doc = (await docs.get(l.uri))?.doc;
+      const n = l.range.start.line + 1;
+      const code = doc && n <= doc.lines ? doc.line(n).text.trim().slice(0, 200) : "";
+      return `${uriPath(repo, l.uri) ?? l.uri}:${n}:${l.range.start.character + 1}  ${code}`;
+    }),
+  );
+  return out.join("\n") + (all.length > 200 ? "\n" + t("… {n} weitere", { n: all.length - 200 }) : "");
+}
+
+const NAV: Record<string, [string, string]> = {
+  definition: ["textDocument/definition", "definitionProvider"],
+  type_definition: ["textDocument/typeDefinition", "typeDefinitionProvider"],
+  implementation: ["textDocument/implementation", "implementationProvider"],
+  references: ["textDocument/references", "referencesProvider"],
+};
+
+/** Edits from Claude's tool calls are saved at once: Claude reads files from disk. Dirty buffers would mix in the user's unsaved work. */
+function notDirty(repo: string, paths: string[]) {
+  const dirty = paths.filter((p) => peek(repo)?.files[p]?.dirty);
+  if (dirty.length) throw new Error(t("Ungespeicherte Änderungen im Editor: {paths}. Der Nutzer muss erst speichern oder verwerfen.", { paths: dirty.join(", ") }));
+}
+
+async function saveAll(repo: string, paths: Iterable<string>) {
+  for (const p of paths) {
+    if (!peek(repo)?.files[p]?.dirty || (await save(repo, p))) continue;
+    const s = peek(repo);
+    throw new Error(t("{path} wurde geändert, aber nicht gespeichert: {why}", { path: p, why: s?.error || (s?.files[p]?.conflict ? t("Datei wurde außerhalb geändert.") : "?") }));
+  }
+}
+
+async function codeActions(conn: Conn, f: File, a: LspArgs): Promise<Action[]> {
+  if (!conn.client.serverCapabilities?.codeActionProvider) throw new Error(t("Der Language-Server bietet keine Code-Aktionen."));
+  const start = posOf(f.doc, a);
+  const last = Math.min(Math.max(a.end_line ?? a.line!, a.line!), f.doc.lines);
+  const end = a.end_line ? { line: last - 1, character: f.doc.line(last).length } : start;
+  const diagnostics = (lsp.diags[k(conn.ws.repo, f.path)]?.list ?? []).filter((d) => d.range.start.line <= end.line && d.range.end.line >= start.line);
+  const res = await conn.client.request<unknown, (Action | Cmd)[] | null>("textDocument/codeAction", {
+    textDocument: { uri: f.uri },
+    range: { start, end },
+    context: { diagnostics: $state.snapshot(diagnostics), triggerKind: 1 },
+  });
+  return (res ?? []).map((x): Action => (typeof x.command === "string" ? { title: x.title, command: x as Cmd } : (x as Action)));
+}
+
+/** MCP tool "lsp": navigation, types, symbols, quick fixes, rename and format through the editor's language servers. */
+export async function lspTool(repo: string, a: LspArgs): Promise<string> {
+  const op = a.operation ?? "";
+  // Open tabs of a hidden editor are not polled: bring unchanged buffers to the disk state (Claude's own edits) first.
+  await poll(repo);
+  if (op === "workspace_symbols") {
+    if (a.path) await fileAt(repo, a.path);
+    const hits = await workspaceSymbols(repo, a.query ?? "");
+    if (!hits.length) return a.path ? t("Nichts gefunden.") : t("Nichts gefunden. Ohne path werden nur bereits laufende Server gefragt.");
+    return hits.slice(0, 200).map((h) => `${h.name}${h.container ? ` (${h.container})` : ""}  ${h.path}:${h.line}`).join("\n");
+  }
+  if (!a.path) throw new Error(t("path fehlt."));
+  const { conn, f } = await fileAt(repo, a.path);
+  const { client, ws } = conn;
+  const caps = client.serverCapabilities ?? {};
+  const doc = { textDocument: { uri: f.uri } };
+  const nav = NAV[op];
+  if (nav) {
+    if (!(caps as Record<string, unknown>)[nav[1]]) throw new Error(t("Der Language-Server kann {op} nicht.", { op }));
+    const params = { ...doc, position: posOf(f.doc, a), ...(op === "references" ? { context: { includeDeclaration: true } } : {}) };
+    return where(repo, ws, toLocs(await client.request<unknown, Parameters<typeof toLocs>[0]>(nav[0], params)));
+  }
+  switch (op) {
+    case "hover": {
+      const r = await client.request<unknown, Hover | null>("textDocument/hover", { ...doc, position: posOf(f.doc, a) });
+      const c = r?.contents;
+      if (!c || (Array.isArray(c) && !c.length)) return t("Keine Information an dieser Stelle.");
+      return Array.isArray(c) ? c.map(markdown).join("\n\n") : typeof c === "string" || "language" in c ? markdown(c) : c.value;
+    }
+    case "document_symbols": {
+      const hits = await documentSymbols(repo, f.path);
+      return hits.length ? hits.map((h) => `${h.name}${h.container ? ` (${h.container})` : ""}  :${h.line}`).join("\n") : t("Nichts gefunden.");
+    }
+    case "code_actions": {
+      const list = await codeActions(conn, f, a);
+      return list.length ? list.map((x) => `${x.title}${x.isPreferred ? " *" : ""}`).join("\n") : t("Keine Code-Aktionen an dieser Stelle.");
+    }
+    case "apply_code_action": {
+      const hit = (await codeActions(conn, f, a)).find((x) => x.title === a.title);
+      if (!hit) throw new Error(t("Keine Code-Aktion „{title}“ an dieser Stelle; code_actions listet sie.", { title: a.title ?? "" }));
+      const open = Object.values(peek(repo)?.files ?? {});
+      notDirty(repo, open.map((x) => x.path));
+      await runAction(client, hit);
+      await saveAll(repo, open.map((x) => x.path));
+      return t("Angewendet und gespeichert: {title}", { title: hit.title });
+    }
+    case "rename": {
+      if (!a.new_name) throw new Error(t("new_name fehlt."));
+      if (!caps.renameProvider) throw new Error(t("Der Language-Server kann nicht umbenennen."));
+      const position = posOf(f.doc, a);
+      const sum = await client.withMapping(async (m) => {
+        const edits = editsOf(await client.request<unknown, Parameters<typeof editsOf>[0]>("textDocument/rename", { ...doc, position, newName: a.new_name }));
+        const paths = edits.flatMap((e) => uriPath(repo, e.uri) ?? []);
+        notDirty(repo, paths);
+        await applyWorkspaceEdit(ws, edits, m);
+        await saveAll(repo, paths);
+        return renameSummary(repo, edits);
+      });
+      if (!sum.count) return t("Nichts zum Umbenennen gefunden.");
+      return t("{count} Stellen geändert und gespeichert:", { count: sum.count }) + "\n" + sum.files.map((x) => `${x.name}  ${x.detail}`).join("\n");
+    }
+    case "format": {
+      if (!caps.documentFormattingProvider) throw new Error(t("Der Language-Server kann diese Datei nicht formatieren."));
+      notDirty(repo, [f.path]);
+      const st = f.view?.state;
+      // Without an editor the file decides: tabs if a line starts with one, else the smallest space indent (4 if none).
+      const text = f.doc.toString();
+      const spaces = [...text.matchAll(/^( +)[^\s*]/gm)].reduce((n, m) => Math.min(n, m[1].length), Infinity);
+      const options = st
+        ? { tabSize: getIndentUnit(st), insertSpaces: !st.facet(indentUnit).includes("\t") }
+        : { tabSize: spaces === Infinity ? 4 : spaces, insertSpaces: !/^\t/m.test(text) };
+      const n = await client.withMapping(async (m) => {
+        const edits = await client.request<unknown, TextEdit[] | null>("textDocument/formatting", { ...doc, options });
+        if (!edits?.length) return 0;
+        await applyWorkspaceEdit(ws, [{ uri: f.uri, edits }], m);
+        await saveAll(repo, [f.path]);
+        return edits.length;
+      });
+      return n ? t("Formatiert und gespeichert.") : t("Schon formatiert.");
+    }
+  }
+  throw new Error(t("Unbekannte operation: {op}", { op }));
 }

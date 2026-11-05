@@ -48,6 +48,7 @@
   import { drop, gitHook, isDirty, open as openFile } from "$lib/editor.svelte";
   import { stop as stopLsp } from "$lib/lsp.svelte";
   import { claudeTarget, ide, listenIde } from "$lib/ide.svelte";
+  import { listenAgent } from "$lib/agent.svelte";
   import { testCancel } from "$lib/testing.svelte";
   import { listen } from "@tauri-apps/api/event";
   import IdeDiff from "$lib/components/IdeDiff.svelte";
@@ -900,6 +901,11 @@
       await openEdit(repo);
       if (editRepo === repo) await openFile(repo.path, file, line);
     });
+    return () => void off.then((f) => f());
+  });
+  // Claude's editor tools (lsp, debugger, run).
+  onMount(() => {
+    const off = listenAgent();
     return () => void off.then((f) => f());
   });
 

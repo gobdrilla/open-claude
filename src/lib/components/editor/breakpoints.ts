@@ -30,12 +30,15 @@ const arrow = new Mark("cm-bp-at", "➜");
 const toggle = StateEffect.define<number>();
 /** Line (1-based) the debugger stopped at in this file, null = none. */
 export const setStopped = StateEffect.define<number | null>();
+/** Replace all breakpoints (1-based lines), e.g. set by Claude's debugger tool. */
+export const setLines = StateEffect.define<number[]>();
 
 const bps = StateField.define<RangeSet<GutterMarker>>({
   create: () => RangeSet.empty,
   update(set, tr) {
     set = set.map(tr.changes);
     for (const e of tr.effects) {
+      if (e.is(setLines)) set = RangeSet.of(e.value.filter((l) => l >= 1 && l <= tr.state.doc.lines).map((l) => dot.range(tr.state.doc.line(l).from)), true);
       if (!e.is(toggle)) continue;
       let had = false;
       set.between(e.value, e.value, () => void (had = true));

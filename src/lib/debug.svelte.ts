@@ -46,6 +46,8 @@ class RepoDebug {
   at = $state.raw<{ path: string; line: number } | null>(null);
   /** Repo-relative path -> breakpoint lines (1-based). */
   bps: Record<string, number[]>;
+  /** Last breakpoints set from outside an editor (Claude's tool): an open editor of that file takes them over. */
+  pushed = $state.raw<{ path: string; lines: number[] } | null>(null);
   constructor(bps: Record<string, number[]>) {
     this.bps = bps;
   }
@@ -325,4 +327,31 @@ export async function debugStop(repo: string): Promise<void> {
     await Promise.race([bye, new Promise((r) => setTimeout(r, 1500))]);
   }
   finish(repo, s);
+}
+
+// ---------- For Claude's tool "debugger" (agent.svelte.ts) ----------
+
+const paused = (repo: string): Session => {
+  const s = debug(repo).session;
+  if (!s || s.phase !== "pause") throw new Error(t("Der Debugger hält gerade nicht an."));
+  return s;
+};
+
+/** Evaluate an expression in the shown frame: value, type and a ref to expand. */
+export async function debugEval(repo: string, expression: string): Promise<string> {
+  const s = paused(repo);
+  const r = await req(repo, s, "evaluate", { expression, frameId: s.frame ?? undefined, context: "repl" });
+  return `${r.result ?? ""}${r.type ? `: ${r.type}` : ""}${r.variablesReference > 0 ? ` [ref ${r.variablesReference}]` : ""}`;
+}
+
+/** Children of a variable or evaluation result (variablesReference). */
+export async function debugVars(repo: string, ref: number): Promise<Var[]> {
+  const r = await req(repo, paused(repo), "variables", { variablesReference: ref });
+  return (r.variables ?? []).slice(0, MAX_VARS).map((x: any) => ({ name: x.name, value: x.value ?? "", type: x.type ?? "", ref: x.variablesReference ?? 0, kids: null, open: false }));
+}
+
+/** Breakpoints of a file from outside the editor; an open editor of the file shows them too. */
+export function pushBreakpoints(repo: string, path: string, lines: number[]): void {
+  setBreakpoints(repo, path, lines);
+  debug(repo).pushed = { path, lines };
 }

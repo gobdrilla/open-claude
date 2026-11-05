@@ -3,7 +3,8 @@
 //!   Edits als Diff zum Annehmen/Ablehnen in der App, Auswahl im Editor als Kontext, @-Erwaehnung,
 //!   Diagnostics der Language-Server (src/lsp.rs).
 //! - MCP ueber HTTP fuer das Modell (eingebaute Mod, .claude-plugin/plugin.json): git und GitHub/GitLab-API
-//!   mit dem Konto aus der App, Datei im Editor zeigen. Token bleiben im Schluesselbund.
+//!   mit dem Konto aus der App, Datei im Editor zeigen, Language-Server, Debugger und Run-Panel des Editors
+//!   (lsp/debugger/run, ausgefuehrt im Frontend: agent.svelte.ts). Token bleiben im Schluesselbund.
 //!
 //! Protokoll nachgebaut nach der VS-Code-Extension; die CLI ruft openDiff/close_tab/closeAllDiffTabs
 //! selbst, getDiagnostics vor/nach Edits und als Tool mcp__ide__getDiagnostics fuers Modell.
@@ -281,6 +282,37 @@ pub fn ide_run_state(repo: String, state: Option<String>) {
     };
 }
 
+/// Editor tools (lsp, debugger, run) run in the frontend: request out per event "ide-ask", answer via ide_answer.
+type Answer = oneshot::Sender<Result<String, String>>;
+static ASKS: Mutex<Vec<(u64, Answer)>> = Mutex::new(Vec::new());
+
+fn asks() -> std::sync::MutexGuard<'static, Vec<(u64, Answer)>> {
+    ASKS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// From the frontend (agent.svelte.ts): result of an editor tool.
+#[tauri::command]
+pub fn ide_answer(id: u64, ok: bool, text: String) {
+    let mut a = asks();
+    if let Some(i) = a.iter().position(|(k, _)| *k == id) {
+        let _ = a.remove(i).1.send(if ok { Ok(text) } else { Err(text) });
+    }
+}
+
+async fn ask<R: Runtime>(ctx: &Ctx<R>, tool: &str, args: &Value) -> Result<String, String> {
+    let (tx, rx) = oneshot::channel();
+    let id = NEXT.fetch_add(1, Ordering::Relaxed);
+    asks().push((id, tx));
+    let sent = ctx.app.emit("ide-ask", json!({ "id": id, "repo": ctx.repo, "tool": tool, "args": args }));
+    // Debugger start builds the project and may ask the user (missing SDK): generous, but never forever.
+    let r = match sent {
+        Ok(()) => tokio::time::timeout(std::time::Duration::from_secs(300), rx).await.ok().and_then(Result::ok),
+        Err(_) => None,
+    };
+    asks().retain(|(k, _)| *k != id);
+    r.unwrap_or_else(|| Err(tr!("Keine Antwort vom Editor von L'Atelier de Claude.", "No answer from the L'Atelier de Claude editor.")))
+}
+
 // ---------- HTTP (MCP fuers Modell) ----------
 
 /// Minimaler Streamable-HTTP-Server: ein POST je Verbindung, JSON-Antwort, keine Sessions.
@@ -490,6 +522,62 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
             "annotations": { "destructiveHint": true },
         },
         {
+            "name": "lsp",
+            "description": tr!("Language-Server des Editors von L'Atelier de Claude (dieselben wie im Editor; das Projekt muss sie dort erlaubt haben). \
+                Lesend: definition, type_definition, implementation, references, hover (Typ und Doku), document_symbols, workspace_symbols (query), \
+                code_actions (Quick-Fixes und Refactorings an der Stelle bzw. den Zeilen line..end_line). \
+                Schreibend, Ergebnis gespeichert: rename (new_name, über alle Dateien), apply_code_action (title aus code_actions), format. \
+                Stelle: path + line (1-basiert) + symbol (Text in der Zeile) oder column (1-basiert).",
+                "Language servers of the L'Atelier de Claude editor (the same as in the editor; the project must have allowed them there). \
+                Read: definition, type_definition, implementation, references, hover (type and docs), document_symbols, workspace_symbols (query), \
+                code_actions (quick fixes and refactorings at the position or lines line..end_line). \
+                Write, result saved: rename (new_name, across all files), apply_code_action (title from code_actions), format. \
+                Position: path + line (1-based) + symbol (text in that line) or column (1-based)."),
+            "inputSchema": obj(json!({
+                "operation": { "type": "string", "enum": ["definition", "type_definition", "implementation", "references", "hover", "document_symbols", "workspace_symbols", "code_actions", "rename", "apply_code_action", "format"] },
+                "path": { "type": "string", "description": tr!("absolut oder relativ zum Repository", "absolute or relative to the repository") },
+                "line": { "type": "integer", "description": tr!("1-basiert", "1-based") },
+                "end_line": { "type": "integer", "description": tr!("code_actions: letzte Zeile des Bereichs", "code_actions: last line of the range") },
+                "symbol": { "type": "string", "description": tr!("Bezeichner in der Zeile; die Stelle ist sein erstes Vorkommen", "identifier in the line; the position is its first occurrence") },
+                "column": { "type": "integer", "description": tr!("1-basiert, statt symbol", "1-based, instead of symbol") },
+                "query": { "type": "string" },
+                "new_name": { "type": "string" },
+                "title": { "type": "string" },
+            }), &["operation"]),
+        },
+        {
+            "name": "debugger",
+            "description": tr!("Debugger des Editors von L'Atelier de Claude (bisher .NET über netcoredbg). Startet und steuert Projektcode. \
+                breakpoints (path + lines setzt die Zeilen der Datei, leer entfernt; ohne path Liste), start (config = Startziel aus run list, sonst das gewählte), \
+                continue/next/step_in/step_out (warten bis zum nächsten Halt), pause, stop, state (Halt, Stack, Variablen, Ausgabe), \
+                variables (ref aus state), evaluate (expression im gewählten Frame).",
+                "Debugger of the L'Atelier de Claude editor (so far .NET via netcoredbg). Starts and controls project code. \
+                breakpoints (path + lines sets the file's lines, empty removes; without path lists), start (config = run target from run list, else the selected one), \
+                continue/next/step_in/step_out (wait for the next stop), pause, stop, state (stop, stack, variables, output), \
+                variables (ref from state), evaluate (expression in the selected frame)."),
+            "inputSchema": obj(json!({
+                "action": { "type": "string", "enum": ["breakpoints", "start", "continue", "next", "step_in", "step_out", "pause", "stop", "state", "variables", "evaluate"] },
+                "path": { "type": "string" },
+                "lines": { "type": "array", "items": { "type": "integer" } },
+                "config": { "type": "string" },
+                "ref": { "type": "integer" },
+                "expression": { "type": "string" },
+            }), &["action"]),
+            "annotations": { "destructiveHint": true },
+        },
+        {
+            "name": "run",
+            "description": tr!("Startziele des Run-Panels von L'Atelier de Claude (package.json-Scripts, .NET-Projekte, Cargo, eigene). \
+                list, start/restart/stop (config = Label aus list, sonst das gewählte), output (letzte Zeilen; auch run_state). Startet Projektcode.",
+                "Run targets of the L'Atelier de Claude run panel (package.json scripts, .NET projects, Cargo, custom). \
+                list, start/restart/stop (config = label from list, else the selected one), output (latest lines; also run_state). Starts project code."),
+            "inputSchema": obj(json!({
+                "action": { "type": "string", "enum": ["list", "start", "restart", "stop", "output"] },
+                "config": { "type": "string" },
+            }), &["action"]),
+            "annotations": { "destructiveHint": true },
+        },
+        {
             "name": "editor_state",
             "description": tr!("Offene Dateien im Editor (dirty/conflict), aktive Datei und Auswahl. Bei Fragen zur offenen Datei/Auswahl aufrufen; \
                 vor Edits prüfen, ob die Datei ungespeichert ist.",
@@ -565,6 +653,7 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
             let r = crate::git::blocking(move || Ok(crate::images::clean(&crate::activity::config_dir(), days, sid.as_deref()))).await?;
             crate::images::summary(&r)
         }
+        "lsp" | "debugger" | "run" => ask(ctx, name, a).await?,
         "editor_state" => editors().get(&ctx.repo).map_or_else(|| tr!("Editor für dieses Projekt nicht geöffnet.", "Editor not open for this project."), Value::to_string),
         "run_state" => runs().get(&ctx.repo).cloned().unwrap_or_else(|| tr!("Kein Run/Test für dieses Projekt.", "No run/test for this project.")),
         _ => return Err(tr!("Tool unbekannt: {name}", "Unknown tool: {name}")),
@@ -684,6 +773,18 @@ mod tests {
             assert!(r.contains("npm test") && !r.contains("fremd"), "{r}");
             ide_run_state(repo_s.clone(), None);
             assert!(rs().await.contains("Kein Run/Test"));
+
+            // Editor tools go to the frontend ("ide-ask") and come back via ide_answer, errors as isError.
+            assert!(list.contains("\"lsp\"") && list.contains("\"debugger\"") && list.contains("\"run\""), "{list}");
+            app.listen_any("ide-ask", |e| {
+                let p: Value = serde_json::from_str(e.payload()).unwrap();
+                ide_answer(p["id"].as_u64().unwrap(), p["tool"] == "run", format!("{}:{}", p["tool"].as_str().unwrap(), p["args"]["action"].as_str().unwrap_or("")));
+            });
+            let r = post(&http_port, &bearer, call(6, "run", json!({ "action": "list" }))).await;
+            assert!(r.contains("run:list") && !r.contains("isError"), "{r}");
+            let r = post(&http_port, &bearer, call(7, "debugger", json!({ "action": "state" }))).await;
+            assert!(r.contains("debugger:state") && r.contains("\"isError\":true"), "{r}");
+            assert!(asks().is_empty());
 
             let mut bad = format!("ws://127.0.0.1:{ws_port}").into_client_request().unwrap();
             bad.headers_mut().insert("x-claude-code-ide-authorization", "falsch".parse().unwrap());

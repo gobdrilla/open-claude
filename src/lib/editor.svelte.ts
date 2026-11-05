@@ -717,6 +717,8 @@ export async function poll(repo: string): Promise<void> {
     return; // Naechste Runde versucht es wieder.
   }
   if (store.get(repo) !== s) return;
+  // Awaited at the end: Claude's lsp tool polls first and must see the reloaded buffers.
+  const loads: Promise<unknown>[] = [];
   files.forEach(([path, was], i) => {
     const f = s.files[path];
     // Inzwischen gespeichert, neu geladen oder geschlossen: der Vergleich waere veraltet.
@@ -725,10 +727,11 @@ export async function poll(repo: string): Promise<void> {
     if (v === "reload") {
       // Changed outside (Claude, git): keep both versions in the local history.
       const before = f.saved;
-      load(s, path)
+      const p = load(s, path)
         .then(() => record(repo, path, before, "Vor externer Änderung"))
         .then(() => s.files[path] && record(repo, path, s.files[path].saved, "Extern geändert"))
         .catch((e) => (s.error = String(e)));
+      loads.push(p);
     }
     else if (v === "close") {
       forget(s, path);
@@ -738,6 +741,7 @@ export async function poll(repo: string): Promise<void> {
   const next = Object.fromEntries(dirs.map((d, i) => [d, now[files.length + i]]));
   // Nur bei Aenderung zuweisen, sonst liest der Baum alle 1,5 s umsonst neu.
   if (JSON.stringify(next) !== JSON.stringify(s.dirs)) s.dirs = next;
+  await Promise.all(loads);
 }
 
 /**

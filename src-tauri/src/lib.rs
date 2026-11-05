@@ -914,6 +914,7 @@ pub fn run() {
             runner::test_cancel,
             ide::ide_notify,
             ide::ide_reply,
+            ide::ide_answer,
             ide::ide_editor_state,
             ide::ide_run_state,
             debug::dbg_build,
