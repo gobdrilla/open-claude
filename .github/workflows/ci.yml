@@ -55,6 +55,9 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      # ocui-sh tests drive the built binary and skip without it
       - name: cargo test
         working-directory: src-tauri
-        run: cargo test
+        run: |
+          cargo build --bin ocui-sh
+          cargo test
