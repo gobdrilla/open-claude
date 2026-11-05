@@ -10,7 +10,7 @@
   import { load, type Store } from "@tauri-apps/plugin-store";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { check, type Update } from "@tauri-apps/plugin-updater";
-  import { FILES_APP } from "$lib/editor.logic";
+  import { FILES_APP, SHIFT } from "$lib/editor.logic";
   import { relaunch } from "@tauri-apps/plugin-process";
   import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
@@ -362,6 +362,8 @@
   // macOS: native Ampeln im Overlay-Titelbalken (tauri.macos.conf.json) statt eigener Knoepfe.
   const mac = navigator.userAgent.includes("Mac");
   const mod = mac ? "⌘" : t("Strg");
+  // Windows/Linux spell keys out like the OS does (Strg+Umschalt+N, Enter); the symbols are the Mac way.
+  const enter = mac ? "⏎" : "Enter";
   // Im macOS-Vollbild sind die Ampeln weg, dann kein Platz dafuer freihalten.
   let fullscreen = $state(false);
   const lights = $derived(mac && !fullscreen);
@@ -1441,7 +1443,7 @@
             <DropdownMenu.Content align="end" sideOffset={4} class={cn(menuContent, "min-w-56 rounded-lg shadow-lg")}>
               {#each [
                 [FolderDownIcon, t("Repo klonen …"), `${mod}+N`, () => (cloneOpen = true)],
-                [FolderPlusIcon, t("Neues Repo anlegen …"), `${mod}+⇧+N`, () => (createOpen = true)],
+                [FolderPlusIcon, t("Neues Repo anlegen …"), `${mod}+${SHIFT}+N`, () => (createOpen = true)],
                 [FolderInputIcon, t("Ordner hinzufügen …"), "", addProject],
                 [UserPlusIcon, t("Sitzung beitreten …"), "", () => (joinOpen = true)],
                 [FolderIcon, t("Dev-Ordner wechseln …"), `${mod}+O`, pickRoot],
@@ -1672,7 +1674,7 @@
                     {@render repoItem("Editor", `${mod}+2`, () => openEdit(item.repo))}
                     {@render repoItem(t("Git-Ansicht"), `${mod}+3`, () => openGit(item.repo))}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem(t("Im {app} zeigen", { app: FILES_APP }), `${mod}+⇧+E`, () => reveal(item.repo))}
+                    {@render repoItem(t("Im {app} zeigen", { app: FILES_APP }), `${mod}+${SHIFT}+E`, () => reveal(item.repo))}
                     {@render repoItem(t("Im Browser öffnen"), "", () => browse(item.repo))}
                     {@render repoItem(t("Pfad kopieren"), "", () => navigator.clipboard.writeText(item.repo.path))}
                     {@render repoItem(pinned ? t("Nicht mehr anpinnen") : t("Anpinnen"), `${mod}+D`, () => togglePin(item.repo.path))}
@@ -1828,9 +1830,10 @@
 {#snippet keys(title: string, list: string[][])}
   <section>
     <h3 class="text-muted-foreground text-meta mb-2 font-semibold tracking-wide uppercase">{title}</h3>
-    <dl class="text-body grid grid-cols-[12rem_1fr] items-center gap-x-4 gap-y-1.5">
+    <!-- 16rem, same in every section: spelled-out keys ("Umschalt + Esc / Strg + Umschalt + W") wrapped at 12rem. -->
+    <dl class="text-body grid grid-cols-[16rem_1fr] items-center gap-x-4 gap-y-1.5">
       {#each list as [key, what] (key)}
-        <dt class="border-border text-meta justify-self-start rounded border px-1.5 py-0.5 font-mono">{key}</dt>
+        <dt class="border-border text-meta justify-self-start rounded border px-1.5 py-0.5 font-mono whitespace-nowrap">{key}</dt>
         <dd class="text-muted-foreground">{what}</dd>
       {/each}
     </dl>
@@ -1888,7 +1891,8 @@
   onhelp={() => openSub("help", "settings")}
 />
 <Dialog.Root bind:open={help}>
-  <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+  <!-- 3xl: room for the spelled-out keys and a one-line description next to them -->
+  <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
     <Dialog.Header>
       <Dialog.Title>{t("Tastenkürzel")}</Dialog.Title>
       <Dialog.Description>{t("Ein Schema für alle Ansichten. Alles lässt sich auch ohne Maus bedienen.")}</Dialog.Description>
@@ -1896,45 +1900,45 @@
     <div class="grid gap-5">
       {@render keys(t("Überall"), [
         [`${mod} + 1 / 2 / 3`, t("Claude / Editor / Git des Projekts (auf der Startseite: des gewählten)")],
-        [`${mod} + ⇧ + E`, t("Projektordner im {app} öffnen", { app: FILES_APP })],
-        [`⇧ + Esc / ${mod} + ⇧ + W`, t("Zurück zu den Projekten, Sitzung läuft weiter")],
+        [`${mod} + ${SHIFT} + E`, t("Projektordner im {app} öffnen", { app: FILES_APP })],
+        [`${SHIFT} + Esc / ${mod} + ${SHIFT} + W`, t("Zurück zu den Projekten, Sitzung läuft weiter")],
         [`F1 / ${mod} + /`, t("Diese Übersicht")],
         [`${mod} + + / − / 0`, t("Zoom größer / kleiner / zurücksetzen")],
         [t("{mod} + Mausrad", { mod }), t("Zoom (Fokus und Maus außerhalb der Vorschau)")],
       ])}
       {@render keys(t("Startseite"), [
-        [t("⏎ / Klick"), t("Claude im Projekt öffnen")],
+        [t("{enter} / Klick", { enter }), t("Claude im Projekt öffnen")],
         ["↑ ↓", t("Projekt wählen")],
         [`${mac ? "⌥" : "Alt"} + 1 … 9`, t("Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)")],
         [`${mod} + K`, t("Suche fokussieren")],
         [`${mod} + D`, t("Projekt anpinnen")],
         [`${mod} + N`, t("Repo klonen")],
-        [`${mod} + ⇧ + N`, t("Neues Repo anlegen")],
+        [`${mod} + ${SHIFT} + N`, t("Neues Repo anlegen")],
         [`${mod} + T`, t("Claude ohne Projekt (im Home-Ordner)")],
         [`${mod} + R`, t("Neu einlesen")],
         [`${mod} + O`, t("Dev-Ordner wechseln")],
         [t("Rechtsklick"), t("Weitere Aktionen, z. B. vom Gerät löschen")],
         ["Esc", t("Suche leeren, sonst schließen (bzw. ins Tray)")],
       ])}
-      {@render keys("Claude", [[mac ? "⌘ + C / ⌘ + V" : t("Strg + ⇧ + C / Strg + V"), t("Im Terminal kopieren / einfügen")]])}
+      {@render keys("Claude", [[mac ? "⌘ + C / ⌘ + V" : `${t("Strg")} + ${SHIFT} + C / ${t("Strg")} + V`, t("Im Terminal kopieren / einfügen")]])}
       {@render keys("Editor", [
         [`${mod} + S`, t("Datei speichern")],
         [`${mod} + P`, t("Datei suchen und öffnen")],
         [`${mac ? "⌃" : t("Strg")} + G`, t("Zu Zeile springen")],
-        [`${mac ? "⌃" : t("Strg")} + Tab / ${mac ? "⌃" : t("Strg")} + ⇧ + Tab`, t("Zuletzt verwendete Dateien durchgehen, Loslassen öffnet")],
+        [`${mac ? "⌃" : t("Strg")} + Tab / ${mac ? "⌃" : t("Strg")} + ${SHIFT} + Tab`, t("Zuletzt verwendete Dateien durchgehen, Loslassen öffnet")],
         [t("Doppelklick auf Tab"), t("Vorschau-Tab (kursiv) behalten")],
         [t("Tab ziehen"), t("Umsortieren, an eine Kante ziehen teilt den Bereich")],
       ])}
       {@render keys("Git", [
         ["Esc", t("Zurück zu den Projekten")],
         ["Alt + 1 … 5", t("Änderungen / Verlauf / Releases / CI / Unity")],
-        [`${mod} + ⇧ + F`, "Fetch"],
-        [`${mod} + ⇧ + L`, "Pull"],
-        [`${mod} + ⇧ + P`, "Push"],
+        [`${mod} + ${SHIFT} + F`, "Fetch"],
+        [`${mod} + ${SHIFT} + L`, "Pull"],
+        [`${mod} + ${SHIFT} + P`, "Push"],
         ["F5", t("Aktualisieren")],
-        [`${mod} + ⏎`, "Commit"],
+        [`${mod} + ${enter}`, "Commit"],
         [t("Leertaste"), t("Datei stagen / unstagen")],
-        ["F7 / ⇧ + F7", t("Merge-Editor: nächster / vorheriger Konflikt")],
+        [`F7 / ${SHIFT} + F7`, t("Merge-Editor: nächster / vorheriger Konflikt")],
         [`${mod} + S`, t("Merge-Editor: speichern")],
       ])}
     </div>
