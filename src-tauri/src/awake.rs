@@ -130,7 +130,7 @@ fn working(app: &AppHandle, now: SystemTime) -> bool {
     busy_panel(&panels, now) || animating(Instant::now()) || app.state::<crate::ide::Ides>().repos().iter().any(|r| agents_recent(r, now))
 }
 
-fn fresh(p: &Path, now: SystemTime) -> bool {
+pub(crate) fn fresh(p: &Path, now: SystemTime) -> bool {
     std::fs::metadata(p).and_then(|m| m.modified()).is_ok_and(|t| now.duration_since(t).unwrap_or_default() < FRESH)
 }
 

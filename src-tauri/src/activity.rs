@@ -1066,7 +1066,16 @@ fn activity_in(cache: &mut Cache, c: &Path, cwd: &str, want: Option<&str>, now: 
 /// Nur das Session-Panel der Mod (Kopfleiste ueber dem Terminal), ohne den Rest von claude_activity.
 #[tauri::command]
 pub fn claude_panel(id: String) -> Option<Value> {
-    crate::pty::valid_id(&id).then(|| fs::read_to_string(panel_file(&id)).ok().and_then(|t| serde_json::from_str(&t).ok())).flatten()
+    if !crate::pty::valid_id(&id) {
+        return None;
+    }
+    let p = panel_file(&id);
+    let mut v: Value = serde_json::from_str(&fs::read_to_string(&p).ok()?).ok()?;
+    // busy without the mod's heartbeat: mod gone or claude died mid-turn, the tab must not show "working" forever.
+    if v["busy"] == true && !crate::awake::fresh(&p, SystemTime::now()) {
+        v["busy"] = false.into();
+    }
+    Some(v)
 }
 
 /// Slash-Command fuer die Mod: sie pollt <panel>.cmd und fuehrt ihn per $.command.run aus, sobald claude frei ist.
@@ -1166,6 +1175,19 @@ mod tests {
     use std::io::Write;
 
     const SID: &str = "0000aaaa-1111-2222-3333-444455556666";
+
+    #[test]
+    fn panel_busy_nur_mit_heartbeat() {
+        fs::create_dir_all(panel_dir()).unwrap();
+        let id = format!("test-busy-{}", std::process::id());
+        let p = panel_file(&id);
+        fs::write(&p, r#"{"busy":true,"waiting":false}"#).unwrap();
+        assert_eq!(claude_panel(id.clone()).unwrap()["busy"], true);
+        // Mod gone or claude dead: no write for minutes.
+        File::options().write(true).open(&p).unwrap().set_modified(SystemTime::now() - std::time::Duration::from_secs(600)).unwrap();
+        assert_eq!(claude_panel(id.clone()).unwrap()["busy"], false);
+        let _ = fs::remove_file(&p);
+    }
 
     fn tmp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("ocui-act-{name}-{}", std::process::id()));

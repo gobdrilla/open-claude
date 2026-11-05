@@ -946,9 +946,13 @@ pub fn run() {
             #[cfg(debug_assertions)]
             devbridge::start(app.handle());
             // Plugin was renamed open-claude -> atelier: fix the stored theme key, drop the stale release copy.
-            skills::migrate_theme(&skills::home());
-            if let Ok(d) = app.path().app_data_dir() {
-                let _ = std::fs::remove_dir_all(d.join("mods/open-claude"));
+            // Release only: dev builds share both with an installed older release that still uses the old name.
+            #[cfg(not(debug_assertions))]
+            {
+                skills::migrate_theme(&skills::home());
+                if let Ok(d) = app.path().app_data_dir() {
+                    let _ = std::fs::remove_dir_all(d.join("mods/open-claude"));
+                }
             }
             deps::auto_update();
             // Kontenliste fuer git fetch/pull/push mit automatisch gewaehltem Konto (forge::repo_auth).

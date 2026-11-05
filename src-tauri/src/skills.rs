@@ -223,6 +223,7 @@ pub(crate) fn user_read(home: &Path) -> Result<String, String> {
 /// Theme key from before the rename (plugin "open-claude"); the prefix also covers "-light". Writes only on change.
 /// A text replace keeps Claude Code's formatting and key order.
 // shortcut: one-time migration, remove a few releases after 1.6
+#[cfg_attr(debug_assertions, allow(dead_code))]
 pub(crate) fn migrate_theme(home: &Path) {
     let Ok(text) = user_read(home) else { return };
     let new = text.replace("\"custom:open-claude:open-claude", "\"custom:atelier:atelier");
