@@ -5,6 +5,7 @@
   let { src, alt, onswipe }: { src: string; alt: string; onswipe?: (dir: number) => void } = $props();
 
   let box: HTMLDivElement;
+  let img: HTMLImageElement;
   let scale = $state(1);
   let x = $state(0);
   let y = $state(0);
@@ -25,6 +26,15 @@
     x = next === 1 ? 0 : px - (px - x) * k;
     y = next === 1 ? 0 : py - (py - y) * k;
     scale = next;
+    clamp();
+  }
+
+  /** Keeps the zoomed image covering the box: no panning it out of view. */
+  function clamp() {
+    const mx = Math.max(0, (img.offsetWidth * scale - box.clientWidth) / 2);
+    const my = Math.max(0, (img.offsetHeight * scale - box.clientHeight) / 2);
+    x = Math.min(mx, Math.max(-mx, x));
+    y = Math.min(my, Math.max(-my, y));
   }
 
   // Touchpad-Wischen hat Nachlauf: nach einem Blaettern kurz nichts mehr zaehlen.
@@ -36,7 +46,7 @@
     if (scale > 1) {
       x -= e.deltaX;
       y -= e.deltaY;
-      return;
+      return clamp();
     }
     if (e.timeStamp < quietUntil || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     swipe += e.deltaX;
@@ -70,6 +80,7 @@
     if (drag?.id !== e.pointerId) return;
     x = e.clientX - drag.x;
     y = e.clientY - drag.y;
+    clamp();
   }
 
   function gestures(node: HTMLElement) {
@@ -98,6 +109,7 @@
   ondblclick={(e) => zoomAt(scale > 1 ? 1 / scale : 2.5, e.clientX, e.clientY)}
 >
   <img
+    bind:this={img}
     {src}
     {alt}
     draggable="false"

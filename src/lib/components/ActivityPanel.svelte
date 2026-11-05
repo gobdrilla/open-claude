@@ -367,8 +367,8 @@
     void sessionId;
     void shownAt;
     fullUrl = undefined;
-    const m = untrack(() => current);
-    if (m) full(m).then((u) => current?.id === i && (fullUrl = u));
+    // full() reads `data` before its first await; tracked, every poll reloaded the image and reset the zoom.
+    untrack(() => current && full(current).then((u) => current?.id === i && (fullUrl = u)));
   });
 
   // Vorschau erst laden, wenn die Kachel in die Naehe der Sicht kommt.
