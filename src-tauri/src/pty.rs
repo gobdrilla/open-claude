@@ -219,6 +219,10 @@ pub fn pty_open(
     }
     // Unix: the login shell execs ocui-sh from here (see shell).
     env.push(("OCUI_SH", &own));
+    // ocui-sh is its own binary without l10n state: refusal messages follow the UI language.
+    if crate::l10n::en() {
+        env.push(("OCUI_LANG", "en"));
+    }
     // CLAUDE.md der weiteren Repos mitladen, damit claude deren Regeln und Aufbau kennt.
     if !extra.is_empty() {
         env.push(("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1"));

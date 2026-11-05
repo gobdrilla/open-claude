@@ -159,10 +159,13 @@ impl Shell {
         if self.only_claude {
             // Words taken literally: no expansion, no ; | & or $(...), so nothing but claude can start.
             let words = split(line, &home().to_string_lossy());
+            if words[0] == "exit" {
+                return false;
+            }
             self.status = if words[0] == "claude" {
                 self.spawn(&words, line)
             } else {
-                eprintln!("ocui-sh: nur claude-Befehle, z. B. claude --resume");
+                eprintln!("{}", tr("ocui-sh: nur claude-Befehle, z. B. claude --resume", "ocui-sh: only claude commands, e.g. claude --resume"));
                 126
             };
             return true;
@@ -259,7 +262,7 @@ impl Shell {
                 Some(p) if has_ext(&p, &[".exe", ".com", ".bat", ".cmd"]) => Command::new(p),
                 // cmd /c below would interpret & | in the arguments.
                 Some(_) | None if self.only_claude => {
-                    eprintln!("ocui-sh: claude nicht gefunden");
+                    eprintln!("{}", tr("ocui-sh: claude nicht gefunden", "ocui-sh: claude not found"));
                     return 127;
                 }
                 Some(p) => {
@@ -492,6 +495,11 @@ fn split(line: &str, home: &str) -> Vec<String> {
         words.push(cur);
     }
     words
+}
+
+/// UI language from pty_open (OCUI_LANG=en), German otherwise.
+fn tr(de: &'static str, en: &'static str) -> &'static str {
+    if std::env::var_os("OCUI_LANG").is_some_and(|l| l == "en") { en } else { de }
 }
 
 fn has_ext(p: &Path, exts: &[&str]) -> bool {
@@ -794,18 +802,19 @@ mod tests {
             .arg("--only-claude")
             .current_dir(&d)
             .env_remove("OPEN_CLAUDE_SETTINGS")
+            .env_remove("OCUI_LANG")
             .env("PATH", format!("{}:/usr/bin:/bin", d.display()))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
             .unwrap();
-        let script = "claude --resume 'a b'\ntouch x\nclaude; touch y\nclaude $(touch z) && touch w\ncd sub\nexit\n";
+        let script = "claude --resume 'a b'\ntouch x\nclaude; touch y\nclaude $(touch z) && touch w\ncd sub\nexit\nclaude after-exit\n";
         child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
         let out = child.wait_with_output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert_eq!(stdout, "claude[]\nclaude[--resume a b]\nclaude[$(touch z) && touch w]\n", "{stdout}");
-        assert_eq!(String::from_utf8_lossy(&out.stderr).matches("nur claude-Befehle").count(), 4);
+        assert_eq!(String::from_utf8_lossy(&out.stderr).matches("nur claude-Befehle").count(), 3);
         for f in ["x", "y", "z", "w"] {
             assert!(!d.join(f).exists(), "{f}");
         }
