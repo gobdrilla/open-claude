@@ -136,21 +136,48 @@
 }
 
 /* Dezenter Primary-Schimmer oben rechts (wie die Terminal-Karte); Grundfarbe kommt per bg-card/bg-popover. */
+/* Strength, corner and color come from a custom theme (themes.ts). */
 @utility glow {
-  background-image: radial-gradient(ellipse at top right, color-mix(in oklch, var(--primary) 8%, transparent), transparent 60%);
+  background-image: radial-gradient(
+    ellipse at var(--glow-at, top right),
+    color-mix(in oklch, var(--glow-color, var(--primary)) var(--glow, 8%), transparent),
+    transparent 60%
+  );
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+  /* Color on html only: an opaque body would cover the theme layers below (z-index -1). */
+  html {
+    @apply bg-background;
+  }
   html,
   body {
-    @apply h-full overflow-hidden bg-background text-foreground;
+    @apply h-full overflow-hidden text-foreground;
     font-family: var(--font-sans);
     /* WKWebView (macOS) wertet nur die Variante mit Praefix aus: sonst markiert Doppelklick die halbe Oberflaeche. */
     -webkit-user-select: none;
     user-select: none;
+  }
+  /* Backdrop gradient and grain of a custom theme, fixed behind everything (themes.ts sets the variables). */
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+  body::before {
+    background-image: var(--backdrop, none);
+    opacity: var(--backdrop-opacity, 1);
+  }
+  /* Static noise tile against banding; the slider only changes its opacity. */
+  body::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: calc(var(--grain, 0) * 0.2);
   }
   input,
   textarea,

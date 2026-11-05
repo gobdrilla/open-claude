@@ -9,6 +9,7 @@ import app from "./i18n/en/app.ts";
 import panels from "./i18n/en/panels.ts";
 import misc from "./i18n/en/misc.ts";
 import logic from "./i18n/en/logic.ts";
+import themes from "./i18n/en/themes.ts";
 
 export type LangPref = "system" | "de" | "en";
 export type Lang = "de" | "en";
@@ -44,7 +45,7 @@ export function setLangPref(p: LangPref): void {
   }
 }
 
-const EN: Record<string, string> = { ...logic, ...misc, ...panels, ...app, ...git, ...editor };
+const EN: Record<string, string> = { ...logic, ...themes, ...misc, ...panels, ...app, ...git, ...editor };
 
 /** Fill {name} placeholders. */
 function fill(s: string, vars?: Record<string, string | number>): string {

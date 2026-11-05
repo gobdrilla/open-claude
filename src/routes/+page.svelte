@@ -1391,7 +1391,7 @@
     shouldFilter={false}
     bind:value={selected}
     loop
-    class="bg-background flex-1 rounded-none! p-0 {view !== 'list' ? 'hidden!' : ''}"
+    class="flex-1 rounded-none! bg-transparent p-0 {view !== 'list' ? 'hidden!' : ''}"
   >
     <div class="border-border flex items-center gap-2 border-b py-1 pr-2 pl-2">
       <div class="flex-1 [&_[data-slot=command-input-wrapper]]:p-0">

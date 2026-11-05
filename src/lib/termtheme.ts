@@ -1,5 +1,6 @@
 import { forge } from "$lib/git";
 import { invoke } from "@tauri-apps/api/core";
+import { terminal } from "$lib/themes.svelte";
 
 /** xterm-linkHandler fuer OSC-8-Links (claude gibt Links so aus): http(s) im Browser, Rest verwerfen.
  *  xterms Standard fragt per window.confirm und oeffnet window.open, also ein App-Fenster. */
@@ -67,7 +68,8 @@ export const LIGHT = {
  *  Haelfte verlangt, sonst grau auf weiss. Dazu kraeftigere Schrift: WebGL-Glyphen ohne Subpixel wirken auf hellem
  *  Grund duenn. Dunkel bleibt alles exakt. */
 export const look = (dark: boolean) => ({
-  theme: dark ? DARK : LIGHT,
+  // A custom theme brings its own palette (themes.ts); the built-in one uses the tuned values above.
+  theme: (dark ? terminal.v.dark : terminal.v.light) ?? (dark ? DARK : LIGHT),
   minimumContrastRatio: dark ? 1 : 7,
   fontWeight: (dark ? "normal" : "500") as "normal" | "500",
   fontWeightBold: (dark ? "600" : "700") as "600" | "700",

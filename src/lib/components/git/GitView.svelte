@@ -364,7 +364,7 @@
     {#if status}
       <div class="mr-3 flex min-w-0 items-center gap-2.5" title={status.upstream ?? t("Kein Upstream")}>
         <div
-          class="from-primary to-primary/50 text-primary-foreground shadow-primary/30 grid size-8 shrink-0 place-items-center rounded-lg bg-linear-to-br shadow-md"
+          class="from-primary to-[var(--primary-2,color-mix(in_oklab,var(--primary)_50%,transparent))] text-primary-foreground shadow-primary/30 grid size-8 shrink-0 place-items-center rounded-lg bg-linear-to-br shadow-md"
         >
           {#if busy}
             <LoaderCircleIcon class="size-4 animate-spin" />

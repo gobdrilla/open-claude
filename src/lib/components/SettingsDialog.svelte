@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Button, ConfirmBar, Dialog, IconButton, Input, Row, Segmented, SettingRow, SettingsSection, Slider, Switch, TextButton } from "$lib/atelier-ui";
   import type { Update } from "@tauri-apps/plugin-updater";
-  import { theme, setMode } from "$lib/theme.svelte";
   import { langPref, setLangPref, t, type LangPref } from "$lib/i18n";
   import { ASKS, noAsk, setNoAsk, type AskKey } from "$lib/ask.svelte";
   import { gitCmds, setGitCmds } from "$lib/gitcmds.svelte";
@@ -16,7 +15,9 @@
   import BotIcon from "@lucide/svelte/icons/bot";
   import InfoIcon from "@lucide/svelte/icons/info";
   import PuzzleIcon from "@lucide/svelte/icons/puzzle";
+  import PaletteIcon from "@lucide/svelte/icons/palette";
   import ExtensionsTab from "./ExtensionsTab.svelte";
+  import ThemeTab from "./theme/ThemeTab.svelte";
 
   // App settings; state and side effects stay in +page.svelte. Sub-dialogs replace this one (openSub there),
   // questions show as a bar inside it.
@@ -73,6 +74,7 @@
 
   const TABS = [
     [t("Allgemein"), "general", SettingsIcon],
+    ["Themes", "themes", PaletteIcon],
     ["Terminal", "terminal", TerminalIcon],
     ["Git", "git", GitBranchIcon],
     ["Claude", "claude", BotIcon],
@@ -191,9 +193,6 @@
                 >
               </div>
             </SettingRow>
-            <SettingRow label={t("Design")} description={t("Hell, dunkel oder wie das System.")}>
-              <Segmented value={theme.mode} options={[["System", "system"], [t("Hell"), "light"], [t("Dunkel"), "dark"]] as const} onchange={setMode} />
-            </SettingRow>
             <!-- Fixed per run (i18n.ts): a change shows a note until the next start. -->
             <SettingRow label="Sprache / Language" description={t("System folgt der Sprache des Betriebssystems.")}>
               <Segmented value={lang} options={[["System", "system"], ["Deutsch", "de"], ["English", "en"]] as const} onchange={(v: LangPref) => (setLangPref(v), (lang = v))} />
@@ -204,6 +203,8 @@
               </p>
             {/if}
           </SettingsSection>
+        {:else if tab === "themes"}
+          <ThemeTab />
         {:else if tab === "terminal"}
           {#if claudeCfg}
             <SettingsSection title={t("Claude (neue Sitzungen)")}>
