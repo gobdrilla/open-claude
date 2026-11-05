@@ -2,5 +2,6 @@
 # dotnet build of the WPF preview (Tests panel, XAML preview)
 xaml-preview/bin/
 xaml-preview/obj/
-# claude writes type stubs into every mod folder it loads; in debug the built-in mod is the source folder
-**/.claude-plugin/types/
+# claude writes type stubs into every mod folder it loads; in debug the built-in mod is the source folder.
+# The whole folder: creating types/ reports a change of .claude-plugin itself (seen on Windows).
+**/.claude-plugin
