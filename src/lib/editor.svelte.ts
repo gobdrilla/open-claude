@@ -28,6 +28,7 @@ import {
   type Layout,
   type PanelId,
 } from "./dock.ts";
+import { record } from "./history.ts";
 import { KONFLIKT, fs, isBinaryImage, previewAllow } from "./files.ts";
 import { moved, pushNav, under, verdict, type Spot } from "./editor.logic.ts";
 import { follow, touch } from "./mru.logic.ts";
@@ -383,8 +384,11 @@ export async function save(repo: string, path?: string, force = false): Promise<
     if (prefs.format) await formatFile(repo, p);
     flush(repo, p);
     const text = f.text;
+    const before = f.saved;
     f.mtime = await fs.write(repo, p, text, f.crlf, f.bom, f.mtime, force);
     f.saved = text;
+    // Local history: the version on disk until now (first save of a session) and the new one.
+    void record(repo, p, before, "Vor dem Speichern").then(() => record(repo, p, text, "Gespeichert"));
     // Waehrend des Schreibens kann weitergetippt worden sein.
     f.dirty = f.text !== text;
     f.conflict = null;
@@ -712,7 +716,14 @@ export async function poll(repo: string): Promise<void> {
     // Inzwischen gespeichert, neu geladen oder geschlossen: der Vergleich waere veraltet.
     if (!f || f.mtime !== was || saving.has(snapKey(repo, path))) return;
     const v = verdict(f.dirty, was, now[i]);
-    if (v === "reload") load(s, path).catch((e) => (s.error = String(e)));
+    if (v === "reload") {
+      // Changed outside (Claude, git): keep both versions in the local history.
+      const before = f.saved;
+      load(s, path)
+        .then(() => record(repo, path, before, "Vor externer Änderung"))
+        .then(() => s.files[path] && record(repo, path, s.files[path].saved, "Extern geändert"))
+        .catch((e) => (s.error = String(e)));
+    }
     else if (v === "close") {
       forget(s, path);
       persist(s);

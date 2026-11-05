@@ -483,6 +483,12 @@ pub async fn fs_diff(repo: String, path: String, content: String) -> Result<Stri
     blocking(move || diff(&repo, &path, &content)).await
 }
 
+/// Unified diff between two texts the frontend holds (local history: a snapshot against the editor buffer).
+#[tauri::command]
+pub async fn fs_diff_texts(repo: String, path: String, old: String, new: String) -> Result<String, String> {
+    blocking(move || diff_texts(&repo, &path, &old, &new, false)).await
+}
+
 #[tauri::command]
 pub async fn fs_gutter(repo: String, path: String, content: String, context: Option<bool>) -> Result<String, String> {
     blocking(move || gutter(&repo, &path, &content, context.unwrap_or(false))).await

@@ -868,6 +868,7 @@ pub fn run() {
             files::fs_delete,
             files::fs_files,
             files::fs_diff,
+            files::fs_diff_texts,
             files::fs_gutter,
             files::git_blame,
             files::fs_search,

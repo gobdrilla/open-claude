@@ -22,6 +22,7 @@
   import { tick } from "svelte";
   import BuildProfilesDialog from "./BuildProfilesDialog.svelte";
   import RunConfigsDialog from "./RunConfigsDialog.svelte";
+  import HistoryDialog from "./HistoryDialog.svelte";
   import ListPlusIcon from "@lucide/svelte/icons/list-plus";
   import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, mainGroup, panelPath, splitAt, type PanelId } from "$lib/dock";
   import { closeTab, editor, focus, permanent, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
@@ -315,3 +316,4 @@
 
 <BuildProfilesDialog bind:open={profilesOpen} {repo} />
 <RunConfigsDialog bind:open={customOpen} {repo} />
+<HistoryDialog {repo} />

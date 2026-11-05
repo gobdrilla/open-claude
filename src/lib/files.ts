@@ -51,6 +51,8 @@ export const fs = {
   files: (repo: string) => call<string[]>("fs_files", { repo }),
   /** Unified Diff Platte -> content (LF) fuer DiffView; "" wenn gleich. Kopf: "diff --git a/<path> b/<path>". */
   diff: (repo: string, path: string, content: string) => call<string>("fs_diff", { repo, path, content }),
+  /** Unified diff old -> new (both LF) with the header of path; "" when equal. */
+  diffTexts: (repo: string, path: string, old: string, next: string) => call<string>("fs_diff_texts", { repo, path, old, new: next }),
   /** Diff HEAD -> content ohne Kontext (-U0) fuer den Git-Gutter, Kopf wie diff(); "" wenn gleich oder untracked. */
   gutter: (repo: string, path: string, content: string, context = false) => call<string>("fs_gutter", { repo, path, content, context }),
   /** git blame of the unsaved buffer (line numbers as in the editor); empty when untracked or without git. */

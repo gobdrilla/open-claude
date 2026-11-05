@@ -14,6 +14,7 @@
   import { rows, join, dirname, treeKey, type Row } from "$lib/tree";
   import { FILES_APP, atRef, under } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
+  import { showHistory } from "$lib/history.svelte";
 
   let { repo }: { repo: string } = $props();
 
@@ -192,6 +193,7 @@
             <ContextItem label="Neue Datei" onSelect={() => create(dir, false)} />
             <ContextItem label="Neuer Ordner" onSelect={() => create(dir, true)} />
             <ContextItem label="Umbenennen" onSelect={() => rename(r)} />
+            {#if !r.dir}<ContextItem label="Lokale Historie" onSelect={() => showHistory(repo, r.path)} />{/if}
             <ContextItem label="Im {FILES_APP} zeigen" onSelect={() => reveal(dir)} />
             <ContextItem label="Löschen" onSelect={() => remove(r)} destructive />
           </ContextMenu.Content>
