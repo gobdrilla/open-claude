@@ -29,15 +29,15 @@ fn scan(dir: &Path) -> Vec<ExtFile> {
         .map(|d| {
             let read = || -> Result<String, String> {
                 let f = d.join("manifest.json");
-                let len = std::fs::metadata(&f).map_err(|e| format!("Manifest nicht lesbar: {e}"))?.len();
+                let len = std::fs::metadata(&f).map_err(|e| tr!("Manifest nicht lesbar: {e}", "Manifest not readable: {e}"))?.len();
                 if len > MAX_MANIFEST {
-                    return Err("Manifest ist größer als 256 KiB".into());
+                    return Err(tr!("Manifest ist größer als 256 KiB", "Manifest is larger than 256 KiB"));
                 }
-                let bytes = std::fs::read(&f).map_err(|e| format!("Manifest nicht lesbar: {e}"))?;
-                let text = String::from_utf8(bytes).map_err(|_| "Manifest ist kein UTF-8".to_string())?;
+                let bytes = std::fs::read(&f).map_err(|e| tr!("Manifest nicht lesbar: {e}", "Manifest not readable: {e}"))?;
+                let text = String::from_utf8(bytes).map_err(|_| tr!("Manifest ist kein UTF-8", "Manifest is not UTF-8"))?;
                 // Checked here because serde_json knows the position; the webview's JSON.parse message is English and has none (WebKit).
                 serde_json::from_str::<serde_json::Value>(&text)
-                    .map_err(|e| format!("Manifest ist kein gültiges JSON (Zeile {}, Spalte {})", e.line(), e.column()))?;
+                    .map_err(|e| tr!("Manifest ist kein gültiges JSON (Zeile {}, Spalte {})", "Manifest is not valid JSON (line {}, column {})", e.line(), e.column()))?;
                 Ok(text)
             };
             let (text, error) = match read() {
@@ -54,7 +54,7 @@ fn scan(dir: &Path) -> Vec<ExtFile> {
 pub async fn ext_dir(app: AppHandle) -> Result<String, String> {
     let d = root(&app)?;
     crate::git::blocking(move || {
-        std::fs::create_dir_all(&d).map_err(|e| format!("Ordner nicht anlegbar: {e}"))?;
+        std::fs::create_dir_all(&d).map_err(|e| tr!("Ordner nicht anlegbar: {e}", "Cannot create folder: {e}"))?;
         Ok(d.to_string_lossy().into_owned())
     })
     .await

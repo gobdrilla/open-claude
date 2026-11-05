@@ -2,9 +2,10 @@ import { EditorState, Prec } from "@codemirror/state";
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
 import { countLabel, countMatches } from "$lib/findcount.logic";
+import { LANG, t } from "$lib/i18n";
 
-// German texts for the Strg+F panel and CodeMirror's own go-to-line dialog (Mod-Alt-g).
-const phrases = EditorState.phrases.of({
+// German texts for the Strg+F panel and CodeMirror's own go-to-line dialog (Mod-Alt-g); English keeps CodeMirror's own.
+const phrases = LANG !== "de" ? [] : EditorState.phrases.of({
   Find: "Suchen",
   Replace: "Ersetzen",
   next: "Nächster",
@@ -45,7 +46,7 @@ const count = ViewPlugin.fromClass(
         const q = getSearchQuery(view.state);
         const sel = view.state.selection.main;
         let label = "";
-        if (q.search && !q.valid) label = "Ungültiger Ausdruck";
+        if (q.search && !q.valid) label = t("Ungültiger Ausdruck");
         else if (q.search) {
           const c = countMatches(q.getCursor(view.state), sel);
           // Selected match past the cap: its number is unknown, but it is one ("? von 1000+").

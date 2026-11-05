@@ -1,6 +1,7 @@
 // Rueckfragen als Promise, ein Dialog (in +page.svelte) fuer alle Aufrufer.
 // window.confirm taugt in der Tauri-Webview nicht: es wird asynchron umgeleitet, ohne Dialog-Recht abgelehnt
 // und liefert ein Promise, das als "ja" zaehlt.
+import { t } from "./i18n.ts";
 
 /** Eintrag einer Liste im Dialog: Name fett, Detail klein darunter. */
 export type Item = { name: string; detail: string };
@@ -10,7 +11,7 @@ type Question = { title: string; message: string; action: string; resolve: (ok: 
 export const confirming = $state<{ q: Question | null }>({ q: null });
 
 /** true = bestaetigt. Eine neue Frage beantwortet eine noch offene mit nein. */
-export function confirm(message: string, action = "Fortfahren", title = "Sicher?", opts: Opts = {}): Promise<boolean> {
+export function confirm(message: string, action = t("Fortfahren"), title = t("Sicher?"), opts: Opts = {}): Promise<boolean> {
   confirming.q?.resolve(false);
   return new Promise((resolve) => (confirming.q = { title, message, action, resolve, ...opts }));
 }
@@ -26,7 +27,7 @@ export class Asker {
   q = $state.raw<({ title: string; message: string; action: string; done: (ok: boolean) => void } & Opts) | null>(null);
 
   /** Gleiche Form wie confirm(). */
-  ask = (message: string, action = "Fortfahren", title = "", opts: Opts = {}): Promise<boolean> => {
+  ask = (message: string, action = t("Fortfahren"), title = "", opts: Opts = {}): Promise<boolean> => {
     this.q?.done(false);
     return new Promise((resolve) => {
       const q = {

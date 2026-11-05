@@ -21,6 +21,7 @@
   import { fs, type Hit } from "$lib/files";
   import { open } from "$lib/editor.svelte";
   import { MOD, SHIFT, atRef } from "$lib/editor.logic";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -88,23 +89,23 @@
     <TextInput
       density="xs"
       class="min-w-0 flex-1"
-      placeholder="In Dateien suchen …"
-      aria-label="In Dateien suchen"
+      placeholder={t("In Dateien suchen …")}
+      aria-label={t("In Dateien suchen")}
       data-search
       spellcheck={false}
       bind:value={s.q}
     />
-    {@render flag("Aa", "Groß-/Kleinschreibung beachten", s.caseSensitive, (v) => (s.caseSensitive = v))}
-    {@render flag(".*", "Regulärer Ausdruck", s.regex, (v) => (s.regex = v))}
+    {@render flag("Aa", t("Groß-/Kleinschreibung beachten"), s.caseSensitive, (v) => (s.caseSensitive = v))}
+    {@render flag(".*", t("Regulärer Ausdruck"), s.regex, (v) => (s.regex = v))}
   </div>
   <Notice bind:text={error} timeout={0} />
   {#if !s.q || !hits.length}
-    <Empty icon={SearchIcon} hint={s.q ? undefined : `${MOD}+{SHIFT}+F`}>{busy ? "Suche …" : s.q ? "Keine Treffer." : "Suchbegriff eingeben."}</Empty>
+    <Empty icon={SearchIcon} hint={s.q ? undefined : `${MOD}+${SHIFT}+F`}>{busy ? t("Suche …") : s.q ? t("Keine Treffer.") : t("Suchbegriff eingeben.")}</Empty>
   {:else}
     <div class="text-muted-foreground px-2 py-0.5 text-meta" role="status">
-      {hits.length >= 2000 ? "Über 2000" : hits.length} Treffer in {groups.length} Dateien
+      {t("{n} Treffer in {files} Dateien", { n: hits.length >= 2000 ? t("Über 2000") : hits.length, files: groups.length })}
     </div>
-    <ul class="min-h-0 flex-1 overflow-y-auto pb-1" aria-label="Suchergebnisse">
+    <ul class="min-h-0 flex-1 overflow-y-auto pb-1" aria-label={t("Suchergebnisse")}>
       {#each groups as [path, list] (path)}
         {@const ic = fileIcon(path)}
         <li>
@@ -124,7 +125,7 @@
               </ContextMenu.Trigger>
               <ContextMenu.Portal>
                 <ContextMenu.Content class={menuContent}>
-                  <ContextItem label="An Claude" onSelect={() => sendToClaude(repo, atRef(path, `#L${h.line}`))} />
+                  <ContextItem label={t("An Claude")} onSelect={() => sendToClaude(repo, atRef(path, `#L${h.line}`))} />
                 </ContextMenu.Content>
               </ContextMenu.Portal>
             </ContextMenu.Root>

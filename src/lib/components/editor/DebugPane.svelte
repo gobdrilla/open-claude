@@ -13,13 +13,14 @@
   import SquareIcon from "@lucide/svelte/icons/square";
   import { debug, debugStep, debugStop, expand, selectFrame, type Var } from "$lib/debug.svelte";
   import { tick } from "svelte";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
   const d = $derived(debug(repo));
   const s = $derived(d.session);
   const paused = $derived(s?.phase === "pause");
-  const REASON: Record<string, string> = { breakpoint: "Haltepunkt", step: "Schritt", exception: "Ausnahme", pause: "Pausiert", entry: "Start" };
+  const REASON: Record<string, string> = { breakpoint: t("Haltepunkt"), step: t("Schritt"), exception: t("Ausnahme"), pause: t("Pausiert"), entry: t("Start") };
   let con = $state<HTMLPreElement>();
 
   // Console follows new output while scrolled to the end.
@@ -55,41 +56,41 @@
     {#if s}
       <span class="truncate font-mono text-meta" title={s.label}>{s.label}</span>
       <span class="text-muted-foreground flex shrink-0 items-center gap-1 text-meta" role="status">
-        {#if s.phase === "build"}<LoaderIcon class="size-3 animate-spin" /> baut …
-        {:else if s.phase === "start"}<LoaderIcon class="size-3 animate-spin" /> startet …
-        {:else if s.phase === "run"}<span class="bg-success size-1.5 animate-pulse rounded-full"></span> läuft
-        {:else if s.phase === "pause"}<span class="text-warning">angehalten{s.reason ? `: ${REASON[s.reason] ?? s.reason}` : ""}</span>
-        {:else}beendet{/if}
+        {#if s.phase === "build"}<LoaderIcon class="size-3 animate-spin" /> {t("baut …")}
+        {:else if s.phase === "start"}<LoaderIcon class="size-3 animate-spin" /> {t("startet …")}
+        {:else if s.phase === "run"}<span class="bg-success size-1.5 animate-pulse rounded-full"></span> {t("läuft")}
+        {:else if s.phase === "pause"}<span class="text-warning">{t("angehalten")}{s.reason ? `: ${REASON[s.reason] ?? s.reason}` : ""}</span>
+        {:else}{t("beendet")}{/if}
       </span>
       <span class="flex-1"></span>
-      <Button variant="ghost" size="icon-xs" title="Weiter (F5)" disabled={!paused} onclick={() => debugStep(repo, "continue")}><PlayIcon /></Button>
-      <Button variant="ghost" size="icon-xs" title="Anhalten" disabled={s.phase !== "run"} onclick={() => debugStep(repo, "pause")}><PauseIcon /></Button>
-      <Button variant="ghost" size="icon-xs" title="Überspringen (F10)" disabled={!paused} onclick={() => debugStep(repo, "next")}><RedoDotIcon /></Button>
-      <Button variant="ghost" size="icon-xs" title="Hineinspringen (F11)" disabled={!paused} onclick={() => debugStep(repo, "stepIn")}><ArrowDownToDotIcon /></Button>
-      <Button variant="ghost" size="icon-xs" title="Herausspringen (Umschalt+F11)" disabled={!paused} onclick={() => debugStep(repo, "stepOut")}
+      <Button variant="ghost" size="icon-xs" title={t("Weiter (F5)")} disabled={!paused} onclick={() => debugStep(repo, "continue")}><PlayIcon /></Button>
+      <Button variant="ghost" size="icon-xs" title={t("Anhalten")} disabled={s.phase !== "run"} onclick={() => debugStep(repo, "pause")}><PauseIcon /></Button>
+      <Button variant="ghost" size="icon-xs" title={t("Überspringen (F10)")} disabled={!paused} onclick={() => debugStep(repo, "next")}><RedoDotIcon /></Button>
+      <Button variant="ghost" size="icon-xs" title={t("Hineinspringen (F11)")} disabled={!paused} onclick={() => debugStep(repo, "stepIn")}><ArrowDownToDotIcon /></Button>
+      <Button variant="ghost" size="icon-xs" title={t("Herausspringen (Umschalt+F11)")} disabled={!paused} onclick={() => debugStep(repo, "stepOut")}
         ><ArrowUpFromDotIcon /></Button
       >
-      <Button variant="ghost" size="icon-xs" title="Debuggen beenden (Umschalt+F5)" disabled={s.phase === "end"} onclick={() => debugStop(repo)}
+      <Button variant="ghost" size="icon-xs" title={t("Debuggen beenden (Umschalt+F5)")} disabled={s.phase === "end"} onclick={() => debugStop(repo)}
         ><SquareIcon class="{s.phase === 'end' ? '' : 'text-destructive'} fill-current" /></Button
       >
     {:else}
-      <span class="text-muted-foreground">Noch nichts debuggt.</span>
+      <span class="text-muted-foreground">{t("Noch nichts debuggt.")}</span>
     {/if}
   </div>
   {#if !s}
-    <Empty icon={BugIcon}>.NET-Startziel wählen und „Debuggen“ drücken. Haltepunkte: Klick links neben die Zeilennummer oder F9.</Empty>
+    <Empty icon={BugIcon}>{t(".NET-Startziel wählen und „Debuggen“ drücken. Haltepunkte: Klick links neben die Zeilennummer oder F9.")}</Empty>
   {:else}
     <div class="@container min-h-0 flex-1">
       <div class="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.6fr)] @max-[48rem]:grid-cols-1 @max-[48rem]:grid-rows-3">
-        <section class="border-border/60 flex min-h-0 flex-col border-r" aria-label="Aufrufliste">
-          <h3 class="text-muted-foreground px-2 pt-1 text-meta">Aufrufliste</h3>
+        <section class="border-border/60 flex min-h-0 flex-col border-r" aria-label={t("Aufrufliste")}>
+          <h3 class="text-muted-foreground px-2 pt-1 text-meta">{t("Aufrufliste")}</h3>
           <ul class="min-h-0 flex-1 overflow-y-auto py-0.5">
             {#each s.frames as f (f.id)}
               <li>
                 <TextButton
                   tone="plain"
                   class="w-full items-baseline gap-2 px-2 py-px {f.id === s.frame ? 'bg-accent' : ''} {f.path ? '' : 'text-muted-foreground'}"
-                  title={f.path ? `${f.path}:${f.line}` : "ohne Quelltext"}
+                  title={f.path ? `${f.path}:${f.line}` : t("ohne Quelltext")}
                   onclick={() => selectFrame(repo, f)}
                 >
                   <span class="min-w-0 truncate font-mono text-meta">{f.name}</span>
@@ -97,16 +98,16 @@
                 </TextButton>
               </li>
             {:else}
-              <li class="text-muted-foreground px-2 text-meta">{s.phase === "run" ? "Läuft – hält am nächsten Haltepunkt." : "–"}</li>
+              <li class="text-muted-foreground px-2 text-meta">{s.phase === "run" ? t("Läuft – hält am nächsten Haltepunkt.") : "–"}</li>
             {/each}
           </ul>
         </section>
-        <section class="border-border/60 flex min-h-0 flex-col border-r" aria-label="Variablen">
-          <h3 class="text-muted-foreground px-2 pt-1 text-meta">Variablen</h3>
+        <section class="border-border/60 flex min-h-0 flex-col border-r" aria-label={t("Variablen")}>
+          <h3 class="text-muted-foreground px-2 pt-1 text-meta">{t("Variablen")}</h3>
           <ul class="min-h-0 flex-1 overflow-y-auto py-0.5">{@render vars(s.vars, 0)}</ul>
         </section>
-        <section class="flex min-h-0 flex-col" aria-label="Konsole">
-          <h3 class="text-muted-foreground px-2 pt-1 text-meta">Konsole</h3>
+        <section class="flex min-h-0 flex-col" aria-label={t("Konsole")}>
+          <h3 class="text-muted-foreground px-2 pt-1 text-meta">{t("Konsole")}</h3>
           <pre bind:this={con} class="min-h-0 flex-1 overflow-auto px-2 py-0.5 font-mono text-meta whitespace-pre-wrap">{s.out}</pre>
         </section>
       </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import type { Store } from "@tauri-apps/plugin-store";
   import { forge, type Account, type ForgeKind } from "$lib/git";
   import { Badge, Button, Dialog, IconButton, Input, Segmented, TextButton } from "$lib/atelier-ui";
@@ -92,8 +93,8 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>Konten</Dialog.Title>
-      <Dialog.Description>GitHub- und GitLab-Zugänge für Klonen, Push/Pull und Pull Requests. Mehrere Konten pro Host möglich, pro Repo wählbar.</Dialog.Description>
+      <Dialog.Title>{t("Konten")}</Dialog.Title>
+      <Dialog.Description>{t("GitHub- und GitLab-Zugänge für Klonen, Push/Pull und Pull Requests. Mehrere Konten pro Host möglich, pro Repo wählbar.")}</Dialog.Description>
     </Dialog.Header>
 
     {#if accounts.length}
@@ -101,11 +102,12 @@
         {#each accounts as a (a.kind + a.host + a.user)}
           <li class="flex min-h-10 items-center gap-2 px-2.5 py-1.5">
             {#if asking === keyOf(a)}
+{@const parts = t("{account} entfernen? Der Token wird gelöscht.").split("{account}")}
               <span class="min-w-0 flex-1 text-ui">
-                <span class="font-medium">{a.user}@{a.host}</span> entfernen? Der Token wird gelöscht.
+                {parts[0]}<span class="font-medium">{a.user}@{a.host}</span>{parts[1]}
               </span>
-              <Button variant="ghost" size="sm" onclick={() => (asking = "")}>Abbrechen</Button>
-              <Button variant="destructive" size="sm" disabled={busy} onclick={() => logout(a)}>Entfernen</Button>
+              <Button variant="ghost" size="sm" onclick={() => (asking = "")}>{t("Abbrechen")}</Button>
+              <Button variant="destructive" size="sm" disabled={busy} onclick={() => logout(a)}>{t("Entfernen")}</Button>
             {:else}
               <GlobeIcon class="size-3.5 shrink-0" />
               <span class="min-w-0 flex-1 truncate" title="{a.user}@{a.host}">
@@ -115,7 +117,7 @@
               <Badge variant="outline" class="text-muted-foreground shrink-0 text-meta"
                 >{a.kind === "github" ? "GitHub" : "GitLab"}</Badge
               >
-              <IconButton size="md" tone="danger" disabled={busy} onclick={() => (asking = keyOf(a))} label="Konto entfernen">
+              <IconButton size="md" tone="danger" disabled={busy} onclick={() => (asking = keyOf(a))} label={t("Konto entfernen")}>
                 <TrashIcon class="size-3.5" />
               </IconButton>
             {/if}
@@ -126,12 +128,12 @@
 
     <div class="flex flex-col gap-2">
       <Segmented
-        label="Anbieter"
+        label={t("Anbieter")}
         value={kind}
         options={[["GitHub", "github"], ["GitLab", "gitlab"]] as const}
         onchange={(v) => (kind = v)}
       />
-      <Input bind:value={host} placeholder="Host, z. B. github.com" density="sm" class="font-mono" />
+      <Input bind:value={host} placeholder={t("Host, z. B. github.com")} density="sm" class="font-mono" />
       <Input bind:value={token} type="password" placeholder="Access Token" density="sm" class="font-mono" />
       <!-- Die Webview oeffnet target=_blank nicht, daher ueber den Standardbrowser. -->
       <TextButton
@@ -139,19 +141,20 @@
         onclick={() => forge.openUrl(tokenUrl).catch((e) => (error = String(e)))}
         class="hover:text-primary self-start"
       >
-        <ExternalLinkIcon class="size-3" /> Token mit den nötigen Rechten erstellen ({kind === "github"
-          ? "repo, read:org"
-          : "api, read_repository, write_repository"})
+        <ExternalLinkIcon class="size-3" />
+        {t("Token mit den nötigen Rechten erstellen ({scopes})", {
+          scopes: kind === "github" ? "repo, read:org" : "api, read_repository, write_repository",
+        })}
       </TextButton>
       {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
     </div>
 
     <div class="flex justify-end gap-1.5">
       <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={importCli}
-        >Von {kind === "github" ? "gh" : "glab"} übernehmen</Button
+        >{t("Von {cli} übernehmen", { cli: kind === "github" ? "gh" : "glab" })}</Button
       >
-      <Button variant="ghost" size="sm" onclick={() => (open = false)}>Schließen</Button>
-      <Button size="sm" disabled={busy || !host.trim() || !token.trim()} onclick={login}>Anmelden</Button>
+      <Button variant="ghost" size="sm" onclick={() => (open = false)}>{t("Schließen")}</Button>
+      <Button size="sm" disabled={busy || !host.trim() || !token.trim()} onclick={login}>{t("Anmelden")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

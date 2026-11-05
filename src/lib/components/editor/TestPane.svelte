@@ -23,6 +23,8 @@
   import { failedItems, failure, rescan, setExpanded, testCancel, testRun, tests, title, where } from "$lib/testing.svelte";
   import { failureReport, failuresReport, rows, stackLinks, type Row, type St } from "$lib/testing.logic";
   import { sendToClaude } from "$lib/ide.svelte";
+  // tr: t is the test state here.
+  import { t as tr } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -109,7 +111,7 @@
 {/snippet}
 
 {#snippet rescanAction()}
-  <Button size="xs" variant="outline" disabled={!!t.run} onclick={() => rescan(repo)}>Neu suchen</Button>
+  <Button size="xs" variant="outline" disabled={!!t.run} onclick={() => rescan(repo)}>{tr("Neu suchen")}</Button>
 {/snippet}
 
 {#snippet pre(label: string, text: string)}
@@ -121,28 +123,31 @@
 
 <div class="flex h-full min-h-0 flex-col text-ui">
   <div class="{paneBar} flex-wrap py-0.5">
-    <Button variant="ghost" size="xs" disabled={!!t.run || t.scanning} title="Alle Tests ausführen" onclick={() => run("all")}
-      ><PlayIcon /> Alle</Button
+    <Button variant="ghost" size="xs" disabled={!!t.run || t.scanning} title={tr("Alle Tests ausführen")} onclick={() => run("all")}
+      ><PlayIcon /> {tr("Alle")}</Button
     >
     <Button
       variant="ghost"
       size="xs"
       disabled={!!t.run || !counts.failed}
-      title="Fehlgeschlagene erneut ausführen"
-      onclick={() => run("failed")}><CircleXIcon /> Fehlgeschlagene</Button
+      title={tr("Fehlgeschlagene erneut ausführen")}
+      onclick={() => run("failed")}><CircleXIcon /> {tr("Fehlgeschlagene")}</Button
     >
-    <Button variant="ghost" size="xs" disabled={!t.run} title="Lauf abbrechen" onclick={() => testCancel(repo)}
-      ><SquareIcon class="fill-current" /> Abbrechen</Button
+    <Button variant="ghost" size="xs" disabled={!t.run} title={tr("Lauf abbrechen")} onclick={() => testCancel(repo)}
+      ><SquareIcon class="fill-current" /> {tr("Abbrechen")}</Button
     >
-    <IconButton size="md" label="Tests neu suchen" disabled={!!t.run || t.scanning} onclick={() => rescan(repo)}
+    <IconButton size="md" label={tr("Tests neu suchen")} disabled={!!t.run || t.scanning} onclick={() => rescan(repo)}
       ><RefreshCwIcon class="size-3 {t.scanning ? 'animate-spin' : ''}" /></IconButton
     >
     {#if counts.failed}
       <Button
         variant="ghost"
         size="xs"
-        title="Fehlgeschlagene Tests mit Meldung und Stack in den Prompt von Claude"
-        onclick={sendFailures}>Alle Fehler an Claude ({counts.failed > MAX_SEND ? `${MAX_SEND} von ${counts.failed}` : counts.failed})</Button
+        title={tr("Fehlgeschlagene Tests mit Meldung und Stack in den Prompt von Claude")}
+        onclick={sendFailures}
+        >{counts.failed > MAX_SEND
+          ? tr("Alle Fehler an Claude ({n} von {total})", { n: MAX_SEND, total: counts.failed })
+          : tr("Alle Fehler an Claude ({n})", { n: counts.failed })}</Button
       >
     {/if}
     <span class="flex-1"></span>
@@ -154,8 +159,8 @@
     </span>
   </div>
   <div class="border-border flex items-center gap-2 border-b px-2 py-1">
-    <Input density="xs" class="min-w-0 flex-1" placeholder="Filter …" aria-label="Tests filtern" bind:value={t.filter} />
-    <Checkbox size="sm" muted class="shrink-0" bind:checked={t.failedOnly}>nur Fehler</Checkbox>
+    <Input density="xs" class="min-w-0 flex-1" placeholder="Filter …" aria-label={tr("Tests filtern")} bind:value={t.filter} />
+    <Checkbox size="sm" muted class="shrink-0" bind:checked={t.failedOnly}>{tr("nur Fehler")}</Checkbox>
   </div>
   <Notice bind:text={() => t.error, (v) => (t.error = v)} timeout={0} />
   <Notice bind:text={() => t.note, (v) => (t.note = v)} kind="note" timeout={0} />
@@ -170,7 +175,7 @@
     {#if !visible.length}
       <div class="absolute inset-0">
         <Empty icon={FlaskConicalIcon} action={t.scanning || t.filter || t.failedOnly ? undefined : rescanAction}>
-          {t.scanning ? "Suche Tests …" : t.filter || t.failedOnly ? "Keine Treffer." : "Keine Tests gefunden."}
+          {t.scanning ? tr("Suche Tests …") : t.filter || t.failedOnly ? tr("Keine Treffer.") : tr("Keine Tests gefunden.")}
         </Empty>
       </div>
     {/if}
@@ -202,7 +207,7 @@
               <IconButton
                 tabindex={-1}
                 size="xs"
-                label={r.open ? "Zuklappen" : "Aufklappen"}
+                label={r.open ? tr("Zuklappen") : tr("Aufklappen")}
                 class={r.kids ? "" : "invisible"}
                 onclick={(e) => {
                   e.stopPropagation();
@@ -222,7 +227,7 @@
               {#if n.kind === "file"}
                 <span
                   class="bg-muted text-muted-foreground shrink-0 rounded px-1 text-[10px]"
-                  title={n.fw === "jest" || n.fw === "pytest" ? "Experimentell: nicht gegen ein echtes Projekt geprüft" : undefined}
+                  title={n.fw === "jest" || n.fw === "pytest" ? tr("Experimentell: nicht gegen ein echtes Projekt geprüft") : undefined}
                   >{n.fw}{n.fw === "jest" || n.fw === "pytest" ? "*" : ""}</span
                 >
               {/if}
@@ -232,7 +237,7 @@
                 size="xs"
                 reveal
                 class="disabled:hidden"
-                label="Ausführen"
+                label={tr("Ausführen")}
                 disabled={!!t.run}
                 onclick={(e) => {
                   e.stopPropagation();
@@ -243,10 +248,10 @@
           </ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Content class={cn(menuContent, "min-w-40")}>
-              <ContextItem label="Ausführen" onSelect={() => run(r.id)} />
-              <ContextItem label="Zur Definition" onSelect={() => definition(r.id)} />
+              <ContextItem label={tr("Ausführen")} onSelect={() => run(r.id)} />
+              <ContextItem label={tr("Zur Definition")} onSelect={() => definition(r.id)} />
               {#if t.results[r.id]?.state === "failed"}
-                <ContextItem label="An Claude" onSelect={() => sendFailure(r.id)} />
+                <ContextItem label={tr("An Claude")} onSelect={() => sendFailure(r.id)} />
               {/if}
             </ContextMenu.Content>
           </ContextMenu.Portal>
@@ -261,14 +266,14 @@
       dense
       tabs={[
         { id: "details", label: "Details" },
-        { id: "output", label: "Ausgabe" },
+        { id: "output", label: tr("Ausgabe") },
       ]}
       bind:value={() => t.tab, (v) => (t.tab = v)}
     />
     {#if t.tab === "output"}
       <pre bind:this={out} class="min-h-0 flex-1 overflow-auto p-2 font-mono text-meta whitespace-pre-wrap">{tail.join("\n")}</pre>
     {:else if !sel}
-      <div class="min-h-0 flex-1"><Empty>Test in der Liste wählen.</Empty></div>
+      <div class="min-h-0 flex-1"><Empty>{tr("Test in der Liste wählen.")}</Empty></div>
     {:else}
       <div class="min-h-0 flex-1 space-y-2 overflow-auto p-2">
         <div class="flex items-center gap-1.5">
@@ -279,20 +284,20 @@
             <TextButton
               size="sm"
               class="shrink-0 gap-0.5 font-mono"
-              title="Im Editor öffnen"
+              title={tr("Im Editor öffnen")}
               onclick={() => void open(repo, at.file, at.line)}
               >{at.file.slice(at.file.lastIndexOf("/") + 1)}:{at.line}<ExternalLinkIcon class="size-3" /></TextButton
             >
           {/if}
         </div>
         {#if !res}
-          <p class="text-muted-foreground text-meta">Noch nicht gelaufen.</p>
+          <p class="text-muted-foreground text-meta">{tr("Noch nicht gelaufen.")}</p>
         {:else}
           {#if res.msg}<pre class="font-mono text-meta whitespace-pre-wrap">{res.msg}</pre>{/if}
           {#if res.exp !== undefined || res.act !== undefined}
             <div class="flex gap-2">
-              {@render pre(res.labels?.[0] ?? "Erwartet", res.exp ?? "")}
-              {@render pre(res.labels?.[1] ?? "Tatsächlich", res.act ?? "")}
+              {@render pre(res.labels?.[0] ?? tr("Erwartet"), res.exp ?? "")}
+              {@render pre(res.labels?.[1] ?? tr("Tatsächlich"), res.act ?? "")}
             </div>
           {/if}
           {#if res.diff}{@render pre("Diff", res.diff)}{/if}

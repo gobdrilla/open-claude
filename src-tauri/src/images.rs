@@ -149,7 +149,7 @@ pub(crate) fn parse(args: &str) -> Result<(Option<u64>, bool), String> {
         match w {
             "alle" | "all" => days = None,
             "hier" | "here" => here = true,
-            _ => days = Some(w.strip_suffix('d').and_then(|d| d.parse().ok()).ok_or(format!("Unbekannt: {w} (alle, 1d, 7d, hier)"))?),
+            _ => days = Some(w.strip_suffix('d').and_then(|d| d.parse().ok()).ok_or(tr!("Unbekannt: {w} (alle, 1d, 7d, hier)", "Unknown: {w} (all, 1d, 7d, here)"))?),
         }
     }
     Ok((days, here))
@@ -157,8 +157,8 @@ pub(crate) fn parse(args: &str) -> Result<(Option<u64>, bool), String> {
 
 pub(crate) fn summary(r: &Cleaned) -> String {
     let mb = r.bytes as f64 / 1_048_576.0;
-    let skipped = if r.skipped > 0 { format!(", {} Datei(en) laufender Sitzungen übersprungen", r.skipped) } else { String::new() };
-    format!("{} Bild(er) aus {} Transkript(en) entfernt, {mb:.1} MB frei{skipped}.", r.images, r.files)
+    let skipped = if r.skipped > 0 { tr!(", {} Datei(en) laufender Sitzungen übersprungen", ", {} file(s) of running sessions skipped", r.skipped) } else { String::new() };
+    tr!("{} Bild(er) aus {} Transkript(en) entfernt, {mb:.1} MB frei{skipped}.", "{} image(s) removed from {} transcript(s), {mb:.1} MB freed{skipped}.", r.images, r.files)
 }
 
 #[cfg(test)]

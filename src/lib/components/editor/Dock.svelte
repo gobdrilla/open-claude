@@ -1,6 +1,8 @@
 <script lang="ts" module>
   import XIcon from "@lucide/svelte/icons/x";
   import { IconButton } from "$lib/atelier-ui";
+  // tr: the tab loop below binds t.
+  import { t as tr } from "$lib/i18n";
   // preview: title in italics (preview tab, replaced by the next file opened from the tree).
   export type TabInfo = { title: string; hint?: string; dirty?: boolean; closable?: boolean; icon?: typeof XIcon; tint?: string; preview?: boolean };
 </script>
@@ -228,7 +230,7 @@
                 <IconButton
                   tabindex={-1}
                   size="xs"
-                  label="{t.title} schließen"
+                  label={tr("{name} schließen", { name: t.title })}
                   tone="inherit"
                   class={t.dirty || n.active === id ? "" : "opacity-0 group-hover/tab:opacity-100"}
                   onclick={(e) => {

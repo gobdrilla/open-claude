@@ -1,4 +1,5 @@
 // Pure helpers for LSP navigation (components/editor/nav.ts) and Code Vision (components/editor/codeLens.svelte.ts).
+import { t } from "./i18n.ts";
 
 export type LspPos = { line: number; character: number };
 export type LspRange = { start: LspPos; end: LspPos };
@@ -37,9 +38,9 @@ export function lensOf(title: string): { kind: LensKind; count: number } | null 
 export const lensLabel = (l: { kind: LensKind; count: number }) =>
   l.kind === "refs"
     ? l.count === 0
-      ? "keine Verwendungen"
-      : `${l.count} ${l.count === 1 ? "Verwendung" : "Verwendungen"}`
-    : `${l.count} ${l.count === 1 ? "Implementierung" : "Implementierungen"}`;
+      ? t("keine Verwendungen")
+      : l.count === 1 ? t("1 Verwendung") : t("{n} Verwendungen", { n: l.count })
+    : l.count === 1 ? t("1 Implementierung") : t("{n} Implementierungen", { n: l.count });
 
 /** Lenses of one line, usages first. An implementation count of 0 says nothing (sealed class, plain method): left out. */
 export function lineLenses(all: Lens[]): Map<number, Lens[]> {

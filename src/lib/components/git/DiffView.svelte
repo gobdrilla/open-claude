@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { t } from "$lib/i18n";
   import type { DiffFile, Hunk } from "$lib/diff";
 
   /** Aktion pro Hunk; lineLabel gilt, sobald Zeilen im Hunk gewaehlt sind. */
@@ -21,7 +22,7 @@
   let {
     diff,
     actions = [],
-    empty = "Keine Änderungen.",
+    empty = t("Keine Änderungen."),
     busy = false,
     repo,
     rev,
@@ -125,8 +126,8 @@
         {#if onopen && file.status !== "deleted"}
           <IconButton
             size="md"
-            label="Im Editor öffnen"
-            title="Im Editor öffnen (Doppelklick auf eine Zeile springt dorthin)"
+            label={t("Im Editor öffnen")}
+            title={t("Im Editor öffnen (Doppelklick auf eine Zeile springt dorthin)")}
             onclick={() => onopen(file.newPath, file.hunks[0] && newLine(file.hunks[0], 0))}><FileCodeIcon class="size-3.5" /></IconButton
           >
         {/if}
@@ -136,12 +137,12 @@
         {/if}
       </div>
       {#if file.binary}
-        <p class="text-muted-foreground px-2 py-1 font-sans">Binärdatei</p>
+        <p class="text-muted-foreground px-2 py-1 font-sans">{t("Binärdatei")}</p>
       {:else if file.hunks.length === 0}
-        <p class="text-muted-foreground px-2 py-1 font-sans">Keine Inhaltsänderung.</p>
+        <p class="text-muted-foreground px-2 py-1 font-sans">{t("Keine Inhaltsänderung.")}</p>
       {:else if size(file) > BIG && !opened.has(fi)}
         <TextButton class="px-2 py-1 font-sans" onclick={() => opened.add(fi)}>
-          {size(file)} Zeilen – anzeigen
+          {t("{n} Zeilen – anzeigen", { n: size(file) })}
         </TextButton>
       {/if}
       {#each size(file) > BIG && !opened.has(fi) ? [] : file.hunks as hunk, hi (hi)}
@@ -151,7 +152,7 @@
           <span class="min-w-0 flex-1 truncate">{hunk.header}</span>
           {#if repo && sel.size}
             <Button variant="ghost" size="2xs" class="font-sans" onclick={() => comment(file, hunk, key, sel)}>
-              Kommentieren
+              {t("Kommentieren")}
             </Button>
           {/if}
           {#each actions as a (a.label)}
@@ -201,11 +202,11 @@
 
 <PromptDialog
   open={note !== null}
-  title="Kommentar für Claude"
+  title={t("Kommentar für Claude")}
   description={note?.key}
   bind:value={noteText}
-  placeholder="Was soll Claude hier ändern?"
-  action="Speichern"
+  placeholder={t("Was soll Claude hier ändern?")}
+  action={t("Speichern")}
   onsubmit={saveNote}
   oncancel={() => (note = null)}
 />

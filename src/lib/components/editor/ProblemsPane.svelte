@@ -12,6 +12,7 @@
   import LoaderIcon from "@lucide/svelte/icons/loader-circle";
   import { lsp, scanProject } from "$lib/lsp.svelte";
   import { problems, SCAN_MAX } from "$lib/lsp.logic";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -27,21 +28,21 @@
 <div class="flex h-full min-h-0 flex-col">
 {#if scan?.busy || scan?.capped}
   <p class="text-muted-foreground flex items-center gap-1.5 px-2 py-1 text-meta" role="status">
-    {#if scan.busy}<LoaderIcon class="size-3 animate-spin" /> Prüfe das ganze Projekt …
-    {:else}Nur die ersten {SCAN_MAX} Dateien geprüft, {scan.capped} weitere nicht.{/if}
+    {#if scan.busy}<LoaderIcon class="size-3 animate-spin" /> {t("Prüfe das ganze Projekt …")}
+    {:else}{t("Nur die ersten {max} Dateien geprüft, {more} weitere nicht.", { max: SCAN_MAX, more: scan.capped })}{/if}
   </p>
 {/if}
 
 {#if !editor(repo).lsp}
   <!-- Einziger Rueckweg nach "Nicht fuer dieses Projekt" im Datei-Banner. -->
   <Empty icon={CircleAlertIcon}>
-    Language-Server sind aus. Sie führen Projektcode aus.
-    {#snippet action()}<Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>{/snippet}
+    {t("Language-Server sind aus. Sie führen Projektcode aus.")}
+    {#snippet action()}<Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>{t("Aktivieren")}</Button>{/snippet}
   </Empty>
 {:else if !list.length}
-  <Empty icon={CircleAlertIcon}>{scan?.busy ? "Noch keine Probleme gefunden." : "Keine Probleme im Projekt."}</Empty>
+  <Empty icon={CircleAlertIcon}>{scan?.busy ? t("Noch keine Probleme gefunden.") : t("Keine Probleme im Projekt.")}</Empty>
 {:else}
-  <ul class="min-h-0 flex-1 overflow-y-auto py-0.5 text-ui" aria-label="Probleme">
+  <ul class="min-h-0 flex-1 overflow-y-auto py-0.5 text-ui" aria-label={t("Probleme")}>
     {#each list as { path, d }, i (i)}
       {@const line = d.range.start.line}
       <li class="group hover:bg-accent flex items-center gap-1.5 pr-1 pl-2">
@@ -56,8 +57,8 @@
           variant="quiet"
           size="xs"
           class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          title="Zeilen als @-Erwähnung an Claude"
-          onclick={() => mentionLines(repo, path, line, d.range.end.line)}><AtSignIcon /> An Claude</Button
+          title={t("Zeilen als @-Erwähnung an Claude")}
+          onclick={() => mentionLines(repo, path, line, d.range.end.line)}><AtSignIcon /> {t("An Claude")}</Button
         >
       </li>
     {/each}

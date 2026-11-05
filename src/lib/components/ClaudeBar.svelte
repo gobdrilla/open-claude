@@ -9,6 +9,7 @@
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import { Button, Select } from "$lib/atelier-ui";
   import { MODES } from "$lib/claudemode";
+  import { t } from "$lib/i18n";
 
   // Steuert claude im Terminal: Slash-Commands gehen ueber die atelier-Mod (claude_command), der Modus per Umschalt+Tab.
   // mode: aus der Terminal-Fusszeile (Terminal.svelte), undefined bis claude sie zeigt
@@ -46,10 +47,10 @@
     ["Haiku", "haiku"],
   ] as const;
   const EFFORT = [
-    ["Niedrig", "low"],
-    ["Mittel", "medium"],
-    ["Hoch", "high"],
-    ["Sehr hoch", "xhigh"],
+    [t("Niedrig"), "low"],
+    [t("Mittel"), "medium"],
+    [t("Hoch"), "high"],
+    [t("Sehr hoch"), "xhigh"],
     ["Max", "max"],
   ] as const;
 
@@ -69,8 +70,8 @@
     effort = p.effort ?? "";
   }
   onMount(() => {
-    const t = setInterval(poll, 2000);
-    return () => clearInterval(t);
+    const timer = setInterval(poll, 2000);
+    return () => clearInterval(timer);
   });
   $effect(() => {
     void id;
@@ -110,7 +111,7 @@
     await cycleTo(target);
     // Nicht im Zyklus (z. B. Alles erlauben ohne --dangerously-skip-permissions): nicht still woanders stehen bleiben.
     if (mode !== target) {
-      error = `Modus „${MODES.find(([, v]) => v === target)?.[0] ?? target}“ ist in dieser Sitzung nicht wählbar`;
+      error = t("Modus „{mode}“ ist in dieser Sitzung nicht wählbar", { mode: MODES.find(([, v]) => v === target)?.[0] ?? target });
       if (start) await cycleTo(start);
     }
     cycling = false;
@@ -123,38 +124,38 @@
   <img src="/logo.png" alt="Claude" title="Claude" class="mr-1 size-4 shrink-0 select-none [image-rendering:pixelated]" draggable="false" />
   {#if !guest}
     <Select
-      label="Modus"
+      label={t("Modus")}
       value={mode ?? ""}
       options={MODES}
       onchange={pickMode}
       placeholder="–"
       class={mode === "bypassPermissions" ? "border-destructive/60 text-destructive" : ""}
-      title="Berechtigungsmodus (Umschalt+Tab im Terminal)"
-      aria-label="Berechtigungsmodus"
+      title={t("Berechtigungsmodus (Umschalt+Tab im Terminal)")}
+      aria-label={t("Berechtigungsmodus")}
     />
     <Select
-      label="Modell"
+      label={t("Modell")}
       value={model}
       options={MODELS}
       onchange={(v) => ((model = v), run("model", v))}
       placeholder="–"
-      title="Modell für diese Sitzung (/model)"
-      aria-label="Modell"
+      title={t("Modell für diese Sitzung (/model)")}
+      aria-label={t("Modell")}
     />
     <Select
-      label="Denken"
+      label={t("Denken")}
       value={effort || footerEffort || ""}
       options={EFFORT}
       onchange={(v) => ((effort = v), run("effort", v))}
-      placeholder="Standard"
-      title="Wie gründlich Claude nachdenkt (/effort)"
-      aria-label="Denken"
+      placeholder={t("Standard")}
+      title={t("Wie gründlich Claude nachdenkt (/effort)")}
+      aria-label={t("Denken")}
     />
     <Button variant="outline" size="xs" class="gap-1.5 font-normal" title="MCP-Server (/mcp)" onclick={mcp}
       ><PlugIcon class="size-3" /> MCP</Button
     >
     {#if onskills}
-      <Button variant="outline" size="xs" class="gap-1.5 font-normal" title="Skills und Plugins dieses Projekts" onclick={onskills}
+      <Button variant="outline" size="xs" class="gap-1.5 font-normal" title={t("Skills und Plugins dieses Projekts")} onclick={onskills}
         ><SparklesIcon class="size-3" /> Skills</Button
       >
     {/if}
@@ -167,21 +168,21 @@
         size="xs"
         class="gap-1.5 {share.on ? 'text-primary hover:text-primary' : ''}"
         onclick={share.open}
-        title="Sitzung mit anderen teilen"
-        ><Share2Icon class="size-3.5" /> <span class="max-lg:hidden">Teilen</span>{#if share.guests}&nbsp;({share.guests}){/if}</Button
+        title={t("Sitzung mit anderen teilen")}
+        ><Share2Icon class="size-3.5" /> <span class="max-lg:hidden">{t("Teilen")}</span>{#if share.guests}&nbsp;({share.guests}){/if}</Button
       >
     {/if}
-    <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title="Aktivität: Sitzung, Workflows und Bilder"
-      ><WorkflowIcon class="size-3.5" /> <span class="max-lg:hidden">Aktivität</span></Button
+    <Button variant="toggle" size="xs" class="gap-1.5" aria-pressed={side} onclick={ontoggleside} title={t("Aktivität: Sitzung, Workflows und Bilder")}
+      ><WorkflowIcon class="size-3.5" /> <span class="max-lg:hidden">{t("Aktivität")}</span></Button
     >
     {#if onnew}
-      <Button variant="quiet" size="xs" class="gap-1.5" onclick={onnew} title="Weitere Claude-Sitzung im selben Projekt"
-        ><PlusIcon class="size-3.5" /> <span class="max-lg:hidden">Sitzung</span></Button
+      <Button variant="quiet" size="xs" class="gap-1.5" onclick={onnew} title={t("Weitere Claude-Sitzung im selben Projekt")}
+        ><PlusIcon class="size-3.5" /> <span class="max-lg:hidden">{t("Sitzung")}</span></Button
       >
     {/if}
     {#if !guest}
-      <Button variant="quiet" size="xs" class="gap-1.5" title="Claude-Einstellungen" onclick={onsettings}
-        ><SettingsIcon class="size-3.5" /> <span class="max-lg:hidden">Einstellungen</span></Button
+      <Button variant="quiet" size="xs" class="gap-1.5" title={t("Claude-Einstellungen")} onclick={onsettings}
+        ><SettingsIcon class="size-3.5" /> <span class="max-lg:hidden">{t("Einstellungen")}</span></Button
       >
     {/if}
   </div>

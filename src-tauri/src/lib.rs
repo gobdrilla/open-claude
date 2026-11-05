@@ -8,6 +8,9 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Manager, WindowEvent};
 use walkdir::WalkDir;
 
+// First: tr! is used by the modules below.
+#[macro_use]
+mod l10n;
 // Terminal in der App (ersetzt das externe wt.exe-Fenster).
 mod pty;
 mod complete;
@@ -296,7 +299,7 @@ fn read_last_commit(repo: &Path) -> String {
 async fn scan(root: String, extra: Vec<String>) -> Result<Vec<Repo>, String> {
     tauri::async_runtime::spawn_blocking(move || scan_blocking(root, extra))
         .await
-        .map_err(|e| format!("Scan abgebrochen: {e}"))?
+        .map_err(|e| tr!("Scan abgebrochen: {e}", "Scan aborted: {e}"))?
 }
 
 /// root leer = kein Dev-Ordner. extra: einzeln hinzugefuegte Projektordner (auch ohne Git), fehlende fallen still weg.
@@ -304,7 +307,7 @@ fn scan_blocking(root: String, extra: Vec<String>) -> Result<Vec<Repo>, String> 
     let root = PathBuf::from(root.trim_end_matches(['\\', '/']));
     let has_root = !root.as_os_str().is_empty();
     if has_root && !root.is_dir() {
-        return Err(format!("Ordner nicht gefunden: {}", root.display()));
+        return Err(tr!("Ordner nicht gefunden: {}", "Folder not found: {}", root.display()));
     }
 
     let mut dirs = Vec::new();
@@ -432,9 +435,9 @@ fn reveal(path: String) -> Result<(), String> {
     } else if p.is_dir() {
         open_system(&p)
     } else {
-        return Err(format!("Nicht gefunden: {path}"));
+        return Err(tr!("Nicht gefunden: {path}", "Not found: {path}"));
     };
-    shown.map_err(|e| format!("Explorer konnte nicht geoeffnet werden: {e}"))
+    shown.map_err(|e| tr!("Explorer konnte nicht geoeffnet werden: {e}", "Explorer could not be opened: {e}"))
 }
 
 fn select_file(p: &Path) -> std::io::Result<()> {
@@ -471,13 +474,13 @@ fn path_kinds(paths: Vec<String>) -> Vec<Option<(String, bool)>> {
 
 /// Nur Git-Repos echt unterhalb des Dev-Ordners, nie den Dev-Ordner selbst.
 fn trashable(path: &str, root: &str) -> Result<PathBuf, String> {
-    let dir = Path::new(path).canonicalize().map_err(|e| format!("Ordner nicht gefunden: {e}"))?;
-    let root = Path::new(root).canonicalize().map_err(|e| format!("Dev-Ordner nicht gefunden: {e}"))?;
+    let dir = Path::new(path).canonicalize().map_err(|e| tr!("Ordner nicht gefunden: {e}", "Folder not found: {e}"))?;
+    let root = Path::new(root).canonicalize().map_err(|e| tr!("Dev-Ordner nicht gefunden: {e}", "Dev folder not found: {e}"))?;
     if dir == root || !dir.starts_with(&root) {
-        return Err(format!("Liegt nicht im Dev-Ordner: {path}"));
+        return Err(tr!("Liegt nicht im Dev-Ordner: {path}", "Not inside the dev folder: {path}"));
     }
     if !dir.join(".git").exists() {
-        return Err(format!("Kein Git-Repo: {path}"));
+        return Err(tr!("Kein Git-Repo: {path}", "Not a Git repo: {path}"));
     }
     Ok(dir)
 }
@@ -493,7 +496,7 @@ fn trash_check(path: String, root: String) -> Result<(), String> {
 async fn trash_repo(path: String, root: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dir = trashable(&path, &root)?;
-        trash::delete(&dir).map_err(|e| format!("Löschen fehlgeschlagen: {e}"))
+        trash::delete(&dir).map_err(|e| tr!("Löschen fehlgeschlagen: {e}", "Delete failed: {e}"))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -573,7 +576,7 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> 
     // Erstes Untermenue = App-Menue, sein letzter Eintrag = Beenden.
     if let Some(sub) = menu.items()?.first().and_then(|i| i.as_submenu()) {
         sub.remove_at(sub.items()?.len().saturating_sub(1))?;
-        sub.append(&tauri::menu::MenuItem::with_id(app, "quit", "L'Atelier de Claude beenden", true, Some("Cmd+Q"))?)?;
+        sub.append(&tauri::menu::MenuItem::with_id(app, "quit", tr!("L'Atelier de Claude beenden", "Quit L'Atelier de Claude"), true, Some("Cmd+Q"))?)?;
     }
     Ok(menu)
 }
@@ -642,10 +645,23 @@ fn tray_supported() -> bool {
     true
 }
 
+fn tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let oeffnen = MenuItem::with_id(app, "oeffnen", tr!("Öffnen", "Open"), true, None::<&str>)?;
+    let beenden = MenuItem::with_id(app, "beenden", tr!("Beenden", "Quit"), true, None::<&str>)?;
+    Menu::with_items(app, &[&oeffnen, &beenden])
+}
+
+/// Menus are built at startup, before the frontend reports the language: rebuild them with the current one.
+pub(crate) fn relabel_menus(app: &tauri::AppHandle) {
+    if let Some(t) = app.tray_by_id("main") {
+        let _ = tray_menu(app).and_then(|m| t.set_menu(Some(m)));
+    }
+    #[cfg(target_os = "macos")]
+    let _ = menu(app).and_then(|m| app.set_menu(m));
+}
+
 fn tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let oeffnen = MenuItem::with_id(app, "oeffnen", "Öffnen", true, None::<&str>)?;
-    let beenden = MenuItem::with_id(app, "beenden", "Beenden", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&oeffnen, &beenden])?;
+    let menu = tray_menu(app)?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("L'Atelier de Claude")
@@ -901,6 +917,7 @@ pub fn run() {
             ide::ide_editor_state,
             ide::ide_run_state,
             debug::dbg_build,
+            l10n::set_lang,
             lsp::lsp_start,
             lsp::lsp_send,
             lsp::lsp_stop,

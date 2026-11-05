@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import type { Snippet } from "svelte";
   import * as Dialog from "./primitives/dialog/index.js";
   import { Button } from "./primitives/button/index.js";
@@ -47,7 +48,7 @@
     <Input bind:value {placeholder} class={mono ? "font-mono" : ""} onkeydown={keydown} autofocus />
     {@render children?.()}
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" onclick={oncancel}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" onclick={oncancel}>{t("Abbrechen")}</Button>
       <Button size="sm" onclick={onsubmit}>{action}</Button>
     </div>
   </Dialog.Content>

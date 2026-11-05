@@ -6,6 +6,7 @@
   import { history, type Snap } from "$lib/history";
   import { localHistory } from "$lib/history.svelte";
   import { editor, open, setText } from "$lib/editor.svelte";
+  import { LOCALE, t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -61,20 +62,20 @@
   }
 
   const close = () => (localHistory.open = null);
-  const when = (t: number) => new Date(t).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
+  const when = (ms: number) => new Date(ms).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" });
   const name = $derived(path?.split("/").pop() ?? "");
   const snap = $derived(snaps[at]);
 </script>
 
 <DiffDialog
   {diff}
-  title="Lokale Historie: {name}"
-  description={snap ? `Version ${at + 1}/${snaps.length} · ${when(snap.time)} · ${snap.why} → aktueller Stand` : (path ?? "")}
-  empty={snap ? "Gleich wie der aktuelle Stand." : "Noch keine Versionen: sie entstehen beim Speichern und bei Änderungen von außen."}
+  title={t("Lokale Historie: {name}", { name })}
+  description={snap ? t("Version {n}/{total} · {when} · {why} → aktueller Stand", { n: at + 1, total: snaps.length, when: when(snap.time), why: t(snap.why) }) : (path ?? "")}
+  empty={snap ? t("Gleich wie der aktuelle Stand.") : t("Noch keine Versionen: sie entstehen beim Speichern und bei Änderungen von außen.")}
   step={snaps.length > 1 ? step : undefined}
   onclose={close}
 >
   {#if snap && diff}
-    <Button size="xs" variant="outline" class="ml-auto shrink-0" onclick={restore}>Wiederherstellen</Button>
+    <Button size="xs" variant="outline" class="ml-auto shrink-0" onclick={restore}>{t("Wiederherstellen")}</Button>
   {/if}
 </DiffDialog>

@@ -5,22 +5,23 @@ import { EditorView, showPanel, type Panel, type ViewUpdate } from "@codemirror/
 import { LSPPlugin, type LSPClientExtension } from "@codemirror/lsp-client";
 import { crumbsAt, symbolTree, type Crumb, type SymNode } from "$lib/nav.logic";
 import { showPick } from "./nav.ts";
+import { t } from "$lib/i18n";
 
 const DELAY = 700;
 const KIND: Record<number, string> = {
-  2: "Modul",
+  2: t("Modul"),
   3: "Namespace",
-  5: "Klasse",
-  6: "Methode",
-  7: "Eigenschaft",
-  8: "Feld",
-  9: "Konstruktor",
+  5: t("Klasse"),
+  6: t("Methode"),
+  7: t("Eigenschaft"),
+  8: t("Feld"),
+  9: t("Konstruktor"),
   10: "Enum",
   11: "Interface",
-  12: "Funktion",
+  12: t("Funktion"),
   13: "Variable",
-  14: "Konstante",
-  22: "Enum-Wert",
+  14: t("Konstante"),
+  22: t("Enum-Wert"),
   23: "Struct",
   24: "Event",
 };

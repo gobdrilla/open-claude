@@ -8,6 +8,7 @@
   import { editor, open as openFile } from "$lib/editor.svelte";
   import { documentSymbols, workspaceSymbols, type SymHit } from "$lib/lsp.svelte";
   import { gotoLabel, parseGoto } from "$lib/gotoline.logic";
+  import { t } from "$lib/i18n";
 
   let { repo, open = $bindable(false), initial = "" }: { repo: string; open: boolean; initial?: string } = $props();
 
@@ -98,17 +99,17 @@
   }
 </script>
 
-<Command.Dialog bind:open shouldFilter={false} title="Datei öffnen" description="Datei im Projekt suchen">
-  <Command.Input bind:value={query} placeholder="Datei öffnen (@ Symbol in Datei, # Symbol im Projekt, : Zeile)" />
+<Command.Dialog bind:open shouldFilter={false} title={t("Datei öffnen")} description={t("Datei im Projekt suchen")}>
+  <Command.Input bind:value={query} placeholder={t("Datei öffnen (@ Symbol in Datei, # Symbol im Projekt, : Zeile)")} />
   <Command.List>
     <Command.Empty>
       {mode === ":"
         ? active
-          ? "Zeilennummer eingeben, z. B. :42 oder :42:7"
-          : "Keine Datei geöffnet."
+          ? t("Zeilennummer eingeben, z. B. :42 oder :42:7")
+          : t("Keine Datei geöffnet.")
         : mode
-          ? "Keine Symbole gefunden (Language-Server aktiv?)."
-          : "Keine Datei gefunden."}
+          ? t("Keine Symbole gefunden (Language-Server aktiv?).")
+          : t("Keine Datei gefunden.")}
     </Command.Empty>
     {#if target}
       <Command.Item value="goto" onSelect={() => pickLine(target)}>

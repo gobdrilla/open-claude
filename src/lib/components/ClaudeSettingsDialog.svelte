@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { t } from "$lib/i18n";
   // Optionen wie in /config von Claude Code (Stand 2.1.x). g = liegt in ~/.claude.json statt settings.json.
   // def = Standard von Claude Code; wer ihn waehlt, loescht den Key, damit spaetere Standardwechsel greifen.
   type Opt = readonly [label: string, value: string];
@@ -11,94 +12,94 @@
 
   const SECTIONS: { title: string; fields: Field[] }[] = [
     {
-      title: "Modell & Denken",
+      title: t("Modell & Denken"),
       fields: [
-        { k: "model", label: "Modell", type: "text", placeholder: "Standard (empfohlen)", list: ["opus", "opus[1m]", "sonnet", "sonnet[1m]", "haiku", "fable", "opusplan"] },
+        { k: "model", label: t("Modell"), type: "text", placeholder: t("Standard (empfohlen)"), list: ["opus", "opus[1m]", "sonnet", "sonnet[1m]", "haiku", "fable", "opusplan"] },
         {
           k: "effortLevel",
-          label: "Denken",
-          hint: "Wie gründlich Claude nachdenkt",
+          label: t("Denken"),
+          hint: t("Wie gründlich Claude nachdenkt"),
           type: "enum",
           def: "",
-          opts: [["Standard", ""], ["Niedrig", "low"], ["Mittel", "medium"], ["Hoch", "high"], ["Sehr hoch", "xhigh"], ["Max", "max"]],
+          opts: [[t("Standard"), ""], [t("Niedrig"), "low"], [t("Mittel"), "medium"], [t("Hoch"), "high"], [t("Sehr hoch"), "xhigh"], ["Max", "max"]],
         },
-        { k: "alwaysThinkingEnabled", label: "Erweitertes Denken", hint: "Erweitertes Nachdenken standardmäßig an", type: "bool", def: true },
-        { k: "outputStyle", label: "Ausgabestil", type: "text", placeholder: "Standard", list: ["default", "Explanatory", "Learning"] },
-        { k: "language", label: "Sprache", hint: "Antwortsprache, z. B. german oder de", type: "text", placeholder: "Standard (Englisch)" },
+        { k: "alwaysThinkingEnabled", label: t("Erweitertes Denken"), hint: t("Erweitertes Nachdenken standardmäßig an"), type: "bool", def: true },
+        { k: "outputStyle", label: t("Ausgabestil"), type: "text", placeholder: t("Standard"), list: ["default", "Explanatory", "Learning"] },
+        { k: "language", label: t("Sprache"), hint: t("Antwortsprache, z. B. german oder de"), type: "text", placeholder: t("Standard (Englisch)") },
       ],
     },
     {
-      title: "Berechtigungen",
+      title: t("Berechtigungen"),
       fields: [
-        { k: "useAutoModeDuringPlan", label: "Auto-Modus beim Planen", type: "bool", def: true },
-        { k: "autoContinueAtUsageLimit", label: "Am Nutzungslimit automatisch weitermachen", type: "bool", def: true },
+        { k: "useAutoModeDuringPlan", label: t("Auto-Modus beim Planen"), type: "bool", def: true },
+        { k: "autoContinueAtUsageLimit", label: t("Am Nutzungslimit automatisch weitermachen"), type: "bool", def: true },
       ],
     },
     {
-      title: "Darstellung",
+      title: t("Darstellung"),
       fields: [
         {
           k: "theme",
           label: "Theme",
-          hint: "Auto wechselt live mit der App, Atelier erst in neuen Sitzungen",
+          hint: t("Auto wechselt live mit der App, Atelier erst in neuen Sitzungen"),
           type: "enum",
           def: "dark",
-          opts: [["Auto (live mit der App)", "auto"], ["Atelier (lila)", "custom:atelier:atelier"], ["Dunkel", "dark"], ["Hell", "light"], ["Dunkel (farbenblind)", "dark-daltonized"], ["Hell (farbenblind)", "light-daltonized"], ["Dunkel (ANSI)", "dark-ansi"], ["Hell (ANSI)", "light-ansi"]],
+          opts: [[t("Auto (live mit der App)"), "auto"], [t("Atelier (lila)"), "custom:atelier:atelier"], [t("Dunkel"), "dark"], [t("Hell"), "light"], [t("Dunkel (farbenblind)"), "dark-daltonized"], [t("Hell (farbenblind)"), "light-daltonized"], [t("Dunkel (ANSI)"), "dark-ansi"], [t("Hell (ANSI)"), "light-ansi"]],
         },
-        { k: "editorMode", label: "Editor-Modus", type: "enum", def: "normal", opts: [["Normal", "normal"], ["Vim", "vim"]] },
-        { k: "timeFormat", label: "Zeitformat", type: "enum", def: "auto", opts: [["Auto", "auto"], ["12 h", "12h"], ["24 h", "24h"]] },
-        { k: "defaultView", label: "Standardansicht", type: "enum", def: "", opts: [["Standard", ""], ["Chat", "chat"], ["Transkript", "transcript"]] },
-        { k: "prefersReducedMotion", label: "Weniger Animationen", type: "bool", def: false },
-        { k: "spinnerTipsEnabled", label: "Tipps anzeigen", type: "bool", def: true },
-        { k: "showTurnDuration", label: "Dauer je Antwort anzeigen", type: "bool", def: true, g: true },
-        { k: "showMessageTimestamps", label: "Zeitstempel an Nachrichten", type: "bool", def: false, g: true },
-        { k: "terminalProgressBarEnabled", label: "Fortschrittsbalken im Terminal", type: "bool", def: true, g: true },
+        { k: "editorMode", label: t("Editor-Modus"), type: "enum", def: "normal", opts: [["Normal", "normal"], ["Vim", "vim"]] },
+        { k: "timeFormat", label: t("Zeitformat"), type: "enum", def: "auto", opts: [["Auto", "auto"], ["12 h", "12h"], ["24 h", "24h"]] },
+        { k: "defaultView", label: t("Standardansicht"), type: "enum", def: "", opts: [[t("Standard"), ""], ["Chat", "chat"], [t("Transkript"), "transcript"]] },
+        { k: "prefersReducedMotion", label: t("Weniger Animationen"), type: "bool", def: false },
+        { k: "spinnerTipsEnabled", label: t("Tipps anzeigen"), type: "bool", def: true },
+        { k: "showTurnDuration", label: t("Dauer je Antwort anzeigen"), type: "bool", def: true, g: true },
+        { k: "showMessageTimestamps", label: t("Zeitstempel an Nachrichten"), type: "bool", def: false, g: true },
+        { k: "terminalProgressBarEnabled", label: t("Fortschrittsbalken im Terminal"), type: "bool", def: true, g: true },
       ],
     },
     {
-      title: "Verhalten",
+      title: t("Verhalten"),
       fields: [
-        { k: "autoCompactEnabled", label: "Auto-Compact", hint: "Kontext automatisch zusammenfassen, wenn er voll wird", type: "bool", def: true, g: true },
-        { k: "precomputeCompactionEnabled", label: "Compact vorberechnen", type: "bool", def: true },
-        { k: "fileCheckpointingEnabled", label: "Code zurückspulen (Checkpoints)", type: "bool", def: true, g: true },
-        { k: "respectGitignore", label: ".gitignore in der Dateiauswahl beachten", type: "bool", def: true, g: true },
-        { k: "enableWorkflows", label: "Dynamische Workflows", type: "bool", def: true },
-        { k: "workflowKeywordTriggerEnabled", label: "Ultracode-Stichwort startet Workflows", type: "bool", def: true },
-        { k: "worktree.baseRef", label: "Worktree-Basis", hint: "Frisch vom Default-Branch oder vom aktuellen HEAD", type: "enum", def: "fresh", opts: [["Frisch", "fresh"], ["HEAD", "head"]] },
-        { k: "cleanupPeriodDays", label: "Transkripte behalten (Tage)", type: "number", def: 30 },
-        { k: "autoUpdatesChannel", label: "Update-Kanal", type: "enum", def: "latest", opts: [["Neueste", "latest"], ["Stabil", "stable"]] },
+        { k: "autoCompactEnabled", label: "Auto-Compact", hint: t("Kontext automatisch zusammenfassen, wenn er voll wird"), type: "bool", def: true, g: true },
+        { k: "precomputeCompactionEnabled", label: t("Compact vorberechnen"), type: "bool", def: true },
+        { k: "fileCheckpointingEnabled", label: t("Code zurückspulen (Checkpoints)"), type: "bool", def: true, g: true },
+        { k: "respectGitignore", label: t(".gitignore in der Dateiauswahl beachten"), type: "bool", def: true, g: true },
+        { k: "enableWorkflows", label: t("Dynamische Workflows"), type: "bool", def: true },
+        { k: "workflowKeywordTriggerEnabled", label: t("Ultracode-Stichwort startet Workflows"), type: "bool", def: true },
+        { k: "worktree.baseRef", label: t("Worktree-Basis"), hint: t("Frisch vom Default-Branch oder vom aktuellen HEAD"), type: "enum", def: "fresh", opts: [[t("Frisch"), "fresh"], ["HEAD", "head"]] },
+        { k: "cleanupPeriodDays", label: t("Transkripte behalten (Tage)"), type: "number", def: 30 },
+        { k: "autoUpdatesChannel", label: t("Update-Kanal"), type: "enum", def: "latest", opts: [[t("Neueste"), "latest"], [t("Stabil"), "stable"]] },
       ],
     },
     {
-      title: "Benachrichtigungen",
+      title: t("Benachrichtigungen"),
       fields: [
         {
           k: "preferredNotifChannel",
-          label: "Lokale Benachrichtigungen",
+          label: t("Lokale Benachrichtigungen"),
           type: "enum",
           def: "auto",
           g: true,
-          opts: [["Auto", "auto"], ["iTerm2", "iterm2"], ["iTerm2 + Glocke", "iterm2_with_bell"], ["Terminal-Glocke", "terminal_bell"], ["Kitty", "kitty"], ["Ghostty", "ghostty"], ["Aus", "notifications_disabled"]],
+          opts: [["Auto", "auto"], ["iTerm2", "iterm2"], [t("iTerm2 + Glocke"), "iterm2_with_bell"], [t("Terminal-Glocke"), "terminal_bell"], ["Kitty", "kitty"], ["Ghostty", "ghostty"], [t("Aus"), "notifications_disabled"]],
         },
-        { k: "agentPushNotifEnabled", label: "Push, wenn Claude es für nötig hält", type: "bool", def: false },
-        { k: "inputNeededNotifEnabled", label: "Push, wenn eine Aktion nötig ist", type: "bool", def: false },
+        { k: "agentPushNotifEnabled", label: t("Push, wenn Claude es für nötig hält"), type: "bool", def: false },
+        { k: "inputNeededNotifEnabled", label: t("Push, wenn eine Aktion nötig ist"), type: "bool", def: false },
       ],
     },
     {
       title: "IDE & Terminal",
       fields: [
-        { k: "autoConnectIde", label: "Automatisch mit IDE verbinden", type: "bool", def: false, g: true },
-        { k: "autoInstallIdeExtension", label: "IDE-Erweiterung automatisch installieren", type: "bool", def: true, g: true },
-        { k: "diffTool", label: "Diff-Anzeige", type: "enum", def: "auto", g: true, opts: [["Auto", "auto"], ["Terminal", "terminal"]] },
-        { k: "copyOnSelect", label: "Beim Markieren kopieren", type: "bool", def: true, g: true },
-        { k: "copyFullResponse", label: "/copy ohne Auswahl", type: "bool", def: false, g: true },
+        { k: "autoConnectIde", label: t("Automatisch mit IDE verbinden"), type: "bool", def: false, g: true },
+        { k: "autoInstallIdeExtension", label: t("IDE-Erweiterung automatisch installieren"), type: "bool", def: true, g: true },
+        { k: "diffTool", label: t("Diff-Anzeige"), type: "enum", def: "auto", g: true, opts: [["Auto", "auto"], ["Terminal", "terminal"]] },
+        { k: "copyOnSelect", label: t("Beim Markieren kopieren"), type: "bool", def: true, g: true },
+        { k: "copyFullResponse", label: t("/copy ohne Auswahl"), type: "bool", def: false, g: true },
       ],
     },
   ];
   const RULES = [
-    ["allow", "Erlauben"],
-    ["ask", "Nachfragen"],
-    ["deny", "Verbieten"],
+    ["allow", t("Erlauben")],
+    ["ask", t("Nachfragen")],
+    ["deny", t("Verbieten")],
   ] as const;
 </script>
 
@@ -106,11 +107,11 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, Dialog, IconButton, Input, Segmented, Select, SettingRow, SettingsSection, Switch, Textarea } from "$lib/atelier-ui";
   const MODES = [
-    ["Manuell", "default", "Fragt vor Änderungen und Befehlen"],
-    ["Edits annehmen", "acceptEdits", "Dateiänderungen ohne Rückfrage"],
-    ["Plan", "plan", "Nur lesen und planen"],
-    ["Auto", "auto", "Claude entscheidet, was sicher ist"],
-    ["Nicht fragen", "dontAsk", "Nur Erlaubtes, alles andere wird abgelehnt"],
+    [t("Manuell"), "default", t("Fragt vor Änderungen und Befehlen")],
+    [t("Edits annehmen"), "acceptEdits", t("Dateiänderungen ohne Rückfrage")],
+    [t("Plan"), "plan", t("Nur lesen und planen")],
+    ["Auto", "auto", t("Claude entscheidet, was sicher ist")],
+    [t("Nicht fragen"), "dontAsk", t("Nur Erlaubtes, alles andere wird abgelehnt")],
   ] as const;
   import XIcon from "@lucide/svelte/icons/x";
 
@@ -255,22 +256,22 @@
 <Dialog.Root bind:open={() => open, (v) => (v ? (open = true) : void close())}>
   <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-2xl">
     <Dialog.Header>
-      <Dialog.Title>Claude-Einstellungen</Dialog.Title>
-      <Dialog.Description>Wie /config im Terminal. Gilt für neue Sitzungen; Umschalt+Tab im Terminal wechselt den Modus sofort.</Dialog.Description>
+      <Dialog.Title>{t("Claude-Einstellungen")}</Dialog.Title>
+      <Dialog.Description>{t("Wie /config im Terminal. Gilt für neue Sitzungen; Umschalt+Tab im Terminal wechselt den Modus sofort.")}</Dialog.Description>
     </Dialog.Header>
 
     <div class="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 text-ui">
       {#each SECTIONS as s (s.title)}
         <SettingsSection title={s.title}>
-          {#if s.title === "Berechtigungen"}
-            <SettingRow label="Standard-Modus" description="Mit welchem Modus neue Sitzungen starten">
+          {#if s.title === t("Berechtigungen")}
+            <SettingRow label={t("Standard-Modus")} description={t("Mit welchem Modus neue Sitzungen starten")}>
               <Segmented value={mode} options={MODES} onchange={(v) => set(modeField, v)} disabled={!parsed} />
             </SettingRow>
           {/if}
           {#each s.fields as f (f.k)}
             <SettingRow label={f.label} description={f.hint}>{@render ctl(f)}</SettingRow>
           {/each}
-          {#if s.title === "Berechtigungen"}
+          {#if s.title === t("Berechtigungen")}
             {#each RULES as [k, label] (k)}
               <div class="px-2 py-1.5">
                 <div class="mb-1 flex items-center gap-2">
@@ -280,7 +281,7 @@
                 <div class="flex flex-wrap gap-1">
                   {#each rules(k) as r (r)}
                     <span class="bg-secondary flex items-center gap-1 rounded py-0.5 pr-0.5 pl-1.5 font-mono text-meta"
-                      >{r}<IconButton size="bare" tone="danger" label="{r} entfernen" disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
+                      >{r}<IconButton size="bare" tone="danger" label={t("{r} entfernen", { r })} disabled={!parsed} onclick={() => setRules(k, rules(k).filter((x) => x !== r))}
                         ><XIcon class="size-3" /></IconButton
                       ></span
                     >
@@ -288,7 +289,7 @@
                   <Input
                     bind:value={adding[k]}
                     disabled={!parsed}
-                    placeholder={k === "deny" ? "z. B. Bash(rm -rf:*)" : "z. B. Bash(npm test:*)"}
+                    placeholder={k === "deny" ? t("z. B. Bash(rm -rf:*)") : t("z. B. Bash(npm test:*)")}
                     density="xs" class="w-48 font-mono"
                     onkeydown={(e) => e.key === "Enter" && addRule(k)}
                     onblur={() => addRule(k)}
@@ -301,23 +302,23 @@
       {/each}
 
       <details>
-        <summary class="text-muted-foreground cursor-pointer text-meta font-medium tracking-wide uppercase">settings.json direkt bearbeiten</summary>
+        <summary class="text-muted-foreground cursor-pointer text-meta font-medium tracking-wide uppercase">{t("settings.json direkt bearbeiten")}</summary>
         <Textarea bind:value={text} spellcheck={false} density="xs" class="mt-1.5 h-64 font-mono" placeholder={"{}"} />
       </details>
     </div>
 
-    {#if !parsed}<p class="text-destructive text-ui">settings.json ist kein gültiges JSON-Objekt</p>{/if}
+    {#if !parsed}<p class="text-destructive text-ui">{t("settings.json ist kein gültiges JSON-Objekt")}</p>{/if}
     {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
 
     <div class="flex items-center justify-end gap-2">
       {#if asking}
-        <span class="text-ui mr-auto">Ungespeicherte Änderungen gehen verloren.</span>
-        <Button variant="ghost" size="sm" onclick={() => (asking = null)}>Zurück</Button>
-        <Button variant="destructive" size="sm" onclick={discardNow}>Verwerfen</Button>
+        <span class="text-ui mr-auto">{t("Ungespeicherte Änderungen gehen verloren.")}</span>
+        <Button variant="ghost" size="sm" onclick={() => (asking = null)}>{t("Zurück")}</Button>
+        <Button variant="destructive" size="sm" onclick={discardNow}>{t("Verwerfen")}</Button>
       {:else}
-        <Button variant="ghost" size="sm" class="mr-auto" disabled={busy} onclick={reload}>Neu laden</Button>
-        <Button variant="ghost" size="sm" disabled={busy} onclick={close}>Abbrechen</Button>
-        <Button size="sm" disabled={busy || !parsed || !dirty} onclick={save}>Speichern</Button>
+        <Button variant="ghost" size="sm" class="mr-auto" disabled={busy} onclick={reload}>{t("Neu laden")}</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onclick={close}>{t("Abbrechen")}</Button>
+        <Button size="sm" disabled={busy || !parsed || !dirty} onclick={save}>{t("Speichern")}</Button>
       {/if}
     </div>
   </Dialog.Content>
@@ -349,7 +350,7 @@
     <!-- Unknown value stays selectable; the last entry switches to free text -->
     <Select
       value={v}
-      options={[[f.placeholder ?? "Standard", ""], ...f.list.map((o) => [o, o] as const), ...(v && !f.list.includes(v) ? [[v, v] as const] : []), ["Eigener Wert …", CUSTOM]]}
+      options={[[f.placeholder ?? t("Standard"), ""], ...f.list.map((o) => [o, o] as const), ...(v && !f.list.includes(v) ? [[v, v] as const] : []), [t("Eigener Wert …"), CUSTOM]]}
       onchange={(x) => (x === CUSTOM ? (custom = f.k) : set(f, x))}
       disabled={off}
       aria-label={f.label}

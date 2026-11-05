@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   // Diff im grossen Dialog; mit step blaettern ←/→ bzw. Knoepfe durch mehrere Dateien. Esc schliesst (bits-ui).
   import type { Snippet } from "svelte";
   import * as Dialog from "./primitives/dialog/index.js";
@@ -62,10 +63,10 @@
         {@render children?.()}
         {#if step}
           <span class="ml-auto flex shrink-0 gap-0.5">
-            <Button variant="ghost" size="icon-xs" title="Vorherige Datei (←)" aria-label="Vorherige Datei" onclick={() => step(-1)}
+            <Button variant="ghost" size="icon-xs" title={t("Vorherige Datei (←)")} aria-label={t("Vorherige Datei")} onclick={() => step(-1)}
               ><ChevronLeftIcon /></Button
             >
-            <Button variant="ghost" size="icon-xs" title="Nächste Datei (→)" aria-label="Nächste Datei" onclick={() => step(1)}
+            <Button variant="ghost" size="icon-xs" title={t("Nächste Datei (→)")} aria-label={t("Nächste Datei")} onclick={() => step(1)}
               ><ChevronRightIcon /></Button
             >
           </span>

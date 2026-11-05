@@ -75,10 +75,10 @@ fn has_pipeline(dir: &Path) -> bool {
 fn project(path: &str) -> Result<PathBuf, String> {
     let dir = PathBuf::from(path);
     if !dir.is_dir() {
-        return Err(format!("Ordner nicht gefunden: {path}"));
+        return Err(tr!("Ordner nicht gefunden: {path}", "Folder not found: {path}"));
     }
     if !is_project(&dir) {
-        return Err(format!("Kein Unity-Projekt: {path}"));
+        return Err(tr!("Kein Unity-Projekt: {path}", "Not a Unity project: {path}"));
     }
     Ok(dir)
 }
@@ -109,13 +109,19 @@ fn find_cli(
 fn cli() -> Result<String, String> {
     find_cli(cfg!(windows), |k| std::env::var(k).ok(), |p| Path::new(p).is_file()).ok_or_else(|| {
         if cfg!(windows) {
-            "Unity-CLI nicht gefunden (weder im PATH noch in %USERPROFILE%\\.unity\\bin). Installieren: \
-             Windows-Installer der Unity-CLI (PowerShell, siehe Unity-Doku), danach App neu starten."
-                .to_string()
+            tr!(
+                "Unity-CLI nicht gefunden (weder im PATH noch in %USERPROFILE%\\.unity\\bin). Installieren: \
+                 Windows-Installer der Unity-CLI (PowerShell, siehe Unity-Doku), danach App neu starten.",
+                "Unity CLI not found (neither in PATH nor in %USERPROFILE%\\.unity\\bin). Install: \
+                 Unity CLI Windows installer (PowerShell, see Unity docs), then restart the app."
+            )
         } else {
-            "Unity-CLI nicht gefunden (weder im PATH noch in ~/.unity/bin). Installieren: \
-             https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh"
-                .to_string()
+            tr!(
+                "Unity-CLI nicht gefunden (weder im PATH noch in ~/.unity/bin). Installieren: \
+                 https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh",
+                "Unity CLI not found (neither in PATH nor in ~/.unity/bin). Install: \
+                 https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh"
+            )
         }
     })
 }
@@ -150,7 +156,7 @@ fn unity(cli: &str, dir: &Path, args: &[&str], limit: Duration) -> Result<Output
         let _ = std::fs::remove_file(p);
         b
     };
-    let file = |p: &Path| std::fs::File::create(p).map_err(|e| format!("Unity-CLI: Ausgabedatei: {e}"));
+    let file = |p: &Path| std::fs::File::create(p).map_err(|e| tr!("Unity-CLI: Ausgabedatei: {e}", "Unity CLI: output file: {e}"));
     let mut cmd = crate::quiet(cli);
     cmd.args(["--no-banner", "--no-pager", "--non-interactive"])
         .args(args)
@@ -168,7 +174,7 @@ fn unity(cli: &str, dir: &Path, args: &[&str], limit: Duration) -> Result<Output
         Err(e) => {
             read(&out_p);
             read(&err_p);
-            return Err(format!("Unity-CLI konnte nicht gestartet werden: {e}"));
+            return Err(tr!("Unity-CLI konnte nicht gestartet werden: {e}", "Unity CLI could not be started: {e}"));
         }
     };
     let pid = child.id();
@@ -183,7 +189,7 @@ fn unity(cli: &str, dir: &Path, args: &[&str], limit: Duration) -> Result<Output
     let (stdout, stderr) = (read(&out_p), read(&err_p));
     match res {
         Ok(s) => s.map(|status| Output { status, stdout, stderr }).map_err(|e| format!("Unity-CLI: {e}")),
-        Err(_) => Err(format!("Unity-CLI hing bei `{}` und wurde nach {} s beendet", args.join(" "), limit.as_secs())),
+        Err(_) => Err(tr!("Unity-CLI hing bei `{}` und wurde nach {} s beendet", "Unity CLI hung on `{}` and was stopped after {} s", args.join(" "), limit.as_secs())),
     }
 }
 
@@ -205,7 +211,7 @@ fn busy(dir: &Path) -> Result<Busy, String> {
     let key = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
     let mut all = lock(&BUSY);
     if all.contains(&key) {
-        return Err("Unity ist für dieses Projekt gerade beschäftigt (Test, Öffnen oder Einrichten läuft). Kurz warten.".into());
+        return Err(tr!("Unity ist für dieses Projekt gerade beschäftigt (Test, Öffnen oder Einrichten läuft). Kurz warten.", "Unity is busy for this project right now (test, opening or setup running). Wait a moment."));
     }
     all.push(key.clone());
     Ok(Busy(key))
@@ -226,8 +232,8 @@ fn parse_envelope(ok: bool, stdout: &str, stderr: &str) -> Result<Value, String>
         let msg = [&v["errors"][0]["message"], &v["error"], &v["data"]["error"]]
             .into_iter()
             .find_map(|m| m.as_str())
-            .unwrap_or("unbekannter Fehler");
-        return Err(msg.to_string());
+            .map_or_else(|| tr!("unbekannter Fehler", "unknown error"), String::from);
+        return Err(msg);
     }
     if ok {
         return Ok(Value::Null);
@@ -266,7 +272,7 @@ fn find_instance(data: &Value, dir: &Path) -> Option<bool> {
 /// Prozessliste statt Temp/UnityLockfile: die Datei ueberlebt einen Absturz.
 fn editor_state(cli: &str, dir: &Path) -> Result<Option<bool>, String> {
     let data = envelope(&unity(cli, dir, &["editors", "running", "--json"], SHORT)?)
-        .map_err(|e| format!("Laufende Unity-Editoren nicht lesbar: {e}"))?;
+        .map_err(|e| tr!("Laufende Unity-Editoren nicht lesbar: {e}", "Running Unity editors not readable: {e}"))?;
     Ok(find_instance(&data, dir))
 }
 
@@ -275,7 +281,7 @@ fn editor_state(cli: &str, dir: &Path) -> Result<Option<bool>, String> {
 fn info_blocking(path: &str) -> Result<UnityInfo, String> {
     let dir = PathBuf::from(path);
     if !dir.is_dir() {
-        return Err(format!("Ordner nicht gefunden: {path}"));
+        return Err(tr!("Ordner nicht gefunden: {path}", "Folder not found: {path}"));
     }
     let mut info = UnityInfo {
         version: read_version(&dir),
@@ -340,34 +346,35 @@ fn setup_blocking(path: &str) -> Result<String, String> {
     let mut log = Vec::new();
 
     if has_pipeline(&dir) {
-        log.push("Pipeline-Paket: schon installiert".to_string());
+        log.push(tr!("Pipeline-Paket: schon installiert", "Pipeline package: already installed"));
     } else if let Some(v) = read_version(&dir).filter(|v| BROKEN_PIPELINE.contains(&v.as_str())) {
-        log.push(format!(
-            "Pipeline-Paket: übersprungen – kompiliert unter Unity {v} nicht. Nach einem Editor-Update erneut einrichten."
+        log.push(tr!(
+            "Pipeline-Paket: übersprungen – kompiliert unter Unity {v} nicht. Nach einem Editor-Update erneut einrichten.",
+            "Pipeline package: skipped – does not compile under Unity {v}. Set up again after an editor update."
         ));
     } else {
         envelope(&unity(&cli, &dir, &["pipeline", "install", "--project-path", &p, "--package-version", PIPELINE_VERSION, "--json"], LONG)?)
-            .map_err(|e| format!("Pipeline-Paket nicht installiert: {e}"))?;
-        log.push("Pipeline-Paket: installiert".to_string());
+            .map_err(|e| tr!("Pipeline-Paket nicht installiert: {e}", "Pipeline package not installed: {e}"))?;
+        log.push(tr!("Pipeline-Paket: installiert", "Pipeline package: installed"));
     }
 
     // Immer: spiegelt auch den unity-pipeline-Skill, sobald das Paket im PackageCache liegt.
     envelope(&unity(&cli, &dir, &["skill", "install", "claude-code", "--local", "--yes", "--json"], LONG)?)
-        .map_err(|e| format!("Unity-Skill nicht installiert: {e}"))?;
-    log.push("Skill: .claude/skills/unity-cli aktuell".to_string());
+        .map_err(|e| tr!("Unity-Skill nicht installiert: {e}", "Unity skill not installed: {e}"))?;
+    log.push(tr!("Skill: .claude/skills/unity-cli aktuell", "Skill: .claude/skills/unity-cli up to date"));
 
     let md_path = dir.join("CLAUDE.md");
     let md = match std::fs::read_to_string(&md_path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(e) => return Err(format!("CLAUDE.md nicht lesbar: {e}")),
+        Err(e) => return Err(tr!("CLAUDE.md nicht lesbar: {e}", "CLAUDE.md not readable: {e}")),
     };
     match with_section(&md) {
         Some(new) => {
-            std::fs::write(&md_path, new).map_err(|e| format!("CLAUDE.md nicht schreibbar: {e}"))?;
-            log.push("CLAUDE.md: Unity-CLI-Abschnitt ergänzt".to_string());
+            std::fs::write(&md_path, new).map_err(|e| tr!("CLAUDE.md nicht schreibbar: {e}", "CLAUDE.md not writable: {e}"))?;
+            log.push(tr!("CLAUDE.md: Unity-CLI-Abschnitt ergänzt", "CLAUDE.md: Unity CLI section added"));
         }
-        None => log.push("CLAUDE.md: Unity-CLI-Abschnitt vorhanden".to_string()),
+        None => log.push(tr!("CLAUDE.md: Unity-CLI-Abschnitt vorhanden", "CLAUDE.md: Unity CLI section present")),
     }
     Ok(log.join("\n"))
 }
@@ -385,7 +392,7 @@ fn open_blocking(path: &str) -> Result<(), String> {
     }
     // Die CLI startet den Editor im Hintergrund und kehrt sofort zurueck.
     envelope(&unity(&cli, &dir, &["open", &dir.to_string_lossy()], LONG)?)
-        .map_err(|e| format!("Unity-Editor ließ sich nicht öffnen: {e}"))?;
+        .map_err(|e| tr!("Unity-Editor ließ sich nicht öffnen: {e}", "Unity editor could not be opened: {e}"))?;
     // Erst fertig, wenn der Editor gelistet ist: sonst sieht ein Test gleich danach "zu" und startet
     // Batchmode daneben, und ein zweites Oeffnen startet einen zweiten Editor.
     let start = Instant::now();
@@ -395,7 +402,7 @@ fn open_blocking(path: &str) -> Result<(), String> {
             return Ok(());
         }
     }
-    Err(format!("Unity-Editor nach {} s noch nicht gestartet (Unity Hub/Lizenz prüfen).", OPEN_TIMEOUT.as_secs()))
+    Err(tr!("Unity-Editor nach {} s noch nicht gestartet (Unity Hub/Lizenz prüfen).", "Unity editor not started after {} s (check Unity Hub/license).", OPEN_TIMEOUT.as_secs()))
 }
 
 /// force beendet den Prozess, falls der Editor nicht per Pipeline zu schliessen ist.
@@ -413,7 +420,7 @@ fn close_blocking(path: &str, force: bool) -> Result<(), String> {
     }
     envelope(&unity(&cli, &dir, &args, LONG)?)
         .map(drop)
-        .map_err(|e| format!("Unity-Editor ließ sich nicht schließen: {e}"))
+        .map_err(|e| tr!("Unity-Editor ließ sich nicht schließen: {e}", "Unity editor could not be closed: {e}"))
 }
 
 // ---------- Tests ----------
@@ -429,12 +436,18 @@ fn route(open: Option<bool>, pipeline: bool) -> Result<Via, String> {
     match open {
         None => Ok(Via::Batch),
         Some(true) => Ok(Via::Editor),
-        Some(false) if pipeline => Err("Der Unity-Editor hat das Projekt offen, antwortet aber nicht \
-            über die Pipeline (startet noch, Kompilierfehler oder Safe Mode?). Kurz warten oder den Editor schließen."
-            .into()),
-        Some(false) => Err("Der Unity-Editor hat das Projekt offen, ist aber nicht steuerbar. \
-            Unity einrichten (Pipeline-Paket) oder den Editor schließen."
-            .into()),
+        Some(false) if pipeline => Err(tr!(
+            "Der Unity-Editor hat das Projekt offen, antwortet aber nicht \
+            über die Pipeline (startet noch, Kompilierfehler oder Safe Mode?). Kurz warten oder den Editor schließen.",
+            "The Unity editor has the project open but does not respond \
+            via the pipeline (still starting, compile errors or safe mode?). Wait a moment or close the editor."
+        )),
+        Some(false) => Err(tr!(
+            "Der Unity-Editor hat das Projekt offen, ist aber nicht steuerbar. \
+            Unity einrichten (Pipeline-Paket) oder den Editor schließen.",
+            "The Unity editor has the project open but cannot be controlled. \
+            Set up Unity (pipeline package) or close the editor."
+        )),
     }
 }
 
@@ -490,7 +503,7 @@ fn start_tag<'a>(xml: &'a str, name: &str) -> Option<(usize, &'a str)> {
 
 /// NUnit3-Bericht von `unity test`: Zahlen vom <test-run>, Fehler aus den <test-case>.
 fn parse_nunit(xml: &str) -> Result<TestReport, String> {
-    let (_, run) = start_tag(xml, "test-run").ok_or("Testbericht unlesbar: kein <test-run>")?;
+    let (_, run) = start_tag(xml, "test-run").ok_or_else(|| tr!("Testbericht unlesbar: kein <test-run>", "Test report unreadable: no <test-run>"))?;
     let num = |k: &str| attr(run, k).and_then(|v| v.trim().parse::<u32>().ok());
     let (passed, failed) = (num("passed").unwrap_or(0), num("failed").unwrap_or(0));
     let (skipped, inconclusive) = (num("skipped").unwrap_or(0), num("inconclusive").unwrap_or(0));
@@ -530,7 +543,7 @@ fn parse_editor_status(text: &str) -> Result<Option<TestReport>, String> {
         "completed" => {}
         "error" | "cancelled" => {
             let msg = s(&v, "message");
-            return Err(format!("Testlauf im Editor abgebrochen: {}", if msg.is_empty() { s(&v, "status") } else { msg }));
+            return Err(tr!("Testlauf im Editor abgebrochen: {}", "Test run in the editor aborted: {}", if msg.is_empty() { s(&v, "status") } else { msg }));
         }
         _ => return Ok(None),
     }
@@ -556,7 +569,7 @@ fn parse_editor_status(text: &str) -> Result<Option<TestReport>, String> {
 
 fn report_file(dir: &Path, mode: &str, ext: &str) -> Result<PathBuf, String> {
     let logs = dir.join("Logs");
-    std::fs::create_dir_all(&logs).map_err(|e| format!("Logs-Ordner nicht anlegbar: {e}"))?;
+    std::fs::create_dir_all(&logs).map_err(|e| tr!("Logs-Ordner nicht anlegbar: {e}", "Cannot create logs folder: {e}"))?;
     Ok(logs.join(format!("open-claude-{mode}.{ext}")))
 }
 
@@ -573,11 +586,11 @@ fn batch_test(cli: &str, dir: &Path, mode: &str) -> Result<TestReport, String> {
     // Exit 8 = Tests liefen, einige rot. Alles andere ohne success hat kein Ergebnis.
     if let Err(e) = envelope(&o) {
         if o.status.code() != Some(8) {
-            return Err(format!("Testlauf abgebrochen: {e}"));
+            return Err(tr!("Testlauf abgebrochen: {e}", "Test run aborted: {e}"));
         }
     }
     let xml = std::fs::read_to_string(&report)
-        .map_err(|e| format!("Testbericht fehlt ({}): {e}", report.display()))?;
+        .map_err(|e| tr!("Testbericht fehlt ({}): {e}", "Test report missing ({}): {e}", report.display()))?;
     Ok(TestReport { via: "batchmode".into(), report_path: r.into_owned(), ..parse_nunit(&xml)? })
 }
 
@@ -600,14 +613,14 @@ fn editor_test(cli: &str, dir: &Path, mode: &str) -> Result<TestReport, String> 
     }
     match gone {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            return Err(format!("Alte Test-Statusdatei nicht löschbar: {e}"));
+            return Err(tr!("Alte Test-Statusdatei nicht löschbar: {e}", "Old test status file cannot be deleted: {e}"));
         }
         _ => {}
     }
     // Ohne Autotick haengen Tests, solange der Editor nicht im Vordergrund ist.
     let _ = unity(cli, dir, &["command", "set_autotick", "--enable", "true", "--project-path", &p, "--json"], LONG);
     let args = ["command", "run_tests", "--mode", pmode, "--async_tests", "true", "--project-path", &p, "--json"];
-    envelope(&unity(cli, dir, &args, LONG)?).map_err(|e| format!("Tests im Editor nicht gestartet: {e}"))?;
+    envelope(&unity(cli, dir, &args, LONG)?).map_err(|e| tr!("Tests im Editor nicht gestartet: {e}", "Tests in the editor not started: {e}"))?;
 
     let start = Instant::now();
     let mut alive = Instant::now();
@@ -616,17 +629,17 @@ fn editor_test(cli: &str, dir: &Path, mode: &str) -> Result<TestReport, String> 
         let text = std::fs::read_to_string(&status).unwrap_or_default();
         if let Some(report) = parse_editor_status(&text)? {
             let out = report_file(dir, mode, "json")?;
-            std::fs::write(&out, &text).map_err(|e| format!("Testbericht nicht schreibbar: {e}"))?;
+            std::fs::write(&out, &text).map_err(|e| tr!("Testbericht nicht schreibbar: {e}", "Test report not writable: {e}"))?;
             let report_path = out.to_string_lossy().into_owned();
             return Ok(TestReport { via: "editor".into(), report_path, ..report });
         }
         if start.elapsed() > TEST_TIMEOUT {
-            return Err("Tests im Editor: Zeitlimit überschritten".into());
+            return Err(tr!("Tests im Editor: Zeitlimit überschritten", "Tests in the editor: time limit exceeded"));
         }
         if alive.elapsed() > Duration::from_secs(10) {
             alive = Instant::now();
             if editor_state(cli, dir)?.is_none() {
-                return Err("Unity-Editor wurde während der Tests beendet".into());
+                return Err(tr!("Unity-Editor wurde während der Tests beendet", "Unity editor was closed during the tests"));
             }
         }
     }
@@ -634,7 +647,7 @@ fn editor_test(cli: &str, dir: &Path, mode: &str) -> Result<TestReport, String> 
 
 fn test_blocking(path: &str, mode: &str) -> Result<TestReport, String> {
     if !matches!(mode, "EditMode" | "PlayMode") {
-        return Err(format!("Unbekannter Testmodus: {mode}"));
+        return Err(tr!("Unbekannter Testmodus: {mode}", "Unknown test mode: {mode}"));
     }
     let dir = project(path)?;
     let cli = cli()?;
@@ -656,7 +669,7 @@ async fn blocking<T: Send + 'static>(
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f)
         .await
-        .map_err(|e| format!("Unity abgebrochen: {e}"))?
+        .map_err(|e| tr!("Unity abgebrochen: {e}", "Unity aborted: {e}"))?
 }
 
 #[tauri::command]

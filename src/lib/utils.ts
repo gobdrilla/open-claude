@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import { clsx, type ClassValue } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
@@ -18,11 +19,11 @@ export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & {
 };
 
 const AGE_STEPS: [number, string][] = [
-  [31536e6, "J"],
-  [2592e6, "Mo"],
-  [864e5, "T"],
-  [36e5, "h"],
-  [6e4, "min"],
+  [31536e6, "{n} J"],
+  [2592e6, "{n} Mo"],
+  [864e5, "{n} T"],
+  [36e5, "{n} h"],
+  [6e4, "{n} min"],
 ];
 
 /** Kurzes Alter eines ISO-Zeitpunkts: "3 T", "2 Mo"; leer ohne Datum. */
@@ -35,6 +36,6 @@ export function altKey(e: KeyboardEvent, k: "e" | "g"): boolean {
 export function age(iso: string) {
   if (!iso) return "";
   const diff = Date.now() - Date.parse(iso);
-  for (const [ms, unit] of AGE_STEPS) if (diff >= ms) return `${Math.floor(diff / ms)} ${unit}`;
-  return "jetzt";
+  for (const [ms, unit] of AGE_STEPS) if (diff >= ms) return t(unit, { n: Math.floor(diff / ms) });
+  return t("jetzt");
 }

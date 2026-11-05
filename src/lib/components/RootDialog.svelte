@@ -4,6 +4,7 @@
   import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
   import FolderInputIcon from "@lucide/svelte/icons/folder-input";
   import { Button, Dialog, FolderField, Row } from "$lib/atelier-ui";
+  import { t } from "$lib/i18n";
 
   // first: Erststart, nicht wegklickbar, eine der beiden Wahlen muss fallen. onchoose("") = ohne Dev-Ordner.
   let {
@@ -34,7 +35,7 @@
     found = null;
     error = "";
     if (!open || !p) return;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const n = (await invoke<unknown[]>("scan", { root: p, extra: [] })).length;
         if (g === gen) found = n;
@@ -42,11 +43,11 @@
         if (g === gen) error = String(e);
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   });
 
   async function browse() {
-    const picked = await pickFolder({ directory: true, title: "Ordner wählen", defaultPath: path || undefined });
+    const picked = await pickFolder({ directory: true, title: t("Ordner wählen"), defaultPath: path || undefined });
     if (typeof picked === "string") (path = picked), (mode = "dev");
   }
 
@@ -78,31 +79,31 @@
     interactOutsideBehavior={first ? "ignore" : "close"}
   >
     <Dialog.Header>
-      <Dialog.Title>{first ? "Willkommen bei L'Atelier de Claude" : "Projektquelle"}</Dialog.Title>
-      <Dialog.Description>Wie sollen deine Projekte in die Liste kommen? Ändern geht später jederzeit.</Dialog.Description>
+      <Dialog.Title>{first ? t("Willkommen bei L'Atelier de Claude") : t("Projektquelle")}</Dialog.Title>
+      <Dialog.Description>{t("Wie sollen deine Projekte in die Liste kommen? Ändern geht später jederzeit.")}</Dialog.Description>
     </Dialog.Header>
 
     <div class="grid gap-2">
-      {@render option("dev", FolderSearchIcon, "Dev-Ordner", "Alle Git-Repos darunter erscheinen automatisch.")}
+      {@render option("dev", FolderSearchIcon, t("Dev-Ordner"), t("Alle Git-Repos darunter erscheinen automatisch."))}
       {#if mode === "dev"}
         <!-- Enter im Pfadfeld uebernimmt; kein form, sonst waere der Ordner-Knopf ein Submit. -->
         <div class="grid gap-1.5 pl-1" role="presentation" onkeydown={(e) => e.key === "Enter" && submit()}>
           <FolderField bind:value={path} oninput={() => {}} onbrowse={browse} />
           <p class="min-h-4 text-meta {error ? 'text-destructive' : 'text-muted-foreground'}">
             {#if error}{error}
-            {:else if !path.trim()}Ordner wählen oder Pfad eingeben.
-            {:else if found === null}Suche Repos …
-            {:else if found === 0}Noch keine Git-Repos darin, neue erscheinen nach dem Klonen.
-            {:else}{found} {found === 1 ? "Git-Repo" : "Git-Repos"} gefunden.{/if}
+            {:else if !path.trim()}{t("Ordner wählen oder Pfad eingeben.")}
+            {:else if found === null}{t("Suche Repos …")}
+            {:else if found === 0}{t("Noch keine Git-Repos darin, neue erscheinen nach dem Klonen.")}
+            {:else}{found === 1 ? t("1 Git-Repo gefunden.") : t("{n} Git-Repos gefunden.", { n: found })}{/if}
           </p>
         </div>
       {/if}
-      {@render option("single", FolderInputIcon, "Ohne Dev-Ordner", "Projekte einzeln hinzufügen, egal wo sie liegen.")}
+      {@render option("single", FolderInputIcon, t("Ohne Dev-Ordner"), t("Projekte einzeln hinzufügen, egal wo sie liegen."))}
     </div>
 
     <div class="flex justify-end gap-2">
-      {#if !first}<Button variant="ghost" size="sm" onclick={onclose}>Abbrechen</Button>{/if}
-      <Button size="sm" onclick={submit} disabled={!ready}>Übernehmen</Button>
+      {#if !first}<Button variant="ghost" size="sm" onclick={onclose}>{t("Abbrechen")}</Button>{/if}
+      <Button size="sm" onclick={submit} disabled={!ready}>{t("Übernehmen")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

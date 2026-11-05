@@ -78,9 +78,9 @@ fn install(name: &str) -> Result<String, String> {
             &["install", "--id", "Git.Git", "-e", "--silent", "--accept-package-agreements", "--accept-source-agreements"],
             "https://git-scm.com",
         ),
-        _ => return Err(format!("Unbekannte Abhängigkeit: {name}")),
+        _ => return Err(tr!("Unbekannte Abhängigkeit: {name}", "Unknown dependency: {name}")),
     };
-    let fail = |why: String| format!("{name} nicht installiert ({why}). Von Hand: {manual}");
+    let fail = |why: String| tr!("{name} nicht installiert ({why}). Von Hand: {manual}", "{name} not installed ({why}). Manually: {manual}");
     let out = crate::quiet(prog)
         .args(args)
         .stdin(Stdio::null())

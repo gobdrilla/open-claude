@@ -8,6 +8,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, IconButton, Textarea } from "$lib/atelier-ui";
   import Markdown from "$lib/components/Markdown.svelte";
+  import { t } from "$lib/i18n";
 
   // Composer at the bottom of the activity panel: always reachable, answers stack above it.
   let { cwd, id, sid }: { cwd: string; id: string; sid: string | null } = $props();
@@ -49,7 +50,7 @@
           {#if x.err}
             <p class="text-destructive break-words">{x.err}</p>
           {:else if x.a === undefined}
-            <p class="text-muted-foreground animate-pulse">Claude denkt nach …</p>
+            <p class="text-muted-foreground animate-pulse">{t("Claude denkt nach …")}</p>
           {:else}
             <div class="min-w-0 overflow-x-auto"><Markdown text={x.a} /></div>
           {/if}
@@ -58,10 +59,10 @@
     </div>
   {/if}
   <div class="mb-1 flex items-center gap-2">
-    <label for="btw-{id}" class="text-meta text-muted-foreground min-w-0 flex-1 truncate" title="Läuft parallel, stört die Sitzung nicht; Claude kann nur lesen."
-      >Nebenfrage an Claude</label
+    <label for="btw-{id}" class="text-meta text-muted-foreground min-w-0 flex-1 truncate" title={t("Läuft parallel, stört die Sitzung nicht; Claude kann nur lesen.")}
+      >{t("Nebenfrage an Claude")}</label
     >
-    {#if list.length}<IconButton size="xs" label="Antworten ausblenden" onclick={() => (history[id] = [])}>✕</IconButton>{/if}
+    {#if list.length}<IconButton size="xs" label={t("Antworten ausblenden")} onclick={() => (history[id] = [])}>✕</IconButton>{/if}
   </div>
   <div class="flex items-end gap-1.5">
     <Textarea
@@ -69,12 +70,12 @@
       bind:value={text}
       rows={1}
       disabled={!sid}
-      placeholder={sid ? "Frage … (Enter sendet)" : "Keine laufende Claude-Sitzung"}
-      title="Enter sendet, Umschalt+Enter neue Zeile"
+      placeholder={sid ? t("Frage … (Enter sendet)") : t("Keine laufende Claude-Sitzung")}
+      title={t("Enter sendet, Umschalt+Enter neue Zeile")}
       density="sm"
       class="max-h-32 min-h-7 py-1"
       onkeydown={keydown}
     />
-    <Button size="sm" disabled={!sid || !text.trim()} onclick={ask}>Fragen</Button>
+    <Button size="sm" disabled={!sid || !text.trim()} onclick={ask}>{t("Fragen")}</Button>
   </div>
 </div>

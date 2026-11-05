@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
 	import { Dialog as DialogPrimitive } from "bits-ui";
 	import XIcon from '@lucide/svelte/icons/x';
 	import { Button } from "$lib/atelier-ui/primitives/button/index.js";
@@ -67,7 +68,7 @@
 				{#snippet child({ props })}
 					<Button variant="ghost" class="absolute top-2 right-2" size="icon-sm" {...props}>
 						<XIcon  />
-						<span class="sr-only">Schließen</span>
+						<span class="sr-only">{t("Schließen")}</span>
 					</Button>
 				{/snippet}
 			</DialogPrimitive.Close>

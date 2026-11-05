@@ -135,7 +135,7 @@ struct CloneProgress {
 fn check_kind(kind: &str) -> Result<(), String> {
     match kind {
         "github" | "gitlab" => Ok(()),
-        _ => Err(format!("Unbekannter Anbieter: {kind}")),
+        _ => Err(tr!("Unbekannter Anbieter: {kind}", "Unknown provider: {kind}")),
     }
 }
 
@@ -151,7 +151,7 @@ fn norm_host(host: &str) -> Result<String, String> {
     if ok {
         Ok(h)
     } else {
-        Err(format!("Ungültiger Host: {host}"))
+        Err(tr!("Ungültiger Host: {host}", "Invalid host: {host}"))
     }
 }
 
@@ -164,7 +164,7 @@ fn api_base(kind: &str, host: &str) -> String {
 }
 
 fn kstore(e: keyring::Error) -> String {
-    format!("Anmeldeinfo-Speicher: {e}")
+    tr!("Anmeldeinfo-Speicher: {e}", "Credential store: {e}")
 }
 
 /// key ist "kind:host:user", alt (ein Konto pro Host) "kind:host".
@@ -293,7 +293,7 @@ async fn api(
     let req = authed(req, kind, tok);
     let req = if kind == "github" { req.header("Accept", "application/vnd.github+json") } else { req };
     // reqwest-Fehler nennen nur die URL; der Token steckt im Header.
-    let res = req.send().await.map_err(|e| format!("{host} nicht erreichbar: {e}"))?;
+    let res = req.send().await.map_err(|e| tr!("{host} nicht erreichbar: {e}", "{host} not reachable: {e}"))?;
     let status = res.status();
     // DELETE antwortet mit 204 ohne Body -> Null.
     let body: Value = res.json().await.unwrap_or(Value::Null);
@@ -330,7 +330,7 @@ fn client() -> Result<reqwest::Client, String> {
 
 fn api_error(host: &str, status: reqwest::StatusCode, body: &Value) -> String {
     if status == reqwest::StatusCode::UNAUTHORIZED {
-        return format!("{host}: Token ungültig oder abgelaufen (401)");
+        return tr!("{host}: Token ungültig oder abgelaufen (401)", "{host}: token invalid or expired (401)");
     }
     // GitHub 422: Grund in errors[0].message; GitLab 400: message als Objekt {"name":["…"]}.
     let obj = body["message"].is_object().then(|| body["message"].to_string());
@@ -342,8 +342,8 @@ fn api_error(host: &str, status: reqwest::StatusCode, body: &Value) -> String {
         .unwrap_or("");
     // GitLab schickt z. B. {"message":"403 Forbidden"}, das stuende sonst doppelt da.
     let msg = if status.to_string().contains(msg) { "" } else { msg };
-    let hint = if status == reqwest::StatusCode::FORBIDDEN { " (Token ohne Rechte?)" } else { "" };
-    format!("{host} antwortet mit {status}{hint} {msg}").trim().to_string()
+    let hint = if status == reqwest::StatusCode::FORBIDDEN { tr!(" (Token ohne Rechte?)", " (token lacks permissions?)") } else { String::new() };
+    tr!("{host} antwortet mit {status}{hint} {msg}", "{host} responds with {status}{hint} {msg}").trim().to_string()
 }
 
 fn s(v: &Value) -> String {
@@ -359,7 +359,7 @@ async fn verify(kind: String, host: String, tok: String) -> Result<Account, Stri
     let host = norm_host(&host)?;
     let tok = tok.trim().to_string();
     if tok.is_empty() {
-        return Err("Token fehlt".into());
+        return Err(tr!("Token fehlt", "Token missing"));
     }
     let me = api_get(&kind, &host, &tok, "/user", &[]).await?;
     let user = if kind == "github" { s(&me["login"]) } else { s(&me["username"]) };
@@ -402,12 +402,12 @@ pub async fn forge_import_cli(kind: String, host: String) -> Result<Account, Str
     let out = crate::quiet(prog)
         .args(args)
         .output()
-        .map_err(|_| format!("{prog} ist nicht installiert"))?;
+        .map_err(|_| tr!("{prog} ist nicht installiert", "{prog} is not installed"))?;
     let tok = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if !out.status.success() || tok.is_empty() {
         // stderr von gh/glab enthaelt keinen Token.
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return Err(format!("{prog}: kein Token für {h}. {err}").trim().to_string());
+        return Err(tr!("{prog}: kein Token für {h}. {err}", "{prog}: no token for {h}. {err}").trim().to_string());
     }
     verify(kind, h, tok).await
 }
@@ -430,7 +430,7 @@ pub async fn forge_repos(
         Some(u) => token(&kind, &host, &u, &known)?,
         None => None,
     };
-    let tok = tok.ok_or_else(|| format!("Kein Konto für {host}"))?;
+    let tok = tok.ok_or_else(|| tr!("Kein Konto für {host}", "No account for {host}"))?;
     let page = page.max(1).to_string();
     let q = query.trim().to_string();
     let per = ("per_page", "50".to_string());
@@ -582,12 +582,12 @@ fn resolve<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str, remote_url: &str) 
 
 /// Fuer Schreibzugriffe: ohne Konto ist das ein Fehler, kein leeres Ergebnis.
 fn require<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str, remote_url: &str) -> Result<Repo, String> {
-    resolve(app, repo, remote_url)?.ok_or_else(|| "Kein Konto für dieses Remote-Repository hinterlegt".to_string())
+    resolve(app, repo, remote_url)?.ok_or_else(|| tr!("Kein Konto für dieses Remote-Repository hinterlegt", "No account set up for this remote repository"))
 }
 
 /// Repo hinter "origin" mit Konto; fuer den MCP-Server der Claude-Session.
 fn origin<R: tauri::Runtime>(app: &AppHandle<R>, repo: &str) -> Result<Repo, String> {
-    let url = crate::git::config(repo, "remote.origin.url").ok_or("Repository hat kein Remote „origin“")?;
+    let url = crate::git::config(repo, "remote.origin.url").ok_or_else(|| tr!("Repository hat kein Remote „origin“", "Repository has no remote “origin”"))?;
     require(app, repo, &url)
 }
 
@@ -616,12 +616,12 @@ pub(crate) async fn mcp_call<R: tauri::Runtime>(
     let r = origin(app, repo)?;
     // Nur Pfade unter der API-Wurzel, damit der Token nie an einen anderen Host geht.
     if !path.starts_with('/') || path.starts_with("//") {
-        return Err(format!("path muss mit / beginnen: {path}"));
+        return Err(tr!("path muss mit / beginnen: {path}", "path must start with /: {path}"));
     }
     if !in_repo(path, &r.base) {
-        return Err(format!("path muss mit {} beginnen: {path}", r.base));
+        return Err(tr!("path muss mit {} beginnen: {path}", "path must start with {}: {path}", r.base));
     }
-    let method = reqwest::Method::from_bytes(method.to_ascii_uppercase().as_bytes()).map_err(|_| format!("Ungültige Methode: {method}"))?;
+    let method = reqwest::Method::from_bytes(method.to_ascii_uppercase().as_bytes()).map_err(|_| tr!("Ungültige Methode: {method}", "Invalid method: {method}"))?;
     let default = if r.github() { "application/vnd.github+json" } else { "application/json" };
     let req = client()?.request(method, format!("{}{path}", api_base(r.kind, &r.host))).query(query);
     let req = authed(req, r.kind, &r.tok).header("Accept", accept.unwrap_or(default));
@@ -629,12 +629,12 @@ pub(crate) async fn mcp_call<R: tauri::Runtime>(
         Some(b) => req.json(b),
         None => req,
     };
-    let res = req.send().await.map_err(|e| format!("{} nicht erreichbar: {e}", r.host))?;
+    let res = req.send().await.map_err(|e| tr!("{} nicht erreichbar: {e}", "{} not reachable: {e}", r.host))?;
     // Logs/Archive leitet GitHub auf einen Blob-Host um; client() folgt fremden Hosts nicht, darum hier ohne Token.
     let res = match res.headers().get(reqwest::header::LOCATION).and_then(|l| l.to_str().ok()) {
         Some(loc) if res.status().is_redirection() => {
             let plain = reqwest::Client::builder().user_agent("ocui").timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
-            plain.get(loc).send().await.map_err(|e| format!("Weiterleitung nicht erreichbar: {e}"))?
+            plain.get(loc).send().await.map_err(|e| tr!("Weiterleitung nicht erreichbar: {e}", "Redirect not reachable: {e}"))?
         }
         _ => res,
     };
@@ -875,7 +875,7 @@ fn release_path(repo: &Repo, id: &str) -> Result<String, String> {
         return Ok(format!("/releases/{}", encode(id)));
     }
     if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(format!("Ungültige Release-ID: {id}"));
+        return Err(tr!("Ungültige Release-ID: {id}", "Invalid release ID: {id}"));
     }
     Ok(format!("/releases/{id}"))
 }
@@ -932,14 +932,14 @@ fn mark_web(dest: &std::path::Path, url: &str) {
 pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, name: String, url: String, api: Option<String>) -> Result<String, String> {
     use std::io::Write;
     // Nur der letzte Pfadteil: ein Asset-Name wie "../x" darf nicht aus dem Ordner heraus.
-    let name = std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.starts_with('.')).map(safe_name).ok_or("Ungültiger Dateiname")?;
+    let name = std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).filter(|n| !n.starts_with('.')).map(safe_name).ok_or_else(|| tr!("Ungültiger Dateiname", "Invalid file name"))?;
     // Ohne Gesamt-Timeout: grosse DMGs brauchen laenger als 30 s, haengen soll aber nichts.
     let plain = reqwest::Client::builder().user_agent("ocui").read_timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
     let res = match (resolve(&app, &repo, &remote_url)?, api) {
         // Privates GitHub-Repo: ueber die API mit Token; die Weiterleitung zum Blob-Host ohne Token (wie mcp_call).
         (Some(r), Some(api)) if r.github() && in_repo(&api, &r.base) => {
             let req = client()?.get(format!("{}{api}", api_base(r.kind, &r.host))).header("Accept", "application/octet-stream");
-            let res = authed(req, r.kind, &r.tok).send().await.map_err(|e| format!("{} nicht erreichbar: {e}", r.host))?;
+            let res = authed(req, r.kind, &r.tok).send().await.map_err(|e| tr!("{} nicht erreichbar: {e}", "{} not reachable: {e}", r.host))?;
             match res.headers().get(reqwest::header::LOCATION).and_then(|l| l.to_str().ok()) {
                 Some(loc) if res.status().is_redirection() => plain.get(loc).send().await,
                 _ => Ok(res),
@@ -948,9 +948,9 @@ pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, na
         // shortcut: GitLab-Links und GitHub ohne Konto laden ohne Token, private GitLab-Uploads scheitern dann; bei Bedarf API-Upload-Endpunkt nutzen.
         _ => plain.get(&url).send().await,
     }
-    .map_err(|e| format!("Download nicht erreichbar: {e}"))?;
+    .map_err(|e| tr!("Download nicht erreichbar: {e}", "Download not reachable: {e}"))?;
     if !res.status().is_success() {
-        return Err(format!("Download fehlgeschlagen: HTTP {}", res.status().as_u16()));
+        return Err(tr!("Download fehlgeschlagen: HTTP {}", "Download failed: HTTP {}", res.status().as_u16()));
     }
     // Ohne XDG-user-dirs (Linux-Minimalsetups) kennt Tauri keinen Downloads-Ordner.
     let dir = app.path().download_dir().unwrap_or_else(|_| crate::skills::home().join("Downloads"));
@@ -962,7 +962,7 @@ pub async fn forge_download(app: AppHandle, repo: String, remote_url: String, na
     let result = async {
         let mut f = std::fs::File::create(&part).map_err(|e| e.to_string())?;
         let mut res = res;
-        while let Some(chunk) = res.chunk().await.map_err(|e| format!("Download abgebrochen: {e}"))? {
+        while let Some(chunk) = res.chunk().await.map_err(|e| tr!("Download abgebrochen: {e}", "Download aborted: {e}"))? {
             f.write_all(&chunk).map_err(|e| e.to_string())?;
         }
         f.sync_all().map_err(|e| e.to_string())?;
@@ -1015,7 +1015,7 @@ pub async fn forge_release_save(
         }
         Some(tag) => {
             if input.tag != tag {
-                return Err("GitLab kann den Tag eines Releases nicht ändern. Release löschen und neu anlegen.".into());
+                return Err(tr!("GitLab kann den Tag eines Releases nicht ändern. Release löschen und neu anlegen.", "GitLab cannot change the tag of a release. Delete the release and create it again."));
             }
             let body = serde_json::json!({ "name": input.name, "description": input.body });
             repo.call(Method::PUT, &release_path(&repo, &tag)?, &[], Some(&body)).await?
@@ -1082,7 +1082,7 @@ fn run_action_path(github: bool, job: bool, id: u64, action: &str) -> Result<Str
         (false, _, "rerun_failed") => "retry",
         (false, true, "rerun") => "retry",
         (false, _, "cancel") => "cancel",
-        _ => return Err(format!("Aktion nicht unterstützt: {action}")),
+        _ => return Err(tr!("Aktion nicht unterstützt: {action}", "Action not supported: {action}")),
     };
     let what = match (github, job) {
         (true, false) => "actions/runs",
@@ -1140,7 +1140,7 @@ pub async fn forge_clone(
     };
     tauri::async_runtime::spawn_blocking(move || clone_blocking(url, dest, auth, emit))
         .await
-        .map_err(|e| format!("Klonen abgebrochen: {e}"))?
+        .map_err(|e| tr!("Klonen abgebrochen: {e}", "Clone aborted: {e}"))?
 }
 
 fn clone_blocking(
@@ -1151,11 +1151,11 @@ fn clone_blocking(
 ) -> Result<String, String> {
     let url = url.trim().to_string();
     if url.is_empty() || url.starts_with('-') {
-        return Err(format!("Ungültige URL: {url}"));
+        return Err(tr!("Ungültige URL: {url}", "Invalid URL: {url}"));
     }
     let target = std::path::Path::new(&dest);
     if target.exists() && std::fs::read_dir(target).map_or(true, |mut d| d.next().is_some()) {
-        return Err(format!("Zielordner ist nicht leer: {dest}"));
+        return Err(tr!("Zielordner ist nicht leer: {dest}", "Target folder is not empty: {dest}"));
     }
 
     let mut cmd = crate::quiet("git");
@@ -1169,8 +1169,8 @@ fn clone_blocking(
 
     cmd.envs(auth.into_iter().flatten());
 
-    let mut child = cmd.spawn().map_err(|e| format!("git nicht startbar: {e}"))?;
-    let mut err = child.stderr.take().ok_or("stderr fehlt")?;
+    let mut child = cmd.spawn().map_err(|e| tr!("git nicht startbar: {e}", "git cannot be started: {e}"))?;
+    let mut err = child.stderr.take().ok_or_else(|| tr!("stderr fehlt", "stderr missing"))?;
     let mut buf = [0u8; 4096];
     let mut pending: Vec<u8> = Vec::new();
     // Nur Meldungen ohne Prozentangabe, fuer die Fehlermeldung.
@@ -1201,7 +1201,7 @@ fn clone_blocking(
     if !status.success() {
         let tail = msgs.len().saturating_sub(10);
         let msg = msgs[tail..].join("\n");
-        return Err(if msg.is_empty() { "Klonen fehlgeschlagen".into() } else { msg });
+        return Err(if msg.is_empty() { tr!("Klonen fehlgeschlagen", "Clone failed") } else { msg });
     }
     Ok(dest)
 }
@@ -1241,9 +1241,9 @@ pub async fn forge_repo_account(app: AppHandle, repo: String) -> Result<RepoAcco
 pub async fn forge_set_repo_account(app: AppHandle, repo: String, account: Option<String>) -> Result<RepoAccount, String> {
     match account {
         Some(id) => {
-            let (kind, host, user) = parse_account(&id).ok_or_else(|| format!("Ungültiges Konto: {id}"))?;
+            let (kind, host, user) = parse_account(&id).ok_or_else(|| tr!("Ungültiges Konto: {id}", "Invalid account: {id}"))?;
             let id = format!("{kind}:{host}:{user}");
-            let tok = token(kind, &host, &user, &known(&app))?.ok_or_else(|| format!("Kein Token für {id}"))?;
+            let tok = token(kind, &host, &user, &known(&app))?.ok_or_else(|| tr!("Kein Token für {id}", "No token for {id}"))?;
             let me = api_get(kind, &host, &tok, "/user", &[]).await?;
             let (name, email) = identity(kind, &me);
             crate::git::apply_identity(&repo, &id, &name, &email)?;
@@ -1275,18 +1275,18 @@ fn created(kind: &str, r: &Value) -> (String, String) {
 /// Remote mit dem am Repo gebundenen Konto anlegen, origin setzen, pushen. Liefert die Web-URL.
 #[tauri::command]
 pub async fn forge_create_remote(app: AppHandle, repo: String, name: String, private: bool) -> Result<String, String> {
-    let id = crate::git::config(&repo, "ocui.account").ok_or("Kein Konto am Repo")?;
-    let (kind, host, user) = parse_account(&id).ok_or_else(|| format!("Ungültiges Konto: {id}"))?;
-    let tok = token(kind, &host, &user, &known(&app))?.ok_or_else(|| format!("Kein Token für {id}"))?;
+    let id = crate::git::config(&repo, "ocui.account").ok_or_else(|| tr!("Kein Konto am Repo", "No account on the repo"))?;
+    let (kind, host, user) = parse_account(&id).ok_or_else(|| tr!("Ungültiges Konto: {id}", "Invalid account: {id}"))?;
+    let tok = token(kind, &host, &user, &known(&app))?.ok_or_else(|| tr!("Kein Token für {id}", "No token for {id}"))?;
     let (path, body) = create_req(kind, &name, private);
     let r = api(kind, &host, &tok, reqwest::Method::POST, path, &[], Some(&body)).await?;
     let (url, web) = created(kind, &r);
     if !url.starts_with("https://") {
-        return Err(format!("{host}: keine Clone-URL in der Antwort"));
+        return Err(tr!("{host}: keine Clone-URL in der Antwort", "{host}: no clone URL in the response"));
     }
     crate::git::blocking(move || crate::git::publish(&repo, &url))
         .await
-        .map_err(|e| format!("{web} angelegt, Push fehlgeschlagen: {e}"))?;
+        .map_err(|e| tr!("{web} angelegt, Push fehlgeschlagen: {e}", "{web} created, push failed: {e}"))?;
     Ok(web)
 }
 
@@ -1301,10 +1301,10 @@ fn valid_url(url: &str) -> bool {
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
     if !valid_url(&url) {
-        return Err(format!("Keine http(s)-URL: {url}"));
+        return Err(tr!("Keine http(s)-URL: {url}", "Not an http(s) URL: {url}"));
     }
     crate::open_link(&url)
-        .map_err(|e| format!("Browser konnte nicht geöffnet werden: {e}"))
+        .map_err(|e| tr!("Browser konnte nicht geöffnet werden: {e}", "Browser could not be opened: {e}"))
 }
 
 /// Browser-URL zum Remote (ssh/scp-artig -> https); None, wenn nicht parsebar.

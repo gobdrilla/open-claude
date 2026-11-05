@@ -27,7 +27,7 @@ pub struct PreviewRoots(Mutex<HashSet<PathBuf>>);
 /// `on` false: Editor des Projekts geschlossen, das Schema liefert nichts mehr daraus.
 #[tauri::command]
 pub fn preview_allow(repo: String, on: bool, state: tauri::State<'_, PreviewRoots>) -> Result<(), String> {
-    let root = Path::new(&repo).canonicalize().map_err(|e| format!("Projekt nicht gefunden: {e}"))?;
+    let root = Path::new(&repo).canonicalize().map_err(|e| tr!("Projekt nicht gefunden: {e}", "Project not found: {e}"))?;
     let mut roots = state.0.lock().unwrap();
     if on {
         roots.insert(root);
@@ -175,7 +175,7 @@ fn run(cmd: &mut Command, input: Vec<u8>, timeout: Duration) -> Result<(ExitStat
             None if start.elapsed() > timeout => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("Zeitüberschreitung".into());
+                return Err(tr!("Zeitüberschreitung", "Timed out"));
             }
             None => std::thread::sleep(Duration::from_millis(20)),
         }
@@ -192,12 +192,12 @@ fn xaml_result(code: Option<i32>, png: &[u8], stderr: &str) -> Result<String, St
     if code.map(|c| c as u32) == Some(FRAMEWORK_MISSING) || stderr.contains("You must install") {
         return Err("DOTNET_FEHLT".into());
     }
-    Err(if stderr.is_empty() { format!("WPF-Vorschau fehlgeschlagen (Code {code:?}).") } else { stderr.to_string() })
+    Err(if stderr.is_empty() { tr!("WPF-Vorschau fehlgeschlagen (Code {code:?}).", "WPF preview failed (code {code:?}).") } else { stderr.to_string() })
 }
 
 fn render(helper: &Path, repo: &str, path: &str, content: String) -> Result<String, String> {
     if !helper.is_file() {
-        return Err(format!("WPF-Vorschau ist nicht installiert ({} fehlt).", helper.display()));
+        return Err(tr!("WPF-Vorschau ist nicht installiert ({} fehlt).", "WPF preview is not installed ({} missing).", helper.display()));
     }
     let mut cmd = crate::quiet(&helper.to_string_lossy());
     // Argument 1: Projektordner (nur daraus bindet der Helfer weitere XAML-Dateien ein), Argument 2: App.xaml.
@@ -207,7 +207,7 @@ fn render(helper: &Path, repo: &str, path: &str, content: String) -> Result<Stri
         cmd.current_dir(dir);
     }
     let (status, png, stderr) = run(&mut cmd, content.into_bytes(), XAML_TIMEOUT)
-        .map_err(|e| format!("WPF-Vorschau konnte nicht gestartet werden: {e}"))?;
+        .map_err(|e| tr!("WPF-Vorschau konnte nicht gestartet werden: {e}", "WPF preview could not be started: {e}"))?;
     xaml_result(status.code(), &png, &stderr)
 }
 
@@ -236,10 +236,10 @@ pub fn editor_dirty(dirty: bool) {
 fn losses(dirty: bool, sessions: usize) -> String {
     let mut lines = Vec::new();
     if sessions > 0 {
-        lines.push(format!("{sessions} laufende Claude-Sitzung(en) werden beendet."));
+        lines.push(tr!("{sessions} laufende Claude-Sitzung(en) werden beendet.", "{sessions} running Claude session(s) will be ended."));
     }
     if dirty {
-        lines.push("Ungespeicherte Änderungen im Editor gehen verloren.".to_string());
+        lines.push(tr!("Ungespeicherte Änderungen im Editor gehen verloren.", "Unsaved changes in the editor will be lost."));
     }
     lines.join("\n")
 }
@@ -257,9 +257,9 @@ pub fn quit(app: &tauri::AppHandle) {
     let mut dialog = app
         .dialog()
         .message(lost)
-        .title("L'Atelier de Claude beenden?")
+        .title(tr!("L'Atelier de Claude beenden?", "Quit L'Atelier de Claude?"))
         .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom("Beenden".into(), "Abbrechen".into()));
+        .buttons(MessageDialogButtons::OkCancelCustom(tr!("Beenden", "Quit"), tr!("Abbrechen", "Cancel")));
     if let Some(w) = app.get_webview_window("main") {
         dialog = dialog.parent(&w);
     }

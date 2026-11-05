@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import Notice from "$lib/components/Notice.svelte";
   import { Badge, Button, ConfirmDialog, ContextItem, IconButton, PromptDialog, Row, SectionToggle, Select, TextButton, Textarea, menuContent, menuItem, menuSeparator } from "$lib/atelier-ui";
   import { untrack } from "svelte";
@@ -124,9 +125,16 @@
   function deleteBranches(names: string[], remote: boolean) {
     const list = remote ? names : names.filter((n) => n !== cur);
     if (!list.length) return;
-    const shown = (l: string[]) => (l.length === 1 ? `„${l[0]}“` : `${l.length} Branches (${l.slice(0, 5).join(", ")}${l.length > 5 ? ", …" : ""})`);
-    const where = remote ? "auf dem Server" : "lokal";
-    askConfirm(`${remote ? "Remote-" : ""}${list.length > 1 ? "Branches" : "Branch"} löschen`, `${shown(list)} ${where} löschen?`, async () => {
+    const shown = (l: string[]) =>
+      l.length === 1
+        ? t("„{name}“", { name: l[0] })
+        : t("{n} Branches ({list})", { n: l.length, list: l.slice(0, 5).join(", ") + (l.length > 5 ? ", …" : "") });
+    const many = list.length > 1;
+    const title = remote
+      ? many ? t("Remote-Branches löschen") : t("Remote-Branch löschen")
+      : many ? t("Branches löschen") : t("Branch löschen");
+    const what = shown(list);
+    askConfirm(title, remote ? t("{what} auf dem Server löschen?", { what }) : t("{what} lokal löschen?", { what }), async () => {
       const unmerged: string[] = [];
       try {
         // shortcut: one git call (remote: one push) per branch, batch in Rust if deleting dozens of remote branches is too slow.
@@ -143,8 +151,10 @@
       }
       if (unmerged.length)
         askConfirm(
-          "Branch nicht gemergt",
-          `${shown(unmerged)} ${unmerged.length === 1 ? "enthält" : "enthalten"} Commits, die in keinem anderen Branch liegen. Trotzdem löschen?`,
+          t("Branch nicht gemergt"),
+          unmerged.length === 1
+            ? t("{what} enthält Commits, die in keinem anderen Branch liegen. Trotzdem löschen?", { what: shown(unmerged) })
+            : t("{what} enthalten Commits, die in keinem anderen Branch liegen. Trotzdem löschen?", { what: shown(unmerged) }),
           async () => {
             for (const n of unmerged) await git.branchDelete(repo, n, true, false);
           },
@@ -162,7 +172,7 @@
       .filter((b) => b !== undefined)
       .map((b) => b.name),
   );
-  const setBase = (b: string | null) => run("Production-Branch", () => git.setBase(repo, b));
+  const setBase = (b: string | null) => run(t("Production-Branch"), () => git.setBase(repo, b));
   // Die Basis selbst und ihr lokales Gegenstueck (master -> origin/master) sind nie "offen".
   const isBase = (b: Branch) => b.name === base || b.upstream === base;
   const merged = (b: Branch) => b.unmerged === 0 && !isBase(b) && !b.current;
@@ -295,10 +305,10 @@
 
   // Merge dialog; the chosen mode is remembered across merges.
   const MERGE_MODES = [
-    ["Standard (Fast-Forward wenn möglich)", "default"],
-    ["Immer Merge-Commit (--no-ff)", "no-ff"],
-    ["Nur Fast-Forward (--ff-only)", "ff-only"],
-    ["Squash (ein Commit, ohne Merge-Verknüpfung)", "squash"],
+    [t("Standard (Fast-Forward wenn möglich)"), "default"],
+    [t("Immer Merge-Commit (--no-ff)"), "no-ff"],
+    [t("Nur Fast-Forward (--ff-only)"), "ff-only"],
+    [t("Squash (ein Commit, ohne Merge-Verknüpfung)"), "squash"],
   ] as const;
   let mergeRev = $state<string | null>(null);
   let mergeMsg = $state("");
@@ -340,13 +350,15 @@
   // Tracking-Branch an (Name ueber die echten Remotes, auch bei "up/stream/x").
   function checkout(b: Branch) {
     if (b.current) return;
-    ask("checkout", "Branch wechseln", `Auf „${b.name}“ wechseln?`, () =>
-      run("Branch-Wechsel", () => git.checkout(repo, b.name, false, null)),
+    ask("checkout", t("Branch wechseln"), t("Auf „{name}“ wechseln?", { name: b.name }), () =>
+      run(t("Branch-Wechsel"), () => git.checkout(repo, b.name, false, null)),
     );
   }
 
-  const SUB_STATE = { "-": "nicht geladen", "+": "anderer Commit", U: "Konflikt", " ": "" };
-  const updateSub = (path: string | null) => run("Submodule", () => git.submoduleUpdate(repo, path));
+  const SUB_STATE = { "-": t("nicht geladen"), "+": t("anderer Commit"), U: t("Konflikt"), " ": "" };
+  // Split around the placeholder so the branch keeps its mono font in either word order.
+  const notIn = t("Nicht in {base}").split("{base}");
+  const updateSub = (path: string | null) => run(t("Submodule"), () => git.submoduleUpdate(repo, path));
   // Nicht geladen: leerer Ordner, erst holen
   const openSub = (m: Submodule) => (m.state === "-" ? updateSub(m.path).then(() => onsubmodule(m.path)) : onsubmodule(m.path));
 
@@ -378,16 +390,16 @@
 {#snippet pickBar(remote: boolean)}
   {#if pick.remote === remote && picked.length > 1}
     <div class="bg-primary/10 mx-1 mb-1 flex items-center gap-1 rounded-md px-2 py-0.5">
-      <span class="text-muted-foreground flex-1 text-meta whitespace-nowrap">{picked.length} ausgewählt</span>
-      <Button variant="ghost-danger" size="2xs" disabled={busy} onclick={() => deleteBranches(picked, remote)}>Löschen …</Button>
-      <IconButton size="xs" label="Auswahl aufheben" onclick={() => (pick = { remote, names: [] })}><XIcon class="size-3" /></IconButton>
+      <span class="text-muted-foreground flex-1 text-meta whitespace-nowrap">{t("{n} ausgewählt", { n: picked.length })}</span>
+      <Button variant="ghost-danger" size="2xs" disabled={busy} onclick={() => deleteBranches(picked, remote)}>{t("Löschen …")}</Button>
+      <IconButton size="xs" label={t("Auswahl aufheben")} onclick={() => (pick = { remote, names: [] })}><XIcon class="size-3" /></IconButton>
     </div>
   {/if}
 {/snippet}
 
 {#snippet pickItems(b: Branch, remote: boolean)}
   {#if isPicked(b, remote) && picked.length > 1}
-    <ContextItem label="Ausgewählte löschen ({picked.length}) …" onSelect={() => deleteBranches(picked, remote)} destructive />
+    <ContextItem label={t("Ausgewählte löschen ({n}) …", { n: picked.length })} onSelect={() => deleteBranches(picked, remote)} destructive />
     <ContextMenu.Separator class={menuSeparator} />
   {/if}
 {/snippet}
@@ -413,13 +425,12 @@
           class="flex-1 hover:bg-transparent"
           open={!!expanded.open}
           onclick={() => (expanded.open = !expanded.open)}
-          title="Branches mit Commits, die noch nicht in {base} sind{merges < open.length
-            ? ` · ${merges} Merges reichen, eingerückte kommen mit`
-            : ''}"
+          title={t("Branches mit Commits, die noch nicht in {base} sind", { base }) +
+            (merges < open.length ? t(" · {n} Merges reichen, eingerückte kommen mit", { n: merges }) : "")}
         >
           <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><GitMergeIcon class="size-3" /></span>
           <!-- origin/ dropped so the branch name fits; the tooltip has the full ref -->
-          <span class="min-w-0 flex-1 truncate">Nicht in <span class="font-mono">{base.replace(/^origin\//, "")}</span></span>
+          <span class="min-w-0 flex-1 truncate">{notIn[0]}<span class="font-mono">{base.replace(/^origin\//, "")}</span>{notIn[1]}</span>
           <span class="font-mono text-meta {open.length ? 'text-warning' : 'text-muted-foreground'}"
             >{open.length}</span
           >
@@ -430,8 +441,8 @@
             {#snippet child({ props })}
               <IconButton
                 {...props}
-                label="Production-Branch wählen"
-                title={fixedBase ? `Production-Branch fest: ${fixedBase}` : "Production-Branch wählen"}
+                label={t("Production-Branch wählen")}
+                title={fixedBase ? t("Production-Branch fest: {branch}", { branch: fixedBase }) : t("Production-Branch wählen")}
                 active={!!fixedBase}><SettingsIcon class="size-3" /></IconButton
               >
             {/snippet}
@@ -441,15 +452,15 @@
               align="end"
               class={cn(menuContent, "min-w-52")}
             >
-              <p class="text-muted-foreground px-2 py-1 text-meta">Production-Branch</p>
-              {@render choice("Automatisch erkennen", null)}
+              <p class="text-muted-foreground px-2 py-1 text-meta">{t("Production-Branch")}</p>
+              {@render choice(t("Automatisch erkennen"), null)}
               {#each candidates as c (c)}
                 {@render choice(c, c)}
               {/each}
               {#if fixedBase && !candidates.includes(fixedBase)}
                 {@render choice(fixedBase, fixedBase)}
               {/if}
-              <p class="text-muted-foreground px-2 pt-1.5 pb-1 text-meta">Andere: Rechtsklick auf einen Branch.</p>
+              <p class="text-muted-foreground px-2 pt-1.5 pb-1 text-meta">{t("Andere: Rechtsklick auf einen Branch.")}</p>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
@@ -458,7 +469,7 @@
         <div class="px-1 pb-1">
           {#if open.length === 0}
             <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">
-              {allOpen.length ? "Nichts aus den letzten 6 Monaten." : "Alles gemergt."}
+              {allOpen.length ? t("Nichts aus den letzten 6 Monaten.") : t("Alles gemergt.")}
             </p>
           {/if}
           {#each tree as { b, depth } (b.name)}
@@ -467,9 +478,11 @@
               style="padding-left:{24 + depth * 12}px"
               onclick={() => onselectref(b.sha)}
               ondblclick={() => checkout(b)}
-              title="{b.name}: {b.unmerged} {b.unmerged === 1 ? 'Commit' : 'Commits'} noch nicht in {base}{within[b.name]
-                ? ` · schon in ${within[b.name]}, kommt mit dessen Merge`
-                : ''} · letzter: {b.subject}"
+              title={(b.unmerged === 1
+                ? t("{name}: 1 Commit noch nicht in {base}", { name: b.name, base: base ?? "" })
+                : t("{name}: {n} Commits noch nicht in {base}", { name: b.name, n: b.unmerged ?? 0, base: base ?? "" })) +
+                (within[b.name] ? t(" · schon in {parent}, kommt mit dessen Merge", { parent: within[b.name] }) : "") +
+                t(" · letzter: {subject}", { subject: b.subject })}
             >
               {#if depth}<span class="text-muted-foreground -ml-1 shrink-0">↳</span>{/if}
               <!-- Remote-Praefix als Icon, sonst schneidet "origin/" den eigentlichen Namen ab -->
@@ -484,7 +497,7 @@
           {/each}
           {#if staleCount}
             <TextButton size="sm" class="px-2 py-1 pl-6" onclick={() => (showStale = !showStale)}>
-              {showStale ? "Ältere ausblenden" : `${staleCount} ältere (über 6 Monate) anzeigen`}
+              {showStale ? t("Ältere ausblenden") : t("{n} ältere (über 6 Monate) anzeigen", { n: staleCount })}
             </TextButton>
           {/if}
         </div>
@@ -503,7 +516,7 @@
       <div class="px-1 pb-1">
         {@render pickBar(false)}
         {#if locals.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">{t("Keine.")}</p>
         {/if}
         {#each localRows as r (r.dir ? r.path + "/" : r.path)}
           {#if r.dir}
@@ -519,7 +532,7 @@
                 dim={merged(b)}
                 ondblclick={() => checkout(b)}
                 onclick={(e) => clickBranch(e, b, false)}
-                title={merged(b) ? `In ${base} gemergt` : undefined}
+                title={merged(b) ? t("In {base} gemergt", { base: base ?? "" }) : undefined}
               >
                 <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{r.label}</span>
                 {#if b.ahead}
@@ -537,34 +550,34 @@
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
                 {@render pickItems(b, false)}
-                <ContextItem label="Auschecken" onSelect={() => checkout(b)} />
+                <ContextItem label={t("Auschecken")} onSelect={() => checkout(b)} />
                 {#if !b.current}
-                  <ContextItem label="In aktuellen mergen …" onSelect={() => openMerge(b.name)} />
+                  <ContextItem label={t("In aktuellen mergen …")} onSelect={() => openMerge(b.name)} />
                   <ContextItem
-                    label="Aktuellen darauf rebasen"
+                    label={t("Aktuellen darauf rebasen")}
                     onSelect={() =>
-                      ask("rebase", "Rebasen", `${status.branch ?? "HEAD"} auf „${b.name}“ rebasen?`, () =>
+                      ask("rebase", t("Rebasen"), t("{branch} auf „{name}“ rebasen?", { branch: status.branch ?? "HEAD", name: b.name }), () =>
                         run("Rebase", () => git.rebase(repo, b.name)),
                       )}
                   />
                 {/if}
                 {#if b.name !== base}
-                  <ContextItem label="Als Production-Branch festlegen" onSelect={() => setBase(b.name)} />
+                  <ContextItem label={t("Als Production-Branch festlegen")} onSelect={() => setBase(b.name)} />
                 {/if}
                 <ContextItem
-                  label="Umbenennen"
+                  label={t("Umbenennen")}
                   onSelect={() =>
-                    askPrompt("Branch umbenennen", "Umbenennen", b.name, (v) => git.branchRename(repo, b.name, v))}
+                    askPrompt(t("Branch umbenennen"), t("Umbenennen"), b.name, (v) => git.branchRename(repo, b.name, v))}
                 />
                 <ContextItem
-                  label="Neuer Branch ab hier"
+                  label={t("Neuer Branch ab hier")}
                   onSelect={() =>
-                    askPrompt("Neuer Branch ab " + b.name, "Anlegen", "", async (v) => {
+                    askPrompt(t("Neuer Branch ab {sha}", { sha: b.name }), t("Anlegen"), "", async (v) => {
                       await git.checkout(repo, v, true, b.name);
                     })}
                 />
                 {#if !b.current}
-                  <ContextItem label="Löschen …" onSelect={() => deleteBranches([b.name], false)} destructive />
+                  <ContextItem label={t("Löschen …")} onSelect={() => deleteBranches([b.name], false)} destructive />
                 {/if}
                 {#if oncommand && cmds.length}
                   <ContextMenu.Separator class={menuSeparator} />
@@ -591,7 +604,7 @@
     {#if expanded.remotes}
       <div class="px-1 pb-1">
         {#if remoteGroups.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">{t("Keine.")}</p>
         {/if}
         {@render pickBar(true)}
         {#each remoteRows as [remote, rows] (remote)}
@@ -609,7 +622,7 @@
                   dim={merged(b)}
                   ondblclick={() => checkout(b)}
                   onclick={(e) => clickBranch(e, b, true)}
-                  title={merged(b) ? `In ${base} gemergt` : undefined}
+                  title={merged(b) ? t("In {base} gemergt", { base: base ?? "" }) : undefined}
                 >
                   <span class="min-w-0 flex-1 truncate font-mono" title={b.name}>{r.label}</span>
                 </Row>
@@ -617,12 +630,12 @@
               <ContextMenu.Portal>
                 <ContextMenu.Content class={menuContent}>
                   {@render pickItems(b, true)}
-                  <ContextItem label="Auschecken (Tracking-Branch)" onSelect={() => checkout(b)} />
-                  <ContextItem label="In aktuellen mergen …" onSelect={() => openMerge(b.name)} />
+                  <ContextItem label={t("Auschecken (Tracking-Branch)")} onSelect={() => checkout(b)} />
+                  <ContextItem label={t("In aktuellen mergen …")} onSelect={() => openMerge(b.name)} />
                   {#if b.name !== base}
-                    <ContextItem label="Als Production-Branch festlegen" onSelect={() => setBase(b.name)} />
+                    <ContextItem label={t("Als Production-Branch festlegen")} onSelect={() => setBase(b.name)} />
                   {/if}
-                  <ContextItem label="Löschen (remote) …" onSelect={() => deleteBranches([b.name], true)} destructive />
+                  <ContextItem label={t("Löschen (remote) …")} onSelect={() => deleteBranches([b.name], true)} destructive />
                 </ContextMenu.Content>
               </ContextMenu.Portal>
             </ContextMenu.Root>
@@ -643,25 +656,25 @@
     {#if expanded.tags}
       <div class="px-1 pb-1">
         {#if tags.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">{t("Keine.")}</p>
         {/if}
         {#each tagRows as r (r.dir ? r.path + "/" : r.path)}
           {#if r.dir}
             {@render folder(r, "t:" + r.path)}
           {:else}
-          {@const t = r.ref}
+          {@const tg = r.ref}
           <ContextMenu.Root>
             <ContextMenu.Trigger>
-              <Row style="padding-left:{24 + r.depth * 12}px" onclick={() => onselectref(t.sha)}>
-                <span class="min-w-0 flex-1 truncate font-mono" title={t.name}>{r.label}</span>
+              <Row style="padding-left:{24 + r.depth * 12}px" onclick={() => onselectref(tg.sha)}>
+                <span class="min-w-0 flex-1 truncate font-mono" title={tg.name}>{r.label}</span>
               </Row>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
-                <ContextItem label="Pushen" onSelect={() => run("Tag-Push", () => git.tagPush(repo, t.name))} />
+                <ContextItem label={t("Pushen")} onSelect={() => run("Tag-Push", () => git.tagPush(repo, tg.name))} />
                 <ContextItem
-                  label="Löschen …"
-                  onSelect={() => askConfirm("Tag löschen", `Tag „${t.name}“ löschen?`, () => git.tagDelete(repo, t.name))}
+                  label={t("Löschen …")}
+                  onSelect={() => askConfirm(t("Tag löschen"), t("Tag „{name}“ löschen?", { name: tg.name }), () => git.tagDelete(repo, tg.name))}
                   destructive
                 />
               </ContextMenu.Content>
@@ -679,7 +692,7 @@
       <div class="flex items-center">
         <SectionToggle class="flex-1" open={!!expanded.subs} onclick={() => (expanded.subs = !expanded.subs)}>
           <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><BoxesIcon class="size-3" /></span>
-          <span class="flex-1">Submodule</span>
+          <span class="flex-1">{t("Submodule")}</span>
           <span class="bg-secondary text-muted-foreground rounded-full px-1.5 font-mono text-[10px]">{subs.length}</span>
         </SectionToggle>
         <!-- Nur fuer ungeladene: "+" kann auch ein neuer, noch nicht eingetragener Commit im Submodul sein -->
@@ -690,7 +703,7 @@
             class="text-primary mr-1"
             disabled={busy}
             title="git submodule update --init --recursive"
-            onclick={() => updateSub(null)}>Alle laden</Button
+            onclick={() => updateSub(null)}>{t("Alle laden")}</Button
           >
         {/if}
       </div>
@@ -702,7 +715,7 @@
                 <Row
                   indent
                   disabled={busy}
-                  title="{m.path} @ {m.sha.slice(0, 7)} – öffnen"
+                  title={t("{path} @ {sha} – öffnen", { path: m.path, sha: m.sha.slice(0, 7) })}
                   onclick={() => openSub(m)}
                 >
                   <span class="min-w-0 flex-1 truncate font-mono">{m.path}</span>
@@ -717,9 +730,9 @@
               </ContextMenu.Trigger>
               <ContextMenu.Portal>
                 <ContextMenu.Content class={menuContent}>
-                  <ContextItem label="Öffnen" onSelect={() => openSub(m)} />
-                  <ContextItem label={m.state === "-" ? "Laden" : "Auf eingetragenen Commit setzen"} onSelect={() => updateSub(m.path)} />
-                  <ContextItem label="Pfad kopieren" onSelect={() => navigator.clipboard.writeText(m.path)} />
+                  <ContextItem label={t("Öffnen")} onSelect={() => openSub(m)} />
+                  <ContextItem label={m.state === "-" ? t("Laden") : t("Auf eingetragenen Commit setzen")} onSelect={() => updateSub(m.path)} />
+                  <ContextItem label={t("Pfad kopieren")} onSelect={() => navigator.clipboard.writeText(m.path)} />
                 </ContextMenu.Content>
               </ContextMenu.Portal>
             </ContextMenu.Root>
@@ -739,7 +752,7 @@
     {#if expanded.stashes}
       <div class="px-1 pb-1">
         {#if stashes.length === 0}
-          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine.</p>
+          <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">{t("Keine.")}</p>
         {/if}
         {#each stashes as s (s.index)}
           <ContextMenu.Root>
@@ -752,23 +765,23 @@
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
                 <ContextItem
-                  label="Anwenden"
+                  label={t("Anwenden")}
                   onSelect={() =>
-                    ask("stash", "Stash anwenden", `„${s.message}“ anwenden?`, () =>
+                    ask("stash", t("Stash anwenden"), t("„{name}“ anwenden?", { name: s.message }), () =>
                       run("Stash", () => git.stashApply(repo, s.index, false)),
                     )}
                 />
                 <ContextItem
                   label="Pop"
                   onSelect={() =>
-                    ask("stash", "Stash anwenden", `„${s.message}“ anwenden und aus der Liste entfernen?`, () =>
+                    ask("stash", t("Stash anwenden"), t("„{name}“ anwenden und aus der Liste entfernen?", { name: s.message }), () =>
                       run("Stash", () => git.stashApply(repo, s.index, true)),
                     )}
                 />
-                <ContextItem label="Anzeigen" onSelect={() => showStash(s)} />
+                <ContextItem label={t("Anzeigen")} onSelect={() => showStash(s)} />
                 <ContextItem
-                  label="Löschen …"
-                  onSelect={() => askConfirm("Stash löschen", `„${s.message}“ verwerfen?`, () => git.stashDrop(repo, s.index))}
+                  label={t("Löschen …")}
+                  onSelect={() => askConfirm(t("Stash löschen"), t("„{name}“ verwerfen?", { name: s.message }), () => git.stashDrop(repo, s.index))}
                   destructive
                 />
               </ContextMenu.Content>
@@ -790,7 +803,7 @@
       {#if expanded.pulls}
         <div class="px-1 pb-1">
           {#if pulls.length === 0}
-            <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">Keine offenen.</p>
+            <p class="text-muted-foreground px-2 py-1 pl-6 text-meta">{t("Keine offenen.")}</p>
           {/if}
           {#each pulls as p (p.number)}
             <Row
@@ -800,7 +813,7 @@
             >
               <span class="text-muted-foreground font-mono">#{p.number}</span>
               <span class="min-w-0 flex-1 truncate">{p.title}</span>
-              {#if p.draft}<Badge variant="outline" class="text-muted-foreground text-meta">Entwurf</Badge>{/if}
+              {#if p.draft}<Badge variant="outline" class="text-muted-foreground text-meta">{t("Entwurf")}</Badge>{/if}
             </Row>
           {/each}
         </div>
@@ -813,16 +826,16 @@
   open={confirm !== null}
   title={confirm?.title ?? ""}
   message={confirm?.message}
-  action="Löschen"
+  action={t("Löschen")}
   onconfirm={doConfirm}
   oncancel={() => (confirm = null)}
 />
 
 <ConfirmDialog
   open={mergeRev !== null}
-  title="„{mergeRev}“ in {status.branch ?? "HEAD"} mergen"
-  message={mergeMode === "squash" ? "Bei Konflikten: lösen, dann im Tab Änderungen committen." : undefined}
-  action="Mergen"
+  title={t("„{rev}“ in {branch} mergen", { rev: mergeRev ?? "", branch: status.branch ?? "HEAD" })}
+  message={mergeMode === "squash" ? t("Bei Konflikten: lösen, dann im Tab Änderungen committen.") : undefined}
+  action={t("Mergen")}
   tone="default"
   wide
   disabled={busy}
@@ -830,9 +843,9 @@
   oncancel={() => (mergeRev = null)}
 >
   <div class="flex flex-col gap-2">
-    <Select bind:value={mergeMode} options={MERGE_MODES} onchange={() => (mergeError = "")} class="h-7 w-full" aria-label="Merge-Modus" />
+    <Select bind:value={mergeMode} options={MERGE_MODES} onchange={() => (mergeError = "")} class="h-7 w-full" aria-label={t("Merge-Modus")} />
     {#if mergeMode !== "ff-only"}
-      <Textarea bind:value={mergeMsg} density="sm" class="h-24 field-sizing-fixed font-mono" spellcheck={true} placeholder="Eigene Nachricht (optional)" aria-label="Merge-Nachricht" />
+      <Textarea bind:value={mergeMsg} density="sm" class="h-24 field-sizing-fixed font-mono" spellcheck={true} placeholder={t("Eigene Nachricht (optional)")} aria-label={t("Merge-Nachricht")} />
     {/if}
     {#if mergeError}<p class="text-destructive text-ui max-h-40 overflow-y-auto break-words whitespace-pre-wrap">{mergeError}</p>{/if}
   </div>

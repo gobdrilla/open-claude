@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
+  import { t } from "$lib/i18n";
 
   // Clawds mit eigener Groesse, Geschwindigkeit und Richtung; negativer delay = schon unterwegs.
   const CRITTERS = [
@@ -13,7 +14,7 @@
 
 <div out:fade={{ duration: 250 }} class="pointer-events-none absolute inset-0 grid place-items-center">
   <p class="text-muted-foreground font-mono text-ui">
-    Claude startet<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+    {t("Claude startet")}<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
   </p>
   <div class="absolute inset-x-6 bottom-8 h-10 overflow-hidden">
     {#each CRITTERS as c, i (i)}

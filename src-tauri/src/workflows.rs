@@ -22,7 +22,7 @@ fn dir(scope: &str, cwd: &str) -> Result<PathBuf, String> {
     match scope {
         "user" => Ok(crate::activity::config_dir().join("workflows")),
         "project" => Ok(Path::new(cwd).join(".claude").join("workflows")),
-        _ => Err(format!("Unbekannter Ort: {scope}")),
+        _ => Err(tr!("Unbekannter Ort: {scope}", "Unknown location: {scope}")),
     }
 }
 
@@ -47,7 +47,7 @@ fn list(dirs: &[(&'static str, PathBuf)]) -> Vec<WfFile> {
 
 fn save(dir: &Path, file: &str, text: &str) -> Result<(), String> {
     if !crate::pty::valid_id(file) || crate::git::device(file) {
-        return Err(format!("Ungueltiger Name: {file}"));
+        return Err(tr!("Ungueltiger Name: {file}", "Invalid name: {file}"));
     }
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let target = dir.join(format!("{file}.js"));
@@ -62,7 +62,7 @@ fn save(dir: &Path, file: &str, text: &str) -> Result<(), String> {
 
 fn delete(dir: &Path, file: &str) -> Result<(), String> {
     if !crate::pty::valid_id(file) {
-        return Err(format!("Ungueltiger Name: {file}"));
+        return Err(tr!("Ungueltiger Name: {file}", "Invalid name: {file}"));
     }
     fs::remove_file(dir.join(format!("{file}.js"))).map_err(|e| e.to_string())
 }

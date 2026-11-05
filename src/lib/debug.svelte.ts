@@ -2,6 +2,7 @@
 // "netcoredbg", fetched on first use by debug.rs) and speaks DAP with it. One session per project, shown in DebugPane;
 // breakpoints per file (editor gutter, breakpoints.ts), kept in localStorage "breakpoints:<repo>".
 // Starting runs project code: only from a click or a key, like runStart.
+import { t } from "./i18n.ts";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { DEBUG, activate, groupOf } from "./dock.ts";
 import { editor, open, setLayout, togglePanel } from "./editor.svelte.ts";
@@ -74,7 +75,7 @@ const live = (s: Session | null | undefined): s is Session => !!s && s.phase !==
 const log = (s: Session, text: string) => void (s.out = clip(s.out + text, MAX_OUT));
 
 function req(repo: string, s: Session, command: string, args: object = {}): Promise<any> {
-  if (s.phase === "end") return Promise.reject(new Error("Debugger beendet"));
+  if (s.phase === "end") return Promise.reject(new Error(t("Debugger beendet")));
   const seq = ++s.seq;
   const msg = JSON.stringify({ seq, type: "request", command, arguments: args });
   return new Promise((ok, fail) => {
@@ -118,7 +119,7 @@ export async function debugStart(repo: string, cfg: RunConfig | null): Promise<v
   const d = debug(repo);
   if (live(d.session)) return showDebug(repo);
   if (cfg?.target.kind !== "dotnet") {
-    editor(repo).error = "Debuggen geht bisher nur mit .NET-Startzielen (startbare .csproj).";
+    editor(repo).error = t("Debuggen geht bisher nur mit .NET-Startzielen (startbare .csproj).");
     return;
   }
   const s = new Session(cfg.label);
@@ -129,11 +130,11 @@ export async function debugStart(repo: string, cfg: RunConfig | null): Promise<v
   // A function, not s.phase inline: TypeScript would narrow it across the awaits.
   const ended = () => s.phase === "end";
   try {
-    log(s, `Baue ${cfg.label} …\n`);
+    log(s, t("Baue {label} …", { label: cfg.label }) + "\n");
     const dll = await invoke<string>("dbg_build", { repo, dir: cfg.dir });
     if (ended()) return;
     s.phase = "start";
-    log(s, `Starte den Debugger (netcoredbg, beim ersten Mal wird er heruntergeladen) …\n`);
+    log(s, t("Starte den Debugger (netcoredbg, beim ersten Mal wird er heruntergeladen) …") + "\n");
     const ch = new Channel<Out>();
     ch.onmessage = (o) => (o.t === "msg" ? onMsg(repo, s, o.m) : onExit(repo, s, o));
     await invoke("lsp_start", { repo, server: SERVER, on: ch });
@@ -186,7 +187,7 @@ function onMsg(repo: string, s: Session, raw: string) {
     if (!p) return;
     s.pending.delete(m.request_seq);
     if (m.success) p.ok(m.body ?? {});
-    else p.fail(new Error(m.message || `${m.command} fehlgeschlagen`));
+    else p.fail(new Error(m.message || t("{command} fehlgeschlagen", { command: m.command })));
     return;
   }
   // Reverse requests (runInTerminal) were not offered in initialize.
@@ -201,7 +202,7 @@ function onMsg(repo: string, s: Session, raw: string) {
   else if (m.event === "output" && b.category !== "telemetry" && typeof b.output === "string") log(s, b.output);
   else if (m.event === "stopped") void stopped(repo, s, b);
   else if (m.event === "continued") resumed(repo, s);
-  else if (m.event === "exited") log(s, `\nProgramm beendet (Code ${b.exitCode}).\n`);
+  else if (m.event === "exited") log(s, "\n" + t("Programm beendet (Code {code}).", { code: b.exitCode }) + "\n");
   else if (m.event === "terminated") finish(repo, s);
 }
 
@@ -218,7 +219,7 @@ function finish(repo: string, s: Session) {
   s.frames = [];
   s.vars = [];
   s.frame = null;
-  for (const p of s.pending.values()) p.fail(new Error("Debugger beendet"));
+  for (const p of s.pending.values()) p.fail(new Error(t("Debugger beendet")));
   s.pending.clear();
   s.inited();
   const d = debug(repo);
@@ -239,7 +240,7 @@ function resumed(repo: string, s: Session) {
 async function stopped(repo: string, s: Session, b: { reason?: string; threadId?: number; text?: string; description?: string }) {
   s.phase = "pause";
   s.reason = b.reason ?? "";
-  if (b.reason === "exception") log(s, `\nAusnahme: ${b.text ?? b.description ?? ""}\n`);
+  if (b.reason === "exception") log(s, "\n" + t("Ausnahme: {text}", { text: b.text ?? b.description ?? "" }) + "\n");
   try {
     s.thread = b.threadId ?? (s.thread || ((await req(repo, s, "threads")).threads?.[0]?.id ?? 0));
     const st = await req(repo, s, "stackTrace", { threadId: s.thread, startFrame: 0, levels: 100 });
@@ -288,7 +289,7 @@ export async function expand(repo: string, v: Var): Promise<void> {
     if (!r || s.frame !== frame || s.phase !== "pause") return;
     const all: any[] = r.variables ?? [];
     const kids: Var[] = all.slice(0, MAX_VARS).map((x) => ({ name: x.name, value: x.value ?? "", type: x.type ?? "", ref: x.variablesReference ?? 0, kids: null, open: false }));
-    if (all.length > MAX_VARS) kids.push({ name: "…", value: `${all.length - MAX_VARS} weitere`, type: "", ref: 0, kids: null, open: false });
+    if (all.length > MAX_VARS) kids.push({ name: "…", value: t("{n} weitere", { n: all.length - MAX_VARS }), type: "", ref: 0, kids: null, open: false });
     v.kids = kids;
   }
   v.open = true;
@@ -318,7 +319,7 @@ export async function debugStop(repo: string): Promise<void> {
   const s = store.get(repo)?.session;
   if (!live(s)) return;
   // Before disconnecting: the adapter's "terminated" may end the session first.
-  log(s, "\nGestoppt.\n");
+  log(s, "\n" + t("Gestoppt.") + "\n");
   if (s.phase === "run" || s.phase === "pause") {
     const bye = req(repo, s, "disconnect", { terminateDebuggee: true }).catch(() => {});
     await Promise.race([bye, new Promise((r) => setTimeout(r, 1500))]);

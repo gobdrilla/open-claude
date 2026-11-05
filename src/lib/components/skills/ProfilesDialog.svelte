@@ -5,6 +5,7 @@
   import { fuzzy } from "$lib/fuzzy";
   import { skills, renameProfile, fromProject, adjust, emptyProject, type SkillStore, type SkillsInfo } from "$lib/skills";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
+  import { t } from "$lib/i18n";
 
   type Repo = { path: string; rel: string; kind?: string | null };
 
@@ -67,7 +68,7 @@
     const to = input.value.trim();
     if (to === sel) return;
     if (!to || to in draft.profiles) {
-      error = to ? `Profil „${to}“ gibt es schon.` : "Name fehlt.";
+      error = to ? t("Profil „{to}“ gibt es schon.", { to }) : t("Name fehlt.");
       input.value = sel;
       return;
     }
@@ -102,9 +103,9 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="flex h-[85vh] flex-col sm:max-w-4xl">
     <Dialog.Header>
-      <Dialog.Title>Skill-Profile</Dialog.Title>
+      <Dialog.Title>{t("Skill-Profile")}</Dialog.Title>
       <Dialog.Description>
-        Profile sind Vorlagen: Projekte nutzen sie per Projekttyp oder explizit, Anpassungen im Projekt ändern das Profil nie.
+        {t("Profile sind Vorlagen: Projekte nutzen sie per Projekttyp oder explizit, Anpassungen im Projekt ändern das Profil nie.")}
       </Dialog.Description>
     </Dialog.Header>
     <Notice bind:text={error} />
@@ -119,36 +120,36 @@
               onclick={() => (sel = n)}><span class="truncate">{n}</span></Row
             >
           {:else}
-            <p class="text-muted-foreground px-2">Noch keine Profile.</p>
+            <p class="text-muted-foreground px-2">{t("Noch keine Profile.")}</p>
           {/each}
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <Input bind:value={name} placeholder="Neues Profil" density="sm" onkeydown={(e) => e.key === "Enter" && create(false)} />
+          <Input bind:value={name} placeholder={t("Neues Profil")} density="sm" onkeydown={(e) => e.key === "Enter" && create(false)} />
           <div class="flex gap-1.5">
-            <Button size="xs" variant="outline" class="flex-1" disabled={!nameOk} onclick={() => create(false)}>Leer</Button>
+            <Button size="xs" variant="outline" class="flex-1" disabled={!nameOk} onclick={() => create(false)}>{t("Leer")}</Button>
             <Button size="xs" variant="outline" class="flex-1" disabled={!nameOk || !ctx} onclick={() => create(true)}
-              >Aus Projekt</Button
+              >{t("Aus Projekt")}</Button
             >
           </div>
         </div>
 
         <label class="flex flex-col gap-1">
-          <span class="text-muted-foreground">Projekt (Skill-Liste, „Aus Projekt“)</span>
+          <span class="text-muted-foreground">{t("Projekt (Skill-Liste, „Aus Projekt“)")}</span>
           <Select bind:value={ctx} options={repos.map((r) => [r.rel, r.path] as const)} />
         </label>
 
         {#if kinds.length}
           <div class="flex flex-col gap-1">
-            <span class="text-muted-foreground">Projekttyp → Profil</span>
+            <span class="text-muted-foreground">{t("Projekttyp → Profil")}</span>
             {#each kinds as k (k)}
               <label class="flex items-center gap-2">
                 <span class="flex-1 truncate">{k}</span>
                 <Select
                   class="w-28"
                   bind:value={() => draft.kindProfiles[k] ?? "", (n) => setKind(k, n)}
-                  options={[["kein Profil", ""], ...names.map((n) => [n, n] as const)]}
-                  aria-label="Profil für {k}"
+                  options={[[t("kein Profil"), ""], ...names.map((n) => [n, n] as const)]}
+                  aria-label={t("Profil für {k}", { k })}
                 />
               </label>
             {/each}
@@ -163,20 +164,20 @@
               <Input
                 value={sel}
                 density="sm" class="w-48"
-                title="Umbenennen mit Enter"
+                title={t("Umbenennen mit Enter")}
                 onkeydown={(e) => e.key === "Enter" && rename(e.currentTarget)}
                 onblur={(e) => rename(e.currentTarget)}
               />
               <span class="flex-1"></span>
-              <Input bind:value={query} placeholder="Skill suchen" density="sm" class="w-40" />
+              <Input bind:value={query} placeholder={t("Skill suchen")} density="sm" class="w-40" />
               <Button
                 variant={askDel ? "destructive" : "ghost-danger"}
                 size="sm"
-                title={askDel ? "Wirkt erst mit Speichern" : "Profil löschen"}
+                title={askDel ? t("Wirkt erst mit Speichern") : t("Profil löschen")}
                 onclick={remove}
                 onblur={() => (askDel = false)}
               >
-                <TrashIcon class="size-3.5" />{#if askDel}„{sel}“ löschen?{/if}
+                <TrashIcon class="size-3.5" />{#if askDel}{t("„{sel}“ löschen?", { sel })}{/if}
               </Button>
             </div>
           {/key}
@@ -184,13 +185,13 @@
             {#if info}
               {#each info.plugins as id (id)}
                 <div class="flex items-center gap-2 py-1">
-                  <span class="flex-1 truncate font-mono text-meta">Plugin {id}</span>
+                  <span class="flex-1 truncate font-mono text-meta">{t("Plugin {id}", { id })}</span>
                   <Segmented
                     value={profile.plugins[id]}
                     options={[
-                      ["–", undefined, "Nicht festgelegt"],
-                      ["an", true],
-                      ["aus", false],
+                      ["–", undefined, t("Nicht festgelegt")],
+                      [t("an"), true],
+                      [t("aus"), false],
                     ] as const}
                     onchange={(v) => (draft.profiles[sel] = adjust(profile, "plugin", id, v))}
                   />
@@ -205,27 +206,27 @@
                   <Segmented
                     value={profile.overrides[sk.key]}
                     options={[
-                      ["–", undefined, "Nicht festgelegt"],
-                      ["an", "on"],
-                      ["aus", "off"],
+                      ["–", undefined, t("Nicht festgelegt")],
+                      [t("an"), "on"],
+                      [t("aus"), "off"],
                     ] as const}
                     onchange={(v) => (draft.profiles[sel] = adjust(profile, "skill", sk.key, v))}
                   />
                 </div>
               {/each}
             {:else}
-              <p class="text-muted-foreground">Lese Skills …</p>
+              <p class="text-muted-foreground">{t("Lese Skills …")}</p>
             {/if}
           </div>
         {:else}
-          <p class="text-muted-foreground">Profil anlegen oder links auswählen.</p>
+          <p class="text-muted-foreground">{t("Profil anlegen oder links auswählen.")}</p>
         {/if}
       </div>
     </div>
 
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" onclick={() => (open = false)}>Abbrechen</Button>
-      <Button size="sm" onclick={save}>Speichern</Button>
+      <Button variant="ghost" size="sm" onclick={() => (open = false)}>{t("Abbrechen")}</Button>
+      <Button size="sm" onclick={save}>{t("Speichern")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

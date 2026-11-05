@@ -169,12 +169,12 @@ pub(crate) fn write_local(
 ) -> Result<(), String> {
     let file = repo.join(".claude").join("settings.local.json");
     if tracked(repo) {
-        return Err(format!("{} ist in git eingecheckt, private Skill-Einstellungen werden dort nicht gespeichert", file.display()));
+        return Err(tr!("{} ist in git eingecheckt, private Skill-Einstellungen werden dort nicht gespeichert", "{} is checked into git, private skill settings are not stored there", file.display()));
     }
     let old = match std::fs::read_to_string(&file) {
         Ok(text) => match serde_json::from_str::<Value>(&text) {
             Ok(Value::Object(m)) => Some(m),
-            _ => return Err(format!("{} ist kein gueltiges JSON-Objekt", file.display())),
+            _ => return Err(tr!("{} ist kein gueltiges JSON-Objekt", "{} is not a valid JSON object", file.display())),
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("{}: {e}", file.display())),
@@ -234,10 +234,10 @@ pub(crate) fn migrate_theme(home: &Path) {
 /// Schreibt nur, wenn die Datei seit dem Lesen unveraendert ist (expected), sonst gingen Aenderungen von Claude Code verloren.
 pub(crate) fn user_write(home: &Path, text: &str, expected: &str) -> Result<(), String> {
     if !matches!(serde_json::from_str::<Value>(text), Ok(Value::Object(_))) {
-        return Err("Kein gültiges JSON-Objekt".into());
+        return Err(tr!("Kein gültiges JSON-Objekt", "Not a valid JSON object"));
     }
     if user_read(home)? != expected {
-        return Err("settings.json wurde inzwischen geändert, bitte neu laden".into());
+        return Err(tr!("settings.json wurde inzwischen geändert, bitte neu laden", "settings.json has changed in the meantime, please reload"));
     }
     atomic_write(&home.join(".claude").join("settings.json"), text)
 }
@@ -269,20 +269,20 @@ pub(crate) fn global_read(home: &Path) -> Result<Map<String, Value>, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Map::new()),
         Err(e) => return Err(e.to_string()),
     };
-    let Ok(Value::Object(all)) = serde_json::from_str(&text) else { return Err("~/.claude.json ist kein JSON-Objekt".into()) };
+    let Ok(Value::Object(all)) = serde_json::from_str(&text) else { return Err(tr!("~/.claude.json ist kein JSON-Objekt", "~/.claude.json is not a JSON object")) };
     Ok(all.into_iter().filter(|(k, _)| GLOBAL_KEYS.contains(&k.as_str())).collect())
 }
 
 /// Liest frisch und setzt nur die uebergebenen Keys (null = entfernen), der Rest der Datei bleibt, wie Claude Code ihn schrieb.
 pub(crate) fn global_write(home: &Path, values: Map<String, Value>) -> Result<(), String> {
     if let Some(k) = values.keys().find(|k| !GLOBAL_KEYS.contains(&k.as_str())) {
-        return Err(format!("Unbekannte Einstellung: {k}"));
+        return Err(tr!("Unbekannte Einstellung: {k}", "Unknown setting: {k}"));
     }
     let file = global_file(home);
     let mut all = match std::fs::read_to_string(&file) {
         Ok(t) => match serde_json::from_str(&t) {
             Ok(Value::Object(m)) => m,
-            _ => return Err("~/.claude.json ist kein JSON-Objekt".into()),
+            _ => return Err(tr!("~/.claude.json ist kein JSON-Objekt", "~/.claude.json is not a JSON object")),
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Map::new(),
         Err(e) => return Err(e.to_string()),
@@ -464,10 +464,10 @@ pub(crate) fn plugin_args(
     marketplaces: &[String],
 ) -> Result<Vec<String>, String> {
     if target.is_empty() || target.starts_with('-') || target.chars().any(char::is_control) {
-        return Err(format!("Ungueltiges Ziel: {target:?}"));
+        return Err(tr!("Ungueltiges Ziel: {target:?}", "Invalid target: {target:?}"));
     }
     if accept.is_some_and(|a| a.len() != 64 || !a.chars().all(|c| c.is_ascii_hexdigit())) {
-        return Err("Ungueltige Kommando-Bestaetigung".into());
+        return Err(tr!("Ungueltige Kommando-Bestaetigung", "Invalid command confirmation"));
     }
     let known = || installed.iter().any(|i| i == target);
     let (ok, scopes): (bool, &[&str]) = match action {
@@ -478,10 +478,10 @@ pub(crate) fn plugin_args(
         "enable" | "disable" => (known(), &["user", "project"]),
         "mp-add" => (source_ok(target), &[]),
         "mp-remove" | "mp-update" => (marketplaces.iter().any(|m| m == target), &[]),
-        _ => return Err(format!("Unbekannte Aktion: {action}")),
+        _ => return Err(tr!("Unbekannte Aktion: {action}", "Unknown action: {action}")),
     };
     if !ok {
-        return Err(format!("{action}: {target} ist kein gueltiges/bekanntes Ziel"));
+        return Err(tr!("{action}: {target} ist kein gueltiges/bekanntes Ziel", "{action}: {target} is not a valid/known target"));
     }
     let mut args: Vec<String> = match action.strip_prefix("mp-") {
         Some(sub) => vec!["marketplace".into(), sub.into(), target.into(), "--json".into()],
@@ -490,7 +490,7 @@ pub(crate) fn plugin_args(
     if !scopes.is_empty() {
         let s = scope.unwrap_or("user");
         if !scopes.contains(&s) {
-            return Err(format!("{action}: Scope {s} nicht erlaubt"));
+            return Err(tr!("{action}: Scope {s} nicht erlaubt", "{action}: scope {s} not allowed"));
         }
         args.extend(["-s".into(), s.into()]);
     }
@@ -546,10 +546,10 @@ fn keys(v: Option<&Value>) -> Vec<String> {
 // Windows: claude.exe (nativer Installer) oder npm-Shim claude.cmd; .cmd startet Rust std (>= 1.77.2) selbst ueber cmd.exe.
 fn claude(path: &str, args: &[String]) -> Result<std::process::Output, String> {
     if !Path::new(path).is_dir() {
-        return Err(format!("{path} ist kein Ordner"));
+        return Err(tr!("{path} ist kein Ordner", "{path} is not a folder"));
     }
     // Auch ~/.local/bin, falls die Login-Shell es nicht in den PATH legt.
-    let bin = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    let bin = crate::deps::claude_bin().ok_or_else(|| tr!("claude nicht gefunden", "claude not found"))?;
     crate::quiet(&bin.to_string_lossy())
         .arg("plugin")
         .args(args)
@@ -557,7 +557,7 @@ fn claude(path: &str, args: &[String]) -> Result<std::process::Output, String> {
         .env("NO_COLOR", "1")
         .env("GIT_TERMINAL_PROMPT", "0") // kein haengender Credential-Prompt
         .output()
-        .map_err(|e| format!("claude konnte nicht gestartet werden: {e}"))
+        .map_err(|e| tr!("claude konnte nicht gestartet werden: {e}", "claude could not be started: {e}"))
 }
 
 fn plugins_info(path: &str) -> Result<PluginsInfo, String> {

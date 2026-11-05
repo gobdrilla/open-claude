@@ -1,5 +1,6 @@
 // Gegenstueck zu src-tauri/src/ide.rs: Claude-Sessions sehen den Editor als IDE.
 // Diffs von Claude warten hier auf Annehmen/Ablehnen; Auswahl und @-Erwaehnung gehen an claude.
+import { t } from "./i18n.ts";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { EditorView } from "codemirror";
@@ -27,7 +28,7 @@ export async function blocked(id: string): Promise<boolean> {
 /** Text in den Prompt der Sitzung id einfuegen, ohne abzuschicken; bei busy trotzdem (claude puffert die Eingabe). */
 export async function sendTo(id: string, text: string): Promise<boolean> {
   if (await blocked(id)) {
-    ide.notice = "Claude wartet auf Freigabe";
+    ide.notice = t("Claude wartet auf Freigabe");
     return false;
   }
   return ptyWrite(id, pasteFrame(text)).then(
@@ -40,7 +41,7 @@ export async function sendTo(id: string, text: string): Promise<boolean> {
 export function sendToClaude(repo: string, text: string): Promise<boolean> {
   const id = claudeTarget.find(repo);
   if (!id) {
-    ide.notice = "Keine Claude-Sitzung für dieses Projekt";
+    ide.notice = t("Keine Claude-Sitzung für dieses Projekt");
     return Promise.resolve(false);
   }
   return sendTo(id, text);

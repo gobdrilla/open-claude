@@ -27,8 +27,8 @@ fn hex(b: &[u8]) -> String {
 
 /// Download and unpack netcoredbg into own/netcoredbg (own = the language servers' folder, where lsp.rs looks).
 pub(crate) fn fetch(own: &Path) -> Result<(), String> {
-    let (path, sum) = asset().ok_or("netcoredbg gibt es für diese Plattform nicht")?;
-    let fail = |e: String| format!("netcoredbg herunterladen: {e}");
+    let (path, sum) = asset().ok_or_else(|| tr!("netcoredbg gibt es für diese Plattform nicht", "netcoredbg is not available for this platform"))?;
+    let fail = |e: String| tr!("netcoredbg herunterladen: {e}", "Downloading netcoredbg: {e}");
     let url = format!("{BASE}{path}");
     let bytes = tauri::async_runtime::block_on(async {
         let c = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300)).build().map_err(|e| e.to_string())?;
@@ -38,7 +38,7 @@ pub(crate) fn fetch(own: &Path) -> Result<(), String> {
     .map_err(fail)?;
     let got = hex(&Sha256::digest(&bytes));
     if got != sum {
-        return Err(fail(format!("Prüfsumme stimmt nicht ({got})")));
+        return Err(fail(tr!("Prüfsumme stimmt nicht ({got})", "Checksum mismatch ({got})")));
     }
     std::fs::create_dir_all(own).map_err(|e| fail(e.to_string()))?;
     let file = own.join(path.rsplit('/').next().unwrap_or("netcoredbg.zip"));
@@ -49,7 +49,7 @@ pub(crate) fn fetch(own: &Path) -> Result<(), String> {
     let _ = std::fs::remove_dir_all(own.join("__MACOSX"));
     match out {
         Ok(o) if o.status.success() => {}
-        Ok(o) => return Err(fail(format!("Entpacken: {}", String::from_utf8_lossy(&o.stderr).trim()))),
+        Ok(o) => return Err(fail(tr!("Entpacken: {}", "Unpacking: {}", String::from_utf8_lossy(&o.stderr).trim()))),
         Err(e) => return Err(fail(format!("tar: {e}"))),
     }
     #[cfg(unix)]
@@ -71,7 +71,7 @@ pub async fn dbg_build(repo: String, dir: String) -> Result<String, String> {
             .env("DOTNET_CLI_UI_LANGUAGE", "en")
             .stdin(Stdio::null())
             .output()
-            .map_err(|e| format!("dotnet nicht gestartet: {e}"))?;
+            .map_err(|e| tr!("dotnet nicht gestartet: {e}", "dotnet not started: {e}"))?;
         built(&String::from_utf8_lossy(&o.stdout), &String::from_utf8_lossy(&o.stderr))
     })
     .await
@@ -92,7 +92,7 @@ fn built(out: &str, err: &str) -> Result<String, String> {
         }
     }
     let shown = if errors.is_empty() { out.lines().chain(err.lines()).filter(|l| !l.trim().is_empty()).take(8).collect() } else { errors[..errors.len().min(8)].to_vec() };
-    Err(format!("Build fehlgeschlagen:\n{}", shown.join("\n")))
+    Err(tr!("Build fehlgeschlagen:\n{}", "Build failed:\n{}", shown.join("\n")))
 }
 
 #[cfg(test)]

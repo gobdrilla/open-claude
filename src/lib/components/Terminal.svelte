@@ -26,6 +26,7 @@
   import { ContextMenu } from "bits-ui";
   import { ContextItem, menuContent } from "$lib/atelier-ui";
   import { shares } from "$lib/share.svelte";
+  import { t } from "$lib/i18n";
 
   let {
     id,
@@ -442,13 +443,13 @@
         <div bind:this={el} class="h-full"></div>
         {#if booting}<ClaudeLoader />{/if}
         {#if guest && !booting && !writable}
-          <span class="bg-muted text-muted-foreground pointer-events-none absolute top-1 right-1 rounded px-1.5 py-0.5 text-[10px]">Nur zuschauen</span>
+          <span class="bg-muted text-muted-foreground pointer-events-none absolute top-1 right-1 rounded px-1.5 py-0.5 text-[10px]">{t("Nur zuschauen")}</span>
         {/if}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         {#if cited.trim() && !guest}
           <ContextMenu.Content class={menuContent}>
-            <ContextItem label="An Claude" onSelect={() => sendTo(id, cite(cited)).then(() => term?.focus())} />
+            <ContextItem label={t("An Claude")} onSelect={() => sendTo(id, cite(cited)).then(() => term?.focus())} />
           </ContextMenu.Content>
         {/if}
       </ContextMenu.Portal>

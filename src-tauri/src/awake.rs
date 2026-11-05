@@ -251,11 +251,11 @@ fn hold(_: &Path) -> Result<Hold, String> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| format!("Wach-Halt nicht möglich (systemd-inhibit): {e}"))?;
+        .map_err(|e| tr!("Wach-Halt nicht möglich (systemd-inhibit): {e}", "Cannot keep awake (systemd-inhibit): {e}"))?;
     std::thread::sleep(Duration::from_millis(300));
     // Polkit verweigert oder kein logind: endet sofort.
     if let Ok(Some(s)) = c.try_wait() {
-        return Err(format!("Wach-Halt nicht möglich: systemd-inhibit beendet ({s})"));
+        return Err(tr!("Wach-Halt nicht möglich: systemd-inhibit beendet ({s})", "Cannot keep awake: systemd-inhibit exited ({s})"));
     }
     Ok(Hold(Some(c)))
 }
@@ -296,7 +296,7 @@ fn clamshell_sleep_disabled(on: bool) -> Result<(), String> {
     unsafe {
         let s = IOServiceGetMatchingService(0, IOServiceMatching(c"IOPMrootDomain".as_ptr()));
         if s == 0 {
-            return Err("IOPMrootDomain nicht gefunden".into());
+            return Err(tr!("IOPMrootDomain nicht gefunden", "IOPMrootDomain not found"));
         }
         let mut c = 0;
         let mut r = IOServiceOpen(s, mach_task_self_, 0, &mut c);
@@ -305,7 +305,7 @@ fn clamshell_sleep_disabled(on: bool) -> Result<(), String> {
             IOServiceClose(c);
         }
         IOObjectRelease(s);
-        if r == 0 { Ok(()) } else { Err(format!("Deckel-Schlaf nicht steuerbar (IOKit {r:#x})")) }
+        if r == 0 { Ok(()) } else { Err(tr!("Deckel-Schlaf nicht steuerbar (IOKit {r:#x})", "Lid sleep cannot be controlled (IOKit {r:#x})")) }
     }
 }
 
@@ -348,12 +348,12 @@ fn hold(_: &Path) -> Result<Hold, String> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Wach-Halt nicht möglich: {e}"))?;
+        .map_err(|e| tr!("Wach-Halt nicht möglich: {e}", "Cannot keep awake: {e}"))?;
     std::thread::sleep(Duration::from_millis(300));
     if let Ok(Some(_)) = c.try_wait() {
         let mut err = String::new();
         let _ = std::io::Read::read_to_string(c.stderr.as_mut().expect("piped"), &mut err);
-        return Err(format!("Wach-Halt nicht möglich: {}", err.trim()));
+        return Err(tr!("Wach-Halt nicht möglich: {}", "Cannot keep awake: {}", err.trim()));
     }
     Ok(Hold(Some(c)))
 }
@@ -377,7 +377,7 @@ fn recover(m: &Path) -> Result<(), String> {
     }
     let o = crate::quiet("pmset").arg("-g").output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
     if o.lines().any(|l| l.split_whitespace().eq(["SleepDisabled", "1"])) {
-        return Err("Schlaf ist noch deaktiviert (ältere Version). Zurücksetzen im Terminal: sudo pmset -a disablesleep 0".into());
+        return Err(tr!("Schlaf ist noch deaktiviert (ältere Version). Zurücksetzen im Terminal: sudo pmset -a disablesleep 0", "Sleep is still disabled (older version). Reset in the terminal: sudo pmset -a disablesleep 0"));
     }
     Ok(())
 }
@@ -413,19 +413,19 @@ fn set_lid(ac: u32, dc: u32) -> Result<(), String> {
 
 #[cfg(windows)]
 fn lid() -> Result<(u32, u32), String> {
-    parse_lidaction(&powercfg(&["/q", "SCHEME_CURRENT", "SUB_BUTTONS", "LIDACTION"])?).ok_or_else(|| "Deckel-Aktion nicht lesbar".into())
+    parse_lidaction(&powercfg(&["/q", "SCHEME_CURRENT", "SUB_BUTTONS", "LIDACTION"])?).ok_or_else(|| tr!("Deckel-Aktion nicht lesbar", "Lid action not readable"))
 }
 
 #[cfg(windows)]
 fn hold(m: &Path) -> Result<Hold, String> {
     let (ac, dc) = lid()?;
-    std::fs::create_dir_all(m.parent().ok_or("kein Datenordner")?).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(m.parent().ok_or_else(|| tr!("kein Datenordner", "no data folder"))?).map_err(|e| e.to_string())?;
     // Alter Wert vor dem Eingriff auf die Platte: nach einem Absturz stellt recover ihn wieder her.
     std::fs::write(m, format!("{ac} {dc}")).map_err(|e| e.to_string())?;
-    if let Err(e) = set_lid(0, 0).and_then(|()| lid()).and_then(|v| if v == (0, 0) { Ok(()) } else { Err("von einer Richtlinie gesperrt".into()) }) {
+    if let Err(e) = set_lid(0, 0).and_then(|()| lid()).and_then(|v| if v == (0, 0) { Ok(()) } else { Err(tr!("von einer Richtlinie gesperrt", "locked by a policy")) }) {
         let _ = set_lid(ac, dc);
         let _ = std::fs::remove_file(m);
-        return Err(format!("Deckel-Aktion nicht änderbar: {e}"));
+        return Err(tr!("Deckel-Aktion nicht änderbar: {e}", "Lid action cannot be changed: {e}"));
     }
     Ok(Hold(None))
 }

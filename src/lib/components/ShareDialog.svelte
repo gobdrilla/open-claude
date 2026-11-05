@@ -9,6 +9,7 @@
   import { shares } from "$lib/share.svelte";
   import CopyIcon from "@lucide/svelte/icons/copy";
   import CheckIcon from "@lucide/svelte/icons/check";
+  import { t } from "$lib/i18n";
 
   // Sitzung teilen (Host). Oeffnen startet das Teilen; die Einladung bleibt gueltig, bis man es beendet.
   let { open = $bindable(false), id, cwd }: { open: boolean; id: string; cwd: string } = $props();
@@ -58,33 +59,33 @@
 <Dialog.Root bind:open onOpenChange={(o) => !o && close()}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>Sitzung teilen</Dialog.Title>
+      <Dialog.Title>{t("Sitzung teilen")}</Dialog.Title>
       <Dialog.Description>
-        Wer die Einladung hat, sieht dieses Terminal und das Aktivitäts-Panel live. Claude läuft weiter nur bei dir.
+        {t("Wer die Einladung hat, sieht dieses Terminal und das Aktivitäts-Panel live. Claude läuft weiter nur bei dir.")}
       </Dialog.Description>
     </Dialog.Header>
 
     {#if error}
       <p class="text-destructive text-ui">{error}</p>
     {:else if !share}
-      <p class="text-muted-foreground text-ui">Einladung wird erstellt …</p>
+      <p class="text-muted-foreground text-ui">{t("Einladung wird erstellt …")}</p>
     {:else}
       <div class="grid min-w-0 gap-3">
         <div class="flex min-w-0 items-start gap-2">
           <code oncopy={() => (handedOut[id] = true)} class="bg-muted max-h-20 min-w-0 flex-1 overflow-y-auto rounded px-2 py-1.5 text-meta leading-snug break-all select-all">{share.ticket}</code>
           <Button size="sm" variant="secondary" onclick={copy}>
-            {#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if} Kopieren
+            {#if copied}<CheckIcon class="size-3.5" />{:else}<CopyIcon class="size-3.5" />{/if} {t("Kopieren")}
           </Button>
         </div>
         <p class="text-muted-foreground text-ui">
-          {share.guests === 0 ? "Noch niemand verbunden." : share.guests === 1 ? "1 Gast verbunden." : `${share.guests} Gäste verbunden.`}
+          {share.guests === 0 ? t("Noch niemand verbunden.") : share.guests === 1 ? t("1 Gast verbunden.") : t("{n} Gäste verbunden.", { n: share.guests })}
         </p>
         <div class="flex items-start gap-2 text-body">
-          <span class="mt-1"><Switch on={share.write} label="Gäste dürfen tippen" onclick={() => setWrite(!share.write)} /></span>
+          <span class="mt-1"><Switch on={share.write} label={t("Gäste dürfen tippen")} onclick={() => setWrite(!share.write)} /></span>
           <span>
-            Gäste dürfen tippen
+            {t("Gäste dürfen tippen")}
             <span class="text-muted-foreground block text-ui">
-              Sie steuern dann Claude auf deinem Rechner, inklusive Befehlen, die Claude ausführt. Nur für Leute, denen du vertraust.
+              {t("Sie steuern dann Claude auf deinem Rechner, inklusive Befehlen, die Claude ausführt. Nur für Leute, denen du vertraust.")}
             </span>
           </span>
         </div>
@@ -92,8 +93,8 @@
     {/if}
 
     <div class="flex justify-end gap-2">
-      {#if share && (share.guests || handedOut[id])}<Button variant="destructive" size="sm" class="mr-auto" onclick={stop}>Teilen beenden</Button>{/if}
-      <Button variant="ghost" size="sm" onclick={close}>Schließen</Button>
+      {#if share && (share.guests || handedOut[id])}<Button variant="destructive" size="sm" class="mr-auto" onclick={stop}>{t("Teilen beenden")}</Button>{/if}
+      <Button variant="ghost" size="sm" onclick={close}>{t("Schließen")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

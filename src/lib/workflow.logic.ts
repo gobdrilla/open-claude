@@ -1,5 +1,6 @@
 // Workflow-Vorlagen: Builder-Daten <-> Workflow-Skript fuer das Workflow-Tool von Claude Code.
 // Rein, ohne Tauri, damit node --test es direkt laden kann.
+import { t as tr } from "./i18n.ts";
 
 /** "" = von der Session erben bzw. kein Schema. */
 export type WfAgent = {
@@ -41,7 +42,7 @@ export const newAgent = (): WfAgent => ({
   schema: "",
 });
 export const newPhase = (n: number): WfPhase => ({
-  title: `Phase ${n}`,
+  title: tr("Phase {n}", { n }),
   mode: "sequence",
   agents: [newAgent()],
 });
@@ -160,17 +161,17 @@ function schemaProblem(s: string): string | null {
   try {
     v = JSON.parse(s);
   } catch {
-    return "kein gültiges JSON";
+    return tr("kein gültiges JSON");
   }
   const o = v as { type?: unknown; properties?: unknown; required?: unknown };
   if (!o || typeof o !== "object" || Array.isArray(o) || o.type !== "object")
-    return 'braucht type: "object"';
+    return tr('braucht type: "object"');
   if (
     !o.properties ||
     typeof o.properties !== "object" ||
     Array.isArray(o.properties)
   )
-    return "braucht ein properties-Objekt";
+    return tr("braucht ein properties-Objekt");
   if (
     o.required !== undefined &&
     (!Array.isArray(o.required) ||
@@ -178,7 +179,7 @@ function schemaProblem(s: string): string | null {
         (k) => typeof k !== "string" || !(k in (o.properties as object)),
       ))
   )
-    return "required nennt Felder, die nicht in properties stehen";
+    return tr("required nennt Felder, die nicht in properties stehen");
   return null;
 }
 
@@ -186,25 +187,25 @@ function schemaProblem(s: string): string | null {
 export function problems(t: WfTemplate, taken: string[]): string[] {
   const out: string[] = [];
   if (!NAME.test(t.name))
-    out.push("Name: nur a-z, 0-9 und -, nicht mit - beginnen");
+    out.push(tr("Name: nur a-z, 0-9 und -, nicht mit - beginnen"));
   else if (taken.includes(t.name))
-    out.push(`Name „${t.name}“ ist hier schon vergeben`);
-  if (!t.description.trim()) out.push("Beschreibung fehlt");
-  if (!t.phases.length) out.push("Mindestens eine Phase");
+    out.push(tr("Name „{name}“ ist hier schon vergeben", { name: t.name }));
+  if (!t.description.trim()) out.push(tr("Beschreibung fehlt"));
+  if (!t.phases.length) out.push(tr("Mindestens eine Phase"));
   const seen = new Set<string>();
   t.phases.forEach((p, i) => {
-    const n = `Phase ${i + 1}`;
+    const n = tr("Phase {n}", { n: i + 1 });
     // " und \ schneiden in phases_of (activity.rs) die Anzeige ab
-    if (!p.title.trim()) out.push(`${n}: Titel fehlt`);
-    else if (/["\\]/.test(p.title)) out.push(`${n}: Titel ohne " und \\`);
-    else if (seen.has(p.title)) out.push(`${n}: Titel „${p.title}“ doppelt`);
+    if (!p.title.trim()) out.push(tr("{phase}: Titel fehlt", { phase: n }));
+    else if (/["\\]/.test(p.title)) out.push(tr('{phase}: Titel ohne " und \\', { phase: n }));
+    else if (seen.has(p.title)) out.push(tr("{phase}: Titel „{title}“ doppelt", { phase: n, title: p.title }));
     seen.add(p.title);
-    if (!p.agents.length) out.push(`${n}: mindestens ein Agent`);
+    if (!p.agents.length) out.push(tr("{phase}: mindestens ein Agent", { phase: n }));
     p.agents.forEach((a, j) => {
-      const m = `${n}, Agent ${j + 1}`;
-      if (!a.prompt.trim()) out.push(`${m}: Prompt fehlt`);
+      const m = tr("{phase}, Agent {n}", { phase: n, n: j + 1 });
+      if (!a.prompt.trim()) out.push(tr("{agent}: Prompt fehlt", { agent: m }));
       const s = schemaProblem(a.schema);
-      if (s) out.push(`${m}: Schema ${s}`);
+      if (s) out.push(tr("{agent}: Schema {problem}", { agent: m, problem: s }));
     });
   });
   return out;

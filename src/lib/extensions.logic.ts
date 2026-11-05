@@ -1,5 +1,6 @@
 // App extensions ("Erweiterungen") v1: declarative manifests (settings + link patterns), no extension code runs.
 // Pure functions, tested with node --test. Runtime state: extensions.svelte.ts. Schema for authors: src/extensions/manifest.schema.json.
+import { t } from "./i18n.ts";
 
 export const MANIFEST_VERSION = 1;
 /** Required top-level fields; a test keeps them equal to "required" in manifest.schema.json. */
@@ -44,23 +45,23 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object
 function str(o: Record<string, unknown>, k: string, path: string, opt: { optional?: boolean; max?: number; re?: RegExp } = {}) {
   const v = o[k];
   if (v === undefined && opt.optional) return undefined;
-  if (typeof v !== "string" || (!opt.optional && !v)) throw new Invalid(`${path}${k} muss ein Text sein`);
-  if (opt.max && v.length > opt.max) throw new Invalid(`${path}${k} ist länger als ${opt.max} Zeichen`);
-  if (opt.re && !opt.re.test(v)) throw new Invalid(`${path}${k} darf nur a–z, 0–9 und - enthalten und muss mit einem Buchstaben beginnen`);
+  if (typeof v !== "string" || (!opt.optional && !v)) throw new Invalid(t("{path}{k} muss ein Text sein", { path, k }));
+  if (opt.max && v.length > opt.max) throw new Invalid(t("{path}{k} ist länger als {max} Zeichen", { path, k, max: opt.max }));
+  if (opt.re && !opt.re.test(v)) throw new Invalid(t("{path}{k} darf nur a–z, 0–9 und - enthalten und muss mit einem Buchstaben beginnen", { path, k }));
   return v;
 }
 function unknown(o: Record<string, unknown>, known: Set<string>, path: string, warnings: string[]) {
-  for (const k of Object.keys(o)) if (!known.has(k)) warnings.push(`Unbekanntes Feld ${path}${k} wird ignoriert`);
+  for (const k of Object.keys(o)) if (!known.has(k)) warnings.push(t("Unbekanntes Feld {path}{k} wird ignoriert", { path, k }));
 }
 function list(o: Record<string, unknown>, k: string, path: string): Record<string, unknown>[] {
   const v = o[k] ?? [];
-  if (!Array.isArray(v) || !v.every(isObj)) throw new Invalid(`${path}${k} muss eine Liste von Objekten sein`);
+  if (!Array.isArray(v) || !v.every(isObj)) throw new Invalid(t("{path}{k} muss eine Liste von Objekten sein", { path, k }));
   return v;
 }
 function unique(items: { [k: string]: unknown }[], k: string, path: string) {
   const seen = new Set();
   for (const it of items) {
-    if (seen.has(it[k])) throw new Invalid(`${path}: ${k} „${it[k]}“ kommt doppelt vor`);
+    if (seen.has(it[k])) throw new Invalid(t("{path}: {k} „{value}“ kommt doppelt vor", { path, k, value: String(it[k]) }));
     seen.add(it[k]);
   }
 }
@@ -68,28 +69,28 @@ function unique(items: { [k: string]: unknown }[], k: string, path: string) {
 function setting(o: Record<string, unknown>, path: string, warnings: string[]): SettingDecl {
   unknown(o, SETTING, path, warnings);
   const type = o.type;
-  if (type !== "string" && type !== "boolean" && type !== "enum") throw new Invalid(`${path}type muss string, boolean oder enum sein`);
+  if (type !== "string" && type !== "boolean" && type !== "enum") throw new Invalid(t("{path}type muss string, boolean oder enum sein", { path }));
   const d: SettingDecl = { key: str(o, "key", path, { max: 64, re: IDENT })!, type, title: str(o, "title", path, { max: 80 })!, scope: "global" };
   d.description = str(o, "description", path, { optional: true, max: 300 });
   d.placeholder = str(o, "placeholder", path, { optional: true, max: 200 });
   if (o.scope !== undefined) {
-    if (o.scope !== "global" && o.scope !== "repo") throw new Invalid(`${path}scope muss global oder repo sein`);
+    if (o.scope !== "global" && o.scope !== "repo") throw new Invalid(t("{path}scope muss global oder repo sein", { path }));
     d.scope = o.scope;
   }
   if (o.format !== undefined) {
-    if (o.format !== "url-template" && o.format !== "regex") throw new Invalid(`${path}format muss url-template oder regex sein`);
-    if (type !== "string") throw new Invalid(`${path}format gibt es nur bei type string`);
+    if (o.format !== "url-template" && o.format !== "regex") throw new Invalid(t("{path}format muss url-template oder regex sein", { path }));
+    if (type !== "string") throw new Invalid(t("{path}format gibt es nur bei type string", { path }));
     d.format = o.format;
   }
   if (type === "enum") {
     const e = o.enum;
     if (!Array.isArray(e) || !e.length || !e.every((x) => Array.isArray(x) && x.length === 2 && x.every((s) => typeof s === "string")))
-      throw new Invalid(`${path}enum muss eine Liste von [Bezeichnung, Wert] sein`);
+      throw new Invalid(t("{path}enum muss eine Liste von [Bezeichnung, Wert] sein", { path }));
     d.enum = e as [string, string][];
   }
   if (o.default !== undefined) {
     const ok = type === "boolean" ? typeof o.default === "boolean" : typeof o.default === "string" && (type === "string" || d.enum!.some(([, v]) => v === o.default));
-    if (!ok) throw new Invalid(`${path}default passt nicht zu type ${type}`);
+    if (!ok) throw new Invalid(t("{path}default passt nicht zu type {type}", { path, type }));
     d.default = o.default as string | boolean;
   }
   return d;
@@ -113,19 +114,19 @@ export function parseManifest(text: string): Parsed {
     raw = JSON.parse(text);
   } catch {
     // User manifests are checked with position in Rust (ext_scan); the engine message would be English.
-    return { error: "Manifest ist kein gültiges JSON" };
+    return { error: t("Manifest ist kein gültiges JSON") };
   }
-  if (!isObj(raw)) return { error: "Manifest ungültig: kein JSON-Objekt" };
+  if (!isObj(raw)) return { error: t("Manifest ungültig: kein JSON-Objekt") };
   const mv = raw.manifestVersion;
-  if (typeof mv === "number" && mv > MANIFEST_VERSION) return { error: "Benötigt eine neuere Version von L'Atelier" };
+  if (typeof mv === "number" && mv > MANIFEST_VERSION) return { error: t("Benötigt eine neuere Version von L'Atelier") };
   if (raw.main !== undefined || (Array.isArray(raw.permissions) ? raw.permissions.length : raw.permissions !== undefined))
-    return { error: "Erweiterungen mit Code werden noch nicht unterstützt" };
+    return { error: t("Erweiterungen mit Code werden noch nicht unterstützt") };
   const warnings: string[] = [];
   try {
-    if (mv !== MANIFEST_VERSION) throw new Invalid("manifestVersion muss 1 sein");
+    if (mv !== MANIFEST_VERSION) throw new Invalid(t("manifestVersion muss 1 sein"));
     unknown(raw, TOP, "", warnings);
     const c = raw.contributes ?? {};
-    if (!isObj(c)) throw new Invalid("contributes muss ein Objekt sein");
+    if (!isObj(c)) throw new Invalid(t("contributes muss ein Objekt sein"));
     unknown(c, CONTRIB, "contributes.", warnings);
     const settings = list(c, "settings", "contributes.").map((s, i) => setting(s, `contributes.settings[${i}].`, warnings));
     const linkProviders = list(c, "linkProviders", "contributes.").map((l, i) => link(l, `contributes.linkProviders[${i}].`, warnings));
@@ -141,10 +142,10 @@ export function parseManifest(text: string): Parsed {
       homepage: str(raw, "homepage", "", { optional: true, max: 300 }),
       contributes: { settings, linkProviders },
     };
-    if (!SEMVER.test(manifest.version)) throw new Invalid("version muss eine Version wie 1.0.0 sein");
+    if (!SEMVER.test(manifest.version)) throw new Invalid(t("version muss eine Version wie 1.0.0 sein"));
     return { manifest, warnings };
   } catch (e) {
-    if (e instanceof Invalid) return { error: `Manifest ungültig: ${e.message}` };
+    if (e instanceof Invalid) return { error: t("Manifest ungültig: {message}", { message: e.message }) };
     throw e;
   }
 }
@@ -175,12 +176,12 @@ function httpUrl(s: string): string | null {
 }
 // Engine messages are English and differ (WebKit "missing )", V8 "Unterminated group"); the common ones get a German hint.
 const REGEX_HINTS: [RegExp, string][] = [
-  [/missing \)|unterminated group/i, "„(“ ohne schließende „)“"],
-  [/unmatched/i, "„)“ ohne öffnende „(“"],
-  [/missing terminating \]|unterminated character class/i, "„[“ ohne schließende „]“"],
-  [/nothing to repeat/i, "*, + oder ? ohne Zeichen davor"],
-  [/\\ at end of pattern/i, "„\\“ am Ende"],
-  [/out of order/i, "Bereich in falscher Reihenfolge, z. B. [z-a] oder {3,1}"],
+  [/missing \)|unterminated group/i, t("„(“ ohne schließende „)“")],
+  [/unmatched/i, t("„)“ ohne öffnende „(“")],
+  [/missing terminating \]|unterminated character class/i, t("„[“ ohne schließende „]“")],
+  [/nothing to repeat/i, t("*, + oder ? ohne Zeichen davor")],
+  [/\\ at end of pattern/i, t("„\\“ am Ende")],
+  [/out of order/i, t("Bereich in falscher Reihenfolge, z. B. [z-a] oder {3,1}")],
 ];
 const regexError = (v: string) => {
   try {
@@ -188,17 +189,17 @@ const regexError = (v: string) => {
     return null;
   } catch (e) {
     const hint = REGEX_HINTS.find(([re]) => re.test(String(e)))?.[1];
-    return hint ? `Ungültiger regulärer Ausdruck: ${hint}` : "Ungültiger regulärer Ausdruck";
+    return hint ? t("Ungültiger regulärer Ausdruck: {hint}", { hint }) : t("Ungültiger regulärer Ausdruck");
   }
 };
-const URL_ERROR = "Muss nach dem Einsetzen eine http(s)-Adresse ergeben, z. B. https://firma.atlassian.net/browse/$1";
+const URL_ERROR = t("Muss nach dem Einsetzen eine http(s)-Adresse ergeben, z. B. https://firma.atlassian.net/browse/$1");
 
 /** Error text for an edited value, or null. Empty is always allowed (= not set). */
 export function checkValue(d: SettingDecl, v: string): string | null {
   if (!v) return null;
   if (d.format === "regex") return regexError(v);
   if (d.format === "url-template") return httpUrl(fill(v, ["X-1", "X-1"], "X-1")) ? null : URL_ERROR;
-  if (d.type === "enum" && !d.enum?.some(([, x]) => x === v)) return "Unbekannter Wert";
+  if (d.type === "enum" && !d.enum?.some(([, x]) => x === v)) return t("Unbekannter Wert");
   return null;
 }
 

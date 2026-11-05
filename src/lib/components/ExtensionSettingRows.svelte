@@ -2,6 +2,7 @@
   import { Input, Segmented, Select, SettingRow, Switch, TextButton } from "$lib/atelier-ui";
   import { checkValue, resolve, type Manifest, type SettingDecl } from "$lib/extensions.logic";
   import { exts, setGlobal, setRepo } from "$lib/extensions.svelte";
+  import { t } from "$lib/i18n";
 
   // Settings of one extension, rendered from its manifest. With repo: only scope "repo", written to that repo's git config.
   let { ext, repo }: { ext: Manifest; repo?: string } = $props();
@@ -51,7 +52,7 @@
           onchange={() => draft[d.key] !== undefined && save(d, draft[d.key])}
         />
       {:else if d.type === "boolean" && repo}
-        <Segmented value={own[d.key] ?? ""} options={[["Global", ""], ["An", "true"], ["Aus", "false"]]} onchange={(v) => save(d, v)} label={d.title} />
+        <Segmented value={own[d.key] ?? ""} options={[["Global", ""], [t("An"), "true"], [t("Aus"), "false"]]} onchange={(v) => save(d, v)} label={d.title} />
       {:else if d.type === "boolean"}
         <Switch label={d.title} on={global[d.key] === true} onclick={() => save(d, global[d.key] !== true)} />
       {:else if choices(d).length <= 3}
@@ -61,7 +62,7 @@
       {/if}
       {#if errors[d.key]}<p class="text-destructive text-meta self-stretch">{errors[d.key]}</p>{/if}
       {#if repo && own[d.key] !== undefined && d.type === "string"}
-        <TextButton size="sm" onclick={() => ((draft[d.key] = ""), save(d, ""))}>Global verwenden</TextButton>
+        <TextButton size="sm" onclick={() => ((draft[d.key] = ""), save(d, ""))}>{t("Global verwenden")}</TextButton>
       {/if}
     </div>
   </SettingRow>

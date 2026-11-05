@@ -33,7 +33,7 @@ impl Drop for Proc {
 pub struct Completer(Mutex<Option<Proc>>);
 
 fn spawn() -> Result<Proc, String> {
-    let bin = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    let bin = crate::deps::claude_bin().ok_or_else(|| tr!("claude nicht gefunden", "claude not found"))?;
     let mut cmd = crate::quiet(&bin.to_string_lossy());
     // Ohne Tools, Settings und MCP: kleiner Prompt, schneller Start, und der Vorschlag kann nichts ausfuehren.
     cmd.args(["-p", "--model", "haiku", "--no-session-persistence", "--tools", "", "--setting-sources", ""])
@@ -46,10 +46,10 @@ fn spawn() -> Result<Proc, String> {
     for key in crate::pty::MARKERS {
         cmd.env_remove(key);
     }
-    let mut child = cmd.spawn().map_err(|e| format!("claude konnte nicht gestartet werden: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| tr!("claude konnte nicht gestartet werden: {e}", "claude could not be started: {e}"))?;
     let (Some(stdin), Some(out)) = (child.stdin.take(), child.stdout.take()) else {
         let _ = child.kill();
-        return Err("claude ohne stdin/stdout".into());
+        return Err(tr!("claude ohne stdin/stdout", "claude without stdin/stdout"));
     };
     Ok(Proc { child, stdin, out: BufReader::new(out), turns: 0 })
 }
@@ -62,7 +62,7 @@ fn ask(p: &mut Proc, prompt: &str) -> Result<String, String> {
     loop {
         line.clear();
         if p.out.read_line(&mut line).map_err(|e| format!("claude: {e}"))? == 0 {
-            return Err("claude hat sich beendet".into());
+            return Err(tr!("claude hat sich beendet", "claude exited"));
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
         if v["type"] != "result" {
@@ -83,7 +83,7 @@ pub async fn ai_complete(app: AppHandle, path: String, before: String, after: St
         if slot.is_none() {
             *slot = Some(spawn()?);
         }
-        let p = slot.as_mut().ok_or("claude nicht gestartet")?;
+        let p = slot.as_mut().ok_or_else(|| tr!("claude nicht gestartet", "claude not started"))?;
         let res = ask(p, &format!("Datei: {path}\n\n{before}<CURSOR>{after}"));
         // Kaputt oder verbraucht: gleich den naechsten starten, dann ist er bis zur naechsten Pause warm.
         if res.is_err() || p.turns >= TURNS {

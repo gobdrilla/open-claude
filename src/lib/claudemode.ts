@@ -1,11 +1,13 @@
+import { t } from "./i18n.ts";
+
 /** Berechtigungsmodi von claude in Umschalt+Tab-Reihenfolge; Label wie frueher im Chat. */
 export const MODES = [
-  ["Manuell", "default"],
-  ["Edits annehmen", "acceptEdits"],
+  [t("Manuell"), "default"],
+  [t("Edits annehmen"), "acceptEdits"],
   ["Plan", "plan"],
   ["Auto", "auto"],
-  ["Nicht fragen", "dontAsk"],
-  ["Alles erlauben", "bypassPermissions"],
+  [t("Nicht fragen"), "dontAsk"],
+  [t("Alles erlauben"), "bypassPermissions"],
 ] as const;
 
 // Fusszeile der TUI, z. B. "⏵⏵ accept edits on (shift+tab to cycle)"; Manuell zeigt keine.
@@ -45,5 +47,5 @@ export function tabState(prev: TabState, p: { busy?: boolean; waiting?: boolean 
 
 /** Banner im Tab-Kopf und Text der OS-Benachrichtigung, z. B. "atelier: Bash »npm i« wartet". */
 export function bannerText(projekt: string, w: { tool: string; summary: string } | null | undefined): string {
-  return `${projekt}: ${w?.tool ?? "Claude"}${w?.summary ? ` »${w.summary}«` : ""} wartet`;
+  return t("{projekt}: {tool} wartet", { projekt, tool: `${w?.tool ?? "Claude"}${w?.summary ? ` »${w.summary}«` : ""}` });
 }

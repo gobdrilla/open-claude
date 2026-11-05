@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { Button, Checkbox, Dialog } from "$lib/atelier-ui";
   import { pending, setNoAsk } from "$lib/ask.svelte";
   import { onDestroy } from "svelte";
@@ -26,10 +27,10 @@
       <Dialog.Title>{pending.ask?.title}</Dialog.Title>
       <Dialog.Description>{pending.ask?.message}</Dialog.Description>
     </Dialog.Header>
-    <Checkbox size="md" muted bind:checked={never}>Nicht erneut anzeigen</Checkbox>
+    <Checkbox size="md" muted bind:checked={never}>{t("Nicht erneut anzeigen")}</Checkbox>
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" onclick={() => (pending.ask = null)}>Abbrechen</Button>
-      <Button size="sm" onclick={ok}>Bestätigen</Button>
+      <Button variant="ghost" size="sm" onclick={() => (pending.ask = null)}>{t("Abbrechen")}</Button>
+      <Button size="sm" onclick={ok}>{t("Bestätigen")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

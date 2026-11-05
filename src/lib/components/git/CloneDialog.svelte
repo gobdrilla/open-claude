@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { age } from "$lib/utils";
   import { Badge, Button, Dialog, FolderField, Input, Row, Segmented, TextButton } from "$lib/atelier-ui";
   import { untrack } from "svelte";
@@ -146,7 +147,7 @@
   }
 
   async function browseDest() {
-    const picked = await pickFolder({ directory: true, title: "Zielordner wählen", defaultPath: dest || root });
+    const picked = await pickFolder({ directory: true, title: t("Zielordner wählen"), defaultPath: dest || root });
     if (typeof picked !== "string") return;
     dest = picked;
     destTouched = true;
@@ -169,7 +170,7 @@
       const failed = id && (await forge.setRepoAccount(path, id).then(() => "", String));
       onclone(path);
       if (failed) {
-        error = `Geklont, aber Konto nicht gesetzt: ${failed}`;
+        error = t("Geklont, aber Konto nicht gesetzt: {error}", { error: failed });
         selected = null;
         progress = null;
         return;
@@ -203,8 +204,8 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-3xl">
     <Dialog.Header>
-      <Dialog.Title>Repository klonen</Dialog.Title>
-      <Dialog.Description>Von GitHub/GitLab suchen oder eine Git-URL einfügen.</Dialog.Description>
+      <Dialog.Title>{t("Repository klonen")}</Dialog.Title>
+      <Dialog.Description>{t("Von GitHub/GitLab suchen oder eine Git-URL einfügen.")}</Dialog.Description>
     </Dialog.Header>
 
     <div class="flex flex-wrap items-center gap-1.5">
@@ -219,7 +220,7 @@
         </Button>
       {/each}
       <!-- Kurz, damit "URL einfügen" mit zwei Konten noch in derselben Zeile steht -->
-      <Button variant="outline" size="sm" title="Konto hinzufügen" onclick={onaccounts}>+ Konto</Button>
+      <Button variant="outline" size="sm" title={t("Konto hinzufügen")} onclick={onaccounts}>{t("+ Konto")}</Button>
       <span class="flex-1"></span>
       <Button
         variant="toggle"
@@ -228,15 +229,15 @@
         onclick={() => {
           mode = "url";
           selected = null;
-        }}>URL einfügen</Button
+        }}>{t("URL einfügen")}</Button
       >
     </div>
 
     {#if mode === "url"}
-      <Input bind:value={url} placeholder="https://… oder git@…" density="sm" class="font-mono" />
+      <Input bind:value={url} placeholder={t("https://… oder git@…")} density="sm" class="font-mono" />
     {:else if !account}
       <p class="text-muted-foreground px-1 py-6 text-center text-body">
-        {accounts.length ? "Konto oben wählen." : "Noch kein Konto verbunden."}
+        {accounts.length ? t("Konto oben wählen.") : t("Noch kein Konto verbunden.")}
       </p>
     {:else}
       <div class="flex items-center gap-1.5">
@@ -244,22 +245,22 @@
           <SearchIcon class="text-muted-foreground absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
           <Input
             bind:value={query}
-            placeholder="Eigene Repos filtern…"
+            placeholder={t("Eigene Repos filtern…")}
             density="sm" class="pl-7"
             onkeydown={(e) => e.key === "Enter" && searchRemote()}
             oninput={() => (searched = null)}
           />
         </div>
         <Button variant="outline" size="sm" disabled={!query.trim() || loading} onclick={searchRemote}
-          >Überall suchen</Button
+          >{t("Überall suchen")}</Button
         >
       </div>
 
       <div class="border-border min-h-0 flex-1 overflow-y-auto rounded border">
         {#if loading && !results.length}
-          <p class="text-muted-foreground px-3 py-6 text-center text-ui">Lade…</p>
+          <p class="text-muted-foreground px-3 py-6 text-center text-ui">{t("Lade…")}</p>
         {:else if !results.length}
-          <p class="text-muted-foreground px-3 py-6 text-center text-ui">Keine Treffer.</p>
+          <p class="text-muted-foreground px-3 py-6 text-center text-ui">{t("Keine Treffer.")}</p>
         {:else}
           {#each results as r (r.full_name)}
             {@const isExisting = existingNames.has(r.name.toLowerCase())}
@@ -289,14 +290,14 @@
               <!-- Feste Breite, auch ohne Badge: sonst springen Schloss und Zeit je Zeile -->
               <span class="flex w-14 shrink-0 justify-end">
                 {#if isExisting}
-                  <Badge variant="outline" class="text-primary gap-0.5 text-meta"><CheckIcon class="size-3" />lokal</Badge>
+                  <Badge variant="outline" class="text-primary gap-0.5 text-meta"><CheckIcon class="size-3" />{t("lokal")}</Badge>
                 {/if}
               </span>
             </Row>
           {/each}
           {#if !searched && own.length && !loading && !ownDone}
             <TextButton size="sm" block onclick={() => loadOwn(page + 1)}
-              >Mehr laden…</TextButton
+              >{t("Mehr laden…")}</TextButton
             >
           {/if}
         {/if}
@@ -304,7 +305,7 @@
 
       {#if selected}
         <Segmented
-          label="Protokoll"
+          label={t("Protokoll")}
           value={protocol}
           options={[["HTTPS", "https"], ["SSH", "ssh"]] as const}
           onchange={(v) => (protocol = v)}
@@ -327,7 +328,7 @@
     {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-1.5">
-      <Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={cloning}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={cloning}>{t("Abbrechen")}</Button>
       <Button
         size="sm"
         class="gap-1.5"
@@ -335,7 +336,7 @@
         onclick={doClone}
       >
         {#if cloning}<LoaderCircleIcon class="size-3.5 animate-spin" />{/if}
-        Klonen
+        {t("Klonen")}
       </Button>
     </div>
   </Dialog.Content>

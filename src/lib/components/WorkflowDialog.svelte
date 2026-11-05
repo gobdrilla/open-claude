@@ -8,6 +8,8 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
+  // Aliased: `t` is the template being edited.
+  import { t as tr } from "$lib/i18n";
 
   let {
     open = $bindable(false),
@@ -44,7 +46,7 @@
   });
 
   // Same words as ClaudeBar
-  const EFFORT_LABEL: Record<string, string> = { "": "Sitzung", low: "Niedrig", medium: "Mittel", high: "Hoch", xhigh: "Sehr hoch", max: "Max" };
+  const EFFORT_LABEL: Record<string, string> = { "": tr("Sitzung"), low: tr("Niedrig"), medium: tr("Mittel"), high: tr("Hoch"), xhigh: tr("Sehr hoch"), max: "Max" };
 
   const issues = $derived(
     problems(
@@ -103,9 +105,9 @@
 <Dialog.Root bind:open={() => open, (v) => { if (!busy) open = v; }}>
   <Dialog.Content class="flex max-h-[90vh] flex-col sm:max-w-2xl">
     <Dialog.Header>
-      <Dialog.Title>Workflow-Vorlage</Dialog.Title>
+      <Dialog.Title>{tr("Workflow-Vorlage")}</Dialog.Title>
       <Dialog.Description>
-        Phasen laufen nacheinander. In Prompts: <code>{"{{args}}"}</code> = Aufruf-Argumente, <code>{"{{prev}}"}</code> = Ergebnis des vorigen Schritts.
+        {tr("Phasen laufen nacheinander. In Prompts:")} <code>{"{{args}}"}</code> {tr("= Aufruf-Argumente,")} <code>{"{{prev}}"}</code> {tr("= Ergebnis des vorigen Schritts.")}
       </Dialog.Description>
     </Dialog.Header>
 
@@ -114,27 +116,27 @@
         <span class="text-muted-foreground">Name</span>
         <div class="flex items-center gap-2">
           <Input bind:value={t.name} placeholder="code-review" density="sm" class="font-mono" />
-          <Segmented value={scope} options={[["Global", "user"], ["Projekt", "project"]] as const} onchange={(v) => (scope = v)} />
+          <Segmented value={scope} options={[["Global", "user"], [tr("Projekt"), "project"]] as const} onchange={(v) => (scope = v)} />
         </div>
-        <span class="text-muted-foreground">Beschreibung</span>
-        <Input bind:value={t.description} placeholder="Was der Workflow tut" density="sm" />
-        <span class="text-muted-foreground">Wann nutzen</span>
+        <span class="text-muted-foreground">{tr("Beschreibung")}</span>
+        <Input bind:value={t.description} placeholder={tr("Was der Workflow tut")} density="sm" />
+        <span class="text-muted-foreground">{tr("Wann nutzen")}</span>
         <Input bind:value={t.whenToUse} placeholder="optional" density="sm" />
-        <span class="text-muted-foreground">Ablauf</span>
+        <span class="text-muted-foreground">{tr("Ablauf")}</span>
         <span class="truncate font-mono">{flow}</span>
       </div>
 
       {#each t.phases as p, i (p)}
         <section class="border-border/60 space-y-2 rounded-lg border p-2">
           <div class="flex items-center gap-1.5">
-            <span class="text-muted-foreground shrink-0">Phase {i + 1}</span>
+            <span class="text-muted-foreground shrink-0">{tr("Phase {n}", { n: i + 1 })}</span>
             <Input bind:value={p.title} density="sm" />
-            <Segmented value={p.mode} options={[["parallel", "parallel"], ["nacheinander", "sequence"]] as const} onchange={(v) => (p.mode = v)} />
-            <Button variant="ghost" size="icon-sm" aria-label="Nach oben" disabled={i === 0} onclick={() => move(t.phases, i, -1)}><ArrowUpIcon class="size-3.5" /></Button>
-            <Button variant="ghost" size="icon-sm" aria-label="Nach unten" disabled={i === t.phases.length - 1} onclick={() => move(t.phases, i, 1)}
+            <Segmented value={p.mode} options={[["parallel", "parallel"], [tr("nacheinander"), "sequence"]] as const} onchange={(v) => (p.mode = v)} />
+            <Button variant="ghost" size="icon-sm" aria-label={tr("Nach oben")} disabled={i === 0} onclick={() => move(t.phases, i, -1)}><ArrowUpIcon class="size-3.5" /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={tr("Nach unten")} disabled={i === t.phases.length - 1} onclick={() => move(t.phases, i, 1)}
               ><ArrowDownIcon class="size-3.5" /></Button
             >
-            <Button variant="ghost" size="icon-sm" aria-label="Phase löschen" onclick={() => t.phases.splice(i, 1)}><Trash2Icon class="size-3.5" /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={tr("Phase löschen")} onclick={() => t.phases.splice(i, 1)}><Trash2Icon class="size-3.5" /></Button>
           </div>
 
           {#each p.agents as a, j (a)}
@@ -142,25 +144,25 @@
               <div class="flex items-center gap-1.5">
                 <span class="text-muted-foreground shrink-0">Agent</span>
                 <Input bind:value={a.label} placeholder="Label (optional)" density="sm" />
-                <Button variant="ghost" size="icon-sm" aria-label="Agent duplizieren" onclick={() => p.agents.splice(j + 1, 0, { ...$state.snapshot(a) })}
+                <Button variant="ghost" size="icon-sm" aria-label={tr("Agent duplizieren")} onclick={() => p.agents.splice(j + 1, 0, { ...$state.snapshot(a) })}
                   ><CopyIcon class="size-3.5" /></Button
                 >
-                <Button variant="ghost" size="icon-sm" aria-label="Agent löschen" onclick={() => p.agents.splice(j, 1)}><Trash2Icon class="size-3.5" /></Button>
+                <Button variant="ghost" size="icon-sm" aria-label={tr("Agent löschen")} onclick={() => p.agents.splice(j, 1)}><Trash2Icon class="size-3.5" /></Button>
               </div>
-              <Textarea bind:value={a.prompt} rows={3} placeholder={"Was soll der Agent tun? {{args}} {{prev}}"} density="sm" class="font-mono" />
+              <Textarea bind:value={a.prompt} rows={3} placeholder={tr("Was soll der Agent tun? {{args}} {{prev}}")} density="sm" class="font-mono" />
               <div class="flex flex-wrap items-center gap-1.5">
                 <!-- Label and choice wrap as one -->
                 <span class="mr-2 flex items-center gap-1.5">
-                  <span class="text-muted-foreground">Modell</span>
-                  <Segmented value={a.model} options={MODELS.map((m) => [m ? m[0].toUpperCase() + m.slice(1) : "Sitzung", m] as const)} onchange={(v) => (a.model = v)} />
+                  <span class="text-muted-foreground">{tr("Modell")}</span>
+                  <Segmented value={a.model} options={MODELS.map((m) => [m ? m[0].toUpperCase() + m.slice(1) : tr("Sitzung"), m] as const)} onchange={(v) => (a.model = v)} />
                 </span>
                 <span class="flex items-center gap-1.5">
-                  <span class="text-muted-foreground">Denken</span>
+                  <span class="text-muted-foreground">{tr("Denken")}</span>
                   <Segmented value={a.effort} options={EFFORTS.map((e) => [EFFORT_LABEL[e] ?? e, e] as const)} onchange={(v) => (a.effort = v)} />
                 </span>
               </div>
               <details open={!!a.schema}>
-                <summary class="text-muted-foreground cursor-pointer">Strukturierte Ausgabe (JSON-Schema)</summary>
+                <summary class="text-muted-foreground cursor-pointer">{tr("Strukturierte Ausgabe (JSON-Schema)")}</summary>
                 <Textarea
                   bind:value={a.schema}
                   rows={4}
@@ -176,7 +178,7 @@
       <Button variant="outline" size="sm" onclick={() => t.phases.push(newPhase(t.phases.length + 1))}>+ Phase</Button>
 
       <details>
-        <summary class="text-muted-foreground cursor-pointer">Skript-Vorschau</summary>
+        <summary class="text-muted-foreground cursor-pointer">{tr("Skript-Vorschau")}</summary>
         <pre class="bg-background/60 mt-1 max-h-64 overflow-auto rounded p-2 font-mono text-meta">{script}</pre>
       </details>
     </fieldset>
@@ -187,15 +189,15 @@
       </ul>
     {/if}
     {#if outdated}
-      <p class="text-muted-foreground text-ui">Das Skript wurde außerhalb geändert – Speichern erzeugt es neu.</p>
+      <p class="text-muted-foreground text-ui">{tr("Das Skript wurde außerhalb geändert – Speichern erzeugt es neu.")}</p>
     {/if}
     {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" disabled={busy} onclick={() => (open = false)}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" disabled={busy} onclick={() => (open = false)}>{tr("Abbrechen")}</Button>
       <Button size="sm" class="gap-1.5" disabled={busy || (tried && !!issues.length)} onclick={save}>
         {#if busy}<LoaderCircleIcon class="size-3.5 animate-spin" />{/if}
-        Speichern
+        {tr("Speichern")}
       </Button>
     </div>
   </Dialog.Content>

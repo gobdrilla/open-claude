@@ -76,6 +76,7 @@
   import ShareDialog from "$lib/components/ShareDialog.svelte";
   import JoinDialog from "$lib/components/JoinDialog.svelte";
   import { shares } from "$lib/share.svelte";
+  import { LANG, LOCALE, t } from "$lib/i18n";
   import SessionOverview, { type Panel } from "$lib/components/start/SessionOverview.svelte";
 
   type Repo = {
@@ -171,9 +172,9 @@
   // Last session panel per session (context, current tool, todos) for the start page; filled by the tab poll.
   let panels = $state<Record<string, Panel>>({});
   const TAB: Record<string, [string, string, string]> = {
-    run: ["◐", "text-primary animate-pulse", "Claude arbeitet"],
-    ask: ["?", "text-warning font-bold", "Claude wartet auf dich"],
-    done: ["✓", "text-success", "Claude ist fertig"],
+    run: ["◐", "text-primary animate-pulse", t("Claude arbeitet")],
+    ask: ["?", "text-warning font-bold", t("Claude wartet auf dich")],
+    done: ["✓", "text-success", t("Claude ist fertig")],
   };
   const activeSession = $derived(sessions.find((s) => s.id === active));
   $effect(() => {
@@ -258,17 +259,19 @@
 
   const lidNote = () =>
     mac
-    ? "Kein Admin-Passwort nötig; der normale Ruhezustand bleibt unverändert."
+    ? t("Kein Admin-Passwort nötig; der normale Ruhezustand bleibt unverändert.")
     : navigator.userAgent.includes("Windows")
-      ? "Ändert solange die Deckel-Aktion des Energieplans. Auf Geräten mit Modern Standby unzuverlässig; danach schläft er erst nach der normalen Leerlaufzeit."
-      : "Braucht systemd-logind; ob GNOME/KDE die Sperre beachten, ist nicht geprüft.";
+      ? t("Ändert solange die Deckel-Aktion des Energieplans. Auf Geräten mit Modern Standby unzuverlässig; danach schläft er erst nach der normalen Leerlaufzeit.")
+      : t("Braucht systemd-logind; ob GNOME/KDE die Sperre beachten, ist nicht geprüft.");
   /** ask: aus den Einstellungen deren Inline-Rueckfrage, sonst der globale Dialog. */
   async function toggleLidAwake(ask = confirm) {
     const msg =
-      "Der Laptop bleibt zugeklappt wach, solange eine Claude-Session gerade arbeitet (Display aus). Wartet Claude auf dich oder ist fertig, schläft er normal ein. " +
-      "In der Tasche kann er dabei heiß werden; unter 20 % Akku wird nicht wach gehalten.\n\n" +
+      t(
+        "Der Laptop bleibt zugeklappt wach, solange eine Claude-Session gerade arbeitet (Display aus). Wartet Claude auf dich oder ist fertig, schläft er normal ein. In der Tasche kann er dabei heiß werden; unter 20 % Akku wird nicht wach gehalten.",
+      ) +
+      "\n\n" +
       lidNote();
-    if (!lidAwake && !(await ask(msg, "Einschalten", "Wach bei zugeklapptem Laptop?", { tone: "default" }))) return;
+    if (!lidAwake && !(await ask(msg, t("Einschalten"), t("Wach bei zugeklapptem Laptop?"), { tone: "default" }))) return;
     lidAwake = !lidAwake;
     await invoke("set_awake", { on: lidAwake });
     await store.set("lidAwake", lidAwake);
@@ -331,8 +334,8 @@
     const live = hits.filter((h) => !pins.includes(h.repo.path) && running.has(h.repo.path));
     const rest = hits.filter((h) => !pins.includes(h.repo.path) && !running.has(h.repo.path));
     const head = [
-      ...(pinned.length ? [{ heading: "Angepinnt", items: pinned }] : []),
-      ...(live.length ? [{ heading: "Aktiv", items: live }] : []),
+      ...(pinned.length ? [{ heading: t("Angepinnt"), items: pinned }] : []),
+      ...(live.length ? [{ heading: t("Aktiv"), items: live }] : []),
     ];
 
     if (query.trim()) return [...head, { heading: "", items: rest }];
@@ -340,7 +343,7 @@
     const by = new Map<string, typeof hits>();
     for (const h of rest) {
       // Einzelprojekte liegen ausserhalb des Dev-Ordners, ihr Pfad sagt dort nichts
-      const top = extra.includes(h.repo.path) ? "Einzeln hinzugefügt" : h.dir.split(/[\\/]/)[0] || "Direkt im Ordner";
+      const top = extra.includes(h.repo.path) ? t("Einzeln hinzugefügt") : h.dir.split(/[\\/]/)[0] || t("Direkt im Ordner");
       (by.get(top) ?? by.set(top, []).get(top)!).push(h);
     }
     return [...head, ...[...by].map(([heading, items]) => ({ heading, items }))];
@@ -354,11 +357,13 @@
   let maximized = $state(false);
   // macOS: native Ampeln im Overlay-Titelbalken (tauri.macos.conf.json) statt eigener Knoepfe.
   const mac = navigator.userAgent.includes("Mac");
-  const mod = mac ? "⌘" : "Strg";
+  const mod = mac ? "⌘" : t("Strg");
   // Im macOS-Vollbild sind die Ampeln weg, dann kein Platz dafuer freihalten.
   let fullscreen = $state(false);
   const lights = $derived(mac && !fullscreen);
   onMount(() => {
+    // Rust messages (errors, tray) in the UI language.
+    invoke("set_lang", { lang: LANG }).catch(() => {});
     const win = getCurrentWindow();
     const sync = async () => {
       maximized = await win.isMaximized();
@@ -473,9 +478,9 @@
     checking = true;
     try {
       update = (await check()) ?? update;
-      return manual && !update ? "L'Atelier ist aktuell." : "";
+      return manual && !update ? t("L'Atelier ist aktuell.") : "";
     } catch (e) {
-      return manual ? `Update-Prüfung fehlgeschlagen: ${e}` : "";
+      return manual ? t("Update-Prüfung fehlgeschlagen: {e}", { e: String(e) }) : "";
     } finally {
       checking = false;
     }
@@ -497,7 +502,7 @@
     installingDeps = true;
     for (const name of missing) {
       try {
-        okNotice = (await invoke<string>("deps_install", { name })) || `${DEPS[name]} installiert.`;
+        okNotice = (await invoke<string>("deps_install", { name })) || t("{name} installiert.", { name: DEPS[name] });
       } catch (e) {
         notice = String(e);
         break;
@@ -507,19 +512,19 @@
     installingDeps = false;
   }
 
-  const sessionsLost = () => `${sessions.length} laufende Claude-Sitzung(en) werden dabei beendet.`;
+  const sessionsLost = () => t("{n} laufende Claude-Sitzung(en) werden dabei beendet.", { n: sessions.length });
 
   /** Ohne Tray beendet Schliessen die App (lib.rs, on_window_event); Rust fragt bei laufenden Sitzungen und ungespeicherten Dateien (preview::quit). */
   /** byKey: per Esc ausgeloest; das beendet ohne Tray die App, darum auch ohne Sitzung nachfragen. */
   async function closeWindow(byKey = false) {
-    if (byKey && !tray && !sessions.length && !(await confirm("Esc schließt das Fenster und beendet die App.", "Beenden", "L'Atelier de Claude beenden?"))) return;
+    if (byKey && !tray && !sessions.length && !(await confirm(t("Esc schließt das Fenster und beendet die App."), t("Beenden"), t("L'Atelier de Claude beenden?")))) return;
     getCurrentWindow().close();
   }
 
   async function installUpdate(ask = confirm) {
     // Der Neustart laeuft an der Rueckfrage in Rust vorbei.
-    if (isDirty() && !(await ask("Ungespeicherte Änderungen im Editor gehen dabei verloren.", "Neu starten", "Update installieren?"))) return;
-    if (sessions.length && !(await ask(sessionsLost(), "Neu starten", "Update installieren?"))) return;
+    if (isDirty() && !(await ask(t("Ungespeicherte Änderungen im Editor gehen dabei verloren."), t("Neu starten"), t("Update installieren?")))) return;
+    if (sessions.length && !(await ask(sessionsLost(), t("Neu starten"), t("Update installieren?")))) return;
     updating = true;
     try {
       await update!.download();
@@ -652,7 +657,7 @@
     };
     const errs = await Promise.all(paths.map(run));
     const msg = errs.filter(Boolean).join("\n");
-    if (msg) skillNotice = `Skills nicht geschrieben: ${msg}`;
+    if (msg) skillNotice = t("Skills nicht geschrieben: {msg}", { msg });
   }
 
   async function setProjectSkills(path: string, ps: ProjectSkills) {
@@ -690,7 +695,7 @@
       }
       // Linux ohne Benachrichtigungsdienst wirft: still bleiben.
       try {
-        if (ok) sendNotification({ title: "Claude wartet auf dich", body });
+        if (ok) sendNotification({ title: t("Claude wartet auf dich"), body });
       } catch {}
     };
     const onFocus = () => {
@@ -757,8 +762,8 @@
       const n = sessions.filter((s) => tabs[s.id] === "ask" || tabs[s.id] === "done").length;
       if (n !== badge) win.setBadgeCount((badge = n) || undefined).catch(() => {});
     };
-    const t = setInterval(tick, 1500);
-    return () => (clearInterval(t), window.removeEventListener("focus", onFocus));
+    const timer = setInterval(tick, 1500);
+    return () => (clearInterval(timer), window.removeEventListener("focus", onFocus));
   });
 
   /** Offene Session des Projekts zeigen, sonst eine neue starten. */
@@ -781,7 +786,7 @@
   async function launchGroup(g: RepoGroup) {
     const [main, ...rest] = g.paths.map((p) => repos.find((r) => r.path === p)).filter((r) => r !== undefined);
     // Nicht still ein anderes Repo zum Haupt-Repo machen: claude startete sonst im falschen Ordner
-    if (main?.path !== g.paths[0]) return void (notice = `Gruppe „${g.name}“: Haupt-Repo nicht gefunden (${g.paths[0]}).`);
+    if (main?.path !== g.paths[0]) return void (notice = t("Gruppe „{name}“: Haupt-Repo nicht gefunden ({path}).", { name: g.name, path: g.paths[0] }));
     if (gitRepo && gitView && !(await gitView.canLeave())) return;
     leaveGit();
     editRepo = null;
@@ -799,7 +804,7 @@
   }
 
   async function deleteGroup(name: string) {
-    if (!(await confirm("Die Projekte selbst bleiben unverändert.", "Löschen", `Gruppe „${name}“ löschen?`))) return;
+    if (!(await confirm(t("Die Projekte selbst bleiben unverändert."), t("Löschen"), t("Gruppe „{name}“ löschen?", { name })))) return;
     repoGroups = repoGroups.filter((g) => g.name !== name);
     await store.set("repoGroups", $state.snapshot(repoGroups));
   }
@@ -845,7 +850,7 @@
     ["Git", "git", GitBranchIcon, 3],
   ] as const;
   // Account-wide usage limits from any session panel (footer of the start page).
-  const LIMIT_NAME: Record<string, string> = { five_hour: "5 h", seven_day: "Woche" };
+  const LIMIT_NAME: Record<string, string> = { five_hour: "5 h", seven_day: t("Woche") };
   const limits = $derived(
     (Object.values(panels).find((p) => p.limits?.length)?.limits ?? []).flatMap((l) => (LIMIT_NAME[l.kind] ? [[LIMIT_NAME[l.kind], l] as const] : [])),
   );
@@ -863,9 +868,9 @@
   // Ab der zweiten Sitzung im selben Projekt durchnummeriert
   const label = (s: (typeof sessions)[number]) => {
     if (s.group) return s.group;
-    if (s.guest) return `Gast: ${s.host ? split(s.host)[1] : "verbinde …"}`;
+    if (s.guest) return t("Gast: {host}", { host: s.host ? split(s.host)[1] : t("verbinde …") });
     const n = sessions.filter((o) => !o.group && o.repo.path === s.repo.path).indexOf(s);
-    return (isFree(s.repo) ? "Ohne Projekt" : split(s.repo.rel)[1]) + (n > 0 ? ` ${n + 1}` : "");
+    return (isFree(s.repo) ? t("Ohne Projekt") : split(s.repo.rel)[1]) + (n > 0 ? ` ${n + 1}` : "");
   };
 
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
@@ -919,7 +924,7 @@
   }
 
   async function addProject() {
-    const picked = await open({ directory: true, title: "Projektordner hinzufügen", defaultPath: root || home });
+    const picked = await open({ directory: true, title: t("Projektordner hinzufügen"), defaultPath: root || home });
     if (typeof picked === "string") await cloned(picked);
   }
 
@@ -988,7 +993,7 @@
   async function setupUnity(repo: Repo) {
     try {
       const log = await unity.setup(repo.path);
-      okNotice = log.trim().split("\n").slice(-2).join(" · ") || "Unity-Support eingerichtet.";
+      okNotice = log.trim().split("\n").slice(-2).join(" · ") || t("Unity-Support eingerichtet.");
     } catch (e) {
       notice = String(e);
     }
@@ -1000,7 +1005,7 @@
       const remotes = await git.remotes(repo.path);
       const r = remotes.find((r) => r.name === "origin") ?? remotes[0];
       const url = r && (await forge.webUrl(r.url));
-      if (!url) throw "Kein Remote mit Web-Adresse.";
+      if (!url) throw t("Kein Remote mit Web-Adresse.");
       await forge.openUrl(url);
     } catch (e) {
       notice = String(e);
@@ -1021,15 +1026,15 @@
         git.remotes(repo.path),
       ]);
       const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
-      if (!remotes.length) risks.push("Kein Remote: alles liegt nur hier.");
-      if (st.files.length) risks.push(n(st.files.length, "nicht committete Änderung", "nicht committete Änderungen"));
+      if (!remotes.length) risks.push(t("Kein Remote: alles liegt nur hier."));
+      if (st.files.length) risks.push(n(st.files.length, t("nicht committete Änderung"), t("nicht committete Änderungen")));
       // Nie gepushte Branches zaehlen nur, wenn sie nicht schon in der Basis stecken.
       const unpushed = branches.filter((b) => !b.remote && (b.ahead > 0 || (!b.upstream && b.unmerged !== 0)));
       if (remotes.length && unpushed.length)
-        risks.push(`Nicht gepusht: ${unpushed.map((b) => b.name + (b.ahead ? ` (+${b.ahead})` : "")).join(", ")}`);
+        risks.push(t("Nicht gepusht: {list}", { list: unpushed.map((b) => b.name + (b.ahead ? ` (+${b.ahead})` : "")).join(", ") }));
       if (stashes.length) risks.push(n(stashes.length, "Stash", "Stashes"));
     } catch (e) {
-      risks.push(`Status unbekannt: ${e}`);
+      risks.push(t("Status unbekannt: {e}", { e: String(e) }));
     }
     doomed = { repo, risks };
   }
@@ -1080,7 +1085,7 @@
 
   /** Per Klick beenden: claude arbeitet evtl. noch, daher nachfragen. */
   async function endSession(id: string) {
-    if (await confirm("Ein laufender claude-Prozess wird abgebrochen.", "Beenden", "Sitzung beenden?")) closeSession(id);
+    if (await confirm(t("Ein laufender claude-Prozess wird abgebrochen."), t("Beenden"), t("Sitzung beenden?"))) closeSession(id);
   }
 
   const forget = (id: string) => (delete tabs[id], delete modes[id], delete efforts[id], delete banners[id], delete panels[id], delete shares[id]);
@@ -1203,7 +1208,7 @@
 
   // Home-Ordner als ~ (alle Plattformen); bis homeDir() da ist, wenigstens das Windows-Muster.
   const short = $derived.by(() => {
-    if (!root) return "Kein Dev-Ordner";
+    if (!root) return t("Kein Dev-Ordner");
     const h = home.replace(/[\\/]+$/, "");
     if (h && (root === h || root.startsWith(h + "/") || root.startsWith(h + "\\"))) return "~" + root.slice(h.length);
     return root.replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/]+/, "~");
@@ -1228,7 +1233,7 @@
       size="xs"
       class="{lights ? '' : '-ml-1.5'} mr-2 gap-1.5"
       onclick={back}
-      title="Zurück zu den Projekten ({mod}+Umschalt+W)"><ArrowLeftIcon class="size-3.5" /> Projekte</Button
+      title={t("Zurück zu den Projekten ({mod}+Umschalt+W)", { mod })}><ArrowLeftIcon class="size-3.5" /> {t("Projekte")}</Button
     >
     <div class="flex min-w-0 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
       <span class="text-ui truncate font-semibold" data-tauri-drag-region>
@@ -1253,7 +1258,7 @@
     <span class="bg-border mx-3 h-4 w-px shrink-0"></span>
     <Segmented
       variant="nav"
-      label="Ansicht"
+      label={t("Ansicht")}
       value={view as ViewKey}
       options={views}
       onchange={(v) => v !== view && VIEW_OPEN[v](viewRepo)}
@@ -1277,8 +1282,8 @@
       class="text-primary mr-1 gap-1.5"
       disabled={updating}
       onclick={() => installUpdate()}
-      title={`Update installieren und neu starten${update.body ? `\n\n${update.body}` : ""}`}
-      ><DownloadIcon class="size-3.5" /> {updating ? "Aktualisiere…" : `Update ${update.version}`}</Button
+      title={t("Update installieren und neu starten") + (update.body ? `\n\n${update.body}` : "")}
+      ><DownloadIcon class="size-3.5" /> {updating ? t("Aktualisiere…") : `Update ${update.version}`}</Button
     >
   {/if}
   {#if missing.length}
@@ -1288,9 +1293,9 @@
       class="mr-1 gap-1.5 text-warning"
       disabled={installingDeps}
       onclick={installDeps}
-      title={`Fehlt auf diesem Rechner: ${missing.map((n) => DEPS[n]).join(", ")}. Klick installiert.`}
+      title={t("Fehlt auf diesem Rechner: {list}. Klick installiert.", { list: missing.map((n) => DEPS[n]).join(", ") })}
       ><DownloadIcon class="size-3.5" />
-      {installingDeps ? "Installiere…" : `${missing.map((n) => DEPS[n]).join(" + ")} installieren`}</Button
+      {installingDeps ? t("Installiere…") : t("{list} installieren", { list: missing.map((n) => DEPS[n]).join(" + ") })}</Button
     >
   {/if}
   {#if !mac}
@@ -1300,7 +1305,7 @@
       tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
       onclick={() => getCurrentWindow().minimize()}
-      label="Minimieren"
+      label={t("Minimieren")}
       title={undefined}><MinusIcon class="size-3.5" /></IconButton
     >
     <IconButton
@@ -1308,7 +1313,7 @@
       tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
       onclick={() => getCurrentWindow().toggleMaximize()}
-      label={maximized ? "Wiederherstellen" : "Maximieren"}
+      label={maximized ? t("Wiederherstellen") : t("Maximieren")}
       title={undefined}
     >
       {#if maximized}
@@ -1327,7 +1332,7 @@
       tabindex={-1}
       onmousedown={(e) => e.preventDefault()}
       onclick={() => closeWindow()}
-      label="Schließen"
+      label={t("Schließen")}
       title={undefined}><XIcon class="size-3.5" /></IconButton
     >
   {/if}
@@ -1341,7 +1346,7 @@
   <Notice bind:text={ide.notice} kind="note" timeout={3000} />
   <!-- Session tabs at the top in every view (also the start page), from the first session on. -->
   {#if sessions.length}
-    <div class="bg-chrome border-border text-ui flex shrink-0 gap-px overflow-x-auto border-b px-1" role="tablist" aria-label="Sitzungen">
+    <div class="bg-chrome border-border text-ui flex shrink-0 gap-px overflow-x-auto border-b px-1" role="tablist" aria-label={t("Sitzungen")}>
       {#each sessions as s (s.id)}
         {@const on = s.id === active}
         <ContextMenu.Root>
@@ -1358,7 +1363,7 @@
             aria-selected={on}
             onclick={() => openSessionTab(s.id)}
           >
-            {#if tabs[s.id]}{@const [i, c, t] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={t}>{i}</span>{/if}{#if s.group}<LayersIcon
+            {#if tabs[s.id]}{@const [i, c, tip] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={tip}>{i}</span>{/if}{#if s.group}<LayersIcon
                 class="text-primary mr-1 inline size-3"
               />{/if}{label(s)}{#if banners[s.id]}<span
                 class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
@@ -1370,12 +1375,12 @@
             tone="danger"
             reveal={!on}
             onclick={() => endSession(s.id)}
-            label="Sitzung beenden"><XIcon class="size-3" /></IconButton
+            label={t("Sitzung beenden")}><XIcon class="size-3" /></IconButton
           >
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content class={cn(menuContent, "min-w-44 rounded-lg shadow-lg")}>
-            <ContextItem label="Sitzung beenden …" destructive onSelect={() => endSession(s.id)} />
+            <ContextItem label={t("Sitzung beenden …")} destructive onSelect={() => endSession(s.id)} />
           </ContextMenu.Content>
         </ContextMenu.Portal>
         </ContextMenu.Root>
@@ -1393,7 +1398,7 @@
         <Command.Input
           bind:ref={input}
           bind:value={query}
-          placeholder="Projekt suchen"
+          placeholder={t("Projekt suchen")}
           autofocus
           class="h-12! text-body!"
         />
@@ -1405,22 +1410,22 @@
           size="sm"
           class="gap-1.5 {sessions.some((s) => isFree(s.repo)) ? 'text-primary' : ''}"
           onclick={launchFree}
-          title="Claude im Home-Ordner starten, ohne Git ({mod}+T)"><TerminalIcon class="size-3.5" /> Claude ohne Projekt</Button
+          title={t("Claude im Home-Ordner starten, ohne Git ({mod}+T)", { mod })}><TerminalIcon class="size-3.5" /> {t("Claude ohne Projekt")}</Button
         >
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             {#snippet child({ props })}
-              <Button {...props} size="sm" class="gap-1.5"><PlusIcon class="size-3.5" /> Projekt <ChevronDownIcon class="size-3" /></Button>
+              <Button {...props} size="sm" class="gap-1.5"><PlusIcon class="size-3.5" /> {t("Projekt")} <ChevronDownIcon class="size-3" /></Button>
             {/snippet}
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content align="end" sideOffset={4} class={cn(menuContent, "min-w-56 rounded-lg shadow-lg")}>
               {#each [
-                [FolderDownIcon, "Repo klonen …", `${mod}+N`, () => (cloneOpen = true)],
-                [FolderPlusIcon, "Neues Repo anlegen …", `${mod}+⇧+N`, () => (createOpen = true)],
-                [FolderInputIcon, "Ordner hinzufügen …", "", addProject],
-                [UserPlusIcon, "Sitzung beitreten …", "", () => (joinOpen = true)],
-                [FolderIcon, "Dev-Ordner wechseln …", `${mod}+O`, pickRoot],
+                [FolderDownIcon, t("Repo klonen …"), `${mod}+N`, () => (cloneOpen = true)],
+                [FolderPlusIcon, t("Neues Repo anlegen …"), `${mod}+⇧+N`, () => (createOpen = true)],
+                [FolderInputIcon, t("Ordner hinzufügen …"), "", addProject],
+                [UserPlusIcon, t("Sitzung beitreten …"), "", () => (joinOpen = true)],
+                [FolderIcon, t("Dev-Ordner wechseln …"), `${mod}+O`, pickRoot],
               ] as const as [Icon, label, key, onSelect], i (label)}
                 {#if i === 4}<DropdownMenu.Separator class={menuSeparator} />{/if}
                 <DropdownMenu.Item class={cn(menuItem, "py-1.5")} {onSelect}>
@@ -1432,7 +1437,7 @@
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" title="Einstellungen" aria-label="Einstellungen" onclick={() => (settingsOpen = true)}
+        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" title={t("Einstellungen")} aria-label={t("Einstellungen")} onclick={() => (settingsOpen = true)}
           ><SettingsIcon class="size-4" /></Button
         >
       </div>
@@ -1442,14 +1447,14 @@
       {#if error}
         <p class="text-destructive px-4 py-6 text-body">{error}</p>
       {:else if scanning && repos.length === 0}
-        <p class="text-muted-foreground px-4 py-6 text-body">Lese Git-Repos …</p>
+        <p class="text-muted-foreground px-4 py-6 text-body">{t("Lese Git-Repos …")}</p>
       {:else}
         <Command.Empty class="px-4 py-6 text-left text-body">
           {repos.length
-            ? `Kein Projekt passt zu „${query.trim()}“.`
+            ? t("Kein Projekt passt zu „{q}“.", { q: query.trim() })
             : root
-              ? "Hier liegen keine Git-Repos."
-              : `Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen (${mod}+O).`}
+              ? t("Hier liegen keine Git-Repos.")
+              : t("Noch keine Projekte: Ordner hinzufügen oder Dev-Ordner wählen ({mod}+O).", { mod })}
         </Command.Empty>
         {#if view === "list" && sessions.some((s) => tabs[s.id] === "ask") && !query.trim()}
           <SessionOverview
@@ -1457,11 +1462,11 @@
             onopen={openSessionTab}
           />
           <h2 class="text-muted-foreground text-meta flex gap-1.5 px-3 pt-4 font-semibold tracking-wide uppercase">
-            Projekte <span class="font-normal">{repos.length}</span>
+            {t("Projekte")} <span class="font-normal">{repos.length}</span>
           </h2>
         {/if}
         {#if repoGroups.length && !query.trim()}
-          <Command.Group heading="Gruppen" class={subHead}>
+          <Command.Group heading={t("Gruppen")} class={subHead}>
             {#each repoGroups as g (g.name)}
               {@const live = sessions.some((s) => s.group === g.name)}
               {@const members = g.paths.map((p) => split(repos.find((r) => r.path === p)?.rel ?? p)[1]).join(" · ")}
@@ -1477,19 +1482,19 @@
                       {#if live}
                         <Badge variant="outline" class="text-primary gap-1.5 text-meta">
                           <span class="size-2 animate-pulse rounded-full bg-current"></span>
-                          läuft
+                          {t("läuft")}
                         </Badge>
                       {/if}
-                      <Badge variant="outline" class="text-muted-foreground text-meta">{g.paths.length} {g.paths.length === 1 ? "Projekt" : "Projekte"}</Badge>
+                      <Badge variant="outline" class="text-muted-foreground text-meta">{t(g.paths.length === 1 ? "{n} Projekt" : "{n} Projekte", { n: g.paths.length })}</Badge>
                     </Command.Item>
                   {/snippet}
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
                   <ContextMenu.Content class={cn(menuContent, "min-w-52 rounded-lg shadow-lg")}>
-                    {@render repoItem(live ? "Zur Claude-Sitzung" : "Claude starten", "", () => launchGroup(g))}
-                    {@render repoItem("Bearbeiten …", "", () => (groupEdit = { orig: g.name, g }))}
+                    {@render repoItem(live ? t("Zur Claude-Sitzung") : t("Claude starten"), "", () => launchGroup(g))}
+                    {@render repoItem(t("Bearbeiten …"), "", () => (groupEdit = { orig: g.name, g }))}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem("Gruppe löschen …", "", () => deleteGroup(g.name), true)}
+                    {@render repoItem(t("Gruppe löschen …"), "", () => deleteGroup(g.name), true)}
                   </ContextMenu.Content>
                 </ContextMenu.Portal>
               </ContextMenu.Root>
@@ -1521,7 +1526,7 @@
                           e.stopPropagation();
                           togglePin(item.repo.path);
                         }}
-                        label={pinned ? "Nicht mehr anpinnen" : "Anpinnen"}
+                        label={pinned ? t("Nicht mehr anpinnen") : t("Anpinnen")}
                         title={undefined}
                         aria-pressed={pinned}
                       >
@@ -1544,7 +1549,7 @@
                       {#if running.has(item.repo.path)}
                         <Badge variant="outline" class="text-primary gap-1.5 pr-0.5 text-meta">
                           <span class="size-2 animate-pulse rounded-full bg-current"></span>
-                          läuft
+                          {t("läuft")}
                           <IconButton
                             size="xs"
                             tone="danger"
@@ -1554,7 +1559,7 @@
                               const s = sessionOf(item.repo.path);
                               if (s) endSession(s.id);
                             }}
-                            label="Sitzung beenden"><XIcon class="size-3" /></IconButton
+                            label={t("Sitzung beenden")}><XIcon class="size-3" /></IconButton
                           >
                         </Badge>
                       {/if}
@@ -1563,7 +1568,7 @@
                       <!-- Meta gives way to the view actions on hover/keyboard selection -->
                       <span class="flex items-center gap-3 group-data-selected/command-item:hidden">
                         {#if prof}
-                          <Badge variant="outline" class="text-muted-foreground gap-1 text-meta" title="Skill-Profil">
+                          <Badge variant="outline" class="text-muted-foreground gap-1 text-meta" title={t("Skill-Profil")}>
                             <SparklesIcon class="size-3" />
                             {prof}
                           </Badge>
@@ -1577,7 +1582,7 @@
                                 <span
                                   class="size-2 rounded-full {uinfo?.editorOpen ? 'bg-success' : ''}"
                                   style={uinfo?.editorOpen ? "" : `background:${LANG_COLOR.Unity}`}
-                                  title={uinfo ? (uinfo.editorOpen ? "Editor offen" : "Editor zu") : ""}
+                                  title={uinfo ? (uinfo.editorOpen ? t("Editor offen") : t("Editor zu")) : ""}
                                 ></span>
                                 {unityBadgeText(uinfo)}
                               </Badge>
@@ -1635,29 +1640,29 @@
                   <ContextMenu.Content
                     class={cn(menuContent, "min-w-52 rounded-lg shadow-lg")}
                   >
-                    {@render repoItem(running.has(item.repo.path) ? "Zur Claude-Sitzung" : "Claude starten", `${mod}+1`, () => launch(item.repo))}
+                    {@render repoItem(running.has(item.repo.path) ? t("Zur Claude-Sitzung") : t("Claude starten"), `${mod}+1`, () => launch(item.repo))}
                     {#if running.has(item.repo.path)}
-                      {@render repoItem("Weitere Claude-Sitzung", "", () => launch(item.repo, true))}
+                      {@render repoItem(t("Weitere Claude-Sitzung"), "", () => launch(item.repo, true))}
                     {/if}
                     {@render repoItem("Editor", `${mod}+2`, () => openEdit(item.repo))}
-                    {@render repoItem("Git-Ansicht", `${mod}+3`, () => openGit(item.repo))}
+                    {@render repoItem(t("Git-Ansicht"), `${mod}+3`, () => openGit(item.repo))}
                     <ContextMenu.Separator class={menuSeparator} />
-                    {@render repoItem(`Im ${FILES_APP} zeigen`, `${mod}+⇧+E`, () => reveal(item.repo))}
-                    {@render repoItem("Im Browser öffnen", "", () => browse(item.repo))}
-                    {@render repoItem("Pfad kopieren", "", () => navigator.clipboard.writeText(item.repo.path))}
-                    {@render repoItem(pinned ? "Nicht mehr anpinnen" : "Anpinnen", `${mod}+D`, () => togglePin(item.repo.path))}
-                    {@render repoItem("Repo-Gruppe erstellen …", "", () => (groupEdit = { orig: null, g: { name: "", paths: [item.repo.path] } }))}
+                    {@render repoItem(t("Im {app} zeigen", { app: FILES_APP }), `${mod}+⇧+E`, () => reveal(item.repo))}
+                    {@render repoItem(t("Im Browser öffnen"), "", () => browse(item.repo))}
+                    {@render repoItem(t("Pfad kopieren"), "", () => navigator.clipboard.writeText(item.repo.path))}
+                    {@render repoItem(pinned ? t("Nicht mehr anpinnen") : t("Anpinnen"), `${mod}+D`, () => togglePin(item.repo.path))}
+                    {@render repoItem(t("Repo-Gruppe erstellen …"), "", () => (groupEdit = { orig: null, g: { name: "", paths: [item.repo.path] } }))}
                     {#if isUnity(item.repo)}
                       <ContextMenu.Separator class={menuSeparator} />
-                      {@render repoItem("Unity-Editor öffnen", "", () => openUnityEditor(item.repo))}
-                      {@render repoItem("Unity-Editor schließen …", "", () => (unityClosePath = item.repo.path))}
-                      {@render repoItem("Unity-Support einrichten", "", () => setupUnity(item.repo))}
+                      {@render repoItem(t("Unity-Editor öffnen"), "", () => openUnityEditor(item.repo))}
+                      {@render repoItem(t("Unity-Editor schließen …"), "", () => (unityClosePath = item.repo.path))}
+                      {@render repoItem(t("Unity-Support einrichten"), "", () => setupUnity(item.repo))}
                     {/if}
                     <ContextMenu.Separator class={menuSeparator} />
                     {#if extra.includes(item.repo.path)}
-                      {@render repoItem("Aus der Liste entfernen", "", () => unlist(item.repo.path))}
+                      {@render repoItem(t("Aus der Liste entfernen"), "", () => unlist(item.repo.path))}
                     {:else}
-                      {@render repoItem("Vom Gerät löschen …", "", () => askTrash(item.repo), true)}
+                      {@render repoItem(t("Vom Gerät löschen …"), "", () => askTrash(item.repo), true)}
                     {/if}
                   </ContextMenu.Content>
                 </ContextMenu.Portal>
@@ -1755,27 +1760,28 @@
       : ''}"
   >
     {#if limits.length}
-      <span class="tabular-nums" title="Nutzungslimits des Claude-Kontos">
+      <span class="tabular-nums" title={t("Nutzungslimits des Claude-Kontos")}>
         Limits {limits.map(([name, l]) => `${name} ${Date.parse(l.resetsAt ?? "") <= Date.now() ? 0 : Math.round(l.percentUsed)} %`).join(" · ")}
       </span>
     {/if}
     <span class="flex-1"></span>
     <span class="tabular-nums">
-      {flat.length === repos.length ? `${repos.length} Projekte` : `${flat.length} von ${repos.length}`}
+      {flat.length === repos.length ? t("{n} Projekte", { n: repos.length }) : t("{n} von {total}", { n: flat.length, total: repos.length })}
     </span>
     <TextButton
       class="max-w-44 gap-1 font-mono"
       onclick={pickRoot}
-      title={root ? `Dev-Ordner wechseln (${mod}+O): ${root}` : `Dev-Ordner wählen (${mod}+O)`}
+      title={root ? t("Dev-Ordner wechseln ({mod}+O): {root}", { mod, root }) : t("Dev-Ordner wählen ({mod}+O)", { mod })}
       ><FolderIcon class="size-3 shrink-0" /><span class="truncate">{short}</span></TextButton
     >
     <span class="flex items-center gap-1 opacity-70">
-      {#if scanning}Lese ein …{:else if fromCache}Stand gespeichert{:else if scannedAt}aktualisiert
-        {new Date(scannedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}{/if}
-      <IconButton size="sm" onclick={rescan} label="Neu einlesen ({mod}+R)"><RefreshIcon class="size-3 {scanning ? 'animate-spin' : ''}" /></IconButton>
+      {#if scanning}{t("Lese ein …")}{:else if fromCache}{t("Stand gespeichert")}{:else if scannedAt}{t("aktualisiert {time}", {
+          time: new Date(scannedAt).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }),
+        })}{/if}
+      <IconButton size="sm" onclick={rescan} label={t("Neu einlesen ({mod}+R)", { mod })}><RefreshIcon class="size-3 {scanning ? 'animate-spin' : ''}" /></IconButton>
     </span>
     <TextButton tone="plain" class="gap-1.5" onclick={() => (help = true)}>
-      {@render kbd("F1")} Hilfe
+      {@render kbd("F1")} {t("Hilfe")}
     </TextButton>
   </footer>
 </div>
@@ -1811,9 +1817,9 @@
 <Dialog.Root open={doomed !== null} onOpenChange={(o) => !o && !trashing && (doomed = null)}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>„{doomed && split(doomed.repo.rel)[1]}“ vom Gerät löschen?</Dialog.Title>
+      <Dialog.Title>{t("„{name}“ vom Gerät löschen?", { name: doomed ? split(doomed.repo.rel)[1] : "" })}</Dialog.Title>
       <Dialog.Description>
-        Der Ordner wandert in den Papierkorb, auf dem Server bleibt alles. Eine laufende Claude-Sitzung wird beendet.
+        {t("Der Ordner wandert in den Papierkorb, auf dem Server bleibt alles. Eine laufende Claude-Sitzung wird beendet.")}
       </Dialog.Description>
     </Dialog.Header>
     <p class="text-muted-foreground truncate font-mono text-meta" title={doomed?.repo.path}>{doomed?.repo.path}</p>
@@ -1823,9 +1829,9 @@
       </ul>
     {/if}
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" disabled={trashing} onclick={() => (doomed = null)}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" disabled={trashing} onclick={() => (doomed = null)}>{t("Abbrechen")}</Button>
       <Button variant="destructive" size="sm" disabled={trashing} onclick={trashRepo}>
-        {trashing ? "Lösche …" : "In den Papierkorb"}
+        {trashing ? t("Lösche …") : t("In den Papierkorb")}
       </Button>
     </div>
   </Dialog.Content>
@@ -1859,52 +1865,52 @@
 <Dialog.Root bind:open={help}>
   <Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
     <Dialog.Header>
-      <Dialog.Title>Tastenkürzel</Dialog.Title>
-      <Dialog.Description>Ein Schema für alle Ansichten. Alles lässt sich auch ohne Maus bedienen.</Dialog.Description>
+      <Dialog.Title>{t("Tastenkürzel")}</Dialog.Title>
+      <Dialog.Description>{t("Ein Schema für alle Ansichten. Alles lässt sich auch ohne Maus bedienen.")}</Dialog.Description>
     </Dialog.Header>
     <div class="grid gap-5">
-      {@render keys("Überall", [
-        [`${mod} + 1 / 2 / 3`, "Claude / Editor / Git des Projekts (auf der Startseite: des gewählten)"],
-        [`${mod} + ⇧ + E`, `Projektordner im ${FILES_APP} öffnen`],
-        [`⇧ + Esc / ${mod} + ⇧ + W`, "Zurück zu den Projekten, Sitzung läuft weiter"],
-        [`F1 / ${mod} + /`, "Diese Übersicht"],
-        [`${mod} + + / − / 0`, "Zoom größer / kleiner / zurücksetzen"],
-        [`${mod} + Mausrad`, "Zoom (Fokus und Maus außerhalb der Vorschau)"],
+      {@render keys(t("Überall"), [
+        [`${mod} + 1 / 2 / 3`, t("Claude / Editor / Git des Projekts (auf der Startseite: des gewählten)")],
+        [`${mod} + ⇧ + E`, t("Projektordner im {app} öffnen", { app: FILES_APP })],
+        [`⇧ + Esc / ${mod} + ⇧ + W`, t("Zurück zu den Projekten, Sitzung läuft weiter")],
+        [`F1 / ${mod} + /`, t("Diese Übersicht")],
+        [`${mod} + + / − / 0`, t("Zoom größer / kleiner / zurücksetzen")],
+        [t("{mod} + Mausrad", { mod }), t("Zoom (Fokus und Maus außerhalb der Vorschau)")],
       ])}
-      {@render keys("Startseite", [
-        ["⏎ / Klick", "Claude im Projekt öffnen"],
-        ["↑ ↓", "Projekt wählen"],
-        [`${mac ? "⌥" : "Alt"} + 1 … 9`, "Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)"],
-        [`${mod} + K`, "Suche fokussieren"],
-        [`${mod} + D`, "Projekt anpinnen"],
-        [`${mod} + N`, "Repo klonen"],
-        [`${mod} + ⇧ + N`, "Neues Repo anlegen"],
-        [`${mod} + T`, "Claude ohne Projekt (im Home-Ordner)"],
-        [`${mod} + R`, "Neu einlesen"],
-        [`${mod} + O`, "Dev-Ordner wechseln"],
-        ["Rechtsklick", "Weitere Aktionen, z. B. vom Gerät löschen"],
-        ["Esc", "Suche leeren, sonst schließen (bzw. ins Tray)"],
+      {@render keys(t("Startseite"), [
+        [t("⏎ / Klick"), t("Claude im Projekt öffnen")],
+        ["↑ ↓", t("Projekt wählen")],
+        [`${mac ? "⌥" : "Alt"} + 1 … 9`, t("Treffer 1 … 9 öffnen (Ziffern erscheinen, solange die Taste gedrückt ist)")],
+        [`${mod} + K`, t("Suche fokussieren")],
+        [`${mod} + D`, t("Projekt anpinnen")],
+        [`${mod} + N`, t("Repo klonen")],
+        [`${mod} + ⇧ + N`, t("Neues Repo anlegen")],
+        [`${mod} + T`, t("Claude ohne Projekt (im Home-Ordner)")],
+        [`${mod} + R`, t("Neu einlesen")],
+        [`${mod} + O`, t("Dev-Ordner wechseln")],
+        [t("Rechtsklick"), t("Weitere Aktionen, z. B. vom Gerät löschen")],
+        ["Esc", t("Suche leeren, sonst schließen (bzw. ins Tray)")],
       ])}
-      {@render keys("Claude", [[mac ? "⌘ + C / ⌘ + V" : "Strg + ⇧ + C / Strg + V", "Im Terminal kopieren / einfügen"]])}
+      {@render keys("Claude", [[mac ? "⌘ + C / ⌘ + V" : t("Strg + ⇧ + C / Strg + V"), t("Im Terminal kopieren / einfügen")]])}
       {@render keys("Editor", [
-        [`${mod} + S`, "Datei speichern"],
-        [`${mod} + P`, "Datei suchen und öffnen"],
-        [`${mac ? "⌃" : "Strg"} + G`, "Zu Zeile springen"],
-        [`${mac ? "⌃" : "Strg"} + Tab / ${mac ? "⌃" : "Strg"} + ⇧ + Tab`, "Zuletzt verwendete Dateien durchgehen, Loslassen öffnet"],
-        ["Doppelklick auf Tab", "Vorschau-Tab (kursiv) behalten"],
-        ["Tab ziehen", "Umsortieren, an eine Kante ziehen teilt den Bereich"],
+        [`${mod} + S`, t("Datei speichern")],
+        [`${mod} + P`, t("Datei suchen und öffnen")],
+        [`${mac ? "⌃" : t("Strg")} + G`, t("Zu Zeile springen")],
+        [`${mac ? "⌃" : t("Strg")} + Tab / ${mac ? "⌃" : t("Strg")} + ⇧ + Tab`, t("Zuletzt verwendete Dateien durchgehen, Loslassen öffnet")],
+        [t("Doppelklick auf Tab"), t("Vorschau-Tab (kursiv) behalten")],
+        [t("Tab ziehen"), t("Umsortieren, an eine Kante ziehen teilt den Bereich")],
       ])}
       {@render keys("Git", [
-        ["Esc", "Zurück zu den Projekten"],
-        ["Alt + 1 … 5", "Änderungen / Verlauf / Releases / CI / Unity"],
+        ["Esc", t("Zurück zu den Projekten")],
+        ["Alt + 1 … 5", t("Änderungen / Verlauf / Releases / CI / Unity")],
         [`${mod} + ⇧ + F`, "Fetch"],
         [`${mod} + ⇧ + L`, "Pull"],
         [`${mod} + ⇧ + P`, "Push"],
-        ["F5", "Aktualisieren"],
+        ["F5", t("Aktualisieren")],
         [`${mod} + ⏎`, "Commit"],
-        ["Leertaste", "Datei stagen / unstagen"],
-        ["F7 / ⇧ + F7", "Merge-Editor: nächster / vorheriger Konflikt"],
-        [`${mod} + S`, "Merge-Editor: speichern"],
+        [t("Leertaste"), t("Datei stagen / unstagen")],
+        ["F7 / ⇧ + F7", t("Merge-Editor: nächster / vorheriger Konflikt")],
+        [`${mod} + S`, t("Merge-Editor: speichern")],
       ])}
     </div>
   </Dialog.Content>

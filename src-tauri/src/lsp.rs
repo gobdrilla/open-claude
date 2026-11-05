@@ -124,7 +124,7 @@ fn frame(buf: &mut Vec<u8>) -> Option<Result<String, String>> {
         .and_then(|(_, v)| v.trim().parse::<usize>().ok());
     let Some(len) = len else {
         buf.drain(..end + 4);
-        return Some(Err(format!("Header ohne Content-Length: {head}")));
+        return Some(Err(tr!("Header ohne Content-Length: {head}", "Header without Content-Length: {head}")));
     };
     if buf.len() < end + 4 + len {
         return None;
@@ -202,10 +202,10 @@ fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
         let _lock = guard(&INSTALL);
         return crate::debug::fetch(own);
     }
-    let (prog, args) = install_cmd(hint, own).ok_or_else(|| format!("{cmd} nicht gefunden. Installieren: {hint}"))?;
+    let (prog, args) = install_cmd(hint, own).ok_or_else(|| tr!("{cmd} nicht gefunden. Installieren: {hint}", "{cmd} not found. Install: {hint}"))?;
     let _lock = guard(&INSTALL);
     std::fs::create_dir_all(own).map_err(|e| e.to_string())?;
-    let fail = |e: String| format!("Installation von {cmd} fehlgeschlagen: {e}");
+    let fail = |e: String| tr!("Installation von {cmd} fehlgeschlagen: {e}", "Installing {cmd} failed: {e}");
     let mut c = crate::quiet(&prog.to_string_lossy());
     c.args(&args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
     // Eigene Gruppe, sonst trifft kill_tree beim Zeitlimit unter Unix nichts und wait() haelt den Lock ewig.
@@ -231,13 +231,13 @@ fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
             crate::kill_tree(child.id());
             let _ = child.kill();
             let _ = child.wait();
-            return Err(fail("Zeitüberschreitung nach 5 Minuten".into()));
+            return Err(fail(tr!("Zeitüberschreitung nach 5 Minuten", "Timed out after 5 minutes")));
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
     };
     let err = reader.join().unwrap_or_default();
     if !status.success() {
-        return Err(format!("Installation von {cmd} fehlgeschlagen ({hint}):\n{}", install_reason(&err)));
+        return Err(tr!("Installation von {cmd} fehlgeschlagen ({hint}):\n{}", "Installing {cmd} failed ({hint}):\n{}", install_reason(&err)));
     }
     Ok(())
 }
@@ -251,7 +251,7 @@ fn install_reason(err: &str) -> String {
         .filter(|l| !l.is_empty() && !l.starts_with("A complete log of this run"))
         .take(4)
         .collect();
-    if lines.is_empty() { "keine Fehlerausgabe".into() } else { lines.join("\n") }
+    if lines.is_empty() { tr!("keine Fehlerausgabe", "no error output") } else { lines.join("\n") }
 }
 
 /// rustup legt rust-analyzer als Proxy an, auch wenn die Komponente fehlt: dann startet er nicht.
@@ -281,16 +281,24 @@ pub async fn lsp_start(app: AppHandle, repo: String, server: String, on: Channel
 }
 
 fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Out>) -> Result<(), String> {
-    let root = Path::new(repo).canonicalize().map_err(|e| format!("Projekt nicht gefunden: {e}"))?;
+    let root = Path::new(repo).canonicalize().map_err(|e| tr!("Projekt nicht gefunden: {e}", "Project not found: {e}"))?;
     let &(key, cmd, args, npm, hint) =
-        SERVERS.iter().find(|s| s.0 == server).ok_or_else(|| format!("Unbekannter Language-Server: {server}"))?;
+        SERVERS.iter().find(|s| s.0 == server).ok_or_else(|| tr!("Unbekannter Language-Server: {server}", "Unknown language server: {server}"))?;
+    // Only the hints that are prose, not install commands, have German text.
+    let hint = match hint {
+        _ if !crate::l10n::en() => hint,
+        "Xcode Command Line Tools, LLVM oder Paketmanager (clangd)" => "Xcode Command Line Tools, LLVM or package manager (clangd)",
+        "Xcode bzw. Swift-Toolchain" => "Xcode or Swift toolchain",
+        "netcoredbg von github.com/Samsung/netcoredbg" => "netcoredbg from github.com/Samsung/netcoredbg",
+        _ => hint,
+    };
     let own = app.path().app_data_dir().map_err(|e| e.to_string())?.join("lsp");
     let prog = match resolve(&root, cmd, npm, &own) {
         Some(p) if !(key == "rust" && rust_analyzer_missing()) && !stale_typescript(key, &own) => p,
         // Fehlt: selbst installieren (der Nutzer hat Language-Server fuer das Projekt schon freigegeben).
         _ => {
             install(cmd, hint, &own)?;
-            resolve(&root, cmd, npm, &own).ok_or_else(|| format!("{cmd} nach der Installation nicht gefunden. Von Hand: {hint}"))?
+            resolve(&root, cmd, npm, &own).ok_or_else(|| tr!("{cmd} nach der Installation nicht gefunden. Von Hand: {hint}", "{cmd} not found after installation. Manually: {hint}"))?
         }
     };
 
@@ -319,7 +327,7 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
     // Eigene Gruppe: kill_tree trifft auch Kinder (tsserver, Proc-Macro-Server).
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut c, 0);
-    let mut child = c.spawn().map_err(|e| format!("{cmd} konnte nicht gestartet werden: {e}"))?;
+    let mut child = c.spawn().map_err(|e| tr!("{cmd} konnte nicht gestartet werden: {e}", "{cmd} could not be started: {e}"))?;
     let pid = child.id();
     let (mut stdin, stdout, stderr) = (child.stdin.take(), child.stdout.take(), child.stderr.take());
     let (tx, rx) = mpsc::channel::<String>();
@@ -387,7 +395,7 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
         }
         drop(map);
         let tail = guard(&tail).join("\n");
-        let err = format!("{cmd} beendet (Code {}). {tail}\nPrüfen/Installieren: {hint}", code.map_or("–".into(), |c| c.to_string()));
+        let err = tr!("{cmd} beendet (Code {}). {tail}\nPrüfen/Installieren: {hint}", "{cmd} exited (code {}). {tail}\nCheck/install: {hint}", code.map_or("–".into(), |c| c.to_string()));
         let _ = out.send(Out::Exit { code, err });
     });
     Ok(())
@@ -403,8 +411,8 @@ fn send<R: Runtime>(app: &AppHandle<R>, repo: &str, server: String, msg: String)
     let root = Path::new(repo).canonicalize().map_err(|e| e.to_string())?;
     let state = app.state::<Lsps>();
     let map = guard(&state.0);
-    let s = map.get(&(root, server)).ok_or("Language-Server läuft nicht")?;
-    s.tx.send(msg).map_err(|_| "Language-Server läuft nicht".to_string())
+    let s = map.get(&(root, server)).ok_or_else(|| tr!("Language-Server läuft nicht", "Language server is not running"))?;
+    s.tx.send(msg).map_err(|_| tr!("Language-Server läuft nicht", "Language server is not running"))
 }
 
 /// Server beenden (Projekt geschlossen). Unbekannt: nichts. Async: kill_tree wartet (taskkill), nicht auf dem Main-Thread.

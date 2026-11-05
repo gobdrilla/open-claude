@@ -6,6 +6,7 @@
   import { filePanel, groupOf } from "$lib/dock";
   import { editor, open } from "$lib/editor.svelte";
   import { step } from "$lib/mru.logic";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -65,7 +66,7 @@
   <div
     bind:this={box}
     role="listbox"
-    aria-label="Zuletzt verwendete Dateien"
+    aria-label={t("Zuletzt verwendete Dateien")}
     class="bg-popover text-popover-foreground ring-foreground/10 fixed top-14 left-1/2 z-50 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-px overflow-y-auto max-h-[calc(100vh-5rem)] rounded-lg p-1 shadow-lg ring-1 shadow-black/10 dark:shadow-black/40"
   >
     {#each list as path, k (path)}

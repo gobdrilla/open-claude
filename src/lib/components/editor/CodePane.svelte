@@ -35,6 +35,7 @@
   import { parseDiff, type DiffFile, type Hunk } from "$lib/diff";
   import { revertHunk } from "$lib/revert.logic";
   import type { HunkAction } from "$lib/components/git/DiffView.svelte";
+  import { t } from "$lib/i18n";
 
   // path bleibt fuer die Lebensdauer der Instanz gleich (Dock mountet je Panel-ID neu).
   let { repo, path }: { repo: string; path: string } = $props();
@@ -69,7 +70,7 @@
     if (c) view.dispatch({ changes: c, annotations: isolateHistory.of("full") });
     void loadHead(true);
   };
-  const revertActions: HunkAction[] = [{ label: "Zurücksetzen", lineLabel: "Zeilen zurücksetzen", run: revert }];
+  const revertActions: HunkAction[] = [{ label: t("Zurücksetzen"), lineLabel: t("Zeilen zurücksetzen"), run: revert }];
 
   const openCommit = (sha: string) => gitHook.showCommit(repo, sha);
 
@@ -319,27 +320,27 @@
 </script>
 
 {#if !f}
-  <Empty>Lädt …</Empty>
+  <Empty>{t("Lädt …")}</Empty>
 {:else}
   <div class="flex h-full min-h-0 flex-col">
     {#if f.conflict}
       <div class="bg-warning/10 border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1.5 text-ui">
         <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
-        <span class="text-warning min-w-48 flex-1">Datei wurde außerhalb {f.conflict === "deleted" ? "gelöscht" : "geändert"}.</span>
+        <span class="text-warning min-w-48 flex-1">{f.conflict === "deleted" ? t("Datei wurde außerhalb gelöscht.") : t("Datei wurde außerhalb geändert.")}</span>
         <span class="ml-auto flex shrink-0 gap-1.5">
-          <Button size="xs" variant="outline" onclick={() => reload(repo, path)}>Neu laden</Button>
-          <Button size="xs" variant="outline" onclick={() => keep(repo, path)}>Meine behalten</Button>
-          <Button size="xs" variant="outline" onclick={showDiff}>Vergleichen</Button>
+          <Button size="xs" variant="outline" onclick={() => reload(repo, path)}>{t("Neu laden")}</Button>
+          <Button size="xs" variant="outline" onclick={() => keep(repo, path)}>{t("Meine behalten")}</Button>
+          <Button size="xs" variant="outline" onclick={showDiff}>{t("Vergleichen")}</Button>
         </span>
       </div>
     {/if}
     {#if sv && lspKey && !s.lsp && !s.noLsp}
       <div class="text-muted-foreground border-border/60 flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-1 text-ui">
         <!-- Knoepfe brechen nur gemeinsam um, nie einzeln -->
-        <span class="min-w-48 flex-1">Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.</span>
+        <span class="min-w-48 flex-1">{t("Language-Server für dieses Projekt aktivieren (Fehler, Vervollständigung, F12, F2)? Er führt Projektcode aus.")}</span>
         <span class="ml-auto flex shrink-0 gap-1.5">
-          <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>Aktivieren</Button>
-          <Button size="xs" variant="ghost" onclick={() => allowLsp(repo, false)}>Nicht für dieses Projekt</Button>
+          <Button size="xs" variant="outline" onclick={() => allowLsp(repo)}>{t("Aktivieren")}</Button>
+          <Button size="xs" variant="ghost" onclick={() => allowLsp(repo, false)}>{t("Nicht für dieses Projekt")}</Button>
         </span>
       </div>
     {:else if lspKey && lsp.status[lspKey]}
@@ -347,21 +348,21 @@
         <TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
         <span class="text-warning line-clamp-3 min-w-48 flex-1 break-words whitespace-pre-line">{lsp.status[lspKey]}</span>
         <span class="ml-auto flex shrink-0 gap-1.5">
-          <Button size="xs" variant="outline" onclick={() => retry(repo, sv!.server)}>Erneut versuchen</Button>
-          <Button size="xs" variant="ghost" onclick={() => dismiss(repo, sv!.server)}>Ausblenden</Button>
+          <Button size="xs" variant="outline" onclick={() => retry(repo, sv!.server)}>{t("Erneut versuchen")}</Button>
+          <Button size="xs" variant="ghost" onclick={() => dismiss(repo, sv!.server)}>{t("Ausblenden")}</Button>
         </span>
       </div>
     {/if}
     {#if plain}
-      <div class="text-muted-foreground border-border/60 shrink-0 border-b px-3 py-1 text-ui">Große Datei: ohne Highlighting</div>
+      <div class="text-muted-foreground border-border/60 shrink-0 border-b px-3 py-1 text-ui">{t("Große Datei: ohne Highlighting")}</div>
     {/if}
     <div bind:this={host} data-path={path} class="min-h-0 flex-1 overflow-hidden"></div>
   </div>
 
-  <DiffDialog diff={head} title={path.split("/").pop() ?? path} description="Änderungen seit dem letzten Commit" {repo} empty="Kein Unterschied." actions={revertActions} onclose={() => (head = null)}>
+  <DiffDialog diff={head} title={path.split("/").pop() ?? path} description={t("Änderungen seit dem letzten Commit")} {repo} empty={t("Kein Unterschied.")} actions={revertActions} onclose={() => (head = null)}>
     {#if stale}
-      <span class="text-warning ml-auto shrink-0 text-ui">Datei wurde inzwischen geändert – Diff neu geladen, bitte erneut wählen.</span>
+      <span class="text-warning ml-auto shrink-0 text-ui">{t("Datei wurde inzwischen geändert – Diff neu geladen, bitte erneut wählen.")}</span>
     {/if}
   </DiffDialog>
-  <DiffDialog diff={compare} title="Platte → meine Änderungen" description={path} empty="Kein Unterschied." onclose={() => (compare = null)} />
+  <DiffDialog diff={compare} title={t("Platte → meine Änderungen")} description={path} empty={t("Kein Unterschied.")} onclose={() => (compare = null)} />
 {/if}

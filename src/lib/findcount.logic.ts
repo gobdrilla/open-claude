@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 export type Count = { index: number; total: number; more: boolean };
 
 /**
@@ -17,7 +18,7 @@ export function countMatches(it: Iterator<{ from: number; to: number }>, sel: { 
 
 /** "3 von 12", "12 Treffer" while no match is selected, "1000+" past the cap, "? von 1000+" for a match past it. */
 export function countLabel({ index, total, more }: Count): string {
-  if (!total) return "Keine Treffer";
+  if (!total) return t("Keine Treffer");
   const n = `${total}${more ? "+" : ""}`;
-  return index ? `${index < 0 ? "?" : index} von ${n}` : `${n} Treffer`;
+  return index ? t("{i} von {n}", { i: index < 0 ? "?" : index, n }) : t("{n} Treffer", { n });
 }

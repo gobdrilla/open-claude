@@ -34,22 +34,22 @@ pub struct FileText {
 /// Pfad im Repo, der auch ueber Symlinks nicht nach draussen zeigt.
 pub(crate) fn within(repo: &str, path: &str) -> Result<PathBuf, String> {
     let file = inside(repo, path)?;
-    let root = Path::new(repo).canonicalize().map_err(|e| format!("Projekt nicht gefunden: {e}"))?;
+    let root = Path::new(repo).canonicalize().map_err(|e| tr!("Projekt nicht gefunden: {e}", "Project not found: {e}"))?;
     // Neue Dateien gibt es noch nicht: den tiefsten vorhandenen Vorfahren pruefen.
     let mut probe = file.as_path();
     let real = loop {
         match probe.canonicalize() {
             Ok(p) => break p,
-            Err(_) => probe = probe.parent().ok_or_else(|| format!("Ungültiger Pfad: {path}"))?,
+            Err(_) => probe = probe.parent().ok_or_else(|| tr!("Ungültiger Pfad: {path}", "Invalid path: {path}"))?,
         }
     };
     if !real.starts_with(&root) {
-        return Err(format!("Liegt außerhalb des Projekts: {path}"));
+        return Err(tr!("Liegt außerhalb des Projekts: {path}", "Outside the project: {path}"));
     }
     // Symlink/Junction (unter Windows ohne Adminrechte) auf .git: der aufgeloeste Pfad muss dieselbe Regel bestehen.
     let rest = real.strip_prefix(&root).unwrap_or(Path::new(""));
     if !rest.as_os_str().is_empty() && inside(repo, &rest.to_string_lossy()).is_err() {
-        return Err(format!("Ungültiger Pfad: {path}"));
+        return Err(tr!("Ungültiger Pfad: {path}", "Invalid path: {path}"));
     }
     Ok(file)
 }
@@ -79,7 +79,7 @@ fn millis(meta: &std::fs::Metadata) -> u64 {
 
 fn list(repo: &str, dir: &str) -> Result<Vec<Entry>, String> {
     let base = if dir.is_empty() { PathBuf::from(repo) } else { within(repo, dir)? };
-    let read = std::fs::read_dir(&base).map_err(|e| format!("Ordner nicht lesbar: {e}"))?;
+    let read = std::fs::read_dir(&base).map_err(|e| tr!("Ordner nicht lesbar: {e}", "Folder not readable: {e}"))?;
     let mut entries: Vec<Entry> = read
         .flatten()
         .filter_map(|e| {
@@ -111,14 +111,14 @@ fn lf(raw: &str) -> String {
 
 fn read(repo: &str, path: &str) -> Result<FileText, String> {
     let file = within(repo, path)?;
-    let meta = std::fs::metadata(&file).map_err(|e| format!("{path} nicht lesbar: {e}"))?;
+    let meta = std::fs::metadata(&file).map_err(|e| tr!("{path} nicht lesbar: {e}", "{path} not readable: {e}"))?;
     if meta.len() > MAX_BYTES {
-        return Err(format!("{path} ist größer als 5 MB."));
+        return Err(tr!("{path} ist größer als 5 MB.", "{path} is larger than 5 MB."));
     }
-    let bytes = std::fs::read(&file).map_err(|e| format!("{path} nicht lesbar: {e}"))?;
+    let bytes = std::fs::read(&file).map_err(|e| tr!("{path} nicht lesbar: {e}", "{path} not readable: {e}"))?;
     let raw = match String::from_utf8(bytes) {
         Ok(s) if !s.contains('\0') => s,
-        _ => return Err(format!("{path} ist binär oder kein UTF-8.")),
+        _ => return Err(tr!("{path} ist binär oder kein UTF-8.", "{path} is binary or not UTF-8.")),
     };
     let bom = raw.starts_with(BOM);
     // ponytail: gemischte Zeilenenden werden beim Speichern zu CRLF vereinheitlicht.
@@ -156,12 +156,12 @@ fn write(
     }
 
     // Erst daneben schreiben, dann umbenennen: ein Absturz hinterlaesst nie eine halbe Datei.
-    let name = target.file_name().ok_or_else(|| format!("Ungültiger Pfad: {path}"))?.to_string_lossy();
+    let name = target.file_name().ok_or_else(|| tr!("Ungültiger Pfad: {path}", "Invalid path: {path}"))?.to_string_lossy();
     let tmp = target.with_file_name(format!(".{name}.ocui-tmp"));
-    let err = |e: std::io::Error| format!("Konnte {path} nicht schreiben: {e}");
+    let err = |e: std::io::Error| tr!("Konnte {path} nicht schreiben: {e}", "Could not write {path}: {e}");
     // Windows: Rechte sind nur das Schreibschutz-Bit; eine schreibgeschuetzte Temp-Datei liesse sich weder umbenennen noch loeschen.
     if cfg!(windows) && std::fs::metadata(&target).is_ok_and(|m| m.permissions().readonly()) {
-        return Err(format!("{path} ist schreibgeschützt."));
+        return Err(tr!("{path} ist schreibgeschützt.", "{path} is read-only."));
     }
     let done = (|| {
         let mut f = std::fs::File::create(&tmp)?;
@@ -193,7 +193,7 @@ fn create(repo: &str, path: &str, dir: bool) -> Result<(), String> {
         // create_new: eine vorhandene Datei wird nie geleert.
         std::fs::OpenOptions::new().write(true).create_new(true).open(&file).map(|_| ())
     };
-    res.map_err(|e| format!("Konnte {path} nicht anlegen: {e}"))
+    res.map_err(|e| tr!("Konnte {path} nicht anlegen: {e}", "Could not create {path}: {e}"))
 }
 
 fn rename(repo: &str, from: &str, to: &str) -> Result<(), String> {
@@ -201,9 +201,9 @@ fn rename(repo: &str, from: &str, to: &str) -> Result<(), String> {
     // Nur Gross-/Kleinschreibung geaendert: auf Windows/macOS ist das dieselbe Datei, unter Linux evtl. eine zweite.
     let same = || matches!((src.canonicalize(), dst.canonicalize()), (Ok(a), Ok(b)) if a == b);
     if dst.exists() && !same() {
-        return Err(format!("{to} gibt es schon."));
+        return Err(tr!("{to} gibt es schon.", "{to} already exists."));
     }
-    std::fs::rename(&src, &dst).map_err(|e| format!("Konnte {from} nicht umbenennen: {e}"))
+    std::fs::rename(&src, &dst).map_err(|e| tr!("Konnte {from} nicht umbenennen: {e}", "Could not rename {from}: {e}"))
 }
 
 /// Alle Dateien fuer Strg+P: getrackt und untracked, ohne ignorierte. Ohne Git-Repo: alle Dateien des Ordners.
@@ -247,7 +247,7 @@ fn search(repo: &str, query: &str, regex: bool, case: bool) -> Result<Vec<Hit>, 
         .case_insensitive(!case)
         .size_limit(1 << 20)
         .build()
-        .map_err(|e| format!("Ungültiger Ausdruck: {e}"))?;
+        .map_err(|e| tr!("Ungültiger Ausdruck: {e}", "Invalid expression: {e}"))?;
     let mut hits = Vec::new();
     for path in files(repo)? {
         let Ok(file) = within(repo, &path) else { continue };
@@ -301,7 +301,7 @@ fn diff_texts(repo: &str, path: &str, old: &str, new: &str, zero: bool) -> Resul
     let (a, b) = (tmp("a"), tmp("b"));
     let res = write(&a, old)
         .and_then(|()| write(&b, new))
-        .map_err(|e| format!("Vergleich fehlgeschlagen: {e}"))
+        .map_err(|e| tr!("Vergleich fehlgeschlagen: {e}", "Comparison failed: {e}"))
         .and_then(|()| {
             let mut cmd = git(repo);
             cmd.args(["-c", "core.autocrlf=false", "diff", "--no-index", "--no-color", "--no-ext-diff"]);
@@ -422,10 +422,10 @@ fn image_type(path: &str) -> Option<&'static str> {
 #[tauri::command]
 pub async fn fs_image(path: String) -> Result<String, String> {
     use base64::Engine;
-    let mt = image_type(&path).ok_or("Kein Bild (png, jpg, gif, webp)")?;
+    let mt = image_type(&path).ok_or_else(|| tr!("Kein Bild (png, jpg, gif, webp)", "Not an image (png, jpg, gif, webp)"))?;
     blocking(move || {
         if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > 50 << 20 {
-            return Err("Bild groesser als 50 MB".into());
+            return Err(tr!("Bild groesser als 50 MB", "Image larger than 50 MB"));
         }
         let b = std::fs::read(&path).map_err(|e| e.to_string())?;
         Ok(format!("data:{mt};base64,{}", base64::engine::general_purpose::STANDARD.encode(b)))
@@ -514,7 +514,7 @@ pub async fn fs_rename(repo: String, from: String, to: String) -> Result<(), Str
 pub async fn fs_delete(repo: String, path: String) -> Result<(), String> {
     blocking(move || {
         let file = within(&repo, &path)?;
-        trash::delete(&file).map_err(|e| format!("Löschen fehlgeschlagen: {e}"))
+        trash::delete(&file).map_err(|e| tr!("Löschen fehlgeschlagen: {e}", "Delete failed: {e}"))
     })
     .await
 }

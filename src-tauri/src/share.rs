@@ -45,7 +45,7 @@ async fn read_frame(r: &mut (impl AsyncRead + Unpin)) -> std::io::Result<Frame> 
     let kind = r.read_u8().await?;
     let len = r.read_u32().await? as usize;
     if len > MAX {
-        return Err(std::io::Error::other("Nachricht zu groß"));
+        return Err(std::io::Error::other(tr!("Nachricht zu groß", "Message too large")));
     }
     let mut data = vec![0; len];
     r.read_exact(&mut data).await?;
@@ -95,7 +95,7 @@ fn frame(kind: u8, v: Value) -> Frame {
 
 fn random_hex(n: usize) -> Result<String, String> {
     let mut b = vec![0u8; n];
-    getrandom::fill(&mut b).map_err(|e| format!("Zufall nicht verfügbar: {e}"))?;
+    getrandom::fill(&mut b).map_err(|e| tr!("Zufall nicht verfügbar: {e}", "Randomness not available: {e}"))?;
     Ok(b.iter().map(|x| format!("{x:02x}")).collect())
 }
 
@@ -115,7 +115,7 @@ fn builder() -> iroh::endpoint::Builder {
 
 async fn guest_endpoint() -> Result<&'static Endpoint, String> {
     GUEST_ENDPOINT
-        .get_or_try_init(|| async { builder().bind().await.map_err(|e| format!("Netzwerk für Teilen nicht verfügbar: {e}")) })
+        .get_or_try_init(|| async { builder().bind().await.map_err(|e| tr!("Netzwerk für Teilen nicht verfügbar: {e}", "Network for sharing not available: {e}")) })
         .await
 }
 
@@ -127,7 +127,7 @@ async fn endpoint<R: Runtime>(app: &AppHandle<R>) -> Result<&'static Endpoint, S
                 .alpns(vec![ALPN.to_vec()])
                 .bind()
                 .await
-                .map_err(|e| format!("Netzwerk für Teilen nicht verfügbar: {e}"))?;
+                .map_err(|e| tr!("Netzwerk für Teilen nicht verfügbar: {e}", "Network for sharing not available: {e}"))?;
             let (app, acc) = (app.clone(), ep.clone());
             tauri::async_runtime::spawn(async move {
                 while let Some(inc) = acc.accept().await {
@@ -149,8 +149,8 @@ fn ticket(addr: &EndpointAddr, key: &str) -> String {
 }
 
 fn parse_ticket(t: &str) -> Result<(EndpointAddr, String), String> {
-    let bad = || "Einladung beschädigt".to_string();
-    let raw = t.trim().strip_prefix(PREFIX).ok_or("Keine Atelier-Einladung")?;
+    let bad = || tr!("Einladung beschädigt", "Invitation damaged");
+    let raw = t.trim().strip_prefix(PREFIX).ok_or_else(|| tr!("Keine Atelier-Einladung", "Not an Atelier invitation"))?;
     let v: Value = serde_json::from_slice(&B64.decode(raw).map_err(|_| bad())?).map_err(|_| bad())?;
     let addr = serde_json::from_value(v["addr"].clone()).map_err(|_| bad())?;
     let key = v["key"].as_str().filter(|k| !k.is_empty()).ok_or_else(bad)?;
@@ -232,7 +232,7 @@ pub async fn share_start(app: AppHandle, ptys: State<'_, crate::pty::Ptys>, id: 
     if let Some(s) = hosts().get(&id) {
         return Ok(s.ticket.clone());
     }
-    let size = crate::pty::size(&ptys, &id).ok_or("Sitzung läuft nicht")?;
+    let size = crate::pty::size(&ptys, &id).ok_or_else(|| tr!("Sitzung läuft nicht", "Session is not running"))?;
     let ep = endpoint(&app).await?;
     // Ohne Relay-Adresse in der Einladung finden Gaeste hinter NAT den Host nur ueber die DNS-Suche.
     let _ = tokio::time::timeout(Duration::from_secs(10), ep.online()).await;
@@ -330,12 +330,12 @@ fn guest_keys(s: &str) -> String {
 // shortcut: Dateien bleiben im Temp-Ordner liegen, bis das System ihn aufraeumt.
 fn save_image(bytes: &[u8]) -> Result<PathBuf, String> {
     use image::ImageFormat::*;
-    let ext = match image::guess_format(bytes).map_err(|_| "Kein Bild")? {
+    let ext = match image::guess_format(bytes).map_err(|_| tr!("Kein Bild", "Not an image"))? {
         Png => "png",
         Jpeg => "jpg",
         Gif => "gif",
         WebP => "webp",
-        f => return Err(format!("Bildformat nicht unterstützt: {f:?}")),
+        f => return Err(tr!("Bildformat nicht unterstützt: {f:?}", "Image format not supported: {f:?}")),
     };
     let dir = std::env::temp_dir().join("atelier-share");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -357,13 +357,13 @@ fn json(v: Result<impl serde::Serialize, String>) -> Result<Value, String> {
 
 /// Panel-Aufrufe der Gaeste: nur lesende, cwd und id immer die der geteilten Sitzung.
 async fn call(id: &str, cmd: &str, args: &Value) -> Result<Value, String> {
-    let (cwd, sid) = hosts().get(id).map(|s| (s.cwd.clone(), s.sid.clone())).ok_or("Teilen beendet")?;
+    let (cwd, sid) = hosts().get(id).map(|s| (s.cwd.clone(), s.sid.clone())).ok_or_else(|| tr!("Teilen beendet", "Sharing ended"))?;
     let arg = |k: &str| args[k].as_str().unwrap_or_default().to_string();
     let own = || match &sid {
         Some(s) if *s == arg("sid") => Ok(s.clone()),
-        _ => Err("Fremde Sitzung".to_string()),
+        _ => Err(tr!("Fremde Sitzung", "Foreign session")),
     };
-    let nth = || args["id"].as_u64().map(|n| n as usize).ok_or("Ungültiges Bild".to_string());
+    let nth = || args["id"].as_u64().map(|n| n as usize).ok_or(tr!("Ungültiges Bild", "Invalid image"));
     match cmd {
         "claude_activity" => {
             let a = crate::activity::claude_activity(cwd, id.into()).await?;
@@ -376,7 +376,7 @@ async fn call(id: &str, cmd: &str, args: &Value) -> Result<Value, String> {
         "claude_thumb" => crate::activity::claude_thumb(own()?, nth()?).await.map(Value::from),
         "claude_agent_log" => json(crate::activity::claude_agent_log(cwd, own()?, arg("run"), arg("agent")).await),
         "workflows_list" => json(crate::workflows::workflows_list(cwd).await),
-        _ => Err(format!("Für Gäste nicht erlaubt: {cmd}")),
+        _ => Err(tr!("Für Gäste nicht erlaubt: {cmd}", "Not allowed for guests: {cmd}")),
     }
 }
 
@@ -394,14 +394,14 @@ static REMOTES: LazyLock<Mutex<HashMap<String, Remote>>> = LazyLock::new(Default
 pub fn input(id: &str, data: String) -> Option<Result<(), String>> {
     let r = lock(&REMOTES);
     let ok = r.get(id)?.tx.push((INPUT, data.into_bytes()));
-    Some(if ok { Ok(()) } else { Err("Verbindung zum Host unterbrochen".into()) })
+    Some(if ok { Ok(()) } else { Err(tr!("Verbindung zum Host unterbrochen", "Connection to host lost")) })
 }
 
 /// Einladung annehmen: verbindet, liefert {cwd, cols, rows, write} des Hosts, Ausgabe danach ueber `out`.
 #[tauri::command]
 pub async fn share_join(app: AppHandle, id: String, ticket: String, out: Channel<InvokeResponseBody>) -> Result<Value, String> {
     if !crate::pty::valid_id(&id) {
-        return Err(format!("Ungueltige Terminal-id: {id}"));
+        return Err(tr!("Ungueltige Terminal-id: {id}", "Invalid terminal id: {id}"));
     }
     let (addr, key) = parse_ticket(&ticket)?;
     let ep = guest_endpoint().await?;
@@ -411,11 +411,11 @@ pub async fn share_join(app: AppHandle, id: String, ticket: String, out: Channel
 async fn join<R: Runtime>(app: AppHandle<R>, ep: &Endpoint, id: String, addr: EndpointAddr, key: String, out: Channel<InvokeResponseBody>) -> Result<Value, String> {
     let conn = tokio::time::timeout(Duration::from_secs(30), ep.connect(addr, ALPN))
         .await
-        .map_err(|_| "Host nicht erreichbar (Zeitüberschreitung)".to_string())?
-        .map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
-    let (mut send, mut recv) = conn.open_bi().await.map_err(|e| format!("Verbindung fehlgeschlagen: {e}"))?;
+        .map_err(|_| tr!("Host nicht erreichbar (Zeitüberschreitung)", "Host not reachable (timed out)"))?
+        .map_err(|e| tr!("Verbindung fehlgeschlagen: {e}", "Connection failed: {e}"))?;
+    let (mut send, mut recv) = conn.open_bi().await.map_err(|e| tr!("Verbindung fehlgeschlagen: {e}", "Connection failed: {e}"))?;
     write_frame(&mut send, &frame(HELLO, json!({ "key": key }))).await.map_err(|e| e.to_string())?;
-    let ended = || "Einladung ungültig oder Teilen beendet".to_string();
+    let ended = || tr!("Einladung ungültig oder Teilen beendet", "Invitation invalid or sharing ended");
     let hello = match tokio::time::timeout(Duration::from_secs(15), read_frame(&mut recv)).await {
         Ok(Ok((HELLO, data))) => serde_json::from_slice::<Value>(&data).map_err(|_| ended())?,
         _ => return Err(ended()),
@@ -464,12 +464,12 @@ pub async fn share_call(id: String, cmd: String, args: Value) -> Result<Value, S
     let (wait_tx, wait) = oneshot::channel();
     let tx = {
         let mut r = lock(&REMOTES);
-        let remote = r.get_mut(&id).ok_or("Keine Verbindung zum Host")?;
+        let remote = r.get_mut(&id).ok_or_else(|| tr!("Keine Verbindung zum Host", "No connection to host"))?;
         remote.calls.insert(n, wait_tx);
         remote.tx.clone()
     };
     if !tx.push(frame(CALL, json!({ "n": n, "cmd": cmd, "args": args }))) {
-        return Err("Keine Verbindung zum Host".into());
+        return Err(tr!("Keine Verbindung zum Host", "No connection to host"));
     }
     let res = tokio::time::timeout(Duration::from_secs(30), wait).await;
     if let Some(r) = lock(&REMOTES).get_mut(&id) {
@@ -477,22 +477,22 @@ pub async fn share_call(id: String, cmd: String, args: Value) -> Result<Value, S
     }
     match res {
         Ok(Ok(v)) => v,
-        Ok(Err(_)) => Err("Keine Verbindung zum Host".into()),
-        Err(_) => Err("Host antwortet nicht".into()),
+        Ok(Err(_)) => Err(tr!("Keine Verbindung zum Host", "No connection to host")),
+        Err(_) => Err(tr!("Host antwortet nicht", "Host does not respond")),
     }
 }
 
 /// Eingefuegtes Bild eines Gastes, roh als Body; Header `id` = Terminal.
 #[tauri::command]
 pub async fn share_image(request: Request<'_>) -> Result<(), String> {
-    let id = request.headers().get("id").and_then(|v| v.to_str().ok()).ok_or("id fehlt")?;
-    let InvokeBody::Raw(data) = request.body() else { return Err("Bild fehlt".into()) };
+    let id = request.headers().get("id").and_then(|v| v.to_str().ok()).ok_or_else(|| tr!("id fehlt", "id missing"))?;
+    let InvokeBody::Raw(data) = request.body() else { return Err(tr!("Bild fehlt", "Image missing")) };
     if data.len() > MAX {
-        return Err("Bild zu groß".into());
+        return Err(tr!("Bild zu groß", "Image too large"));
     }
-    let tx = lock(&REMOTES).get(id).map(|r| r.tx.clone()).ok_or("Keine Verbindung zum Host")?;
+    let tx = lock(&REMOTES).get(id).map(|r| r.tx.clone()).ok_or_else(|| tr!("Keine Verbindung zum Host", "No connection to host"))?;
     if !tx.push((IMAGE, data.clone())) {
-        return Err("Keine Verbindung zum Host".into());
+        return Err(tr!("Keine Verbindung zum Host", "No connection to host"));
     }
     Ok(())
 }

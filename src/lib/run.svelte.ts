@@ -2,6 +2,7 @@
 // nebeneinander. Lebt auf Modulebene wie editor(): RunPane wird beim Andocken neu gemountet, Prozesse und Ausgaben
 // bleiben. Die Auswahl steht im Editor-Store (run), welcher Lauf in der Ausgabe steht in RepoRun.focus.
 // Invariante: laeuft etwas, ist das Panel RUN im Layout (runStart dockt es an, Schliessen/Zuruecksetzen stoppt).
+import { t } from "./i18n.ts";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { RUN, activate, groupOf, mainGroup, splitAt } from "./dock.ts";
@@ -155,8 +156,8 @@ export function tailOutput(repo: string, n = 200, label = store.get(repo)?.curre
   const dec = new TextDecoder();
   let text = parts.map((c) => dec.decode(c, { stream: true })).join("") + dec.decode();
   if (sum > TAIL_BYTES) text = text.slice(text.indexOf("\n") + 1); // angeschnittene erste Zeile weg
-  const st = cur.state === "running" ? "läuft" : cur.state === "idle" ? "gestoppt" : cur.exit === null ? "beendet" : `exit ${cur.exit}`;
-  return `Ausgabe von \`${cur.cfg.label}\` (${st}), letzte ${n} Zeilen:\n${codeBlock(tailText(text, n))}\n`;
+  const st = cur.state === "running" ? t("läuft") : cur.state === "idle" ? t("gestoppt") : cur.exit === null ? t("beendet") : `exit ${cur.exit}`;
+  return t("Ausgabe von `{label}` ({state}), letzte {n} Zeilen:", { label: cur.cfg.label, state: st, n }) + `\n${codeBlock(tailText(text, n))}\n`;
 }
 
 const runTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -208,7 +209,7 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
   const c = cfg ?? chosen(repo);
   const s = editor(repo);
   if (!c) {
-    s.error = "Nichts zum Starten gefunden (package.json-Script, startbares .csproj/.fsproj, Cargo.toml).";
+    s.error = t("Nichts zum Starten gefunden (package.json-Script, startbares .csproj/.fsproj, Cargo.toml).");
     return;
   }
   const dock = () => setLayout(repo, groupOf(s.layout, RUN) ? activate(s.layout, RUN) : splitAt(s.layout, RUN, mainGroup(s.layout).id, "bottom"));
@@ -217,7 +218,7 @@ export async function runStart(repo: string, cfg?: RunConfig): Promise<void> {
   // Fehlt etwas (SDK, Pakete)? Erst fragen und genau sagen, was woher wohin kaeme; Abbrechen startet nicht.
   const items = await runMissing(repo, c.dir, c.target).catch(() => []);
   const install = items.length > 0;
-  if (install && !(await confirm("", "Installieren", "Vor dem Start fehlt:", { items, tone: "default" }))) return;
+  if (install && !(await confirm("", t("Installieren"), t("Vor dem Start fehlt:"), { items, tone: "default" }))) return;
   // Waehrend der Rueckfrage doppelt gestartet
   if (live()) return;
   dock();
@@ -304,7 +305,7 @@ export async function runRestart(repo: string, label?: string): Promise<void> {
 /** Lauf aus der Ausgabe entfernen (Tab schliessen); laeuft er, erst nach Rueckfrage stoppen. */
 export async function closeRun(repo: string, label: string): Promise<void> {
   const r = run(repo);
-  if (r.of(label)?.state === "running" && !(await confirm(`${label} stoppen?`, "Stoppen"))) return;
+  if (r.of(label)?.state === "running" && !(await confirm(t("{label} stoppen?", { label }), t("Stoppen")))) return;
   const shown = r.current?.cfg.label === label;
   await runStop(repo, label);
   r.runs = r.runs.filter((x) => x.cfg.label !== label);

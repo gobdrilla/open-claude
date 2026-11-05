@@ -176,7 +176,7 @@ pub(crate) fn exec(cmd: &mut Command, input: Option<&[u8]>) -> Result<Output, St
                 Ok(out)
             }),
     };
-    res.map_err(|e| format!("git konnte nicht gestartet werden: {e}"))
+    res.map_err(|e| tr!("git konnte nicht gestartet werden: {e}", "git could not be started: {e}"))
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -187,7 +187,7 @@ fn text(bytes: &[u8]) -> String {
 fn strict(bytes: Vec<u8>) -> Result<String, String> {
     match String::from_utf8(bytes) {
         Ok(s) if !s.contains('\0') => Ok(s),
-        _ => Err("Binär- oder Nicht-UTF-8-Datei: Ours oder Theirs komplett übernehmen".into()),
+        _ => Err(tr!("Binär- oder Nicht-UTF-8-Datei: Ours oder Theirs komplett übernehmen", "Binary or non-UTF-8 file: take ours or theirs completely")),
     }
 }
 
@@ -232,7 +232,7 @@ pub(crate) async fn blocking<T: Send + 'static>(
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f)
         .await
-        .map_err(|e| format!("abgebrochen: {e}"))?
+        .map_err(|e| tr!("abgebrochen: {e}", "aborted: {e}"))?
 }
 
 // ---------- Eingaben pruefen ----------
@@ -240,7 +240,7 @@ pub(crate) async fn blocking<T: Send + 'static>(
 /// Refs/Revs aus dem Frontend duerfen nie als Option durchgehen.
 fn arg(s: &str) -> Result<&str, String> {
     if s.is_empty() || s.starts_with('-') {
-        Err(format!("Ungültiger Name: „{s}“"))
+        Err(tr!("Ungültiger Name: „{s}“", "Invalid name: “{s}”"))
     } else {
         Ok(s)
     }
@@ -251,7 +251,7 @@ fn branch_name<'a>(repo: &str, name: &'a str) -> Result<&'a str, String> {
     if ok(git(repo).args(["check-ref-format", "--branch", name])) {
         Ok(name)
     } else {
-        Err(format!("Ungültiger Branch-Name: „{name}“"))
+        Err(tr!("Ungültiger Branch-Name: „{name}“", "Invalid branch name: “{name}”"))
     }
 }
 
@@ -280,7 +280,7 @@ pub(crate) fn inside(repo: &str, path: &str) -> Result<PathBuf, String> {
         _ => true,
     };
     if path.is_empty() || p.components().any(bad) {
-        return Err(format!("Ungültiger Pfad: {path}"));
+        return Err(tr!("Ungültiger Pfad: {path}", "Invalid path: {path}"));
     }
     Ok(Path::new(repo).join(p))
 }
@@ -636,7 +636,7 @@ fn show(repo: &str, sha: &str) -> Result<CommitDetail, String> {
         .args(["show", "-s"])
         .arg(format!("--format={FMT}%x1f%b"))
         .args([sha, "--"]))?;
-    let (commit, body) = parse_commit(&meta).ok_or("Commit nicht lesbar")?;
+    let (commit, body) = parse_commit(&meta).ok_or_else(|| tr!("Commit nicht lesbar", "Commit not readable"))?;
     // Merge-Commits: Diff gegen den ersten Parent.
     let diff = out(git(repo).args([
         "show",
@@ -711,7 +711,7 @@ fn apply(repo: &str, patch: &str, cached: bool, reverse: bool) -> Result<(), Str
         Ok(())
     } else if patch.contains('\u{FFFD}') {
         // diff() dekodiert lossy; Nicht-UTF-8-Zeilen passen dann nicht mehr.
-        Err("Datei ist nicht UTF-8, bitte nur die ganze Datei stagen/verwerfen.".into())
+        Err(tr!("Datei ist nicht UTF-8, bitte nur die ganze Datei stagen/verwerfen.", "File is not UTF-8, please stage/discard the whole file only."))
     } else {
         Err(fail(&o))
     }
@@ -777,7 +777,7 @@ fn branch_delete(repo: &str, name: &str, force: bool, remote: bool) -> Result<St
     arg(name)?;
     if remote {
         let (r, branch) = split_remote(&remotes(repo)?, name)
-            .ok_or_else(|| format!("Kein Remote zu „{name}“ gefunden"))?;
+            .ok_or_else(|| tr!("Kein Remote zu „{name}“ gefunden", "No remote found for “{name}”"))?;
         return talk(net(repo).args(["push", "--delete", "--", r.as_str(), branch]));
     }
     talk(git(repo).args(["branch", if force { "-D" } else { "-d" }, name]))
@@ -791,7 +791,7 @@ fn sequencer(repo: &str, step: &str) -> Result<String, String> {
         RepoState::CherryPick => "cherry-pick",
         RepoState::Revert => "revert",
         RepoState::Clean => {
-            return Err("Kein laufender Merge, Rebase, Cherry-Pick oder Revert.".into())
+            return Err(tr!("Kein laufender Merge, Rebase, Cherry-Pick oder Revert.", "No merge, rebase, cherry-pick or revert in progress."))
         }
     };
     let res = tolerate(repo, git(repo).args([op, step]));
@@ -830,7 +830,7 @@ fn push(repo: &str, force: bool) -> Result<String, String> {
     let st = status(repo)?;
     let mut target = vec![];
     if st.upstream.is_none() {
-        let branch = st.branch.ok_or("Detached HEAD: kein Branch zum Pushen.")?;
+        let branch = st.branch.ok_or_else(|| tr!("Detached HEAD: kein Branch zum Pushen.", "Detached HEAD: no branch to push."))?;
         target = vec!["-u".to_string(), default_remote(repo)?, branch];
     }
     // --force-if-includes: after a mere fetch the lease alone would silently drop foreign commits.
@@ -845,7 +845,7 @@ fn push(repo: &str, force: bool) -> Result<String, String> {
 /// origin, else the first remote.
 fn default_remote(repo: &str) -> Result<String, String> {
     let list = remotes(repo)?;
-    let remote = list.iter().find(|r| r.name == "origin").or(list.first()).ok_or("Kein Remote eingerichtet.")?;
+    let remote = list.iter().find(|r| r.name == "origin").or(list.first()).ok_or_else(|| tr!("Kein Remote eingerichtet.", "No remote set up."))?;
     Ok(remote.name.clone())
 }
 
@@ -902,7 +902,7 @@ fn set_base(repo: &str, base: Option<&str>) -> Result<(), String> {
         Some(b) => {
             let rev = format!("{}^{{commit}}", arg(b)?);
             if !ok(git(repo).args(["rev-parse", "--verify", "--quiet", &rev])) {
-                return Err(format!("Branch nicht gefunden: {b}"));
+                return Err(tr!("Branch nicht gefunden: {b}", "Branch not found: {b}"));
             }
             out(git(repo).args(["config", "ocui.base", b])).map(|_| ())
         }
@@ -920,7 +920,7 @@ fn ext_ident(s: &str) -> Result<&str, String> {
     if c.next().is_some_and(|f| f.is_ascii_lowercase()) && c.all(|x| x.is_ascii_lowercase() || x.is_ascii_digit() || x == '-') {
         Ok(s)
     } else {
-        Err(format!("Ungültiger Name: {s}"))
+        Err(tr!("Ungültiger Name: {s}", "Invalid name: {s}"))
     }
 }
 
@@ -1011,11 +1011,11 @@ fn merge(repo: &str, rev: &str, mode: &str, message: Option<&str>) -> Result<Str
         "no-ff" => Some("--no-ff"),
         "ff-only" => Some("--ff-only"),
         "squash" => Some("--squash"),
-        _ => return Err("Unbekannter Merge-Modus".into()),
+        _ => return Err(tr!("Unbekannter Merge-Modus", "Unknown merge mode")),
     };
     // Squash commits the whole index below; git only refuses staged changes when it cannot fast-forward.
     if mode == "squash" && has_head(repo) && !ok(git(repo).args(["diff", "--cached", "--quiet", "HEAD", "--"])) {
-        return Err("Erst die gestagten Änderungen committen oder unstagen.".into());
+        return Err(tr!("Erst die gestagten Änderungen committen oder unstagen.", "Commit or unstage the staged changes first."));
     }
     let message = message.filter(|m| !m.trim().is_empty() && mode != "ff-only");
     let mut cmd = git(repo);
@@ -1026,7 +1026,7 @@ fn merge(repo: &str, rev: &str, mode: &str, message: Option<&str>) -> Result<Str
     let res = tolerate(repo, cmd.arg(arg(rev)?)).map_err(|e| {
         // git's first line is a "hint:", the real reason comes last.
         if mode == "ff-only" && e.contains("Not possible to fast-forward") {
-            "Fast-Forward nicht möglich: Die Branches sind auseinandergelaufen. Anderen Merge-Modus wählen oder erst rebasen.".into()
+            tr!("Fast-Forward nicht möglich: Die Branches sind auseinandergelaufen. Anderen Merge-Modus wählen oder erst rebasen.", "Fast-forward not possible: the branches have diverged. Choose another merge mode or rebase first.")
         } else {
             e
         }
@@ -1071,16 +1071,16 @@ fn range(base: Option<&str>) -> Result<String, String> {
 /// prepared todo. Conflicts pause it like any rebase (banner: continue/abort).
 fn rewrite(repo: &str, base: Option<&str>, steps: &[Step]) -> Result<String, String> {
     if repo_state(repo)? != RepoState::Clean {
-        return Err("Erst den laufenden Vorgang abschließen oder abbrechen.".into());
+        return Err(tr!("Erst den laufenden Vorgang abschließen oder abbrechen.", "Finish or abort the operation in progress first."));
     }
     if let Some(b) = base {
         if !ok(git(repo).args(["merge-base", "--is-ancestor", arg(b)?, "HEAD"])) {
-            return Err("Commit liegt nicht im aktuellen Branch.".into());
+            return Err(tr!("Commit liegt nicht im aktuellen Branch.", "Commit is not on the current branch."));
         }
     }
     let range = range(base)?;
     if !out(git(repo).args(["rev-list", "--min-parents=2", &range, "--"]))?.trim().is_empty() {
-        return Err("Merge-Commits im Bereich werden nicht unterstützt.".into());
+        return Err(tr!("Merge-Commits im Bereich werden nicht unterstützt.", "Merge commits in the range are not supported."));
     }
     let mut want: Vec<String> = out(git(repo).args(["rev-list", &range, "--"]))?.lines().map(str::to_string).collect();
     let mut got: Vec<String> = steps.iter().map(|s| s.sha.clone()).collect();
@@ -1088,21 +1088,21 @@ fn rewrite(repo: &str, base: Option<&str>, steps: &[Step]) -> Result<String, Str
     got.sort();
     // Omitting a commit must never drop it silently.
     if want != got {
-        return Err("Die Commit-Liste passt nicht mehr zum Branch – neu laden.".into());
+        return Err(tr!("Die Commit-Liste passt nicht mehr zum Branch – neu laden.", "The commit list no longer matches the branch – reload."));
     }
     if let Some(s) = steps.iter().find(|s| !matches!(s.op.as_str(), "pick" | "fixup" | "drop")) {
-        return Err(format!("Unbekannte Aktion: {}", s.op));
+        return Err(tr!("Unbekannte Aktion: {}", "Unknown action: {}", s.op));
     }
     if steps.iter().find(|s| s.op != "drop").is_some_and(|s| s.op != "pick") {
-        return Err("Erster Commit kann nicht zusammengefasst werden.".into());
+        return Err(tr!("Erster Commit kann nicht zusammengefasst werden.", "The first commit cannot be squashed."));
     }
     if steps.iter().any(|s| s.op != "drop" && s.message.as_deref().is_some_and(|m| m.trim().is_empty())) {
-        return Err("Nachricht ist leer.".into());
+        return Err(tr!("Nachricht ist leer.", "Message is empty."));
     }
     let dir = PathBuf::from(out(git(repo).args(["rev-parse", "--absolute-git-dir"]))?.trim()).join("ocui-rewrite");
     // Cleared here, not at the end: a paused rebase still needs the message files.
     let _ = std::fs::remove_dir_all(&dir);
-    let io = |e: std::io::Error| format!("Konnte {} nicht schreiben: {e}", dir.display());
+    let io = |e: std::io::Error| tr!("Konnte {} nicht schreiben: {e}", "Could not write {}: {e}", dir.display());
     std::fs::create_dir_all(&dir).map_err(io)?;
     let mut todo = String::new();
     for (i, s) in steps.iter().enumerate() {
@@ -1143,7 +1143,7 @@ fn rewrite(repo: &str, base: Option<&str>, steps: &[Step]) -> Result<String, Str
 fn plan(repo: &str, sha: &str) -> Result<(Option<String>, Vec<Step>), String> {
     arg(sha)?;
     if !ok(git(repo).args(["merge-base", "--is-ancestor", sha, "HEAD"])) {
-        return Err("Commit liegt nicht im aktuellen Branch.".into());
+        return Err(tr!("Commit liegt nicht im aktuellen Branch.", "Commit is not on the current branch."));
     }
     let base = out(git(repo).args(["rev-parse", "--verify", "--quiet", &format!("{sha}^")]))
         .ok()
@@ -1159,15 +1159,15 @@ fn full_sha(repo: &str, rev: &str) -> Result<String, String> {
     arg(rev)?;
     out(git(repo).args(["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]))
         .map(|s| s.trim().to_string())
-        .map_err(|_| format!("Commit „{rev}“ nicht gefunden."))
+        .map_err(|_| tr!("Commit „{rev}“ nicht gefunden.", "Commit “{rev}” not found."))
 }
 
 /// Folds sha into its parent; message becomes the message of the combined commit.
 fn squash(repo: &str, sha: &str, message: &str) -> Result<String, String> {
     let sha = full_sha(repo, sha)?;
-    let parent = full_sha(repo, &format!("{sha}^")).map_err(|_| "Erster Commit hat keinen Vorgänger.".to_string())?;
+    let parent = full_sha(repo, &format!("{sha}^")).map_err(|_| tr!("Erster Commit hat keinen Vorgänger.", "The first commit has no parent."))?;
     let (base, mut steps) = plan(repo, &parent)?;
-    let step = steps.iter_mut().find(|s| s.sha == sha).ok_or("Commit liegt nicht im aktuellen Branch.")?;
+    let step = steps.iter_mut().find(|s| s.sha == sha).ok_or_else(|| tr!("Commit liegt nicht im aktuellen Branch.", "Commit is not on the current branch."))?;
     step.op = "fixup".into();
     step.message = Some(message.to_string());
     rewrite(repo, base.as_deref(), &steps)
@@ -1176,7 +1176,7 @@ fn squash(repo: &str, sha: &str, message: &str) -> Result<String, String> {
 /// New message for sha; HEAD directly (staged changes stay staged), older ones via rewrite.
 fn reword(repo: &str, sha: &str, message: &str) -> Result<String, String> {
     if message.trim().is_empty() {
-        return Err("Nachricht ist leer.".into());
+        return Err(tr!("Nachricht ist leer.", "Message is empty."));
     }
     let sha = full_sha(repo, sha)?;
     if sha == full_sha(repo, "HEAD")? {
@@ -1264,7 +1264,7 @@ fn tag_create(repo: &str, name: &str, sha: &str, message: Option<&str>) -> Resul
         .arg("check-ref-format")
         .arg(format!("refs/tags/{name}")))
     {
-        return Err(format!("Ungültiger Tag-Name: „{name}“"));
+        return Err(tr!("Ungültiger Tag-Name: „{name}“", "Invalid tag name: “{name}”"));
     }
     let mut cmd = git(repo);
     cmd.arg("tag");
@@ -1346,7 +1346,7 @@ pub async fn git_conflict_sides(repo: String) -> Result<Sides, String> {
 fn resolve_side(repo: &str, path: &str, theirs: bool) -> Result<(), String> {
     inside(repo, path)?;
     if out(lit(repo).args(["ls-files", "-u", "--", path]))?.trim().is_empty() {
-        return Err(format!("{path} steht nicht im Konflikt."));
+        return Err(tr!("{path} steht nicht im Konflikt.", "{path} is not in conflict."));
     }
     let side = if theirs { "--theirs" } else { "--ours" };
     out(lit(repo).args(["checkout", side, "--", path]))?;
@@ -1357,9 +1357,9 @@ fn resolve(repo: &str, path: &str, content: &str) -> Result<(), String> {
     let file = inside(repo, path)?;
     // Nur Dateien schreiben, die wirklich im Konflikt stehen.
     if out(lit(repo).args(["ls-files", "-u", "--", path]))?.trim().is_empty() {
-        return Err(format!("{path} steht nicht im Konflikt."));
+        return Err(tr!("{path} steht nicht im Konflikt.", "{path} is not in conflict."));
     }
-    std::fs::write(&file, content).map_err(|e| format!("Konnte {path} nicht schreiben: {e}"))?;
+    std::fs::write(&file, content).map_err(|e| tr!("Konnte {path} nicht schreiben: {e}", "Could not write {path}: {e}"))?;
     out(lit(repo).args(["add", "--", path])).map(|_| ())
 }
 
@@ -1495,10 +1495,10 @@ const VARS: [&str; 4] = ["REPO", "SHA", "BRANCH", "FILE"];
 /// the shell does not re-parse expansion results, so no quoting and no injection via branch or file names.
 fn custom(repo: &str, command: &str, vars: &HashMap<String, String>) -> Result<String, String> {
     if command.trim().is_empty() {
-        return Err("Leerer Befehl".into());
+        return Err(tr!("Leerer Befehl", "Empty command"));
     }
     if let Some(k) = vars.keys().find(|k| !VARS.contains(&k.as_str())) {
-        return Err(format!("Unbekannte Variable: {k}"));
+        return Err(tr!("Unbekannte Variable: {k}", "Unknown variable: {k}"));
     }
     let mut cmd = if cfg!(windows) {
         let ps = if crate::deps::on_path("pwsh") { "pwsh" } else { "powershell" };
@@ -1558,7 +1558,7 @@ pub async fn git_reset(repo: String, sha: String, mode: String) -> Result<String
             "soft" => "--soft",
             "mixed" => "--mixed",
             "hard" => "--hard",
-            _ => return Err(format!("Unbekannter Reset-Modus: {mode}")),
+            _ => return Err(tr!("Unbekannter Reset-Modus: {mode}", "Unknown reset mode: {mode}")),
         };
         talk(git(&repo).args(["reset", "-q", flag, arg(&sha)?, "--"]))
     })

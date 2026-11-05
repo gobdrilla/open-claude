@@ -4,6 +4,7 @@
   import { Button, DiffDialog, Input } from "$lib/atelier-ui";
   import { fs } from "$lib/files";
   import { blocked, claudeTarget, decide, ide, rel, sendToClaude, type IdeDiff } from "$lib/ide.svelte";
+  import { t } from "$lib/i18n";
 
   const d = $derived(ide.diffs[0]);
   let diff = $state<string | null>(null);
@@ -17,7 +18,7 @@
     reason = "";
     if (!cur) return;
     fs.diff(cur.repo, rel(cur.repo, cur.path), cur.content).then(
-      (t) => cur === d && (diff = t),
+      (txt) => cur === d && (diff = txt),
       (e) => {
         if (cur !== d) return;
         error = String(e);
@@ -34,30 +35,30 @@
     // Bis claude die Ablehnung verarbeitet hat, steht die Freigabe noch offen und sendToClaude wuerde abweisen.
     const id = claudeTarget.find(cur.repo);
     for (let i = 0; id && i < 20 && (await blocked(id)); i++) await new Promise((r) => setTimeout(r, 250));
-    const text = `Abgelehnt (${rel(cur.repo, cur.path)}): ${why}`;
+    const text = t("Abgelehnt ({path}): {why}", { path: rel(cur.repo, cur.path), why });
     // Nicht angekommen (weitere Freigabe offen, keine Sitzung): Grund nicht verlieren
-    if (!(await sendToClaude(cur.repo, text))) ide.notice = `Grund nicht gesendet – ${text}`;
+    if (!(await sendToClaude(cur.repo, text))) ide.notice = t("Grund nicht gesendet – {text}", { text });
   }
 </script>
 
 {#if d}
   <DiffDialog
     diff={diff ?? ""}
-    title="Änderung von Claude"
-    description={rel(d.repo, d.path) + (ide.diffs.length > 1 ? ` · noch ${ide.diffs.length - 1} weitere` : "")}
-    empty={error || (diff === null ? "Lädt …" : "Keine Änderung")}
+    title={t("Änderung von Claude")}
+    description={rel(d.repo, d.path) + (ide.diffs.length > 1 ? " · " + t("noch {n} weitere", { n: ide.diffs.length - 1 }) : "")}
+    empty={error || (diff === null ? t("Lädt …") : t("Keine Änderung"))}
     onclose={() => reject(d)}
   >
     <span class="ml-auto flex shrink-0 gap-1.5">
       <Input
         bind:value={reason}
-        placeholder="Grund (optional)"
+        placeholder={t("Grund (optional)")}
         density="sm"
         class="w-48"
         onkeydown={(e) => e.key === "Enter" && reason.trim() && reject(d)}
       />
-      <Button variant="outline" size="sm" onclick={() => reject(d)}>Ablehnen</Button>
-      <Button size="sm" onclick={() => decide(d, true)}>Annehmen</Button>
+      <Button variant="outline" size="sm" onclick={() => reject(d)}>{t("Ablehnen")}</Button>
+      <Button size="sm" onclick={() => decide(d, true)}>{t("Annehmen")}</Button>
     </span>
   </DiffDialog>
 {/if}

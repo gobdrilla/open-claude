@@ -2,6 +2,7 @@
 // Andocken neu gemountet und die Editor-Ansicht beim Wechsel zu Terminal/Git abgebaut, Puffer bleiben trotzdem.
 // Gespeichert (localStorage "editor:<repo>", JSON, try/catch): layout, active, expanded, pin, url, wpf, lsp, noLsp, run, preview.
 // Ungespeicherte Inhalte ueberleben keinen Neustart der App.
+import { t } from "./i18n.ts";
 import { confirm } from "./confirm.svelte";
 import { untrack } from "svelte";
 import type { EditorState, StateEffect } from "@codemirror/state";
@@ -348,7 +349,7 @@ async function go(s: RepoEditor, path: string, line?: number, col?: number, prev
 /** Tab einer Datei schliessen. Bei ungespeicherten Aenderungen erst nachfragen, ausser force. false = abgebrochen. */
 export async function close(repo: string, path: string, force = false): Promise<boolean> {
   const s = editor(repo);
-  if (!force && s.files[path]?.dirty && !(await confirm(`Ungespeicherte Änderungen in „${name(path)}“ verwerfen?`, "Verwerfen")))
+  if (!force && s.files[path]?.dirty && !(await confirm(t("Ungespeicherte Änderungen in „{name}“ verwerfen?", { name: name(path) }), t("Verwerfen"))))
     return false;
   forget(s, path);
   persist(s);
@@ -360,7 +361,7 @@ export async function closeTab(repo: string, panel: PanelId): Promise<boolean> {
   const path = panelPath(panel);
   if (path !== null) return close(repo, path);
   // Schliessen stoppt den Prozess (s. u.): nicht ohne Rueckfrage.
-  if (panel === RUN && runOf(repo).busy && !(await confirm("Laufende Prozesse stoppen?", "Stoppen"))) return false;
+  if (panel === RUN && runOf(repo).busy && !(await confirm(t("Laufende Prozesse stoppen?"), t("Stoppen")))) return false;
   const s = editor(repo);
   s.layout = closePanel(s.layout, panel);
   persist(s);
@@ -392,6 +393,7 @@ export async function save(repo: string, path?: string, force = false): Promise<
     f.mtime = await fs.write(repo, p, text, f.crlf, f.bom, f.mtime, force);
     f.saved = text;
     // Local history: the version on disk until now (first save of a session) and the new one.
+    // Reasons stay German in the store; HistoryDialog translates them when shown.
     void record(repo, p, before, "Vor dem Speichern").then(() => record(repo, p, text, "Gespeichert"));
     // Waehrend des Schreibens kann weitergetippt worden sein.
     f.dirty = f.text !== text;
@@ -768,7 +770,7 @@ export function isDirty(repo?: string): boolean {
  */
 export async function drop(repo: string, force = false): Promise<boolean> {
   if (!store.has(repo)) return true;
-  if (!force && isDirty(repo) && !(await confirm("Ungespeicherte Änderungen im Editor verwerfen?", "Verwerfen"))) return false;
+  if (!force && isDirty(repo) && !(await confirm(t("Ungespeicherte Änderungen im Editor verwerfen?"), t("Verwerfen")))) return false;
   void runStop(repo);
   void debugStop(repo);
   void testCancel(repo);

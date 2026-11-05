@@ -15,6 +15,7 @@
   import { FILES_APP, atRef, under } from "$lib/editor.logic";
   import { sendToClaude } from "$lib/ide.svelte";
   import { showHistory } from "$lib/history.svelte";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -99,7 +100,10 @@
   }
 
   function create(dir: string, isDir: boolean) {
-    askPrompt(`${isDir ? "Neuer Ordner" : "Neue Datei"} in ${dir || "Projektordner"}`, "", async (name) => {
+    const title = dir
+      ? t(isDir ? "Neuer Ordner in {dir}" : "Neue Datei in {dir}", { dir })
+      : t(isDir ? "Neuer Ordner im Projektordner" : "Neue Datei im Projektordner");
+    askPrompt(title, "", async (name) => {
       const path = join(dir, name);
       await fs.create(repo, path, isDir);
       if (dir) setExpanded(repo, dir, true);
@@ -108,7 +112,7 @@
   }
 
   function rename(r: Row) {
-    askPrompt(`${r.name} umbenennen`, r.name, async (name) => {
+    askPrompt(t("{name} umbenennen", { name: r.name }), r.name, async (name) => {
       const to = join(dirname(r.path), name);
       if (to === r.path) return;
       await fs.rename(repo, r.path, to);
@@ -118,8 +122,8 @@
 
   async function remove(r: Row) {
     const dirty = Object.values(s.files).some((f) => f.dirty && under(f.path, r.path));
-    const message = `„${r.path}“ in den Papierkorb legen?${dirty ? "\nUngespeicherte Änderungen im Editor gehen verloren." : ""}`;
-    if (!(await confirm(message, "Löschen"))) return;
+    const message = t("„{path}“ in den Papierkorb legen?", { path: r.path }) + (dirty ? "\n" + t("Ungespeicherte Änderungen im Editor gehen verloren.") : "");
+    if (!(await confirm(message, t("Löschen")))) return;
     run(async () => {
       await fs.delete(repo, r.path);
       removed(repo, r.path);
@@ -138,10 +142,10 @@
     <span class="text-foreground min-w-0 flex-1 truncate text-meta font-semibold" title={repo}
       >{repo.split(/[\\/]/).pop()}</span
     >
-    <IconButton label="Neue Datei" title="Neue Datei im Projektordner" onclick={() => create("", false)}
+    <IconButton label={t("Neue Datei")} title={t("Neue Datei im Projektordner")} onclick={() => create("", false)}
       ><FilePlusIcon class="size-3" /></IconButton
     >
-    <IconButton label="Neuer Ordner" title="Neuer Ordner im Projektordner" onclick={() => create("", true)}
+    <IconButton label={t("Neuer Ordner")} title={t("Neuer Ordner im Projektordner")} onclick={() => create("", true)}
       ><FolderPlusIcon class="size-3" /></IconButton
     >
   </div>
@@ -154,12 +158,12 @@
         {#snippet action()}<RefreshButton loading={false} onclick={() => ((rootError = ""), load(""))} />{/snippet}
       </Empty>
     {:else}
-      <Empty>Lädt …</Empty>
+      <Empty>{t("Lädt …")}</Empty>
     {/if}
   {:else if !lists[""].length}
     <Empty icon={FolderIcon}>
-      Der Projektordner ist leer.
-      {#snippet action()}<Button size="xs" variant="outline" onclick={() => create("", false)}><FilePlusIcon /> Neue Datei</Button>{/snippet}
+      {t("Der Projektordner ist leer.")}
+      {#snippet action()}<Button size="xs" variant="outline" onclick={() => create("", false)}><FilePlusIcon /> {t("Neue Datei")}</Button>{/snippet}
     </Empty>
   {:else}
   <div class="min-h-0 flex-1 overflow-y-auto px-1.5 py-1" bind:this={box} onkeydown={onKey} role="tree" tabindex="-1">
@@ -189,13 +193,13 @@
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content class={menuContent}>
-            <ContextItem label="An Claude" onSelect={() => sendToClaude(repo, atRef(r.path))} />
-            <ContextItem label="Neue Datei" onSelect={() => create(dir, false)} />
-            <ContextItem label="Neuer Ordner" onSelect={() => create(dir, true)} />
-            <ContextItem label="Umbenennen" onSelect={() => rename(r)} />
-            {#if !r.dir}<ContextItem label="Lokale Historie" onSelect={() => showHistory(repo, r.path)} />{/if}
-            <ContextItem label="Im {FILES_APP} zeigen" onSelect={() => reveal(dir)} />
-            <ContextItem label="Löschen" onSelect={() => remove(r)} destructive />
+            <ContextItem label={t("An Claude")} onSelect={() => sendToClaude(repo, atRef(r.path))} />
+            <ContextItem label={t("Neue Datei")} onSelect={() => create(dir, false)} />
+            <ContextItem label={t("Neuer Ordner")} onSelect={() => create(dir, true)} />
+            <ContextItem label={t("Umbenennen")} onSelect={() => rename(r)} />
+            {#if !r.dir}<ContextItem label={t("Lokale Historie")} onSelect={() => showHistory(repo, r.path)} />{/if}
+            <ContextItem label={t("Im {app} zeigen", { app: FILES_APP })} onSelect={() => reveal(dir)} />
+            <ContextItem label={t("Löschen")} onSelect={() => remove(r)} destructive />
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>

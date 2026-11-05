@@ -23,6 +23,7 @@
   import CircleXIcon from "@lucide/svelte/icons/circle-x";
   import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -81,10 +82,10 @@
 
   let closePath = $state<string | null>(null);
 
-  const t = $derived(tests(repo));
+  const cur = $derived(tests(repo));
 
   async function runTest(mode: UnityTestMode) {
-    const run = t;
+    const run = cur;
     if (run.running) return;
     run.running = mode;
     run.error = "";
@@ -99,7 +100,7 @@
 
   // Das Backend sperrt Test/Oeffnen/Einrichten je Projekt ohnehin; hier nur, damit man es gar nicht erst anklickt.
   // Schliessen bleibt frei: Notausgang fuer einen haengenden Testlauf im Editor.
-  const busy = $derived(!!t.running || opening || settingUp);
+  const busy = $derived(!!cur.running || opening || settingUp);
 
   const VERDICT_CLASS = { green: "text-success", yellow: "text-warning", red: "text-destructive" } as const;
 </script>
@@ -119,26 +120,26 @@
   <Notice bind:text={error} />
 
   {#if loading && !info}
-    <p class="text-muted-foreground px-3 py-4">Lese Unity-Status …</p>
+    <p class="text-muted-foreground px-3 py-4">{t("Lese Unity-Status …")}</p>
   {:else if info}
     <div class="border-border flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-2">
-      {@render stat("Unity-CLI", info.cli)}
-      {@render stat("Editor installiert", info.editorInstalled)}
-      {@render stat("Editor offen", info.editorOpen)}
-      {@render stat("Pipeline-Paket", info.pipeline)}
-      {@render stat("Verbunden", info.connected)}
-      {@render stat("Skill installiert", info.skill)}
+      {@render stat(t("Unity-CLI"), info.cli)}
+      {@render stat(t("Editor installiert"), info.editorInstalled)}
+      {@render stat(t("Editor offen"), info.editorOpen)}
+      {@render stat(t("Pipeline-Paket"), info.pipeline)}
+      {@render stat(t("Verbunden"), info.connected)}
+      {@render stat(t("Skill installiert"), info.skill)}
       <span class="flex-1"></span>
       <Button size="xs" variant="outline" disabled={busy} onclick={setup}>
-        {settingUp ? "Richte ein …" : "Unity-Support einrichten"}
+        {settingUp ? t("Richte ein …") : t("Unity-Support einrichten")}
       </Button>
       {#if info.editorOpen}
         <Button size="xs" variant="outline" onclick={() => (closePath = repo)}>
-          Editor schließen
+          {t("Editor schließen")}
         </Button>
       {:else}
         <Button size="xs" variant="outline" disabled={busy} onclick={openEditor}>
-          {opening ? "Öffnet …" : "Editor öffnen"}
+          {opening ? t("Öffnet …") : t("Editor öffnen")}
         </Button>
       {/if}
       <RefreshButton {loading} onclick={reload} />
@@ -153,19 +154,19 @@
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2">
       <div class="flex items-center gap-2">
         <Button size="xs" variant="outline" disabled={busy} onclick={() => runTest("EditMode")}>
-          {t.running === "EditMode" ? "Läuft …" : "EditMode-Tests"}
+          {cur.running === "EditMode" ? t("Läuft …") : t("EditMode-Tests")}
         </Button>
         <Button size="xs" variant="outline" disabled={busy} onclick={() => runTest("PlayMode")}>
-          {t.running === "PlayMode" ? "Läuft …" : "PlayMode-Tests"}
+          {cur.running === "PlayMode" ? t("Läuft …") : t("PlayMode-Tests")}
         </Button>
-        {#if t.running}<LoaderCircleIcon class="text-muted-foreground size-3.5 animate-spin" />{/if}
+        {#if cur.running}<LoaderCircleIcon class="text-muted-foreground size-3.5 animate-spin" />{/if}
       </div>
 
-      {#if t.error}<p class="text-destructive text-meta">{t.error}</p>{/if}
-      {#if !t.report && !t.error && !t.running}<div class="flex-1"><Empty>Noch keine Testergebnisse. EditMode- oder PlayMode-Tests starten.</Empty></div>{/if}
+      {#if cur.error}<p class="text-destructive text-meta">{cur.error}</p>{/if}
+      {#if !cur.report && !cur.error && !cur.running}<div class="flex-1"><Empty>{t("Noch keine Testergebnisse. EditMode- oder PlayMode-Tests starten.")}</Empty></div>{/if}
 
-      {#if t.report}
-        {@const report = t.report}
+      {#if cur.report}
+        {@const report = cur.report}
         {@const v = verdict(report)}
         <div class="border-border rounded border p-2">
           <div class="flex flex-wrap items-center gap-3">
@@ -177,14 +178,14 @@
               {:else}
                 <CircleCheckIcon class="size-4" />
               {/if}
-              {report.passed}/{report.total} bestanden
+              {t("{passed}/{total} bestanden", { passed: report.passed, total: report.total })}
             </span>
-            {#if report.failed}<span class="text-destructive">{report.failed} fehlgeschlagen</span>{/if}
-            {#if report.skipped}<span class="text-warning">{report.skipped} übersprungen</span>{/if}
-            {#if report.inconclusive}<span class="text-warning">{report.inconclusive} unklar</span>{/if}
+            {#if report.failed}<span class="text-destructive">{t("{n} fehlgeschlagen", { n: report.failed })}</span>{/if}
+            {#if report.skipped}<span class="text-warning">{t("{n} übersprungen", { n: report.skipped })}</span>{/if}
+            {#if report.inconclusive}<span class="text-warning">{t("{n} unklar", { n: report.inconclusive })}</span>{/if}
             <span class="text-muted-foreground font-mono">{formatDuration(report.durationSecs)}</span>
             <span class="text-muted-foreground">
-              über {report.via === "editor" ? "laufenden Editor" : "Batchmode"}
+              {report.via === "editor" ? t("über laufenden Editor") : t("über Batchmode")}
             </span>
           </div>
           {#if report.failures.length}
@@ -202,7 +203,7 @@
     </div>
   {:else}
     <Empty>
-      <p class="whitespace-pre-wrap select-text">{failed || "Unity-Status nicht lesbar."}</p>
+      <p class="whitespace-pre-wrap select-text">{failed || t("Unity-Status nicht lesbar.")}</p>
       {#snippet action()}<RefreshButton {loading} onclick={reload} />{/snippet}
     </Empty>
   {/if}

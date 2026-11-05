@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import Notice from "$lib/components/Notice.svelte";
   import { Button, Checkbox, ConfirmDialog, ContextItem, Empty, Row, Textarea, fileIcon, menuContent, menuSeparator } from "$lib/atelier-ui";
   import { gitCmds, usesFile, type GitCmd } from "$lib/gitcmds.svelte";
@@ -161,7 +162,7 @@
     lines.size ? linesPatch(file, hunk, lines, reverse) : hunkPatch(file, hunk);
 
   function apply(p: string, cached: boolean, reverse: boolean) {
-    if (!p) error = "Keine geänderte Zeile gewählt.";
+    if (!p) error = t("Keine geänderte Zeile gewählt.");
     else run(() => git.apply(repo, p, cached, reverse));
   }
 
@@ -169,26 +170,26 @@
     sel?.staged
       ? [
           {
-            label: "Hunk unstagen",
-            lineLabel: "Zeilen unstagen",
+            label: t("Hunk unstagen"),
+            lineLabel: t("Zeilen unstagen"),
             run: (f, h, l) => apply(patch(f, h, l, true), true, true),
           },
         ]
       : [
           {
-            label: "Hunk stagen",
-            lineLabel: "Zeilen stagen",
+            label: t("Hunk stagen"),
+            lineLabel: t("Zeilen stagen"),
             run: (f, h, l) => apply(patch(f, h, l, false), true, false),
           },
           {
-            label: "Hunk verwerfen",
-            lineLabel: "Zeilen verwerfen",
+            label: t("Hunk verwerfen"),
+            lineLabel: t("Zeilen verwerfen"),
             destructive: true,
             run: (f, h, l) => {
               const p = patch(f, h, l, true);
               confirm = {
-                title: l.size ? "Zeilen verwerfen?" : "Hunk verwerfen?",
-                message: `Die Änderungen in ${f.newPath} gehen verloren.`,
+                title: l.size ? t("Zeilen verwerfen?") : t("Hunk verwerfen?"),
+                message: t("Die Änderungen in {path} gehen verloren.", { path: f.newPath }),
                 run: () => git.apply(repo, p, false, true),
               };
             },
@@ -204,21 +205,27 @@
     confirm =
       fs.length === 1
         ? {
-            title: "Änderungen verwerfen?",
+            title: t("Änderungen verwerfen?"),
             message:
               f.worktree === "?"
-                ? `${f.path} ist nicht versioniert und wird gelöscht.`
-                : `Alle nicht gestageten Änderungen in ${f.path} gehen verloren.`,
+                ? t("{path} ist nicht versioniert und wird gelöscht.", { path: f.path })
+                : t("Alle nicht gestageten Änderungen in {path} gehen verloren.", { path: f.path }),
             run: go,
           }
         : {
-            title: `Änderungen in ${fs.length} Dateien verwerfen?`,
+            title: t("Änderungen in {n} Dateien verwerfen?", { n: fs.length }),
             message:
-              `Alle nicht gestageten Änderungen in diesen ${fs.length} Dateien gehen verloren.` +
+              t("Alle nicht gestageten Änderungen in diesen {n} Dateien gehen verloren.", { n: fs.length }) +
               (loose
-                ? ` ${loose === fs.length ? "Alle" : loose} davon ${loose === 1 ? "ist" : "sind"} nicht versioniert (?) und ${loose === 1 ? "wird" : "werden"} gelöscht.`
+                ? " " +
+                  (loose === fs.length
+                    ? t("Alle davon sind nicht versioniert (?) und werden gelöscht.")
+                    : loose === 1
+                      ? t("1 davon ist nicht versioniert (?) und wird gelöscht.")
+                      : t("{n} davon sind nicht versioniert (?) und werden gelöscht.", { n: loose }))
                 : "") +
-              " Das lässt sich nicht rückgängig machen.",
+              " " +
+              t("Das lässt sich nicht rückgängig machen."),
             files: fs,
             run: go,
           };
@@ -227,11 +234,11 @@
   // Staged: back to HEAD. A staged new file becomes untracked and is deleted; renames restore the old path too.
   function discardStaged(f: FileChange) {
     confirm = {
-      title: "Unstagen und verwerfen?",
+      title: t("Unstagen und verwerfen?"),
       message:
         f.index === "A"
-          ? `${f.path} ist neu und wird gelöscht.`
-          : `Alle Änderungen in ${f.path} (gestaget und nicht gestaget) gehen verloren.`,
+          ? t("{path} ist neu und wird gelöscht.", { path: f.path })
+          : t("Alle Änderungen in {path} (gestaget und nicht gestaget) gehen verloren.", { path: f.path }),
       run: async () => {
         await git.unstage(repo, [f.path]);
         await git.discard(repo, f.orig ? [f.path, f.orig] : [f.path]);
@@ -285,7 +292,7 @@
         after: `\n# Please enter the commit message for your changes.\n# Recent commits:\n${recent}# ------------------------ >8 ------------------------\n${d.slice(0, 12000)}`,
       });
       const s = cleanSuggestion(raw);
-      if (!s) error = "Kein Vorschlag, gleich noch mal versuchen.";
+      if (!s) error = t("Kein Vorschlag, gleich noch mal versuchen.");
       else if (!message.trim()) message = s;
     } catch (e) {
       error = String(e);
@@ -323,7 +330,7 @@
       // Der Commit steht schon: Liste sofort aktualisieren, ein Push-Fehler darf ihn nicht verstecken.
       onchange();
       await git.push(repo, false).catch((e) => {
-        throw `Commit erstellt, Push fehlgeschlagen: ${e}`;
+        throw t("Commit erstellt, Push fehlgeschlagen: {error}", { error: String(e) });
       });
       onchange(true);
     });
@@ -364,7 +371,7 @@
         onclick={() => move(files, isStaged)}
       >
         <!-- Narrow column: "stagen"/"unstagen", so the list title stays readable. -->
-        <span class="@max-[15rem]:hidden">Alles</span>{isStaged ? "unstagen" : "stagen"}
+        <span class="@max-[15rem]:hidden">{isStaged ? t("Alles unstagen") : t("Alles stagen")}</span><span class="hidden @max-[15rem]:inline">{isStaged ? t("unstagen") : t("stagen")}</span>
       </Button>
       {#if !isStaged}
         <!-- Icon only: a text button pushed the list title down to "Nicht …" at 1280 px. -->
@@ -372,8 +379,8 @@
           variant="ghost-danger"
           size="2xs"
           class="shrink-0"
-          title="Alle verwerfen …"
-          aria-label="Alle verwerfen …"
+          title={t("Alle verwerfen …")}
+          aria-label={t("Alle verwerfen …")}
           disabled={files.length === 0 || busy}
           onclick={() => discard(files)}
         >
@@ -383,25 +390,25 @@
     </div>
     {#if picked.length > 1}
       <div class="bg-primary/10 mx-1 mt-1 flex flex-wrap items-center gap-1 rounded-md px-2 py-0.5">
-        <span class="text-muted-foreground flex-1 text-meta whitespace-nowrap">{picked.length} ausgewählt</span>
+        <span class="text-muted-foreground flex-1 text-meta whitespace-nowrap">{t("{n} ausgewählt", { n: picked.length })}</span>
         <Button
           variant="ghost"
           size="2xs"
           disabled={busy}
-          title={isStaged ? "Ausgewählte unstagen" : "Ausgewählte stagen"}
+          title={isStaged ? t("Ausgewählte unstagen") : t("Ausgewählte stagen")}
           onclick={() => move(picked, isStaged)}
         >
-          {isStaged ? "Unstagen" : "Stagen"}
+          {isStaged ? t("Unstagen") : t("Stagen")}
         </Button>
         {#if !isStaged}
           <Button
             variant="ghost-danger"
             size="2xs"
             disabled={busy}
-            title="Ausgewählte verwerfen …"
+            title={t("Ausgewählte verwerfen …")}
             onclick={() => discard(picked)}
           >
-            Verwerfen …
+            {t("Verwerfen …")}
           </Button>
         {/if}
       </div>
@@ -462,33 +469,33 @@
             <ContextMenu.Content class={menuContent}>
               {#if multi}
                 <ContextItem
-                  label={`Ausgewählte ${isStaged ? "unstagen" : "stagen"} (${picked.length})`}
+                  label={isStaged ? t("Ausgewählte unstagen ({n})", { n: picked.length }) : t("Ausgewählte stagen ({n})", { n: picked.length })}
                   onSelect={() => move(picked, isStaged)}
                 />
                 {#if !isStaged}
                   <ContextItem
-                    label={`Ausgewählte verwerfen (${picked.length}) …`}
+                    label={t("Ausgewählte verwerfen ({n}) …", { n: picked.length })}
                     onSelect={() => discard(picked)}
                     destructive
                   />
                 {/if}
               {:else}
-                <ContextItem label={isStaged ? "Unstagen" : "Stagen"} onSelect={() => move([f], isStaged)} />
+                <ContextItem label={isStaged ? t("Unstagen") : t("Stagen")} onSelect={() => move([f], isStaged)} />
                 {#if !isStaged}
-                  <ContextItem label="Änderungen verwerfen …" onSelect={() => discard([f])} destructive />
+                  <ContextItem label={t("Änderungen verwerfen …")} onSelect={() => discard([f])} destructive />
                 {:else}
-                  <ContextItem label="Unstagen und verwerfen …" onSelect={() => discardStaged(f)} destructive />
+                  <ContextItem label={t("Unstagen und verwerfen …")} onSelect={() => discardStaged(f)} destructive />
                 {/if}
               {/if}
               {#if onedit && code !== "D"}
-                <ContextItem label="Im Editor öffnen" onSelect={() => onedit(f.path)} />
+                <ContextItem label={t("Im Editor öffnen")} onSelect={() => onedit(f.path)} />
               {/if}
               <ContextItem
-                label={multi ? `Ausgewählte an Claude (${picked.length})` : "An Claude"}
+                label={multi ? t("Ausgewählte an Claude ({n})", { n: picked.length }) : t("An Claude")}
                 onSelect={() => sendToClaude(repo, (multi ? picked : [f]).map((x) => atRef(x.path)).join(""))}
               />
-              <ContextItem label="Im {FILES_APP} zeigen" onSelect={() => reveal(f)} />
-              <ContextItem label="Pfad kopieren" onSelect={() => navigator.clipboard.writeText(f.path)} />
+              <ContextItem label={t("Im {app} zeigen", { app: FILES_APP })} onSelect={() => reveal(f)} />
+              <ContextItem label={t("Pfad kopieren")} onSelect={() => navigator.clipboard.writeText(f.path)} />
               {#if oncommand && !multi && fileCmds.length}
                 <ContextMenu.Separator class={menuSeparator} />
                 {#each fileCmds as g (g.name)}
@@ -499,7 +506,7 @@
           </ContextMenu.Portal>
         </ContextMenu.Root>
       {:else}
-        <p class="text-muted-foreground px-2 py-1 text-meta">Keine.</p>
+        <p class="text-muted-foreground px-2 py-1 text-meta">{t("Keine.")}</p>
       {/each}
     </div>
   </div>
@@ -514,26 +521,26 @@
         <div class="ring-destructive/30 max-h-40 shrink-0 overflow-y-auto rounded-xl p-1 ring-1">
           <div class="bg-destructive/15 text-destructive flex items-center gap-1.5 rounded-md px-2 py-1 font-semibold">
             <TriangleAlertIcon class="size-3.5" />
-            <span class="flex-1">Konflikte</span>
+            <span class="flex-1">{t("Konflikte")}</span>
             <span class="font-mono text-meta">{conflicts.length}</span>
           </div>
           {#each conflicts as f (f.path)}
-            <Row tone="danger" density="compact" title="Im Merge-Editor öffnen" onclick={() => onconflict(f.path)}>
+            <Row tone="danger" density="compact" title={t("Im Merge-Editor öffnen")} onclick={() => onconflict(f.path)}>
               <span class="w-3 shrink-0 text-center font-mono font-bold">U</span>
               <span class="min-w-0 flex-1 truncate font-mono" title={f.path}>{f.path}</span>
             </Row>
           {/each}
         </div>
       {/if}
-      {@render list("Gestaged", staged, true)}
-      {@render list("Nicht gestaged", unstaged, false)}
+      {@render list(t("Gestaged"), staged, true)}
+      {@render list(t("Nicht gestaged"), unstaged, false)}
 
       <!-- Commit -->
       <div class="bg-background/60 ring-foreground/5 flex flex-col gap-1.5 rounded-xl p-2 ring-1">
         <Textarea
           density="xs"
           class="bg-background dark:bg-background field-sizing-fixed h-24 min-h-0 resize-none font-mono [@media(max-height:640px)]:h-14"
-          placeholder="Commit-Nachricht ({MOD}+Enter · mit {SHIFT} auch pushen)"
+          placeholder={t("Commit-Nachricht ({mod}+Enter · mit {shift} auch pushen)", { mod: MOD, shift: SHIFT })}
           spellcheck={true}
           bind:ref={msgRef}
           bind:value={message}
@@ -547,13 +554,13 @@
         />
         {#if (types.length || ticket || canSuggest) && !amend}
           <div class="flex flex-wrap gap-1">
-            {#each types as t (t)}
-              <Button variant="ghost" size="2xs" class="font-mono" title="Am Anfang einfügen" onclick={() => hint(withPrefix(message, t + ": "))}>
-                {t}:
+            {#each types as ty (ty)}
+              <Button variant="ghost" size="2xs" class="font-mono" title={t("Am Anfang einfügen")} onclick={() => hint(withPrefix(message, ty + ": "))}>
+                {ty}:
               </Button>
             {/each}
             {#if ticket}
-              <Button variant="ghost" size="2xs" class="font-mono" title="Am Anfang einfügen" onclick={() => hint(withTicket(message, ticket))}>
+              <Button variant="ghost" size="2xs" class="font-mono" title={t("Am Anfang einfügen")} onclick={() => hint(withTicket(message, ticket))}>
                 {ticket}
               </Button>
             {/if}
@@ -563,10 +570,10 @@
                 size="2xs"
                 class="ml-auto"
                 disabled={suggesting || !!message.trim()}
-                title={message.trim() ? "Nur bei leerer Nachricht" : "Claude schreibt eine Nachricht zu den gestagten Änderungen"}
+                title={message.trim() ? t("Nur bei leerer Nachricht") : t("Claude schreibt eine Nachricht zu den gestagten Änderungen")}
                 onclick={suggest}
               >
-                {suggesting ? "Claude schreibt …" : "Vorschlag von Claude"}
+                {suggesting ? t("Claude schreibt …") : t("Vorschlag von Claude")}
               </Button>
             {/if}
           </div>
@@ -579,7 +586,7 @@
               : subjectLen > 50
                 ? 'text-warning'
                 : 'text-muted-foreground'}"
-            title="Betreff: bis 50 Zeichen empfohlen, über 72 wird er in vielen Ansichten abgeschnitten"
+            title={t("Betreff: bis 50 Zeichen empfohlen, über 72 wird er in vielen Ansichten abgeschnitten")}
           >
             {subjectLen}/50
           </span>
@@ -606,23 +613,23 @@
     <div class="relative min-w-0 flex-1">
       {#if reviewCount(repo)}
         <Button size="xs" class="absolute right-4 bottom-3 z-20 shadow-md" onclick={() => sendReview(repo)}>
-          Review an Claude ({reviewCount(repo)})
+          {t("Review an Claude ({n})", { n: reviewCount(repo) })}
         </Button>
       {/if}
       {#if sel && diff === null}
-        <p class="text-muted-foreground p-3">Lädt …</p>
+        <p class="text-muted-foreground p-3">{t("Lädt …")}</p>
       {:else if sel && diff?.startsWith("Submodule ")}
         <!-- git diff --submodule=log: Commits seit dem eingetragenen Stand, "<" fallen weg, ">" kommen dazu -->
         <div class="flex flex-col gap-2 p-3">
           <pre class="font-mono text-meta whitespace-pre-wrap">{diff}</pre>
-          <Button size="xs" variant="outline" class="self-start" onclick={() => onsubmodule(sel!.path)}>Submodul öffnen</Button>
+          <Button size="xs" variant="outline" class="self-start" onclick={() => onsubmodule(sel!.path)}>{t("Submodul öffnen")}</Button>
         </div>
       {:else if sel}
         <DiffView diff={diff ?? ""} {actions} {busy} {repo} onopen={onedit} />
       {:else if status.files.length}
-        <Empty icon={FileDiffIcon} hint="↑↓ wechseln · Leertaste stagen">Datei links auswählen, um den Diff zu sehen.</Empty>
+        <Empty icon={FileDiffIcon} hint={t("↑↓ wechseln · Leertaste stagen")}>{t("Datei links auswählen, um den Diff zu sehen.")}</Empty>
       {:else}
-        <Empty icon={CheckIcon}>Keine Änderungen.</Empty>
+        <Empty icon={CheckIcon}>{t("Keine Änderungen.")}</Empty>
       {/if}
     </div>
   </div>
@@ -632,7 +639,7 @@
   open={confirm !== null}
   title={confirm?.title ?? ""}
   message={confirm?.message}
-  action="Verwerfen"
+  action={t("Verwerfen")}
   onconfirm={doConfirm}
   oncancel={() => (confirm = null)}
 >

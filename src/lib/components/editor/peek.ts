@@ -7,6 +7,7 @@ import { uriPath } from "$lib/lsp.logic";
 import { toLocs, type Loc } from "$lib/nav.logic";
 import { language, theme as cmTheme } from "./cm.ts";
 import { goto } from "./nav.ts";
+import { t } from "$lib/i18n";
 
 type Peek = { line: number; loc: Loc; doc: Text; path: string };
 
@@ -35,14 +36,14 @@ class PeekWidget extends WidgetType {
     head.className = "cm-peek-head";
     head.appendChild(document.createElement("span")).textContent = `${path}:${loc.range.start.line + 1}`;
     const open = head.appendChild(document.createElement("button"));
-    open.textContent = "Öffnen";
+    open.textContent = t("Öffnen");
     open.onclick = () => {
       close(view);
       void goto(view, loc);
     };
     const x = head.appendChild(document.createElement("button"));
     x.textContent = "×";
-    x.title = "Schließen (Esc)";
+    x.title = t("Schließen (Esc)");
     x.onclick = () => close(view);
 
     const lineNo = Math.min(loc.range.start.line + 1, doc.lines);
@@ -112,14 +113,14 @@ export const peekDefinition: Command = (view) => {
       position: plugin.toPosition(pos),
     });
     const loc = toLocs(res)[0];
-    if (!loc) return void showDialog(view, { label: "Keine Definition gefunden", top: true });
+    if (!loc) return void showDialog(view, { label: t("Keine Definition gefunden"), top: true });
     const file = await plugin.client.workspace.requestFile(loc.uri);
-    if (!file) return void showDialog(view, { label: "Datei der Definition nicht lesbar", top: true });
+    if (!file) return void showDialog(view, { label: t("Datei der Definition nicht lesbar"), top: true });
     // Moved meanwhile: the peek belongs to where it was asked for.
     if (view.state.selection.main.head !== pos) return;
     const path = uriPath(repoOf(plugin.client.workspace), loc.uri) ?? decodeURIComponent(loc.uri.replace(/^file:\/\//, ""));
     view.dispatch({ effects: setPeek.of({ line: view.state.doc.lineAt(pos).number, loc, doc: file.doc, path }) });
-  })().catch((e) => plugin.reportError("Keine Definition gefunden", e));
+  })().catch((e) => plugin.reportError(t("Keine Definition gefunden"), e));
   return true;
 };
 

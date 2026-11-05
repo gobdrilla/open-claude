@@ -3,6 +3,7 @@
   import TrashIcon from "@lucide/svelte/icons/trash-2";
   import { editor, setProfile, setProfiles } from "$lib/editor.svelte";
   import { BUILTIN, parseArgs, type Profile } from "$lib/run.logic";
+  import { t } from "$lib/i18n";
 
   let { open = $bindable(false), repo }: { open: boolean; repo: string } = $props();
 
@@ -13,7 +14,7 @@
 
   const parsed = $derived(parseArgs(args));
   const taken = $derived([...BUILTIN, ...s.profiles].some((p) => p.name === name.trim()));
-  const error = $derived(parsed === null ? "Argumente ohne Leerzeichen, Quotes oder Shell-Zeichen (; & | $ % …)" : taken ? "Name gibt es schon" : "");
+  const error = $derived(parsed === null ? t("Argumente ohne Leerzeichen, Quotes oder Shell-Zeichen (; & | $ % …)") : taken ? t("Name gibt es schon") : "");
 
   const describe = (p: Profile) =>
     [p.release ? "Release (--release / -c Release)" : "Debug", ...(p.args.length ? [p.args.join(" ")] : [])].join(" · ");
@@ -33,10 +34,12 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>Build-Profile</Dialog.Title>
+      <Dialog.Title>{t("Build-Profile")}</Dialog.Title>
+      <!-- {0}…{3}: the code samples, so the sentence stays whole for translation -->
       <Dialog.Description
-        >Release hängt bei Cargo <code>--release</code> und bei .NET <code>-c Release</code> an. Zusatzargumente kommen hinten dran, z. B.
-        <code>--features x</code> oder <code>-- --port=3000</code>. Gilt für dieses Projekt.</Dialog.Description
+        >{#each t("Release hängt bei Cargo {0} und bei .NET {1} an. Zusatzargumente kommen hinten dran, z. B. {2} oder {3}. Gilt für dieses Projekt.").split(/\{(\d)\}/) as part, i (i)}{#if i % 2}<code
+              >{["--release", "-c Release", "--features x", "-- --port=3000"][+part]}</code
+            >{:else}{part}{/if}{/each}</Dialog.Description
       >
     </Dialog.Header>
 
@@ -49,7 +52,7 @@
             <IconButton
               size="md"
               tone="danger"
-              label="Profil {p.name} löschen"
+              label={t("Profil {name} löschen", { name: p.name })}
               onclick={() => setProfiles(repo, s.profiles.filter((x) => x.name !== p.name))}><TrashIcon class="size-3.5" /></IconButton
             >
           {/if}
@@ -58,14 +61,14 @@
     </ul>
 
     <div class="flex flex-col gap-2">
-      <Input bind:value={name} placeholder="Name, z. B. Profiling" density="sm" onkeydown={enter} />
+      <Input bind:value={name} placeholder={t("Name, z. B. Profiling")} density="sm" onkeydown={enter} />
       <label class="flex items-center gap-2 text-ui">
         <Switch on={release} label="Release" onclick={() => (release = !release)} />
         Release
       </label>
-      <Input bind:value={args} placeholder="Zusatzargumente (optional)" density="sm" class="font-mono" onkeydown={enter} />
+      <Input bind:value={args} placeholder={t("Zusatzargumente (optional)")} density="sm" class="font-mono" onkeydown={enter} />
       {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
-      <Button size="sm" disabled={!name.trim() || !!error} onclick={add}>Profil anlegen</Button>
+      <Button size="sm" disabled={!name.trim() || !!error} onclick={add}>{t("Profil anlegen")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

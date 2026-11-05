@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button, Dialog, Switch } from "$lib/atelier-ui";
   import { unity } from "$lib/unity";
+  import { t } from "$lib/i18n";
 
   /** Projektpfad; null = Dialog zu. */
   let { path = $bindable(), onclosed }: { path: string | null; onclosed?: (path: string) => void } = $props();
@@ -35,18 +36,18 @@
 <Dialog.Root open={path !== null} onOpenChange={(o) => !o && !closing && dismiss()}>
   <Dialog.Content class="sm:max-w-sm">
     <Dialog.Header>
-      <Dialog.Title>Unity-Editor schließen</Dialog.Title>
-      <Dialog.Description>Schließt ohne zu speichern. Ungesicherte Änderungen im Editor gehen verloren.</Dialog.Description>
+      <Dialog.Title>{t("Unity-Editor schließen")}</Dialog.Title>
+      <Dialog.Description>{t("Schließt ohne zu speichern. Ungesicherte Änderungen im Editor gehen verloren.")}</Dialog.Description>
     </Dialog.Header>
     <label class="flex items-center gap-2 text-ui">
-      <Switch on={force} label="Erzwingen" onclick={() => (force = !force)} />
-      Erzwingen (Prozess hart beenden, falls nötig)
+      <Switch on={force} label={t("Erzwingen")} onclick={() => (force = !force)} />
+      {t("Erzwingen (Prozess hart beenden, falls nötig)")}
     </label>
     {#if error}<p class="text-destructive text-ui">{error}</p>{/if}
     <div class="flex justify-end gap-2">
-      <Button variant="ghost" size="sm" disabled={closing} onclick={dismiss}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" disabled={closing} onclick={dismiss}>{t("Abbrechen")}</Button>
       <Button variant="destructive" size="sm" disabled={closing} onclick={run}>
-        {closing ? "Schließt …" : "Schließen"}
+        {closing ? t("Schließt …") : t("Schließen")}
       </Button>
     </div>
   </Dialog.Content>

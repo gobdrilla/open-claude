@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { confirm as ask } from "$lib/confirm.svelte";
   import Notice from "$lib/components/Notice.svelte";
   import { Button, Checkbox, ConfirmDialog, Dialog, DiffDialog, IconButton, PromptDialog, RefreshButton, Tabs, TextButton, menuContent, menuItem, menuSeparator, menuShortcut } from "$lib/atelier-ui";
@@ -137,7 +138,7 @@
   let mergeDirty = $state(false);
   /** Offener Merge-Editor mit Entscheidungen: erst nachfragen. */
   export async function canLeave() {
-    return !conflictPath || !mergeDirty || (await ask("Merge-Editor schließen? Entscheidungen gehen verloren.", "Schließen"));
+    return !conflictPath || !mergeDirty || (await ask(t("Merge-Editor schließen? Entscheidungen gehen verloren."), t("Schließen")));
   }
 
   $effect(() => {
@@ -156,7 +157,7 @@
       const res = await forge.repoAccount(r);
       if (r === cur) acct = res;
     } catch (e) {
-      if (r === cur) error = `Konto: ${e}`;
+      if (r === cur) error = t("Konto: {error}", { error: String(e) });
     }
   }
 
@@ -232,7 +233,10 @@
   const forcePush = () =>
     (confirm = {
       title: "Force-Push",
-      message: `${status?.branch ?? "HEAD"} → ${status?.upstream ?? "origin"} überschreiben? Commits auf dem Server, die lokal fehlen, werden abgelehnt statt gelöscht. Andere müssen danach neu aufsetzen.`,
+      message: t("{branch} → {upstream} überschreiben? Commits auf dem Server, die lokal fehlen, werden abgelehnt statt gelöscht. Andere müssen danach neu aufsetzen.", {
+        branch: status?.branch ?? "HEAD",
+        upstream: status?.upstream ?? "origin",
+      }),
       label: "Force-Push",
       run: () => git.push(cur, true),
     });
@@ -268,10 +272,10 @@
 
   // Header overflow ⋯: [label, action, shortcut label?]; further entries just go into this list.
   const more: [string, () => void, string?][] = $derived([
-    ["Zu Commit springen …", openJump, `${MOD}+G`],
-    ["Tag erstellen …", () => (tagOpen = true)],
+    [t("Zu Commit springen …"), openJump, `${MOD}+G`],
+    [t("Tag erstellen …"), () => (tagOpen = true)],
     ...(active().some((m) => m.contributes.settings.some((d) => d.scope === "repo"))
-      ? [["Erweiterungen für dieses Projekt …", () => (extOpen = true)] as [string, () => void]]
+      ? [[t("Erweiterungen für dieses Projekt …"), () => (extOpen = true)] as [string, () => void]]
       : []),
   ]);
   let extOpen = $state(false);
@@ -331,7 +335,7 @@
 {/snippet}
 
 <!-- Third tuple field: checkmark state; when any item has one, all items reserve the check column. -->
-{#snippet menu(items: [string, () => void, boolean?][], title = "Weitere Optionen")}
+{#snippet menu(items: [string, () => void, boolean?][], title = t("Weitere Optionen"))}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger
       class="text-muted-foreground hover:bg-secondary hover:text-foreground -ml-1 grid h-7 w-4 place-items-center rounded-full disabled:opacity-50"
@@ -358,7 +362,7 @@
 <div class="flex h-full min-h-0 flex-col gap-2 p-2 text-ui">
   <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex items-center gap-0.5 px-2 py-1.5">
     {#if status}
-      <div class="mr-3 flex min-w-0 items-center gap-2.5" title={status.upstream ?? "Kein Upstream"}>
+      <div class="mr-3 flex min-w-0 items-center gap-2.5" title={status.upstream ?? t("Kein Upstream")}>
         <div
           class="from-primary to-primary/50 text-primary-foreground shadow-primary/30 grid size-8 shrink-0 place-items-center rounded-lg bg-linear-to-br shadow-md"
         >
@@ -373,7 +377,7 @@
             {#each [repo.split(/[\\/]/).filter(Boolean).pop(), ...trail] as name, i (i)}
               {#if i}<span class="opacity-60">›</span>{/if}
               {#if i < trail.length}
-                <TextButton tone="plain" underline class="block truncate" title="Zurück zu {name}" onclick={() => goto(trail.slice(0, i))}>{name}</TextButton>
+                <TextButton tone="plain" underline class="block truncate" title={t("Zurück zu {name}", { name: name ?? "" })} onclick={() => goto(trail.slice(0, i))}>{name}</TextButton>
               {:else}
                 <span class="truncate">{name}</span>
               {/if}
@@ -384,7 +388,7 @@
             {#if status.ahead}<span class="bg-primary/15 text-primary rounded-full px-1.5 font-mono text-[10px]">↑{status.ahead}</span>{/if}
             {#if status.behind}<span class="bg-warning/15 text-warning rounded-full px-1.5 font-mono text-[10px]">↓{status.behind}</span>{/if}
             {#if status.upstream && !status.ahead && !status.behind}
-              <span class="text-success flex items-center gap-1 text-meta"><span class="bg-success size-1.5 rounded-full"></span>synchron</span>
+              <span class="text-success flex items-center gap-1 text-meta"><span class="bg-success size-1.5 rounded-full"></span>{t("synchron")}</span>
             {/if}
           </span>
         </div>
@@ -395,23 +399,23 @@
     {@render menu([
       ["Pull (Merge)", () => pull(false), true],
       ["Pull (Rebase)", () => pull(true), false],
-    ], "Pull-Optionen")}
+    ], t("Pull-Optionen"))}
     {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", `Push (${MOD}+${SHIFT}+P)`, push, UploadIcon, hot === "push")}
-    {@render menu([["Force-Push (--force-with-lease) …", forcePush]], "Push-Optionen")}
+    {@render menu([["Force-Push (--force-with-lease) …", forcePush]], t("Push-Optionen"))}
     <span class="bg-border mx-1.5 h-4 w-px"></span>
-    {@render tool("Stash", "Änderungen stashen", () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
-    {@render tool("Branch", "Neuer Branch ab HEAD", () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
+    {@render tool("Stash", t("Änderungen stashen"), () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
+    {@render tool("Branch", t("Neuer Branch ab HEAD"), () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
     <span class="flex-1"></span>
     <!-- Narrow window: Explorer and account drop their text, the tooltip keeps it. -->
-    <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title="Ordner im {FILES_APP} öffnen ({MOD}+{SHIFT}+E)">
+    <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title={t("Ordner im {app} öffnen ({mod}+{shift}+E)", { app: FILES_APP, mod: MOD, shift: SHIFT })}>
       <FolderOpenIcon class="size-3.5" />
       <span class="max-lg:hidden">{FILES_APP}</span>
     </Button>
-    <IconButton size="md" class="mx-0.5" label="Aktualisieren" title="Aktualisieren (F5)" onclick={reload}><RefreshIcon class="size-3.5" /></IconButton>
+    <IconButton size="md" class="mx-0.5" label={t("Aktualisieren")} title={t("Aktualisieren (F5)")} onclick={reload}><RefreshIcon class="size-3.5" /></IconButton>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         {#snippet child({ props })}
-          <IconButton {...props} size="md" class="mx-0.5" label="Weitere Aktionen"><EllipsisIcon class="size-3.5" /></IconButton>
+          <IconButton {...props} size="md" class="mx-0.5" label={t("Weitere Aktionen")}><EllipsisIcon class="size-3.5" /></IconButton>
         {/snippet}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
@@ -426,7 +430,7 @@
           {#each gitCmds.filter((c) => !usesFile(c)) as c (c.name)}
             <DropdownMenu.Item class={menuItem} onSelect={() => runCmd(c)}>{c.name}</DropdownMenu.Item>
           {:else}
-            <DropdownMenu.Item class={menuItem} disabled>Eigene Befehle unter Einstellungen › Git</DropdownMenu.Item>
+            <DropdownMenu.Item class={menuItem} disabled>{t("Eigene Befehle unter Einstellungen › Git")}</DropdownMenu.Item>
           {/each}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -435,7 +439,7 @@
       <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
         <DropdownMenu.Trigger
           class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta whitespace-nowrap"
-          title={acct.name || acct.email ? `Commit als: ${acct.name ?? "?"} <${acct.email ?? "?"}>` : "Keine Commit-Identität gesetzt"}
+          title={acct.name || acct.email ? t("Commit als: {name} <{email}>", { name: acct.name ?? "?", email: acct.email ?? "?" }) : t("Keine Commit-Identität gesetzt")}
         >
           {#if acctFor?.avatar}
             <img src={acctFor.avatar} alt="" class="size-4 rounded-full" />
@@ -445,9 +449,9 @@
           <span class="max-w-40 truncate max-lg:hidden">
             {#if acct.effective}
               {acct.effective.slice(acct.effective.lastIndexOf(":") + 1)}
-              {#if !acct.account}<span class="opacity-60">(automatisch)</span>{/if}
+              {#if !acct.account}<span class="opacity-60">{t("(automatisch)")}</span>{/if}
             {:else}
-              System-Git
+              {t("System-Git")}
             {/if}
           </span>
           <ChevronDownIcon class="size-3" />
@@ -471,11 +475,11 @@
               onSelect={() => setAccount(null)}
             >
               <CheckIcon class="size-3 {acct.account ? 'invisible' : ''}" />
-              Automatisch (System-Git)
+              {t("Automatisch (System-Git)")}
             </DropdownMenu.Item>
             <DropdownMenu.Separator class={menuSeparator} />
             <DropdownMenu.Item class={menuItem} onSelect={onaccounts}
-              >Konten verwalten …</DropdownMenu.Item
+              >{t("Konten verwalten …")}</DropdownMenu.Item
             >
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
@@ -483,7 +487,7 @@
     {/if}
     {#if busy}
       <span class="text-muted-foreground mr-2 flex items-center gap-1.5 text-meta" role="status">
-        <LoaderCircleIcon class="size-3.5 animate-spin" />{busy} läuft …
+        <LoaderCircleIcon class="size-3.5 animate-spin" />{t("{action} läuft …", { action: busy })}
       </span>
     {/if}
   </div>
@@ -492,12 +496,14 @@
     <div class="ring-warning/25 flex items-center gap-2 rounded-xl bg-warning/10 px-3 py-1.5 text-warning ring-1">
       <TriangleAlertIcon class="size-3.5" />
       <span class="flex-1">
-        {STATE_LABEL[status.state]} läuft{conflicts
-          ? ` – ${conflicts} ${conflicts === 1 ? "Konflikt" : "Konflikte"} offen`
-          : " – keine Konflikte mehr"}
+        {conflicts === 1
+          ? t("{op} läuft – 1 Konflikt offen", { op: STATE_LABEL[status.state] })
+          : conflicts
+            ? t("{op} läuft – {n} Konflikte offen", { op: STATE_LABEL[status.state], n: conflicts })
+            : t("{op} läuft – keine Konflikte mehr", { op: STATE_LABEL[status.state] })}
       </span>
-      <Button size="xs" variant={conflicts ? "secondary" : "default"} disabled={!!busy} onclick={() => run("Fortsetzen", () => git.continue(cur))}
-        >Fortsetzen</Button
+      <Button size="xs" variant={conflicts ? "secondary" : "default"} disabled={!!busy} onclick={() => run(t("Fortsetzen"), () => git.continue(cur))}
+        >{t("Fortsetzen")}</Button
       >
       <Button
         variant="ghost"
@@ -505,11 +511,11 @@
         disabled={!!busy}
         onclick={() =>
           (confirm = {
-            title: `${STATE_LABEL[status!.state as keyof typeof STATE_LABEL]} abbrechen`,
-            message: "Zum Stand vor dem Vorgang zurückkehren? Bereits gelöste Konflikte gehen verloren.",
-            label: `${STATE_LABEL[status!.state as keyof typeof STATE_LABEL]} abbrechen`,
+            title: t("{op} abbrechen", { op: STATE_LABEL[status!.state as keyof typeof STATE_LABEL] }),
+            message: t("Zum Stand vor dem Vorgang zurückkehren? Bereits gelöste Konflikte gehen verloren."),
+            label: t("{op} abbrechen", { op: STATE_LABEL[status!.state as keyof typeof STATE_LABEL] }),
             run: () => git.abort(cur),
-          })}>Abbrechen</Button
+          })}>{t("Abbrechen")}</Button
       >
     </div>
   {/if}
@@ -518,7 +524,7 @@
   {#if !error}
     <!-- Long output stays until closed: 5 s is too short to reach the button. -->
     <Notice bind:text={note} kind="note" timeout={cmdOut ? 0 : 5000}>
-      {#if cmdOut}<TextButton class="shrink-0" onclick={() => (outOpen = true)}>Ausgabe anzeigen</TextButton>{/if}
+      {#if cmdOut}<TextButton class="shrink-0" onclick={() => (outOpen = true)}>{t("Ausgabe anzeigen")}</TextButton>{/if}
     </Notice>
   {/if}
 
@@ -557,8 +563,8 @@
             pill
             bind:value={tab}
             tabs={[
-              { id: "changes", label: "Änderungen", title: "Alt+1", count: status.files.length },
-              { id: "history", label: "Verlauf", title: "Alt+2" },
+              { id: "changes", label: t("Änderungen"), title: "Alt+1", count: status.files.length },
+              { id: "history", label: t("Verlauf"), title: "Alt+2" },
               { id: "releases", label: "Releases", title: "Alt+3" },
               { id: "ci", label: "CI", title: `${ciKind === "gitlab" ? "GitLab Pipelines" : ciKind === "github" ? "GitHub Actions" : "CI"} (Alt+4)` },
               ...(isUnity ? [{ id: "unity" as const, label: "Unity", title: "Alt+5" }] : []),
@@ -599,11 +605,11 @@
     </div>
   {:else if loadError}
     <div class="text-muted-foreground flex items-center gap-2 px-4 py-6">
-      Status konnte nicht gelesen werden.
+      {t("Status konnte nicht gelesen werden.")}
       <RefreshButton loading={false} onclick={reload} />
     </div>
   {:else if !error}
-    <p class="text-muted-foreground px-4 py-6">Lese Status …</p>
+    <p class="text-muted-foreground px-4 py-6">{t("Lese Status …")}</p>
   {/if}
 </div>
 
@@ -616,7 +622,7 @@
     </Dialog.Header>
     <pre class="max-h-96 overflow-auto font-mono text-meta whitespace-pre-wrap">{cmdOut?.text}</pre>
     <div class="flex justify-end">
-      <Button variant="ghost" size="sm" onclick={() => (outOpen = false)}>Schließen</Button>
+      <Button variant="ghost" size="sm" onclick={() => (outOpen = false)}>{t("Schließen")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>
@@ -634,11 +640,11 @@
 
 <PromptDialog
   open={branchOpen}
-  title="Neuer Branch"
-  description="Wird ab HEAD angelegt und ausgecheckt."
+  title={t("Neuer Branch")}
+  description={t("Wird ab HEAD angelegt und ausgecheckt.")}
   bind:value={branchName}
   placeholder="feature/…"
-  action="Anlegen"
+  action={t("Anlegen")}
   mono
   onsubmit={createBranch}
   oncancel={() => (branchOpen = false)}
@@ -646,11 +652,11 @@
 
 <PromptDialog
   open={jumpOpen}
-  title="Zu Commit springen"
-  description="SHA (auch gekürzt), Tag oder Branch."
+  title={t("Zu Commit springen")}
+  description={t("SHA (auch gekürzt), Tag oder Branch.")}
   bind:value={jumpRev}
   placeholder="a1b2c3d"
-  action="Springen"
+  action={t("Springen")}
   mono
   onsubmit={doJump}
   oncancel={() => (jumpOpen = false)}
@@ -662,12 +668,12 @@
 
 <PromptDialog
   open={stashOpen}
-  title="Änderungen stashen"
+  title={t("Änderungen stashen")}
   bind:value={stash.message}
-  placeholder="Nachricht (optional)"
-  action="Stashen"
+  placeholder={t("Nachricht (optional)")}
+  action={t("Stashen")}
   onsubmit={doStash}
   oncancel={() => (stashOpen = false)}
 >
-  <Checkbox size="md" bind:checked={stash.untracked}>Neue (untracked) Dateien einschließen</Checkbox>
+  <Checkbox size="md" bind:checked={stash.untracked}>{t("Neue (untracked) Dateien einschließen")}</Checkbox>
 </PromptDialog>

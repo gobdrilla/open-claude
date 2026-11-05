@@ -1,4 +1,5 @@
 // Interactive rebase plan: rows in todo order (oldest first), as sent to git_rewrite.
+import { t } from "./i18n.ts";
 
 export type RebaseOp = "pick" | "fixup" | "drop";
 /** edit: message being edited (null = untouched); orig: the commit's full message once loaded. */
@@ -16,8 +17,8 @@ export function moveRow<T>(rows: T[], i: number, d: number): T[] {
 
 /** Why the plan cannot start, or null. */
 export function rebaseProblem(rows: RebaseRow[]): string | null {
-  if (rows.find((r) => r.op !== "drop")?.op === "fixup") return "Erster Commit kann nicht zusammengefasst werden.";
-  if (rows.some((r) => r.op !== "drop" && r.edit !== null && !r.edit.trim())) return "Nachricht ist leer.";
+  if (rows.find((r) => r.op !== "drop")?.op === "fixup") return t("Erster Commit kann nicht zusammengefasst werden.");
+  if (rows.some((r) => r.op !== "drop" && r.edit !== null && !r.edit.trim())) return t("Nachricht ist leer.");
   return null;
 }
 

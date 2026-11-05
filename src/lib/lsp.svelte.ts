@@ -1,6 +1,7 @@
 // Language-Server im Editor: ein LSPClient (@codemirror/lsp-client) je (Projekt, Server), der Prozess laeuft in
 // src-tauri/src/lsp.rs. Modul-Store statt Komponente: Dock baut CodePane bei jedem Tabwechsel neu auf, Server und
 // beim Server geoeffnete Dokumente bleiben. didClose erst, wenn der Tab zugeht (closed) oder das Projekt (stop).
+import { t } from "./i18n.ts";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { tick } from "svelte";
 import { ChangeSet, Text, type Extension } from "@codemirror/state";
@@ -606,7 +607,7 @@ export function lspDiagnostics(repo: string, path: string, view: EditorView): Di
       source: d.source,
     };
     if (plugin?.client.serverCapabilities?.codeActionProvider) {
-      x.actions = [{ name: "Beheben …", apply: (v, from) => (v.dispatch({ selection: { anchor: from } }), void actionsCmd(v)) }];
+      x.actions = [{ name: t("Beheben …"), apply: (v, from) => (v.dispatch({ selection: { anchor: from } }), void actionsCmd(v)) }];
     }
     ours.add(x);
     return x;
@@ -682,7 +683,7 @@ async function rename(view: EditorView, plugin: LSPPlugin, word: { from: number;
     const r = await plugin.client
       .request<unknown, PrepareRename>("textDocument/prepareRename", { position: plugin.toPosition(word.from, doc), textDocument: { uri: plugin.uri } })
       .catch(() => undefined);
-    if (r === null) return void showDialog(view, { label: "Hier lässt sich nichts umbenennen", top: true });
+    if (r === null) return void showDialog(view, { label: t("Hier lässt sich nichts umbenennen"), top: true });
     const range = r && ("range" in r ? r.range : "start" in r ? r : null);
     if (range && doc === plugin.syncedDoc) {
       from = plugin.unsyncedChanges.mapPos(plugin.fromPosition(range.start, doc));
@@ -690,10 +691,10 @@ async function rename(view: EditorView, plugin: LSPPlugin, word: { from: number;
     }
   }
   const { close, result } = showDialog(view, {
-    label: "Neuer Name",
+    label: t("Neuer Name"),
     input: { name: "name", value },
     focus: true,
-    submitLabel: "Umbenennen",
+    submitLabel: t("Umbenennen"),
     class: "cm-lsp-rename-panel",
   });
   const form = await result;
@@ -713,16 +714,16 @@ async function rename(view: EditorView, plugin: LSPPlugin, word: { from: number;
       const sum = renameSummary(ws.repo, edits);
       // Other files change too: show where before touching them, as Rider's rename preview.
       if (sum.files.length > 1) {
-        const ok = await confirm(`${sum.count} Stellen in ${sum.files.length} Dateien werden geändert.`, "Umbenennen", `„${value}“ in „${name}“ umbenennen?`, { items: sum.files, tone: "default" });
+        const ok = await confirm(t("{count} Stellen in {files} Dateien werden geändert.", { count: sum.count, files: sum.files.length }), t("Umbenennen"), t("„{from}“ in „{to}“ umbenennen?", { from: value, to: name }), { items: sum.files, tone: "default" });
         if (!ok) return -1;
       }
       return applyWorkspaceEdit(ws, edits, m);
     });
-    if (n === 0) showDialog(view, { label: "Nichts zum Umbenennen gefunden", top: true });
-    else if (n > 0) showDialog(view, { label: `In ${n} ${n === 1 ? "Datei" : "Dateien"} umbenannt`, top: true });
+    if (n === 0) showDialog(view, { label: t("Nichts zum Umbenennen gefunden"), top: true });
+    else if (n > 0) showDialog(view, { label: n === 1 ? t("In 1 Datei umbenannt") : t("In {n} Dateien umbenannt", { n }), top: true });
     view.focus();
   } catch (e) {
-    plugin.reportError("Umbenennen fehlgeschlagen", e);
+    plugin.reportError(t("Umbenennen fehlgeschlagen"), e);
   }
 }
 
@@ -734,10 +735,10 @@ async function applyWorkspaceEdit(ws: StoreWorkspace, all: Edit[], m: WorkspaceM
     .filter((e) => e.edits.length)
     .map((e) => {
       const path = uriPath(repo, e.uri);
-      if (path === null) throw new Error(`Datei außerhalb des Projekts: ${e.uri}`);
+      if (path === null) throw new Error(t("Datei außerhalb des Projekts: {uri}", { uri: e.uri }));
       const f = ws.byPath(path);
       // Nicht beim Server geoeffnet: seine Positionen beziehen sich auf die Platte, nicht auf den Puffer.
-      if (!f && peek(repo)?.files[path]?.dirty) throw new Error(`Ungespeicherte Änderungen in ${path}: erst speichern`);
+      if (!f && peek(repo)?.files[path]?.dirty) throw new Error(t("Ungespeicherte Änderungen in {path}: erst speichern", { path }));
       const view = f?.view && LSPPlugin.get(f.view) ? f.view : null;
       // Server-URI evtl. anders kodiert (c%3A): das Mapping kennt nur die eigene.
       const changes =
@@ -812,13 +813,13 @@ const actionsCmd: Command = (view) => {
     const items = (res ?? [])
       .map((a): Action => (typeof a.command === "string" ? { title: a.title, command: a as Cmd } : (a as Action)))
       .sort((a, b) => Number(!!b.isPreferred) - Number(!!a.isPreferred));
-    if (!items.length) return void showDialog(view, { label: "Keine Quick-Fixes an dieser Stelle", top: true });
+    if (!items.length) return void showDialog(view, { label: t("Keine Quick-Fixes an dieser Stelle"), top: true });
     showPick(
       view,
       head,
-      items.map((a) => ({ label: a.title, run: () => void runAction(plugin, a).catch((e) => plugin.reportError("Quick-Fix fehlgeschlagen", e)) })),
+      items.map((a) => ({ label: a.title, run: () => void runAction(plugin, a).catch((e) => plugin.reportError(t("Quick-Fix fehlgeschlagen"), e)) })),
     );
-  })().catch((e) => plugin.reportError("Quick-Fixes konnten nicht geladen werden", e));
+  })().catch((e) => plugin.reportError(t("Quick-Fixes konnten nicht geladen werden"), e));
   return true;
 };
 

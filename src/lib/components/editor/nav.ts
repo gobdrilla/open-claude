@@ -6,6 +6,7 @@ import { Decoration, EditorView, ViewPlugin, keymap, showDialog, showTooltip, ty
 import { LSPPlugin, jumpToDefinition, type Workspace, type WorkspaceMapping } from "@codemirror/lsp-client";
 import { uriPath } from "$lib/lsp.logic";
 import { toLocs, uniqueLocs, type Loc, type LspRange } from "$lib/nav.logic";
+import { t } from "$lib/i18n";
 
 export type PickItem = { label: string; detail?: string; run: (view: EditorView) => void };
 type Pick = { pos: number; title?: string; items: PickItem[]; sel: number } | null;
@@ -137,15 +138,15 @@ export function locate(view: EditorView, how: How, pos = view.state.selection.ma
 export const gotoImplementation: Command = (view) => showImplementations(view, view.state.selection.main.head);
 
 export const gotoTypeDefinition: Command = (view) =>
-  locate(view, { method: "textDocument/typeDefinition", cap: "typeDefinitionProvider", title: (n) => `${n} Typdefinitionen`, none: "Kein Typ im Projekt gefunden" });
+  locate(view, { method: "textDocument/typeDefinition", cap: "typeDefinitionProvider", title: (n) => t("{n} Typdefinitionen", { n }), none: t("Kein Typ im Projekt gefunden") });
 
 export const showImplementations = (view: EditorView, pos: number) =>
-  locate(view, { method: "textDocument/implementation", cap: "implementationProvider", title: (n) => `${n} Implementierungen`, none: "Keine Implementierung gefunden" }, pos);
+  locate(view, { method: "textDocument/implementation", cap: "implementationProvider", title: (n) => t("{n} Implementierungen", { n }), none: t("Keine Implementierung gefunden") }, pos);
 
 export const showUsages = (view: EditorView, pos: number) =>
   locate(
     view,
-    { method: "textDocument/references", cap: "referencesProvider", title: (n) => `${n} Verwendungen`, none: "Keine Verwendungen", params: { context: { includeDeclaration: false } } },
+    { method: "textDocument/references", cap: "referencesProvider", title: (n) => t("{n} Verwendungen", { n }), none: t("Keine Verwendungen"), params: { context: { includeDeclaration: false } } },
     pos,
   );
 
@@ -183,13 +184,13 @@ export const showCallers: Command = (view) =>
     "call",
     "callHierarchy/incomingCalls",
     (res) => res.flatMap((c) => (c.fromRanges.length ? c.fromRanges : [c.from.selectionRange]).map((range) => ({ uri: c.from.uri, range }))),
-    (n) => `${n} Aufrufe`,
-    "Keine Aufrufer gefunden",
+    (n) => t("{n} Aufrufe", { n }),
+    t("Keine Aufrufer gefunden"),
   );
 
 /** Base types of the type at the cursor (Rider: Go to Base, Cmd/Ctrl+U); the other way is Implementations. */
 export const gotoBase: Command = (view) =>
-  hierarchy<HierItem>(view, "type", "typeHierarchy/supertypes", (res) => res.map((t) => ({ uri: t.uri, range: t.selectionRange })), (n) => `${n} Basistypen`, "Kein Basistyp im Projekt");
+  hierarchy<HierItem>(view, "type", "typeHierarchy/supertypes", (res) => res.map((t) => ({ uri: t.uri, range: t.selectionRange })), (n) => t("{n} Basistypen", { n }), t("Kein Basistyp im Projekt"));
 
 // ---------- Cmd/Ctrl+click ----------
 

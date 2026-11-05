@@ -44,6 +44,7 @@
   import { debug, debugStart, debugStep, debugStop } from "$lib/debug.svelte";
   import { lsp } from "$lib/lsp.svelte";
   import { problems } from "$lib/lsp.logic";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -75,28 +76,28 @@
   const dbg = $derived(debug(repo));
   const debugging = $derived(!!dbg.session && dbg.session.phase !== "end");
   const kinds: [RunConfig["target"]["kind"], string][] = [
-    ["npm", "npm-Scripts"],
+    ["npm", t("npm-Scripts")],
     ["dotnet", ".NET"],
     ["cargo", "Cargo"],
-    ["shell", "Eigene"],
+    ["shell", t("Eigene")],
   ];
 
   function info(id: PanelId): TabInfo {
     // Panels close via their toolbar toggle; only file tabs carry an x.
-    if (id === FILES) return { title: "Dateien", icon: FolderTreeIcon, closable: false };
-    if (id === PREVIEW) return { title: "Vorschau", icon: PanelRightIcon, closable: false };
+    if (id === FILES) return { title: t("Dateien"), icon: FolderTreeIcon, closable: false };
+    if (id === PREVIEW) return { title: t("Vorschau"), icon: PanelRightIcon, closable: false };
     if (id === TESTS) return { title: "Tests", icon: FlaskConicalIcon, closable: false };
-    if (id === RUN) return { title: "Ausgabe", icon: SquareTerminalIcon, closable: false };
-    if (id === PROBLEMS) return { title: "Probleme", icon: CircleAlertIcon, closable: false };
-    if (id === SEARCH) return { title: "Suche", icon: SearchIcon, closable: false };
+    if (id === RUN) return { title: t("Ausgabe"), icon: SquareTerminalIcon, closable: false };
+    if (id === PROBLEMS) return { title: t("Probleme"), icon: CircleAlertIcon, closable: false };
+    if (id === SEARCH) return { title: t("Suche"), icon: SearchIcon, closable: false };
     if (id === DEBUG) return { title: "Debug", icon: BugIcon, closable: false };
     const path = panelPath(id) ?? "";
     const f = s.files[path];
     // Auf der Platte geloescht, Puffer hat noch Aenderungen: der Tab bleibt und sagt es.
-    const gone = f?.conflict === "deleted" ? " (gelöscht)" : "";
+    const gone = f?.conflict === "deleted" ? t(" (gelöscht)") : "";
     const { icon, tint } = fileIcon(path);
     const preview = s.preview === path;
-    const hint = path + gone + (preview ? " – Vorschau, Doppelklick behält den Tab" : "");
+    const hint = path + gone + (preview ? t(" – Vorschau, Doppelklick behält den Tab") : "");
     return { title: path.slice(path.lastIndexOf("/") + 1) + gone, hint, dirty: f?.dirty, icon, tint, preview };
   }
 
@@ -191,7 +192,7 @@
 {/snippet}
 
 {#snippet empty()}
-  <Empty icon={FileCodeIcon} hint="{MOD}+P">Datei im Baum wählen oder schnell öffnen.</Empty>
+  <Empty icon={FileCodeIcon} hint="{MOD}+P">{t("Datei im Baum wählen oder schnell öffnen.")}</Empty>
 {/snippet}
 
 {#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems" | "run" | "debug", label: string, Icon: typeof SaveIcon, title = label)}
@@ -202,7 +203,7 @@
     variant="toggle"
     size="xs"
     aria-pressed={on}
-    title="{title} {on ? 'ausblenden' : 'einblenden'}"
+    title={on ? t("{name} ausblenden", { name: title }) : t("{name} einblenden", { name: title })}
     onclick={() => (id === "run" ? toggleRun() : id === "search" && !on ? findInFiles() : togglePanel(repo, id))}
     ><Icon /> <span class="@max-[72rem]:hidden">{label}</span>
     {#if id === "problems" && found.length}
@@ -223,18 +224,18 @@
       variant="quiet"
       size="xs"
       disabled={!s.active || !s.files[s.active]?.dirty}
-      title="Speichern ({MOD}+S)"
-      onclick={() => save(repo)}><SaveIcon /> Speichern</Button
+      title={t("Speichern ({key})", { key: `${MOD}+S` })}
+      onclick={() => save(repo)}><SaveIcon /> {t("Speichern")}</Button
     >
     {#if dirty}
       <span class="text-muted-foreground ml-1 flex items-center gap-1.5 text-meta" role="status">
         <span class="bg-primary size-1.5 rounded-full"></span>
-        {dirty} ungespeichert
+        {t("{n} ungespeichert", { n: dirty })}
       </span>
     {/if}
     <span class="bg-background/60 ring-foreground/10 ml-3 flex items-center gap-0.5 rounded-md p-0.5 ring-1">
-      {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title="Läuft"></span>{/if}
-      <span class="text-muted-foreground pl-1.5 text-meta @max-[88rem]:hidden">Startziel</span>
+      {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title={t("Läuft")}></span>{/if}
+      <span class="text-muted-foreground pl-1.5 text-meta @max-[88rem]:hidden">{t("Startziel")}</span>
       {#key pick}
         <Select
           class="h-5 max-w-60 border-0 bg-transparent font-mono text-meta"
@@ -244,19 +245,19 @@
               label,
               options: cfgs.filter((c) => c.target.kind === kind).map((c) => [c.label, c.label] as const),
             })),
-            { options: [["Eigene Startziele …", EDIT] as const] },
+            { options: [[t("Eigene Startziele …"), EDIT] as const] },
           ]}
-          placeholder="Nichts zum Starten"
-          aria-label="Startziel"
-          title="Startziel (F5 startet)"
+          placeholder={t("Nichts zum Starten")}
+          aria-label={t("Startziel")}
+          title={t("Startziel (F5 startet)")}
           onchange={(v) => (v === EDIT ? ((customOpen = true), pick++) : setRun(repo, v))}
         />
         <Select
           class="h-5 max-w-32 border-0 bg-transparent text-meta"
           value={s.profile}
-          options={[...[...BUILTIN, ...s.profiles].map((p) => [p.name, p.name] as const), ["Profile verwalten …", EDIT]]}
-          aria-label="Build-Profil"
-          title="Build-Profil"
+          options={[...[...BUILTIN, ...s.profiles].map((p) => [p.name, p.name] as const), [t("Profile verwalten …"), EDIT]]}
+          aria-label={t("Build-Profil")}
+          title={t("Build-Profil")}
           onchange={(v) => (v === EDIT ? ((profilesOpen = true), pick++) : setProfile(repo, v))}
         />
       {/key}
@@ -265,63 +266,63 @@
         size="xs"
         class={cfg && !running ? "text-success hover:text-success" : ""}
         disabled={!cfg || running}
-        title={cfg ? `${cfg.label} starten (F5) – führt Code aus dem Projekt aus` : "Nichts zum Starten"}
-        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> <span class="@max-[72rem]:hidden">Starten</span></Button
+        title={cfg ? t("{name} starten (F5) – führt Code aus dem Projekt aus", { name: cfg.label }) : t("Nichts zum Starten")}
+        onclick={() => runStart(repo, cfg ?? undefined)}><PlayIcon /> <span class="@max-[72rem]:hidden">{t("Starten")}</span></Button
       >
       <Button
         variant="quiet"
         size="xs"
         class={running ? "text-destructive hover:text-destructive" : ""}
         disabled={!running}
-        title="Stoppen (Umschalt+F5)"
-        onclick={() => cfg && runStop(repo, cfg.label)}><SquareIcon class="fill-current" /> <span class="@max-[72rem]:hidden">Stoppen</span></Button
+        title={t("Stoppen (Umschalt+F5)")}
+        onclick={() => cfg && runStop(repo, cfg.label)}><SquareIcon class="fill-current" /> <span class="@max-[72rem]:hidden">{t("Stoppen")}</span></Button
       >
       <Button
         variant="quiet"
         size="xs"
         disabled={!r.of(cfg?.label)}
-        title="Neu starten ({MOD}+{SHIFT}+F5)"
-        onclick={() => runRestart(repo, cfg?.label)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">Neu starten</span></Button
+        title={t("Neu starten ({key})", { key: `${MOD}+${SHIFT}+F5` })}
+        onclick={() => runRestart(repo, cfg?.label)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">{t("Neu starten")}</span></Button
       >
       {#if cfg?.target.kind === "dotnet"}
         <Button
           variant="quiet"
           size="xs"
           disabled={debugging}
-          title="{cfg.label} bauen und debuggen – führt Code aus dem Projekt aus"
-          onclick={() => debugStart(repo, cfg ?? null)}><BugIcon /> <span class="@max-[88rem]:hidden">Debuggen</span></Button
+          title={t("{name} bauen und debuggen – führt Code aus dem Projekt aus", { name: cfg.label })}
+          onclick={() => debugStart(repo, cfg ?? null)}><BugIcon /> <span class="@max-[88rem]:hidden">{t("Debuggen")}</span></Button
         >
       {/if}
     </span>
     <span class="flex-1"></span>
     <span class="bg-muted/60 flex items-center gap-0.5 rounded-md p-0.5">
-      {@render toggle("files", "Dateien", PanelLeftIcon)}
-      {@render toggle("search", "Suche", SearchIcon, `Suche (${MOD}+{SHIFT}+F)`)}
+      {@render toggle("files", t("Dateien"), PanelLeftIcon)}
+      {@render toggle("search", t("Suche"), SearchIcon, t("Suche ({key})", { key: `${MOD}+${SHIFT}+F` }))}
       {@render toggle("tests", "Tests", FlaskConicalIcon)}
-      {@render toggle("preview", "Vorschau", PanelRightIcon)}
-      {@render toggle("problems", "Probleme", CircleAlertIcon, `Probleme (${MOD}+{SHIFT}+M)`)}
-      {#if r.current || groupOf(s.layout, RUN)}{@render toggle("run", "Ausgabe", SquareTerminalIcon)}{/if}
+      {@render toggle("preview", t("Vorschau"), PanelRightIcon)}
+      {@render toggle("problems", t("Probleme"), CircleAlertIcon, t("Probleme ({key})", { key: `${MOD}+${SHIFT}+M` }))}
+      {#if r.current || groupOf(s.layout, RUN)}{@render toggle("run", t("Ausgabe"), SquareTerminalIcon)}{/if}
       {#if dbg.session || groupOf(s.layout, DEBUG)}{@render toggle("debug", "Debug", BugIcon)}{/if}
     </span>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         {#snippet child({ props })}
-          <IconButton {...props} size="md" label="Weitere Optionen"><EllipsisIcon class="size-3.5" /></IconButton>
+          <IconButton {...props} size="md" label={t("Weitere Optionen")}><EllipsisIcon class="size-3.5" /></IconButton>
         {/snippet}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" class={menuContent}>
           <DropdownMenu.Item class={menuItem} onSelect={() => (customOpen = true)}
-            ><ListPlusIcon class="size-3.5" /> Eigene Startziele …</DropdownMenu.Item
+            ><ListPlusIcon class="size-3.5" /> {t("Eigene Startziele …")}</DropdownMenu.Item
           >
           <DropdownMenu.Item class={menuItem} onSelect={() => (profilesOpen = true)}
-            ><SlidersIcon class="size-3.5" /> Build-Profile verwalten …</DropdownMenu.Item
+            ><SlidersIcon class="size-3.5" /> {t("Build-Profile verwalten …")}</DropdownMenu.Item
           >
           <DropdownMenu.Separator class={menuSeparator} />
           <DropdownMenu.Item
             class={menuItem}
-            title="Dateien links, Editor in der Mitte; offene Dateien bleiben, ein laufender Prozess stoppt"
-            onSelect={() => resetLayout(repo)}><LayoutDashboardIcon class="size-3.5" /> Layout zurücksetzen</DropdownMenu.Item
+            title={t("Dateien links, Editor in der Mitte; offene Dateien bleiben, ein laufender Prozess stoppt")}
+            onSelect={() => resetLayout(repo)}><LayoutDashboardIcon class="size-3.5" /> {t("Layout zurücksetzen")}</DropdownMenu.Item
           >
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

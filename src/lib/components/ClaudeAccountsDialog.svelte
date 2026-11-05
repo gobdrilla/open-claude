@@ -6,6 +6,7 @@
   import { ptyClose, ptyWrite } from "$lib/files";
   import CheckIcon from "@lucide/svelte/icons/check";
   import UserIcon from "@lucide/svelte/icons/user";
+  import { t } from "$lib/i18n";
 
   type Account = { email: string; org: string };
 
@@ -52,7 +53,7 @@
     busy = false;
   }
 
-  const restartHint = () => (running ? ` ${running} laufende Sitzung(en) nutzen bis zum Neustart weiter das bisherige Konto.` : "");
+  const restartHint = () => (running ? " " + t("{n} laufende Sitzung(en) nutzen bis zum Neustart weiter das bisherige Konto.", { n: running }) : "");
 
   // Rueckfrage direkt in der Zeile statt eines Dialogs im Dialog.
   type Ask = { what: "switch" | "forget" | "logout"; email: string };
@@ -61,9 +62,9 @@
     if (!open) asking = null;
   });
   const QUESTION: Record<Ask["what"], [string, string]> = {
-    switch: ["Wechseln", "Gilt für neu gestartete Sitzungen."],
-    forget: ["Entfernen", "Aus der Liste entfernen? Angemeldet bleibt, wer gerade aktiv ist."],
-    logout: ["Abmelden", "Bei Claude abmelden?"],
+    switch: [t("Wechseln"), t("Gilt für neu gestartete Sitzungen.")],
+    forget: [t("Entfernen"), t("Aus der Liste entfernen? Angemeldet bleibt, wer gerade aktiv ist.")],
+    logout: [t("Abmelden"), t("Bei Claude abmelden?")],
   };
 
   function confirmAsk() {
@@ -100,7 +101,7 @@
             const added = await invoke<Account | null>("claude_account_save");
             if (prev && added && added.email !== prev.email) await invoke("claude_account_switch", { email: prev.email });
           });
-        else error = `Anmeldung nicht abgeschlossen.\n${out.trim().split("\n").slice(-4).join("\n")}`;
+        else error = `${t("Anmeldung nicht abgeschlossen.")}\n${out.trim().split("\n").slice(-4).join("\n")}`;
       }),
     ];
     try {
@@ -129,22 +130,22 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>Claude-Konten</Dialog.Title>
-      <Dialog.Description>An- und abmelden, zwischen gemerkten Konten wechseln. Einstellungen und Verlauf bleiben geteilt.</Dialog.Description>
+      <Dialog.Title>{t("Claude-Konten")}</Dialog.Title>
+      <Dialog.Description>{t("An- und abmelden, zwischen gemerkten Konten wechseln. Einstellungen und Verlauf bleiben geteilt.")}</Dialog.Description>
     </Dialog.Header>
 
     {#if login}
       <div class="flex flex-col gap-2">
-        <p class="text-body">Anmeldung läuft – bitte im Browser bestätigen.</p>
+        <p class="text-body">{t("Anmeldung läuft – bitte im Browser bestätigen.")}</p>
         {#if url}
-          <Button variant="outline" size="sm" onclick={() => forge.openUrl(url)}>Anmeldeseite öffnen</Button>
+          <Button variant="outline" size="sm" onclick={() => forge.openUrl(url)}>{t("Anmeldeseite öffnen")}</Button>
         {/if}
-        <pre class="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded-lg p-2 font-mono text-meta whitespace-pre-wrap">{login.out.trim().split("\n").slice(-12).join("\n") || "Starte …"}</pre>
+        <pre class="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded-lg p-2 font-mono text-meta whitespace-pre-wrap">{login.out.trim().split("\n").slice(-12).join("\n") || t("Starte …")}</pre>
         <div class="flex gap-2">
-          <Input bind:value={code} placeholder="Code aus dem Browser (falls verlangt)" density="sm" class="font-mono" onkeydown={(e) => e.key === "Enter" && sendCode()} />
-          <Button size="sm" variant="outline" disabled={!code.trim()} onclick={sendCode}>Senden</Button>
+          <Input bind:value={code} placeholder={t("Code aus dem Browser (falls verlangt)")} density="sm" class="font-mono" onkeydown={(e) => e.key === "Enter" && sendCode()} />
+          <Button size="sm" variant="outline" disabled={!code.trim()} onclick={sendCode}>{t("Senden")}</Button>
         </div>
-        <div class="flex justify-end"><Button variant="ghost" size="sm" onclick={stopLogin}>Anmeldung abbrechen</Button></div>
+        <div class="flex justify-end"><Button variant="ghost" size="sm" onclick={stopLogin}>{t("Anmeldung abbrechen")}</Button></div>
       </div>
     {:else}
       <ul class="border-border/60 divide-border/60 divide-y rounded-lg border">
@@ -157,7 +158,7 @@
                 <div class="truncate font-medium" title={a.email}>{a.email}</div>
                 <div class="text-muted-foreground">{QUESTION[ask.what][1]}{ask.what === "forget" ? "" : restartHint()}</div>
               </div>
-              <Button variant="ghost" size="sm" onclick={() => (asking = null)}>Abbrechen</Button>
+              <Button variant="ghost" size="sm" onclick={() => (asking = null)}>{t("Abbrechen")}</Button>
               <Button variant={ask.what === "switch" ? "default" : "destructive"} size="sm" disabled={busy} onclick={confirmAsk}
                 >{QUESTION[ask.what][0]}</Button
               >
@@ -167,29 +168,29 @@
               </span>
               <div class="min-w-0 flex-1">
                 <div class="truncate text-body font-medium" title={a.email}>{a.email}</div>
-                <div class="text-muted-foreground truncate text-ui">{on ? "Aktiv" : a.org}</div>
+                <div class="text-muted-foreground truncate text-ui">{on ? t("Aktiv") : a.org}</div>
               </div>
               {#if on}
                 <Button variant="ghost" size="sm" class="text-destructive" disabled={busy} onclick={() => (asking = { what: "logout", email: a.email })}
-                  >Abmelden</Button
+                  >{t("Abmelden")}</Button
                 >
               {:else}
-                <Button variant="outline" size="sm" disabled={busy} onclick={() => (asking = { what: "switch", email: a.email })}>Wechseln</Button>
-                <Button variant="ghost" size="sm" disabled={busy} onclick={() => (asking = { what: "forget", email: a.email })}>Entfernen</Button>
+                <Button variant="outline" size="sm" disabled={busy} onclick={() => (asking = { what: "switch", email: a.email })}>{t("Wechseln")}</Button>
+                <Button variant="ghost" size="sm" disabled={busy} onclick={() => (asking = { what: "forget", email: a.email })}>{t("Entfernen")}</Button>
               {/if}
             {/if}
           </li>
         {:else}
-          <li class="text-muted-foreground px-3 py-3 text-body">{loading ? "Lese Konten …" : "Nicht angemeldet."}</li>
+          <li class="text-muted-foreground px-3 py-3 text-body">{loading ? t("Lese Konten …") : t("Nicht angemeldet.")}</li>
         {/each}
       </ul>
     {/if}
     {#if error}<p class="text-destructive text-ui whitespace-pre-line">{error}</p>{/if}
     <div class="flex justify-end gap-2">
       {#if !login}
-        <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={startLogin}>{current ? "Weiteres Konto anmelden" : "Anmelden"}</Button>
+        <Button variant="outline" size="sm" class="mr-auto" disabled={busy} onclick={startLogin}>{current ? t("Weiteres Konto anmelden") : t("Anmelden")}</Button>
       {/if}
-      <Button variant="ghost" size="sm" onclick={() => (open = false)}>Schließen</Button>
+      <Button variant="ghost" size="sm" onclick={() => (open = false)}>{t("Schließen")}</Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

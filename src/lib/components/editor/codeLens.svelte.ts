@@ -9,6 +9,7 @@ import { LSPPlugin, type LSPClientExtension } from "@codemirror/lsp-client";
 import { prefs } from "$lib/editor.svelte";
 import { lensLabel, lensOf, lineLenses, type Lens, type LensKind, type LspRange } from "$lib/nav.logic";
 import { showImplementations, showUsages } from "./nav.ts";
+import { t } from "$lib/i18n";
 
 /** Ask the server again (workspace/codeLens/refresh). */
 export const refreshLens = StateEffect.define<null>();
@@ -48,7 +49,7 @@ class LensWidget extends WidgetType {
       const s = dom.appendChild(document.createElement("span"));
       s.className = "cm-codelens-item";
       s.textContent = x.label;
-      s.title = x.kind === "refs" ? "Verwendungen zeigen" : "Implementierungen zeigen";
+      s.title = x.kind === "refs" ? t("Verwendungen zeigen") : t("Implementierungen zeigen");
       s.onmousedown = (e) => {
         e.preventDefault();
         // The widget sits above its line: read the position now, the doc may have changed since it was drawn.

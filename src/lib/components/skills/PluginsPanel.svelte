@@ -6,6 +6,7 @@
   import { fuzzy } from "$lib/fuzzy";
   import { skills, groupInstalled, pickAvailable, type PluginsInfo, type PluginAction, type InstalledPlugin } from "$lib/skills";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import { t } from "$lib/i18n";
 
   let { repo, lead, busy = $bindable(null) }: { repo: string; lead?: Snippet; busy?: string | null } = $props();
 
@@ -43,12 +44,12 @@
     const shown = res.shownCommand;
     if (shown?.sha256) {
       const cmd = JSON.stringify(shown.command ?? shown);
-      if (!(await confirm(`Der Marketplace will dieses Kommando ausführen:\n${cmd}`, "Zulassen"))) return null;
+      if (!(await confirm(t("Der Marketplace will dieses Kommando ausführen:\n{cmd}", { cmd }), t("Zulassen")))) return null;
       res = await skills.pluginRun(cwd, action, target, scope, shown.sha256);
     }
     if (res.outcome !== "ok") throw res.message ?? JSON.stringify(res);
-    if (res.updateOutcome === "up_to_date") return "Bereits aktuell.";
-    return (res.message ?? "Erledigt.") + (RESTART.includes(action) ? " Greift beim nächsten Claude-Start." : "");
+    if (res.updateOutcome === "up_to_date") return t("Bereits aktuell.");
+    return (res.message ?? t("Erledigt.")) + (RESTART.includes(action) ? " " + t("Greift beim nächsten Claude-Start.") : "");
   }
 
   /** Mehrere Aufrufe nacheinander (eine Sperre); Fehler je Aufruf gesammelt. true wenn alle ok. */
@@ -61,7 +62,7 @@
       const label = calls.length > 1 ? `${cwd && cwd !== repo ? folder(cwd) : target}: ` : "";
       try {
         const n = await exec(action, target, scope, cwd);
-        if (n === null) errs.push(`${label}abgelehnt`);
+        if (n === null) errs.push(label + t("abgelehnt"));
         else notes.push(label + n);
       } catch (e) {
         errs.push(label + String(e));
@@ -90,10 +91,10 @@
   }
 
   const folder = (p?: string) => p?.split(/[\\/]/).filter(Boolean).pop() ?? p ?? "";
-  const SCOPE = { user: "User", project: "Projekt", local: "lokal" };
+  const SCOPE = { user: t("User"), project: t("Projekt"), local: t("lokal") };
 
   async function remove(p: InstalledPlugin) {
-    if (!(await confirm(`${p.id} aus ${SCOPE[p.scope]} entfernen? Gespeicherte Plugin-Daten werden gelöscht.`, "Entfernen"))) return;
+    if (!(await confirm(t("{id} aus {scope} entfernen? Gespeicherte Plugin-Daten werden gelöscht.", { id: p.id, scope: SCOPE[p.scope] }), t("Entfernen")))) return;
     run("uninstall", p.id, p.scope, p.projectPath ?? repo);
   }
 
@@ -119,24 +120,24 @@
   <div class="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2">
     {@render lead?.()}
     <span class="flex-1"></span>
-    <Input bind:value={query} placeholder="Plugin suchen" density="sm" class="w-48" />
+    <Input bind:value={query} placeholder={t("Plugin suchen")} density="sm" class="w-48" />
     <Button
       variant="outline"
       size="xs"
-      title="Marketplaces aktualisieren und nach neuen Versionen suchen"
+      title={t("Marketplaces aktualisieren und nach neuen Versionen suchen")}
       disabled={!!busy || !info}
-      onclick={checkUpdates}>{busy === "updates" ? "Prüfe …" : "Updates prüfen"}</Button
+      onclick={checkUpdates}>{busy === "updates" ? t("Prüfe …") : t("Updates prüfen")}</Button
     >
     <RefreshButton loading={loading || busy === "updates"} disabled={loading || !!busy} onclick={reload} />
   </div>
 
   {#if loading && !info}
-    <p class="text-muted-foreground px-3 py-4">Lese Plugins …</p>
+    <p class="text-muted-foreground px-3 py-4">{t("Lese Plugins …")}</p>
   {:else if info}
     <div class="min-h-0 flex-1 overflow-y-auto">
-      <SectionHead title={`Installiert (${groups.length})`} />
+      <SectionHead title={t("Installiert ({n})", { n: groups.length })} />
       {#if !groups.length}
-        <p class="text-muted-foreground px-3 py-2">{q ? `Kein Plugin passt zu „${q}“.` : "Keine Plugins installiert."}</p>
+        <p class="text-muted-foreground px-3 py-2">{q ? t("Kein Plugin passt zu „{q}“.", { q }) : t("Keine Plugins installiert.")}</p>
       {/if}
       <ul>
         {#each groups as g (g.id)}
@@ -154,15 +155,15 @@
               {#if m?.description}<div class="text-muted-foreground truncate text-meta" title={m.description}>{m.description}</div>{/if}
               {#if g.locals.length}
                 <div class="text-muted-foreground truncate text-meta" title={g.locals.map((l) => l.projectPath).join("\n")}>
-                  {g.main ? "auch " : ""}lokal in: {g.locals.map((l) => folder(l.projectPath)).join(", ")}
+                  {t(g.main ? "auch lokal in: {list}" : "lokal in: {list}", { list: g.locals.map((l) => folder(l.projectPath)).join(", ") })}
                 </div>
               {/if}
             </div>
             {#if m?.update}
-              {@render action("Update", g.id, () => updateAll(g))}
+              {@render action(t("Update"), g.id, () => updateAll(g))}
             {:else if !m?.latest}
               <!-- Neueste Version unbekannt: CLI entscheidet selbst (up_to_date) -->
-              {@render action("Update suchen", g.id, () => updateAll(g), "Neueste Version unbekannt")}
+              {@render action(t("Update suchen"), g.id, () => updateAll(g), t("Neueste Version unbekannt"))}
             {/if}
             {#if g.main}
               {@const main = g.main}
@@ -175,32 +176,32 @@
               <IconButton
                 size="bare"
                 tone="danger"
-                label="Entfernen"
-                title="Aus {SCOPE[main.scope]} entfernen"
+                label={t("Entfernen")}
+                title={t("Aus {scope} entfernen", { scope: SCOPE[main.scope] })}
                 disabled={!!busy}
                 onclick={() => remove(main)}><Trash2Icon class="size-3.5" /></IconButton
               >
             {:else}
-              <span class="text-muted-foreground w-24 shrink-0 text-right text-meta">pro Projekt im Skills-Modus</span>
+              <span class="text-muted-foreground w-24 shrink-0 text-right text-meta">{t("pro Projekt im Skills-Modus")}</span>
             {/if}
           </li>
         {/each}
       </ul>
 
-      <SectionHead title={`Verfügbar (${avail.items.length} von ${avail.total})`}>
+      <SectionHead title={t("Verfügbar ({n} von {total})", { n: avail.items.length, total: avail.total })}>
         <span class="text-muted-foreground text-meta">Scope</span>
         <Segmented
           value={scopeChoice}
           options={[
-            ["User", "user"],
-            ["Projekt", "project"],
+            [t("User"), "user"],
+            [t("Projekt"), "project"],
           ] as const}
           onchange={(v) => (scopeChoice = v)}
           disabled={!!busy}
         />
       </SectionHead>
       {#if !avail.items.length}
-        <p class="text-muted-foreground px-3 py-2">{q ? `Kein Plugin passt zu „${q}“.` : "Keine weiteren Plugins verfügbar."}</p>
+        <p class="text-muted-foreground px-3 py-2">{q ? t("Kein Plugin passt zu „{q}“.", { q }) : t("Keine weiteren Plugins verfügbar.")}</p>
       {/if}
       <ul>
         {#each avail.items as a (a.pluginId)}
@@ -214,7 +215,7 @@
               </div>
               {#if a.description}<div class="text-muted-foreground truncate text-meta" title={a.description}>{a.description}</div>{/if}
             </div>
-            {@render action("Installieren", a.pluginId, () => run("install", a.pluginId, scopeChoice))}
+            {@render action(t("Installieren"), a.pluginId, () => run("install", a.pluginId, scopeChoice))}
           </li>
         {/each}
       </ul>
@@ -222,7 +223,7 @@
       <SectionHead title={`Marketplaces (${mps.length})`} />
       {#if !mps.length}
         <p class="text-muted-foreground px-3 py-2">
-          {q ? `Kein Marketplace passt zu „${q}“.` : "Keine Marketplaces. Füge einen hinzu (z. B. anthropics/claude-plugins-official)."}
+          {q ? t("Kein Marketplace passt zu „{q}“.", { q }) : t("Keine Marketplaces. Füge einen hinzu (z. B. anthropics/claude-plugins-official).")}
         </p>
       {/if}
       <ul>
@@ -230,9 +231,9 @@
           <li class="flex items-center gap-3 px-3 py-1.5">
             <span class="w-48 shrink-0 truncate font-mono text-meta font-semibold">{name}</span>
             <span class="text-muted-foreground min-w-0 flex-1 truncate text-meta" title={mp.installLocation}>{mpSource(mp.source)}</span>
-            {@render action("Aktualisieren", name, () => run("mp-update", name))}
-            {@render action("Entfernen", name, async () => {
-              if (await confirm(`Marketplace ${name} entfernen? Seine Plugins sind danach nicht mehr installierbar.`, "Entfernen")) run("mp-remove", name);
+            {@render action(t("Aktualisieren"), name, () => run("mp-update", name))}
+            {@render action(t("Entfernen"), name, async () => {
+              if (await confirm(t("Marketplace {name} entfernen? Seine Plugins sind danach nicht mehr installierbar.", { name }), t("Entfernen"))) run("mp-remove", name);
             })}
           </li>
         {/each}
@@ -244,13 +245,13 @@
           if (source.trim()) addMarketplace();
         }}
       >
-        <Input bind:value={source} placeholder="owner/repo, https-/git-URL oder Pfad" density="sm" class="flex-1" />
+        <Input bind:value={source} placeholder={t("owner/repo, https-/git-URL oder Pfad")} density="sm" class="flex-1" />
         <Button type="submit" variant="outline" size="xs" disabled={!!busy || !source.trim()}
-          >{busy === source.trim() && busy ? "…" : "Hinzufügen"}</Button
+          >{busy === source.trim() && busy ? "…" : t("Hinzufügen")}</Button
         >
       </form>
     </div>
   {:else}
-    <p class="text-muted-foreground px-3 py-4">Plugins konnten nicht gelesen werden.</p>
+    <p class="text-muted-foreground px-3 py-4">{t("Plugins konnten nicht gelesen werden.")}</p>
   {/if}
 </div>

@@ -80,7 +80,7 @@ pub fn ensure_panel_dir() -> Result<PathBuf, String> {
         }
         let m = fs::symlink_metadata(&d).map_err(|e| e.to_string())?;
         if !m.is_dir() || m.uid() != unsafe { libc::getuid() } {
-            return Err(format!("{} gehört einem anderen Nutzer", d.display()));
+            return Err(tr!("{} gehört einem anderen Nutzer", "{} belongs to another user", d.display()));
         }
         if m.mode() & 0o077 != 0 {
             fs::set_permissions(&d, fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
@@ -488,7 +488,7 @@ fn scan_images(st: &mut State, path: &Path) {
             let (kind, label) = match (paste, read) {
                 (Some(ids), _) => ("paste", format!("Eingefügt #{}", ids.get(nth).and_then(Value::as_u64).unwrap_or(nth as u64 + 1))),
                 (None, Some(p)) => ("read", p.clone()),
-                _ => ("other", "Bild".to_string()),
+                _ => ("other", tr!("Bild", "Image")),
             };
             let id = st.imgs.len();
             st.imgs.push((
@@ -661,7 +661,7 @@ pub async fn claude_agent_log(cwd: String, sid: String, run: String, agent: Stri
         && (run.is_empty() || run.starts_with("wf_") && ok(&run, |b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-'))
         && ok(&agent, u8::is_ascii_alphanumeric);
     if !valid {
-        return Err("Ungueltige Kennung".into());
+        return Err(tr!("Ungueltige Kennung", "Invalid ID"));
     }
     blocking(move || {
         let proj = config_dir().join("projects").join(slug(&real(&cwd)));
@@ -1073,7 +1073,7 @@ pub fn claude_panel(id: String) -> Option<Value> {
 #[tauri::command]
 pub fn claude_command(id: String, command: String, args: String) -> Result<u64, String> {
     if !crate::pty::valid_id(&id) {
-        return Err(format!("Ungueltige Sitzung: {id}"));
+        return Err(tr!("Ungueltige Sitzung: {id}", "Invalid session: {id}"));
     }
     ensure_panel_dir()?;
     let f = panel_file(&id).with_extension("cmd");
@@ -1110,10 +1110,10 @@ fn image_at(r: &ImgRef) -> Result<String, String> {
     let v: Value = serde_json::from_slice(line.trim_ascii_end()).map_err(|e| e.to_string())?;
     let mut found = Vec::new();
     images(&v, None, &mut found);
-    let src = found.get(nth).ok_or("Bild nicht gefunden")?.0;
+    let src = found.get(nth).ok_or_else(|| tr!("Bild nicht gefunden", "Image not found"))?.0;
     let mt = str_of(src, "media_type");
     if !IMAGE_TYPES.contains(&mt) {
-        return Err(format!("Bildtyp nicht erlaubt: {mt}"));
+        return Err(tr!("Bildtyp nicht erlaubt: {mt}", "Image type not allowed: {mt}"));
     }
     Ok(format!("data:{mt};base64,{}", str_of(src, "data")))
 }
@@ -1126,7 +1126,7 @@ fn image_file(p: &Path) -> Result<String, String> {
         e => format!("image/{e}"),
     };
     if !IMAGE_TYPES.contains(&mt.as_str()) {
-        return Err(format!("Bildtyp nicht erlaubt: {ext}"));
+        return Err(tr!("Bildtyp nicht erlaubt: {ext}", "Image type not allowed: {ext}"));
     }
     let mut bytes = Vec::new();
     File::open(p).and_then(|f| f.take(64 << 20).read_to_end(&mut bytes)).map_err(|e| e.to_string())?;
@@ -1137,7 +1137,7 @@ fn image_file(p: &Path) -> Result<String, String> {
 /// Browser sonst fuer jede Kachel dekodieren muesste (ruckelt bei hunderten Bildern, belegt GB).
 fn thumb_of(data_url: &str) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    let b64 = data_url.split_once(',').ok_or("Kein data-URL")?.1;
+    let b64 = data_url.split_once(',').ok_or_else(|| tr!("Kein data-URL", "Not a data URL"))?.1;
     let bytes = STANDARD.decode(b64).map_err(|e| e.to_string())?;
     let small = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.thumbnail(320, 180).into_rgb8();
     let mut out = Vec::new();
@@ -1147,7 +1147,7 @@ fn thumb_of(data_url: &str) -> Result<String, String> {
 
 fn img_ref(sid: &str, id: usize) -> Result<ImgRef, String> {
     let cache = CACHE.lock().map_err(|e| e.to_string())?;
-    cache.get(sid).and_then(|st| st.imgs.get(id)).map(|x| x.0.clone()).ok_or("Unbekanntes Bild".into())
+    cache.get(sid).and_then(|st| st.imgs.get(id)).map(|x| x.0.clone()).ok_or(tr!("Unbekanntes Bild", "Unknown image"))
 }
 
 #[tauri::command]

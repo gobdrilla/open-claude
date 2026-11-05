@@ -1,4 +1,5 @@
 // Reine Entscheidungen des Editor-Stores, ohne Runen und ohne Laufzeit-Importe, damit `node --test` sie direkt laedt.
+import { t as tr } from "./i18n.ts";
 import type { Hunk } from "./diff.ts";
 
 /** Was das Polling mit einer offenen Datei tut. */
@@ -102,12 +103,12 @@ export function ancestors(path: string): string[] {
 export const huge = (text: string) => text.length > 1_000_000 || /[^\n]{10000}/.test(text);
 
 /** Modifier-Taste fuer Tastenkuerzel in Texten, wie in +page.svelte. */
-export const MOD = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") ? "⌘" : "Strg";
+export const MOD = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") ? "⌘" : tr("Strg");
 /** Shift key in shortcut texts: the symbol on the Mac, as its keys are labeled. */
-export const SHIFT = MOD === "⌘" ? "⇧" : "Umschalt";
+export const SHIFT = MOD === "⌘" ? "⇧" : tr("Umschalt");
 /** Name des Dateimanagers fuer "Im … zeigen": Finder, Explorer, unter Linux allgemein. */
 export const FILES_APP =
-  typeof navigator === "undefined" ? "Explorer" : navigator.userAgent.includes("Mac") ? "Finder" : navigator.userAgent.includes("Windows") ? "Explorer" : "Dateimanager";
+  typeof navigator === "undefined" ? "Explorer" : navigator.userAgent.includes("Mac") ? "Finder" : navigator.userAgent.includes("Windows") ? "Explorer" : tr("Dateimanager");
 
 const win = (repo: string) => repo.includes("\\");
 const slash = (p: string) => p.replace(/\\/g, "/");
@@ -216,7 +217,7 @@ export function pasteFrame(text: string): string {
     .replaceAll("\x1b[201~", "")
     .replace(/\r\n?/g, "\n")
     .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
-  if (t.length > 20000) t = t.slice(0, 20000) + "… [gekürzt]";
+  if (t.length > 20000) t = t.slice(0, 20000) + tr("… [gekürzt]");
   return "\x1b[200~" + t + "\x1b[201~";
 }
 

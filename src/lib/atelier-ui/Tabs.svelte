@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends string">
+  import { t as tr } from "$lib/i18n";
   import type { Snippet } from "svelte";
 
   // Unterstrich-Tabs (pill: Segment-Pillen); children = Bereich rechts
@@ -53,7 +54,7 @@
         onclick={() => (value = t.id)}
         >{#if t.live}<span class="bg-primary mr-1.5 inline-block size-1.5 animate-pulse rounded-full align-middle"></span>{/if}{t.label}{#if t.live}<span
             class="text-primary ml-1.5 tabular-nums"
-            title="{t.live} laufen">{t.live}<span class="text-muted-foreground">/{t.count}</span></span
+            title={tr("{n} laufen", { n: t.live })}>{t.live}<span class="text-muted-foreground">/{t.count}</span></span
           >{:else if t.count}<span class="text-muted-foreground ml-1.5 tabular-nums">{t.count}</span>{/if}</button
       >
     {/each}

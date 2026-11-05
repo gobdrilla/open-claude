@@ -16,6 +16,7 @@
   import { devUrl } from "$lib/editor.logic";
   import { devConfig } from "$lib/run.logic";
   import { detect, run, runStart, runStop } from "$lib/run.svelte";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -101,8 +102,8 @@
     <Input
       bind:value={draft}
       placeholder={r.runs.find((x) => x.url)?.url || (target ?? "http://localhost:5173")}
-      title="Adresse eines laufenden Dev-Servers; leer = Datei bzw. gestarteten Dev-Server anzeigen (Enter übernimmt)"
-      aria-label="Adresse der Vorschau"
+      title={t("Adresse eines laufenden Dev-Servers; leer = Datei bzw. gestarteten Dev-Server anzeigen (Enter übernimmt)")}
+      aria-label={t("Adresse der Vorschau")}
       aria-invalid={bad}
       spellcheck={false}
       density="xs"
@@ -115,10 +116,10 @@
       class={running ? "text-foreground" : ""}
       disabled={!running && !dev}
       title={running
-        ? `Stoppen (${npm?.cfg.label})`
+        ? t("Stoppen ({name})", { name: npm?.cfg.label ?? "" })
         : dev
-          ? `Dev-Server starten: ${dev.label} – führt Code aus dem Projekt aus`
-          : "Kein dev-, start- oder serve-Script in package.json gefunden"}
+          ? t("Dev-Server starten: {name} – führt Code aus dem Projekt aus", { name: dev.label })
+          : t("Kein dev-, start- oder serve-Script in package.json gefunden")}
       onclick={toggleDev}
     >
       {#if running}<SquareIcon class="fill-current" />{:else}<PlayIcon />{/if} <span class="@max-[26rem]:hidden">Dev-Server</span>
@@ -128,15 +129,15 @@
       size="xs"
       disabled={!target}
       aria-pressed={!!s.pin}
-      title={s.pin ? `Angeheftet: ${s.pin} – lösen, um der aktiven Datei zu folgen` : "Vorschau an diese Datei heften"}
+      title={s.pin ? t("Angeheftet: {path} – lösen, um der aktiven Datei zu folgen", { path: s.pin }) : t("Vorschau an diese Datei heften")}
       onclick={() => setPin(repo, s.pin ? null : target)}
     >
-      {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if} <span class="@max-[26rem]:hidden">Anheften</span>
+      {#if s.pin}<PinOffIcon />{:else}<PinIcon />{/if} <span class="@max-[26rem]:hidden">{t("Anheften")}</span>
     </Button>
-    <IconButton size="md" label="Neu laden" onclick={() => n++}><RefreshCwIcon class="size-3.5" /></IconButton>
+    <IconButton size="md" label={t("Neu laden")} onclick={() => n++}><RefreshCwIcon class="size-3.5" /></IconButton>
   </div>
   {#if bad}
-    <div class="text-destructive border-border border-b px-2 py-1" role="alert">Nur http://- oder https://-Adressen.</div>
+    <div class="text-destructive border-border border-b px-2 py-1" role="alert">{t("Nur http://- oder https://-Adressen.")}</div>
   {/if}
   <div class="min-h-0 flex-1 overflow-auto">
     {#if url}
@@ -146,38 +147,38 @@
       {#key n}<iframe
           src={url}
           sandbox="allow-scripts allow-forms allow-same-origin allow-modals allow-downloads"
-          title="Vorschau {url}"
+          title={t("Vorschau {url}", { url })}
           class="size-full border-0 bg-white"
         ></iframe>{/key}
     {:else if !target}
-      <Empty icon={EyeOffIcon}>Keine Datei für die Vorschau. Datei öffnen oder Adresse eingeben.</Empty>
+      <Empty icon={EyeOffIcon}>{t("Keine Datei für die Vorschau. Datei öffnen oder Adresse eingeben.")}</Empty>
     {:else if kind === "web"}
       <!-- Zusaetzlich ohne allow-same-origin: alle Projekte liegen auf einem Origin, per fetch laese die Seite sonst fremde Dateien. -->
-      <iframe {src} sandbox="allow-scripts allow-forms" title="Vorschau {target}" class="size-full border-0 bg-white"></iframe>
+      <iframe {src} sandbox="allow-scripts allow-forms" title={t("Vorschau {url}", { url: target })} class="size-full border-0 bg-white"></iframe>
     {:else if kind === "image"}
       <div class="grid min-h-full place-items-center p-3">
         <img {src} alt={target} class="max-w-full" />
       </div>
     {:else if kind === null}
-      <Empty icon={EyeOffIcon}>Keine Vorschau für <span class="[overflow-wrap:anywhere]">{target}</span>.</Empty>
+      <Empty icon={EyeOffIcon}><span class="[overflow-wrap:anywhere]">{t("Keine Vorschau für {path}.", { path: target })}</span></Empty>
     {:else if !f}
-      <Empty>Lädt …</Empty>
+      <Empty>{t("Lädt …")}</Empty>
     {:else if kind === "markdown"}
       <div class="p-3"><Markdown text={f.text} onerror={(e) => (s.error = e)} /></div>
     {:else if locked}
       <Empty icon={ShieldAlertIcon}>
-        Die WPF-Vorschau lädt XAML aus diesem Projekt. XAML kann dabei Code ausführen – nur für Projekte erlauben, denen du vertraust.
-        {#snippet action()}<Button size="xs" variant="outline" onclick={() => allowWpf(repo)}>WPF-Vorschau erlauben</Button>{/snippet}
+        {t("Die WPF-Vorschau lädt XAML aus diesem Projekt. XAML kann dabei Code ausführen – nur für Projekte erlauben, denen du vertraust.")}
+        {#snippet action()}<Button size="xs" variant="outline" onclick={() => allowWpf(repo)}>{t("WPF-Vorschau erlauben")}</Button>{/snippet}
       </Empty>
     {:else if error === NUR_WINDOWS}
-      <Empty icon={EyeOffIcon}>WPF-Vorschau nur unter Windows.</Empty>
+      <Empty icon={EyeOffIcon}>{t("WPF-Vorschau nur unter Windows.")}</Empty>
     {:else if error === DOTNET_FEHLT}
       <Empty icon={EyeOffIcon}>
-        Für die WPF-Vorschau fehlt die .NET 8 Desktop Runtime.
+        {t("Für die WPF-Vorschau fehlt die .NET 8 Desktop Runtime.")}
         {#snippet action()}<TextButton
             tone="primary"
             class="underline"
-            onclick={() => forge.openUrl(DOTNET_URL).catch((e) => (s.error = String(e)))}>Bei Microsoft herunterladen</TextButton
+            onclick={() => forge.openUrl(DOTNET_URL).catch((e) => (s.error = String(e)))}>{t("Bei Microsoft herunterladen")}</TextButton
           >{/snippet}
       </Empty>
     {:else}
@@ -186,10 +187,10 @@
       {/if}
       {#if png}
         <div class="grid place-items-center p-3">
-          <img src="data:image/png;base64,{png}" alt="WPF-Vorschau {target}" class="max-w-full" />
+          <img src="data:image/png;base64,{png}" alt={t("WPF-Vorschau {path}", { path: target })} class="max-w-full" />
         </div>
       {:else if !error}
-        <Empty>Rendert …</Empty>
+        <Empty>{t("Rendert …")}</Empty>
       {/if}
     {/if}
   </div>

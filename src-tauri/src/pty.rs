@@ -401,7 +401,7 @@ fn run_command(
     if let Target::Shell { command } = t {
         let command = command.trim();
         if command.is_empty() {
-            return Err("Leerer Befehl".into());
+            return Err(tr!("Leerer Befehl", "Empty command"));
         }
         if windows {
             // pwsh (7+) kennt && und || wie die Login-Shell; Windows PowerShell 5.1 nur als Rueckfall.
@@ -416,15 +416,15 @@ fn run_command(
     let mut words: Vec<&str> = match t {
         Target::Npm { pm, script, args } => {
             if !["npm", "pnpm", "yarn", "bun"].contains(&pm.as_str()) || !name_ok(script) || !args.iter().all(|a| arg_ok(a)) {
-                return Err(format!("Nicht erlaubt: {pm} run {script}"));
+                return Err(tr!("Nicht erlaubt: {pm} run {script}", "Not allowed: {pm} run {script}"));
             }
             let pkg = std::fs::read_to_string(cwd.join("package.json"))
-                .map_err(|_| format!("Keine package.json in {}", cwd.display()))?;
+                .map_err(|_| tr!("Keine package.json in {}", "No package.json in {}", cwd.display()))?;
             let has = serde_json::from_str::<serde_json::Value>(&pkg)
                 .ok()
                 .is_some_and(|v| v.get("scripts").and_then(|s| s.get(script)).is_some());
             if !has {
-                return Err(format!("Script „{script}“ fehlt in package.json"));
+                return Err(tr!("Script „{script}“ fehlt in package.json", "Script “{script}” missing in package.json"));
             }
             let mut w = vec![pm.as_str(), "run", script];
             w.extend(args.iter().map(String::as_str));
@@ -438,16 +438,16 @@ fn run_command(
                     .count()
             });
             if n != 1 {
-                return Err(format!("Genau eine .csproj/.fsproj erwartet in {}", cwd.display()));
+                return Err(tr!("Genau eine .csproj/.fsproj erwartet in {}", "Expected exactly one .csproj/.fsproj in {}", cwd.display()));
             }
             vec!["dotnet", if *watch { "watch" } else { "run" }]
         }
         Target::Cargo { bin } => {
             if !cwd.join("Cargo.toml").is_file() {
-                return Err(format!("Keine Cargo.toml in {}", cwd.display()));
+                return Err(tr!("Keine Cargo.toml in {}", "No Cargo.toml in {}", cwd.display()));
             }
             if !bin.as_deref().is_none_or(name_ok) {
-                return Err(format!("Nicht erlaubt: --bin {}", bin.as_deref().unwrap_or_default()));
+                return Err(tr!("Nicht erlaubt: --bin {}", "Not allowed: --bin {}", bin.as_deref().unwrap_or_default()));
             }
             let mut w = vec!["cargo", "run"];
             if let Some(b) = bin {
@@ -466,7 +466,7 @@ fn run_command(
         }
     }
     if let Some(a) = p.args.iter().find(|a| !arg_ok(a)) {
-        return Err(format!("Nicht erlaubtes Argument im Profil: {a}"));
+        return Err(tr!("Nicht erlaubtes Argument im Profil: {a}", "Argument not allowed in profile: {a}"));
     }
     words.extend(p.args.iter().map(String::as_str));
     let run = words.join(" ");
@@ -553,25 +553,25 @@ fn missing(t: &Target, cwd: &Path, windows: bool, ok: impl Fn(&str) -> bool) -> 
     match t {
         Target::Npm { pm, .. } => {
             if windows && !ok("npm") {
-                out.push(need("Node.js LTS".into(), "per winget (OpenJS.NodeJS.LTS)".into()));
+                out.push(need("Node.js LTS".into(), tr!("per winget (OpenJS.NodeJS.LTS)", "via winget (OpenJS.NodeJS.LTS)")));
             }
             if windows && pm != "npm" && !ok(pm) {
-                out.push(need(pm.clone(), format!("per npm install -g {pm}")));
+                out.push(need(pm.clone(), tr!("per npm install -g {pm}", "via npm install -g {pm}")));
             }
             if !has_node_modules(cwd) {
-                out.push(need("Projekt-Pakete".into(), format!("aus package.json per {pm} install · nach node_modules")));
+                out.push(need(tr!("Projekt-Pakete", "Project packages"), tr!("aus package.json per {pm} install · nach node_modules", "from package.json via {pm} install · into node_modules")));
             }
         }
         Target::Dotnet { .. } if !ok("dotnet") => {
             let (_, v) = dotnet_sdk(cwd);
             let name = if v == "LTS" { ".NET SDK (LTS)".into() } else { format!(".NET SDK {v}") };
             let dir = if windows { r"%USERPROFILE%\.dotnet" } else { "~/.dotnet" };
-            out.push(need(name, format!("offizielles dotnet-install-Skript von dot.net · nach {dir}")));
+            out.push(need(name, tr!("offizielles dotnet-install-Skript von dot.net · nach {dir}", "official dotnet-install script from dot.net · into {dir}")));
         }
         Target::Cargo { .. } if !ok("cargo") => out.push(if windows {
-            need("Rust-Toolchain".into(), "per winget (Rustlang.Rustup)".into())
+            need("Rust-Toolchain".into(), tr!("per winget (Rustlang.Rustup)", "via winget (Rustlang.Rustup)"))
         } else {
-            need("Rust-Toolchain".into(), "rustup von sh.rustup.rs · nach ~/.cargo und ~/.rustup".into())
+            need("Rust-Toolchain".into(), tr!("rustup von sh.rustup.rs · nach ~/.cargo und ~/.rustup", "rustup from sh.rustup.rs · into ~/.cargo and ~/.rustup"))
         }),
         _ => {}
     }
@@ -693,7 +693,7 @@ fn tool_ok(cwd: &Path, name: &str) -> bool {
 /// wie beim Terminal ueber `out`, das Ende als pty-exit:<id>.
 #[tauri::command]
 pub fn claude_login(app: AppHandle, ptys: State<'_, Ptys>, id: String, out: Channel<InvokeResponseBody>) -> Result<(), String> {
-    let claude = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    let claude = crate::deps::claude_bin().ok_or_else(|| tr!("claude nicht gefunden", "claude not found"))?;
     let home = crate::skills::home();
     spawn(app, &ptys, id, &home.to_string_lossy(), &claude.to_string_lossy(), vec!["auth".into(), "login".into()], 100, 30, &[], true, out)
 }
@@ -772,18 +772,18 @@ fn spawn(
     out: Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
     if !valid_id(&id) {
-        return Err(format!("Ungueltige Terminal-id: {id}"));
+        return Err(tr!("Ungueltige Terminal-id: {id}", "Invalid terminal id: {id}"));
     }
     if !Path::new(cwd).is_dir() {
-        return Err(format!("Ordner nicht gefunden: {cwd}"));
+        return Err(tr!("Ordner nicht gefunden: {cwd}", "Folder not found: {cwd}"));
     }
     if ptys.lock().contains_key(&id) {
-        return Err(format!("Terminal laeuft schon: {id}"));
+        return Err(tr!("Terminal laeuft schon: {id}", "Terminal already running: {id}"));
     }
 
     let pair = native_pty_system()
         .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
-        .map_err(|e| format!("PTY konnte nicht geoeffnet werden: {e}"))?;
+        .map_err(|e| tr!("PTY konnte nicht geoeffnet werden: {e}", "PTY could not be opened: {e}"))?;
 
     let (exe, pre) = crate::native(program);
     let mut cmd = CommandBuilder::new(exe);
@@ -812,12 +812,12 @@ fn spawn(
     let mut child = pair
         .slave
         .spawn_command(cmd)
-        .map_err(|e| format!("Shell konnte nicht gestartet werden: {e}"))?;
+        .map_err(|e| tr!("Shell konnte nicht gestartet werden: {e}", "Shell could not be started: {e}"))?;
     // Unix: sonst haelt die App selbst den Slave offen und der Reader sieht nie EOF.
     drop(pair.slave);
 
-    let mut reader = pair.master.try_clone_reader().map_err(|e| format!("PTY-Fehler: {e}"))?;
-    let input = spawn_writer(pair.master.take_writer().map_err(|e| format!("PTY-Fehler: {e}"))?);
+    let mut reader = pair.master.try_clone_reader().map_err(|e| tr!("PTY-Fehler: {e}", "PTY error: {e}"))?;
+    let input = spawn_writer(pair.master.take_writer().map_err(|e| tr!("PTY-Fehler: {e}", "PTY error: {e}"))?);
 
     let gen = NEXT_GEN.fetch_add(1, Ordering::Relaxed);
     ptys.lock().insert(
@@ -921,9 +921,9 @@ pub(crate) fn write(ptys: &Ptys, id: &str, data: String) -> Result<(), String> {
     let Some(s) = map.get(id) else {
         drop(map);
         // Gast-Sitzung: Tasten gehen an den Host (share.rs).
-        return crate::share::input(id, data).unwrap_or_else(|| Err(format!("Kein Terminal: {id}")));
+        return crate::share::input(id, data).unwrap_or_else(|| Err(tr!("Kein Terminal: {id}", "No terminal: {id}")));
     };
-    s.input.send(data.into_bytes()).map_err(|_| "Schreiben fehlgeschlagen: Terminal nimmt keine Eingabe mehr an".into())
+    s.input.send(data.into_bytes()).map_err(|_| tr!("Schreiben fehlgeschlagen: Terminal nimmt keine Eingabe mehr an", "Write failed: terminal no longer accepts input"))
 }
 
 #[tauri::command]
@@ -934,10 +934,10 @@ pub fn pty_write(ptys: State<'_, Ptys>, id: String, data: String) -> Result<(), 
 #[tauri::command]
 pub fn pty_resize(ptys: State<'_, Ptys>, id: String, cols: u16, rows: u16) -> Result<(), String> {
     let map = ptys.lock();
-    let s = map.get(&id).ok_or_else(|| format!("Kein Terminal: {id}"))?;
+    let s = map.get(&id).ok_or_else(|| tr!("Kein Terminal: {id}", "No terminal: {id}"))?;
     s.master
         .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
-        .map_err(|e| format!("Resize fehlgeschlagen: {e}"))?;
+        .map_err(|e| tr!("Resize fehlgeschlagen: {e}", "Resize failed: {e}"))?;
     crate::share::resized(&id, cols, rows);
     Ok(())
 }
@@ -955,10 +955,10 @@ pub(crate) fn size(ptys: &Ptys, id: &str) -> Option<(u16, u16)> {
 #[tauri::command]
 pub async fn claude_btw(ptys: State<'_, Ptys>, id: String, cwd: String, sid: String, question: String) -> Result<String, String> {
     if !valid_id(&sid) {
-        return Err(format!("Ungueltige Session-id: {sid}"));
+        return Err(tr!("Ungueltige Session-id: {sid}", "Invalid session id: {sid}"));
     }
-    let env = ptys.lock().get(&id).map(|s| s.env.clone()).ok_or("Sitzung laeuft nicht")?;
-    let bin = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+    let env = ptys.lock().get(&id).map(|s| s.env.clone()).ok_or_else(|| tr!("Sitzung laeuft nicht", "Session is not running"))?;
+    let bin = crate::deps::claude_bin().ok_or_else(|| tr!("claude nicht gefunden", "claude not found"))?;
     crate::git::blocking(move || {
         let get = |k: &str| env.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
         let mut settings: serde_json::Value = get("OPEN_CLAUDE_SETTINGS")
@@ -988,14 +988,14 @@ pub async fn claude_btw(ptys: State<'_, Ptys>, id: String, cwd: String, sid: Str
         for (k, v) in env.iter().filter(|(k, _)| k != "OPEN_CLAUDE_PANEL") {
             cmd.env(k, v);
         }
-        let o = cmd.output().map_err(|e| format!("claude konnte nicht gestartet werden: {e}"))?;
+        let o = cmd.output().map_err(|e| tr!("claude konnte nicht gestartet werden: {e}", "claude could not be started: {e}"))?;
         let out: serde_json::Value = serde_json::from_slice(&o.stdout).map_err(|_| {
             let err = String::from_utf8_lossy(&o.stderr);
-            format!("claude: {}", if err.trim().is_empty() { "keine Antwort" } else { err.trim() })
+            format!("claude: {}", if err.trim().is_empty() { tr!("keine Antwort", "no response") } else { err.trim().to_string() })
         })?;
         let text = out.get("result").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
         if out.get("is_error").and_then(serde_json::Value::as_bool) == Some(true) {
-            return Err(if text.is_empty() { "claude meldet einen Fehler".into() } else { text });
+            return Err(if text.is_empty() { tr!("claude meldet einen Fehler", "claude reports an error") } else { text });
         }
         Ok(text)
     })

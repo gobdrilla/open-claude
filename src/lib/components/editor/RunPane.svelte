@@ -18,6 +18,7 @@
   import { theme } from "$lib/theme.svelte";
   import { attach, clearOutput, closeRun, focusRun, run, runRestart, runStart, runStop, runWrite, tailOutput, type Run } from "$lib/run.svelte";
   import { sendToClaude } from "$lib/ide.svelte";
+  import { t } from "$lib/i18n";
 
   let { repo }: { repo: string } = $props();
 
@@ -122,7 +123,7 @@
   <div class={paneBar}>
     {#if r.runs.length > 1}
       <!-- One tab per started target; the toolbar starts more, the x stops and removes one. -->
-      <div class="flex min-w-0 shrink items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="Läufe">
+      <div class="flex min-w-0 shrink items-center gap-0.5 overflow-x-auto" role="tablist" aria-label={t("Läufe")}>
         {#each r.runs as x (x.cfg.label)}
           {@const on = x.cfg.label === cur?.cfg.label}
           <span
@@ -138,7 +139,7 @@
               size="xs"
               tone="inherit"
               class={on ? "" : "opacity-0 group-hover/run:opacity-100 focus-visible:opacity-100"}
-              label={x.state === "running" ? `${x.cfg.label} stoppen und schließen` : `${x.cfg.label} schließen`}
+              label={x.state === "running" ? t("{name} stoppen und schließen", { name: x.cfg.label }) : t("{name} schließen", { name: x.cfg.label })}
               onclick={() => closeRun(repo, x.cfg.label)}><XIcon class="size-3" /></IconButton
             >
           </span>
@@ -151,41 +152,41 @@
     {#if cur}
       <span class="text-muted-foreground shrink-0 text-meta" role="status">
         {#if cur.state === "running"}
-          läuft {clock(now - cur.started)}
+          {t("läuft {time}", { time: clock(now - cur.started) })}
         {:else if cur.state === "idle"}
-          gestoppt
+          {t("gestoppt")}
         {:else if cur.exit === null}
-          <span class="text-destructive">beendet</span>
+          <span class="text-destructive">{t("beendet")}</span>
         {:else}
-          <span class={cur.exit === 0 ? "text-success" : "text-destructive"}>beendet (Exit {cur.exit})</span>
+          <span class={cur.exit === 0 ? "text-success" : "text-destructive"}>{t("beendet (Exit {code})", { code: cur.exit })}</span>
         {/if}
       </span>
     {:else}
-      <span class="text-muted-foreground">Noch nichts gestartet (F5).</span>
+      <span class="text-muted-foreground">{t("Noch nichts gestartet (F5).")}</span>
     {/if}
     <span class="flex-1"></span>
     {#if cur?.state === "running"}
-      <Button variant="ghost" size="icon-xs" title="Stoppen" onclick={() => cur && runStop(repo, cur.cfg.label)}><SquareIcon /></Button>
+      <Button variant="ghost" size="icon-xs" title={t("Stoppen")} onclick={() => cur && runStop(repo, cur.cfg.label)}><SquareIcon /></Button>
     {:else}
       <Button
         variant="ghost"
         size="icon-xs"
-        title="{cur ? `${cur.cfg.label} erneut starten` : "Starten (F5)"} – führt Code aus dem Projekt aus"
+        title={cur ? t("{name} erneut starten – führt Code aus dem Projekt aus", { name: cur.cfg.label }) : t("Starten (F5) – führt Code aus dem Projekt aus")}
         onclick={() => runStart(repo, cur?.cfg)}><PlayIcon /></Button
       >
     {/if}
-    <Button variant="ghost" size="icon-xs" disabled={!cur} title="Neu starten" onclick={() => runRestart(repo, cur?.cfg.label)}>
+    <Button variant="ghost" size="icon-xs" disabled={!cur} title={t("Neu starten")} onclick={() => runRestart(repo, cur?.cfg.label)}>
       <RotateCcwIcon />
     </Button>
     <Button
       variant="ghost"
       size="icon-xs"
       disabled={!cur}
-      title="Ausgabe an Claude (letzte 200 Zeilen)"
-      aria-label="Ausgabe an Claude"
+      title={t("Ausgabe an Claude (letzte 200 Zeilen)")}
+      aria-label={t("Ausgabe an Claude")}
       onclick={() => sendToClaude(repo, tailOutput(repo))}><MessageSquareShareIcon /></Button
     >
-    <Button variant="ghost" size="icon-xs" title="Ausgabe leeren" onclick={() => clearOutput(repo)}><EraserIcon /></Button>
+    <Button variant="ghost" size="icon-xs" title={t("Ausgabe leeren")} onclick={() => clearOutput(repo)}><EraserIcon /></Button>
   </div>
   <!-- Karte wie die alte Claude-Shell: dezenter Primary-Schimmer scheint durchs transparente Terminal. -->
   <div class="min-h-0 flex-1 p-2">

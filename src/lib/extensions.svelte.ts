@@ -1,5 +1,6 @@
 // Runtime state of app extensions: built-ins bundled from src/extensions, user ones from <app_data_dir>/extensions (ext_scan).
 // Global values live in the store (settings.json, key "extensions"), per-project values in the local git config ocui.ext.<id>.<key>.
+import { t } from "./i18n.ts";
 import { invoke } from "@tauri-apps/api/core";
 import type { Store } from "@tauri-apps/plugin-store";
 import { compileLinker, parseManifest, resolve, serial, type Linker, type Manifest, type Values } from "./extensions.logic.ts";
@@ -46,7 +47,7 @@ export async function rescan() {
   const files = await invoke<{ dir: string; text: string | null; error: string | null }[]>("ext_scan").catch(() => []);
   for (const f of files) {
     const e = f.error ? { key: f.dir, source: "user" as const, dir: f.dir, error: f.error, warnings: [] } : entry(f.dir, "user", f.text ?? "", f.dir);
-    if (e.manifest && list.some((x) => x.manifest?.id === e.manifest!.id)) e.error = "ID schon vergeben";
+    if (e.manifest && list.some((x) => x.manifest?.id === e.manifest!.id)) e.error = t("ID schon vergeben");
     list.push(e);
   }
   exts.list = list;

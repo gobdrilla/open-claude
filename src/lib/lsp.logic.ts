@@ -1,4 +1,5 @@
 // Reine Logik fuer die Language-Server-Anbindung (lsp.svelte.ts): Server je Endung, file-URIs <-> Repo-Pfade.
+import { t } from "./i18n.ts";
 import { abs, rel } from "./editor.logic.ts";
 
 /** Endung -> [Server-Schluessel, LSP-languageId]. Schluessel muessen zu SERVERS in src-tauri/src/lsp.rs passen. */
@@ -98,7 +99,7 @@ export function editsOf(r: { changes?: Record<string, TextEdit[]>; documentChang
   if (r.documentChanges) {
     return r.documentChanges.map((c) => {
       const d = c as { kind?: string; textDocument?: { uri: string }; edits?: TextEdit[] };
-      if (d.kind || !d.textDocument || !d.edits) throw new Error("Dateioperationen (anlegen, umbenennen, löschen) werden nicht unterstützt");
+      if (d.kind || !d.textDocument || !d.edits) throw new Error(t("Dateioperationen (anlegen, umbenennen, löschen) werden nicht unterstützt"));
       return { uri: d.textDocument.uri, edits: d.edits };
     });
   }
@@ -113,7 +114,7 @@ export function renameSummary(repo: string, all: Edit[]): { files: { name: strin
       const lines = [...new Set(e.edits.map((x) => x.range.start.line + 1))].sort((a, b) => a - b);
       const n = e.edits.length;
       const shown = lines.slice(0, 8).join(", ") + (lines.length > 8 ? ", …" : "");
-      return { name: uriPath(repo, e.uri) ?? e.uri, detail: `${n} ${n === 1 ? "Stelle" : "Stellen"} · Zeile ${shown}` };
+      return { name: uriPath(repo, e.uri) ?? e.uri, detail: n === 1 ? t("1 Stelle · Zeile {lines}", { lines: shown }) : t("{n} Stellen · Zeile {lines}", { n, lines: shown }) };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
   return { files, count: all.reduce((n, e) => n + e.edits.length, 0) };

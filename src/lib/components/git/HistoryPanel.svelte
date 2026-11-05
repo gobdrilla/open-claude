@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LOCALE, t } from "$lib/i18n";
   import Notice from "$lib/components/Notice.svelte";
   import { Badge, Button, ConfirmDialog, ContextItem, DiffDialog, Input, LinkedText, PromptDialog, Row, TextButton, Textarea, fileIcon, menuContent, menuSeparator } from "$lib/atelier-ui";
   import { age, cn } from "$lib/utils";
@@ -176,12 +177,12 @@
   async function jump(ref: string) {
     await select(ref);
     // git's "fatal: bad revision" reads like a usage error; ambiguous short prefixes keep git's own text.
-    if (detailError.includes("bad revision") && !detailError.includes("ambiguous")) detailError = `Kein Commit zu „${ref.replace(/\^\{commit\}$/, "")}“ gefunden.`;
+    if (detailError.includes("bad revision") && !detailError.includes("ambiguous")) detailError = t("Kein Commit zu „{ref}“ gefunden.", { ref: ref.replace(/\^\{commit\}$/, "") });
     const sha = selected;
     if (!sha || detailError || sha !== detail?.commit.sha) return;
     for (let i = 0; i < JUMP_PAGES && !done && !error && !commits.some((c) => c.sha === sha); i++) await loadMore();
     if (!commits.some((c) => c.sha === sha)) {
-      if (!error) error = "Commit liegt weiter zurück – Details unten, zum Anzeigen im Verlauf weiter scrollen.";
+      if (!error) error = t("Commit liegt weiter zurück – Details unten, zum Anzeigen im Verlauf weiter scrollen.");
       return;
     }
     await tick();
@@ -309,7 +310,7 @@
   }
 
   // Message dialog for squash and reword: prefilled text, destructive tone once the commit is on a remote.
-  const PUSHED = "Schon gepusht: danach ist ein Force-Push nötig, andere mit diesem Stand bekommen Konflikte.";
+  const PUSHED = t("Schon gepusht: danach ist ein Force-Push nötig, andere mit diesem Stand bekommen Konflikte.");
   let msgDlg = $state<{ title: string; action: string; message?: string; pushed: boolean; run: (m: string) => Promise<unknown> } | null>(null);
   let msgText = $state("");
   let note = $state("");
@@ -320,7 +321,7 @@
     const text = msgText;
     msgDlg = null;
     await run(title, () => action(text));
-    if (pushed && !error) note = "Verlauf geändert – zum Veröffentlichen Push ▾ → Force-Push.";
+    if (pushed && !error) note = t("Verlauf geändert – zum Veröffentlichen Push ▾ → Force-Push.");
   }
 
   async function squash(c: Commit) {
@@ -329,9 +330,9 @@
       const [p, d, pushed] = await Promise.all([git.show(repo, parent), git.show(repo, c.sha), git.pushed(repo, parent)]);
       msgText = fullMessage(p) + "\n\n" + fullMessage(d);
       msgDlg = {
-        title: "Commits zusammenfassen",
-        action: "Zusammenfassen",
-        message: `${c.sha.slice(0, 8)} wird mit ${parent.slice(0, 8)} zu einem Commit.`,
+        title: t("Commits zusammenfassen"),
+        action: t("Zusammenfassen"),
+        message: t("{sha} wird mit {parent} zu einem Commit.", { sha: c.sha.slice(0, 8), parent: parent.slice(0, 8) }),
         pushed,
         run: (m) => git.squash(repo, c.sha, m),
       };
@@ -346,9 +347,9 @@
       const [d, pushed] = await Promise.all([git.show(repo, c.sha), git.pushed(repo, c.sha)]);
       msgText = fullMessage(d);
       msgDlg = {
-        title: "Commit-Nachricht bearbeiten",
-        action: "Speichern",
-        message: head ? undefined : `${c.sha.slice(0, 8)} und alle späteren Commits bekommen neue SHAs.`,
+        title: t("Commit-Nachricht bearbeiten"),
+        action: t("Speichern"),
+        message: head ? undefined : t("{sha} und alle späteren Commits bekommen neue SHAs.", { sha: c.sha.slice(0, 8) }),
         pushed,
         run: (m) => git.reword(repo, c.sha, m),
       };
@@ -361,7 +362,7 @@
   async function startRebase(base: string | null, steps: RebaseStep[], pushed: boolean) {
     rebaseFrom = null;
     await run("Rebase", () => git.rewrite(repo, base, steps));
-    if (pushed && !error) note = "Verlauf geändert – zum Veröffentlichen Push ▾ → Force-Push.";
+    if (pushed && !error) note = t("Verlauf geändert – zum Veröffentlichen Push ▾ → Force-Push.");
   }
 
   function copySha(sha: string) {
@@ -372,8 +373,8 @@
     // Auch soft/mixed schreibt den Branch um und liegt im Menue direkt neben Revert.
     const [title, message, label, tone]: [string, string, string, Tone] =
       mode === "hard"
-        ? ["Hart zurücksetzen", `HEAD hart auf ${sha.slice(0, 8)} zurücksetzen? Nicht committete Änderungen gehen verloren.`, "Hart zurücksetzen", "destructive"]
-        : [`Zurücksetzen (${mode})`, `Branch auf ${sha.slice(0, 8)} zurücksetzen? Die Änderungen bleiben erhalten.`, "Zurücksetzen", "default"];
+        ? [t("Hart zurücksetzen"), t("HEAD hart auf {sha} zurücksetzen? Nicht committete Änderungen gehen verloren.", { sha: sha.slice(0, 8) }), t("Hart zurücksetzen"), "destructive"]
+        : [t("Zurücksetzen ({mode})", { mode }), t("Branch auf {sha} zurücksetzen? Die Änderungen bleiben erhalten.", { sha: sha.slice(0, 8) }), t("Zurücksetzen"), "default"];
     askConfirm(title, message, label, tone, async () => {
       await git.reset(repo, sha, mode);
     });
@@ -445,60 +446,60 @@
     <ContextMenu.Portal>
       <ContextMenu.Content class={cn(menuContent, "min-w-48")}>
         <ContextItem
-          label="Branch hier erstellen"
+          label={t("Branch hier erstellen")}
           onSelect={() =>
-            askPrompt("Neuer Branch ab " + c.sha.slice(0, 8), "feature/…", "", async (v) => {
+            askPrompt(t("Neuer Branch ab {sha}", { sha: c.sha.slice(0, 8) }), "feature/…", "", async (v) => {
               await git.checkout(repo, v, true, c.sha);
             })}
         />
-        <ContextItem label="Tag erstellen …" onSelect={() => (tagSha = c.sha)} />
+        <ContextItem label={t("Tag erstellen …")} onSelect={() => (tagSha = c.sha)} />
         <ContextItem
-          label="Auschecken (detached)"
+          label={t("Auschecken (detached)")}
           onSelect={() =>
-            askConfirm("Detached auschecken", `HEAD von ${c.sha.slice(0, 8)} lösen? Änderungen ohne Branch können verloren gehen.`, "Auschecken", "default", async () => {
+            askConfirm(t("Detached auschecken"), t("HEAD von {sha} lösen? Änderungen ohne Branch können verloren gehen.", { sha: c.sha.slice(0, 8) }), t("Auschecken"), "default", async () => {
               await git.checkout(repo, c.sha, false, null);
             })}
         />
         <ContextItem
           label="Cherry-Pick"
           onSelect={() =>
-            ask("pick", "Cherry-Pick", `${c.sha.slice(0, 8)} auf den aktuellen Branch übernehmen?`, () =>
+            ask("pick", "Cherry-Pick", t("{sha} auf den aktuellen Branch übernehmen?", { sha: c.sha.slice(0, 8) }), () =>
               run("Cherry-Pick", () => git.cherryPick(repo, c.sha)),
             )}
         />
         <ContextItem
           label="Revert"
           onSelect={() =>
-            ask("pick", "Revert", `${c.sha.slice(0, 8)} mit einem neuen Commit rückgängig machen?`, () =>
+            ask("pick", "Revert", t("{sha} mit einem neuen Commit rückgängig machen?", { sha: c.sha.slice(0, 8) }), () =>
               run("Revert", () => git.revert(repo, c.sha)),
             )}
         />
         <ContextMenu.Separator class={menuSeparator} />
         {@const own = !onHead || onHead.has(c.sha)}
-        <ContextItem label="Nachricht bearbeiten …" disabled={!own} onSelect={() => reword(c)} />
+        <ContextItem label={t("Nachricht bearbeiten …")} disabled={!own} onSelect={() => reword(c)} />
         {#if c.parents.length === 1}
-          <ContextItem label="Mit Vorgänger zusammenfassen …" disabled={!own} onSelect={() => squash(c)} />
+          <ContextItem label={t("Mit Vorgänger zusammenfassen …")} disabled={!own} onSelect={() => squash(c)} />
         {/if}
         <ContextItem
-          label="Aktuellen Branch hierauf rebasen"
+          label={t("Aktuellen Branch hierauf rebasen")}
           onSelect={() =>
-            ask("rebase", "Rebasen", `Aktuellen Branch auf ${c.sha.slice(0, 8)} rebasen?`, () =>
+            ask("rebase", t("Rebasen"), t("Aktuellen Branch auf {sha} rebasen?", { sha: c.sha.slice(0, 8) }), () =>
               run("Rebase", () => git.rebase(repo, c.sha)),
             )}
         />
         {#if c.parents.length <= 1}
-          <ContextItem label="Interaktiv ab hier …" disabled={!own} onSelect={() => (rebaseFrom = c)} />
+          <ContextItem label={t("Interaktiv ab hier …")} disabled={!own} onSelect={() => (rebaseFrom = c)} />
         {/if}
         <ContextMenu.Separator class={menuSeparator} />
         <ContextItem label="Reset: soft" onSelect={() => reset(c.sha, "soft")} />
         <ContextItem label="Reset: mixed" onSelect={() => reset(c.sha, "mixed")} />
         <ContextItem label="Reset: hard" onSelect={() => reset(c.sha, "hard")} destructive />
-        <ContextItem label="SHA kopieren" onSelect={() => copySha(c.sha)} />
+        <ContextItem label={t("SHA kopieren")} onSelect={() => copySha(c.sha)} />
         {@const tickets = findLinks(c.subject, links).slice(0, 3)}
         {#if tickets.length}
           <ContextMenu.Separator class={menuSeparator} />
-          {#each tickets as t (t.start)}
-            <ContextItem label="{c.subject.slice(t.start, t.end)} öffnen" onSelect={() => forge.openUrl(t.url).catch((e) => (error = String(e)))} />
+          {#each tickets as tk (tk.start)}
+            <ContextItem label={t("{ticket} öffnen", { ticket: c.subject.slice(tk.start, tk.end) })} onSelect={() => forge.openUrl(tk.url).catch((e) => (error = String(e)))} />
           {/each}
         {/if}
         {#if oncommand && cmds.length}
@@ -517,7 +518,7 @@
     <SearchIcon class="text-muted-foreground size-3.5 shrink-0" />
     <Input
       bind:value={query}
-      placeholder="Verlauf durchsuchen · SHA + Enter springt"
+      placeholder={t("Verlauf durchsuchen · SHA + Enter springt")}
       density="sm"
       class="rounded-full"
       onkeydown={(e: KeyboardEvent) => {
@@ -551,26 +552,26 @@
           {@render commitRow(c, null)}
         {/each}
         {#if loading}
-          <p class="text-muted-foreground px-2 py-2 text-center text-meta">Durchsucht {skip} Commits …</p>
+          <p class="text-muted-foreground px-2 py-2 text-center text-meta">{t("Durchsucht {n} Commits …", { n: skip })}</p>
         {:else if !done}
           <TextButton
             size="sm"
             block
             onclick={() => ((searchUntil = skip + SEARCH_STEP), loadMore())}
           >
-            {filtered.length ? "" : "Keine Treffer. "}Nur die letzten {skip} Commits durchsucht – weiter suchen
+            {filtered.length ? "" : t("Keine Treffer.") + " "}{t("Nur die letzten {n} Commits durchsucht – weiter suchen", { n: skip })}
           </TextButton>
         {:else if filtered.length === 0}
-          <p class="text-muted-foreground px-2 py-4 text-center text-meta">Keine Treffer.</p>
+          <p class="text-muted-foreground px-2 py-4 text-center text-meta">{t("Keine Treffer.")}</p>
         {/if}
       {:else}
         {#each commits as c, i (c.sha)}
           {@render commitRow(c, rows[i])}
         {/each}
         {#if loading}
-          <p class="text-muted-foreground px-2 py-2 text-center text-meta">Lädt …</p>
+          <p class="text-muted-foreground px-2 py-2 text-center text-meta">{t("Lädt …")}</p>
         {:else if done && !commits.length}
-          <p class="text-muted-foreground px-2 py-4 text-center text-meta">Noch keine Commits.</p>
+          <p class="text-muted-foreground px-2 py-4 text-center text-meta">{t("Noch keine Commits.")}</p>
         {/if}
       {/if}
     </div>
@@ -580,27 +581,26 @@
   <!-- max-height: gespeicherte Hoehe aus einem grossen Fenster darf die Liste nicht auf drei Zeilen druecken -->
   <div class="border-border min-h-0 overflow-y-auto border-t" style="height:{detailH}px; max-height:max(80px, 50%)">
     {#if detailLoading}
-      <p class="text-muted-foreground px-2 py-2 text-meta">Lädt …</p>
+      <p class="text-muted-foreground px-2 py-2 text-meta">{t("Lädt …")}</p>
     {:else if detailError}
       <p class="text-destructive px-2 py-2 text-meta">{detailError}</p>
     {:else if detail}
       <div class="space-y-1 px-3 pt-2 pb-1.5">
         <p class="truncate text-ui font-medium" title={detail.commit.subject}><LinkedText text={detail.commit.subject} links={subjectLinks} /></p>
         <div class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta">
-          <TextButton class="font-mono" title="SHA kopieren" onclick={() => copySha(detail!.commit.sha)}
+          <TextButton class="font-mono" title={t("SHA kopieren")} onclick={() => copySha(detail!.commit.sha)}
             >{detail.commit.sha.slice(0, 8)}<CopyIcon class="size-2.5" /></TextButton
           >
           <span>·</span><span title={detail.commit.email}>{detail.commit.author}</span>
-          <span>·</span><span title={new Date(detail.commit.date).toLocaleString("de-DE")}>{age(detail.commit.date)}</span>
+          <span>·</span><span title={new Date(detail.commit.date).toLocaleString(LOCALE)}>{age(detail.commit.date)}</span>
           {#if detail.commit.parents.length}
-            <span>·</span><span>Eltern</span>
+            <span>·</span><span>{t("Eltern")}</span>
             {#each detail.commit.parents as p (p)}
               <TextButton tone="link" underline class="font-mono" onclick={() => select(p)}>{p.slice(0, 8)}</TextButton>
             {/each}
           {/if}
           <span class="ml-auto font-mono tabular-nums">
-            {files.length}
-            {files.length === 1 ? "Datei" : "Dateien"}
+            {files.length === 1 ? t("1 Datei") : t("{n} Dateien", { n: files.length })}
             {#if total.a}<span class="text-success">+{total.a}</span>{/if}
             {#if total.d}<span class="text-destructive">−{total.d}</span>{/if}
           </span>
@@ -609,7 +609,7 @@
           <!-- Not inside a button: the body can hold links. -->
           <div bind:this={bodyEl} class="text-muted-foreground text-meta whitespace-pre-wrap {full ? '' : 'line-clamp-2'}"><LinkedText text={detail.body} links={bodyLinks} /></div>
           {#if full || clamped}
-            <TextButton size="sm" underline onclick={() => (full = !full)}>{full ? "Weniger" : "Mehr"}</TextButton>
+            <TextButton size="sm" underline onclick={() => (full = !full)}>{full ? t("Weniger") : t("Mehr")}</TextButton>
           {/if}
         {/if}
       </div>
@@ -632,7 +632,7 @@
               </span>
               <span class="flex min-w-0 items-center gap-2 pl-5 text-meta">
                 <span class="text-muted-foreground min-w-0 flex-1 truncate">{dirname(f.newPath)}</span>
-                {#if f.binary}<span class="text-muted-foreground shrink-0">binär</span>
+                {#if f.binary}<span class="text-muted-foreground shrink-0">{t("binär")}</span>
                 {:else}<span class="shrink-0 font-mono tabular-nums"
                     >{#if st.a}<span class="text-success">+{st.a}</span>{/if}
                     {#if st.d}<span class="text-destructive">−{st.d}</span>{/if}</span
@@ -643,7 +643,7 @@
         </div>
       {/if}
     {:else}
-      <p class="text-muted-foreground px-2 py-4 text-center text-meta">Commit wählen.</p>
+      <p class="text-muted-foreground px-2 py-4 text-center text-meta">{t("Commit wählen.")}</p>
     {/if}
   </div>
 </div>
@@ -669,7 +669,7 @@
   onconfirm={doMsg}
   oncancel={() => (msgDlg = null)}
 >
-  <Textarea bind:value={msgText} density="sm" class="h-32 field-sizing-fixed font-mono" spellcheck={true} aria-label="Commit-Nachricht" />
+  <Textarea bind:value={msgText} density="sm" class="h-32 field-sizing-fixed font-mono" spellcheck={true} aria-label={t("Commit-Nachricht")} />
 </ConfirmDialog>
 
 <RebaseDialog {repo} from={rebaseFrom} onclose={() => (rebaseFrom = null)} onstart={startRebase} />
@@ -681,7 +681,7 @@
   title={prompt?.title ?? ""}
   bind:value={promptValue}
   placeholder={prompt?.placeholder}
-  action="Anlegen"
+  action={t("Anlegen")}
   mono
   onsubmit={doPrompt}
   oncancel={() => (prompt = null)}
@@ -706,6 +706,6 @@
     <span class="text-muted-foreground shrink-0 text-ui font-normal tabular-nums">{shown + 1} / {files.length}</span>
   {/if}
   {#if reviewCount(repo)}
-    <Button size="xs" class="shrink-0" onclick={() => sendReview(repo)}>Review an Claude ({reviewCount(repo)})</Button>
+    <Button size="xs" class="shrink-0" onclick={() => sendReview(repo)}>{t("Review an Claude ({n})", { n: reviewCount(repo) })}</Button>
   {/if}
 </DiffDialog>

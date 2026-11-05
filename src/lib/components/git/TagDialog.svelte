@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { Checkbox, PromptDialog, Textarea } from "$lib/atelier-ui";
   import { untrack } from "svelte";
 
@@ -28,14 +29,14 @@
 
 <PromptDialog
   open={target !== null}
-  title="Tag auf {target ?? ''} erstellen"
+  title={t("Tag auf {target} erstellen", { target: target ?? "" })}
   bind:value={name}
   placeholder="v1.0.0"
-  action="Erstellen"
+  action={t("Erstellen")}
   mono
   onsubmit={submit}
   {oncancel}
 >
-  <Textarea bind:value={message} density="sm" class="h-20 field-sizing-fixed" placeholder="Nachricht (optional – macht den Tag annotiert)" aria-label="Tag-Nachricht" />
-  <Checkbox size="md" bind:checked={push}>Danach pushen</Checkbox>
+  <Textarea bind:value={message} density="sm" class="h-20 field-sizing-fixed" placeholder={t("Nachricht (optional – macht den Tag annotiert)")} aria-label={t("Tag-Nachricht")} />
+  <Checkbox size="md" bind:checked={push}>{t("Danach pushen")}</Checkbox>
 </PromptDialog>

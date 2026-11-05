@@ -28,6 +28,7 @@
   import { screens } from "$lib/components/Terminal.svelte";
   import { fromScript, metaOf, type WfFile } from "$lib/workflow.logic";
   import { byFolder, chunks, tally } from "$lib/activity.logic";
+  import { LOCALE, t } from "$lib/i18n";
 
   type Step = { at: number; tool: string; summary: string };
   type Agent = {
@@ -124,15 +125,15 @@
   let wfEntry = $state<WfFile | null>(null);
 
   const STATUS: Record<string, [string, string, string]> = {
-    running: ["◐", "text-primary animate-pulse", "läuft"],
-    done: ["✓", "text-success", "fertig"],
-    completed: ["✓", "text-success", "fertig"],
-    error: ["✕", "text-destructive", "Fehler"],
-    failed: ["✕", "text-destructive", "Fehler"],
-    aborted: ["⊘", "text-muted-foreground", "abgebrochen"],
-    open: ["○", "text-muted-foreground/60", "offen"],
-    killed: ["⊘", "text-muted-foreground", "abgebrochen"],
-    paused: ["⏸", "text-muted-foreground", "pausiert"],
+    running: ["◐", "text-primary animate-pulse", t("läuft")],
+    done: ["✓", "text-success", t("fertig")],
+    completed: ["✓", "text-success", t("fertig")],
+    error: ["✕", "text-destructive", t("Fehler")],
+    failed: ["✕", "text-destructive", t("Fehler")],
+    aborted: ["⊘", "text-muted-foreground", t("abgebrochen")],
+    open: ["○", "text-muted-foreground/60", t("offen")],
+    killed: ["⊘", "text-muted-foreground", t("abgebrochen")],
+    paused: ["⏸", "text-muted-foreground", t("pausiert")],
   };
   const status = (s: string) => STATUS[s] ?? ["○", "text-muted-foreground", s];
 
@@ -145,9 +146,9 @@
     !data?.alive
       ? null
       : panel?.waiting
-        ? (["?", "text-warning font-bold", "wartet auf dich"] as const)
+        ? (["?", "text-warning font-bold", t("wartet auf dich")] as const)
         : panel?.busy
-          ? (["◐", "text-primary animate-pulse", "Claude arbeitet"] as const)
+          ? (["◐", "text-primary animate-pulse", t("Claude arbeitet")] as const)
           : null,
   );
   // Eingefuegt, aber noch nicht im Transkript (Prompt nicht abgeschickt): id = -n, Bild aus pasted.local.
@@ -191,8 +192,8 @@
   }
 
   onMount(() => {
-    const t = setInterval(poll, 1500);
-    return () => clearInterval(t);
+    const timer = setInterval(poll, 1500);
+    return () => clearInterval(timer);
   });
 
   $effect(() => {
@@ -239,7 +240,7 @@
     wfOpen = true;
   }
   async function deleteTemplate(f: WfFile, name: string) {
-    if (!(await confirm(`Vorlage „${name}“ löschen?`, "Löschen"))) return;
+    if (!(await confirm(t("Vorlage „{name}“ löschen?", { name }), t("Löschen")))) return;
     try {
       await invoke("workflows_delete", { cwd, scope: f.scope, file: f.file });
       loadTemplates();
@@ -250,8 +251,8 @@
   // Ohne Enter: Args dahinter tippen, dann selbst abschicken; startet nie versehentlich einen teuren Lauf
   // Wartet claude auf eine Freigabe, waere der Text dort die Antwort.
   const startTemplate = async (f: WfFile) => {
-    if (await blocked(id)) return void (tplError = "Claude wartet auf Freigabe");
-    await ptyWrite(id, `Fuehre den Workflow mit dem Workflow-Tool aus, scriptPath: ${JSON.stringify(f.path)}. Args: `).catch((e) => (tplError = String(e)));
+    if (await blocked(id)) return void (tplError = t("Claude wartet auf Freigabe"));
+    await ptyWrite(id, t("Fuehre den Workflow mit dem Workflow-Tool aus, scriptPath: {path}. Args: ", { path: JSON.stringify(f.path) })).catch((e) => (tplError = String(e)));
   };
 
   // Agent-Tool-Agents als Pseudo-Run mit id "": gleiche Liste und Zeitleiste wie Workflow-Agents
@@ -317,7 +318,7 @@
         await invoke("pty_write", { id, data: "\x0f" });
         // Bis 1,5 s auf den Bildschirmwechsel warten, die Ausgabe kommt asynchron ins xterm.
         for (let i = 0; i < 10 && !open(); i++) await wait();
-        if (!open()) return void (actionError = "Transkript-Ansicht von claude ließ sich nicht öffnen.");
+        if (!open()) return void (actionError = t("Transkript-Ansicht von claude ließ sich nicht öffnen."));
       }
       await invoke("pty_write", { id, data: "/" });
       await wait();
@@ -402,13 +403,13 @@
     const s = Math.max(0, Math.round(ms / 1000));
     return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor(s / 60) % 60}m`;
   }
-  const clock = (ms: number) => new Date(ms).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const clock = (ms: number) => new Date(ms).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const ago = (ms: number) => (ms ? age(new Date(ms).toISOString()) : "");
 
   // Wie register.tsx der Mod: <50 primary, <80 gelb, sonst rot.
   const HOUR = 3_600_000;
-  const WIN = { five_hour: ["5 h", 5 * HOUR], seven_day: ["Woche", 168 * HOUR] } as const;
-  const DAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const WIN = { five_hour: ["5 h", 5 * HOUR], seven_day: [t("Woche"), 168 * HOUR] } as const;
+  const DAYS = [t("So"), t("Mo"), t("Di"), t("Mi"), t("Do"), t("Fr"), t("Sa")];
   const lvl = (p: number) => (p < 50 ? "bg-primary" : p < 80 ? "bg-warning" : "bg-destructive");
   const txt = (p: number) => (p < 50 ? "text-primary" : p < 80 ? "text-warning" : "text-destructive");
   // Prognose in % bei Reset (> 100 = zu schnell); undefined, solange das Fenster nicht laeuft.
@@ -417,7 +418,7 @@
     // Nach dem Reset ohne neue Daten waere die Prognose Unsinn.
     return Number.isNaN(f) || f <= 0 || f > 1 ? undefined : used / f;
   };
-  const hm = (d: Date) => d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const hm = (d: Date) => d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
   const mins = (ms: number) => {
     const m = Math.max(0, Math.floor(ms / 60_000));
     return ms < 60_000 ? `${Math.max(0, Math.floor(ms / 1000))}s` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
@@ -426,20 +427,20 @@
     const at = new Date(iso ?? "");
     if (Number.isNaN(at.getTime())) return "";
     const left = at.getTime() - now;
-    if (left <= 0) return `Reset erfolgt ${hm(at)}`;
-    return left < 24 * HOUR ? `Reset ${hm(at)} · noch ${mins(left)}` : `Reset ${DAYS[at.getDay()]} ${hm(at)}`;
+    if (left <= 0) return t("Reset erfolgt {time}", { time: hm(at) });
+    return left < 24 * HOUR ? t("Reset {time} · noch {left}", { time: hm(at), left: mins(left) }) : t("Reset {day} {time}", { day: DAYS[at.getDay()], time: hm(at) });
   };
   function details(s: Panel): [string, string][] {
-    const t = s.tokens;
-    const seen = t.input + t.cacheRead + t.cacheWrite;
+    const tk = s.tokens;
+    const seen = tk.input + tk.cacheRead + tk.cacheWrite;
     const hours = (now - s.startedAt) / HOUR;
     const rows: [string, unknown][] = [
-      ["Modell", s.model && [s.model.replace(/^claude-/, ""), s.effort].filter(Boolean).join(" · ")],
+      [t("Modell"), s.model && [s.model.replace(/^claude-/, ""), s.effort].filter(Boolean).join(" · ")],
       // Im Abo bleibt cost 0, dann sagt die Zeile nichts.
-      ["Kosten", !!s.cost && `$${s.cost.toFixed(2)}${hours > 0.05 ? ` · $${(s.cost / hours).toFixed(2)}/h` : ""}`],
-      ["Tokens", !!(seen || t.output) && `${tokens(seen)} in · ${tokens(t.output)} out`],
-      ["Cache", !!seen && `${Math.round((t.cacheRead / seen) * 100)}% Hit`],
-      ["Dauer", !!s.startedAt && `${mins(now - s.startedAt)} · ${s.turns} Turns`],
+      [t("Kosten"), !!s.cost && `$${s.cost.toFixed(2)}${hours > 0.05 ? ` · $${(s.cost / hours).toFixed(2)}/h` : ""}`],
+      ["Tokens", !!(seen || tk.output) && `${tokens(seen)} in · ${tokens(tk.output)} out`],
+      ["Cache", !!seen && `${Math.round((tk.cacheRead / seen) * 100)}% Hit`],
+      [t("Dauer"), !!s.startedAt && `${mins(now - s.startedAt)} · ${s.turns} Turns`],
     ];
     return rows.filter((r): r is [string, string] => typeof r[1] === "string" && !!r[1]);
   }
@@ -476,7 +477,7 @@
     if (r?.id !== id || !data) return;
     const m = imgs.find((m) => m.kind === "paste" && m.label === `Eingefügt #${r.n}`);
     if (m) shown = m.id;
-    else actionError = `Bild #${r.n} noch nicht im Transkript.`;
+    else actionError = t("Bild #{n} noch nicht im Transkript.", { n: r.n });
     pasted.req = null;
   });
 
@@ -501,9 +502,9 @@
   <Tabs
     bind:value={tab}
     tabs={[
-      { id: "session", label: "Sitzung" },
-      { id: "work", label: "Arbeit", title: "Workflows und Agents", count: (data?.runs.length ?? 0) + (data?.agents.length ?? 0), live: runningRuns + runningAgents },
-      { id: "img", label: "Bilder", count: imgs.length },
+      { id: "session", label: t("Sitzung") },
+      { id: "work", label: t("Arbeit"), title: t("Workflows und Agents"), count: (data?.runs.length ?? 0) + (data?.agents.length ?? 0), live: runningRuns + runningAgents },
+      { id: "img", label: t("Bilder"), count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
     ]}
   />
@@ -512,7 +513,7 @@
     <!-- Ausserhalb des Scrollbereichs: sticky lag dort ueber breitem Inhalt. -->
     <div class="border-border shrink-0 border-b px-2 py-1.5 text-ui">
       <TextButton class="flex max-w-full gap-0.5" onclick={() => (focus = null)}>
-        <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate" title={focused?.r.name}>{focused?.r.name ?? "Zurück"}</span>
+        <ChevronLeftIcon class="size-3.5 shrink-0" /><span class="truncate" title={focused?.r.name}>{focused?.r.name ?? t("Zurück")}</span>
       </TextButton>
       {@render agentHead()}
     </div>
@@ -525,9 +526,9 @@
       <section class="border-border/60 @container mb-2 rounded-lg border">
         <div class="flex items-center justify-between pr-2">
           <SectionToggle class={sectionHead} open={!folded.tpl} onclick={() => (folded.tpl = !folded.tpl)}
-            >Vorlagen{#if tpls.length}<span class="text-meta">{tpls.length}</span>{/if}</SectionToggle
+            >{t("Vorlagen")}{#if tpls.length}<span class="text-meta">{tpls.length}</span>{/if}</SectionToggle
           >
-          {#if !guest}<TextButton class="shrink-0" onclick={() => editTemplate(null)}>+ Neu</TextButton>{/if}
+          {#if !guest}<TextButton class="shrink-0" onclick={() => editTemplate(null)}>{t("+ Neu")}</TextButton>{/if}
         </div>
         {#if !folded.tpl}
         {#each tpls as x (x.f.path)}
@@ -535,9 +536,9 @@
             <span class="max-w-32 min-w-10 truncate font-medium" title={[x.f.path, x.description].filter(Boolean).join("\n")}>{x.name}</span>
             <!-- Badges werden bei Platzmangel abgeschnitten, die Knoepfe rechts nie. -->
             <span class="flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
-              <span class="text-muted-foreground shrink-0 text-meta">{x.f.scope === "user" ? "Global" : "Projekt"}</span>
-              {#if !x.builder}<span class="bg-secondary shrink-0 rounded px-1 text-[10px]" title="Freies Skript: nur starten und löschen">Skript</span>{/if}
-              {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-meta" title="Projekt-Vorlage überschreibt die globale gleichen Namens">überschreibt</span>{/if}
+              <span class="text-muted-foreground shrink-0 text-meta">{x.f.scope === "user" ? "Global" : t("Projekt")}</span>
+              {#if !x.builder}<span class="bg-secondary shrink-0 rounded px-1 text-[10px]" title={t("Freies Skript: nur starten und löschen")}>{t("Skript")}</span>{/if}
+              {#if shadowed(x.f.scope, x.name)}<span class="text-warning shrink-0 text-meta" title={t("Projekt-Vorlage überschreibt die globale gleichen Namens")}>{t("überschreibt")}</span>{/if}
             </span>
             <!-- Only where it fits readably; the name's tooltip carries it otherwise -->
             <span class="text-muted-foreground hidden min-w-0 flex-1 truncate @sm:block" title={x.description}>{x.description}</span>
@@ -546,30 +547,30 @@
               size="2xs"
               variant="outline"
               disabled={!data?.alive}
-              title={data?.alive ? "In die Claude-Sitzung schreiben (Enter selbst drücken)" : "Kein laufendes claude in diesem Terminal-Ordner"}
-              onclick={() => startTemplate(x.f)}>Starten</Button
+              title={data?.alive ? t("In die Claude-Sitzung schreiben (Enter selbst drücken)") : t("Kein laufendes claude in diesem Terminal-Ordner")}
+              onclick={() => startTemplate(x.f)}>{t("Starten")}</Button
             >
             {#if !guest}
               {@const deletable = /^[A-Za-z0-9_-]+$/.test(x.f.file)}
               <!-- Edit and delete in the ⋯ menu: delete no longer sits right next to start. -->
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger>
-                  {#snippet child({ props })}<IconButton {...props} label="Weitere Aktionen"><EllipsisIcon class="size-3.5" /></IconButton>{/snippet}
+                  {#snippet child({ props })}<IconButton {...props} label={t("Weitere Aktionen")}><EllipsisIcon class="size-3.5" /></IconButton>{/snippet}
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content align="end" class={menuContent}>
                     <DropdownMenu.Item
                       class="{menuItem} data-disabled:opacity-50"
                       disabled={!x.builder}
-                      title={x.builder ? undefined : "Freies Skript: nur in einer Datei bearbeitbar"}
-                      onSelect={() => editTemplate(x.f)}>Bearbeiten …</DropdownMenu.Item
+                      title={x.builder ? undefined : t("Freies Skript: nur in einer Datei bearbeitbar")}
+                      onSelect={() => editTemplate(x.f)}>{t("Bearbeiten …")}</DropdownMenu.Item
                     >
                     <DropdownMenu.Separator class={menuSeparator} />
                     <DropdownMenu.Item
                       class="{menuItem} text-destructive data-disabled:opacity-50"
                       disabled={!deletable}
-                      title={deletable ? undefined : "Dateiname mit Sonderzeichen: nur von Hand löschbar"}
-                      onSelect={() => deleteTemplate(x.f, x.name)}>Löschen …</DropdownMenu.Item
+                      title={deletable ? undefined : t("Dateiname mit Sonderzeichen: nur von Hand löschbar")}
+                      onSelect={() => deleteTemplate(x.f, x.name)}>{t("Löschen …")}</DropdownMenu.Item
                     >
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
@@ -577,7 +578,7 @@
             {/if}
           </div>
         {:else}
-          {#if !tplError}<p class="text-muted-foreground border-border/60 border-t px-2 py-1">Noch keine. Oder Claude sagen: „erstell einen Workflow für … und speicher ihn als Vorlage“.</p>{/if}
+          {#if !tplError}<p class="text-muted-foreground border-border/60 border-t px-2 py-1">{t("Noch keine. Oder Claude sagen: „erstell einen Workflow für … und speicher ihn als Vorlage“.")}</p>{/if}
         {/each}
         {#if tplError}<p class="text-destructive border-border/60 border-t px-2 py-1">{tplError}</p>{/if}
         {/if}
@@ -586,30 +587,30 @@
     {#if actionError && !error}
       <p class="text-destructive bg-destructive/10 mb-2 flex items-start gap-2 rounded-md px-2 py-1">
         <span class="min-w-0 flex-1 break-words">{actionError}</span>
-        <IconButton size="bare" tone="inherit" label="Meldung schließen" title="" onclick={() => (actionError = "")}>✕</IconButton>
+        <IconButton size="bare" tone="inherit" label={t("Meldung schließen")} title="" onclick={() => (actionError = "")}>✕</IconButton>
       </p>
     {/if}
     {#if error}
       <p class="text-destructive p-2">{error}</p>
     {:else if !data}
-      <Empty>Lade …</Empty>
+      <Empty>{t("Lade …")}</Empty>
     {:else if tab === "session"}
       <!-- Limits gelten kontoweit: auch vor der ersten Antwort dieser Session, siehe newest_limits() -->
       {@const lims = (["five_hour", "seven_day"] as const).flatMap((k) => (data!.limits ?? panel?.limits ?? []).filter((l) => l.kind === k).slice(0, 1).map((l) => [k, l] as const))}
       {#if !panel}
-        <p class="text-muted-foreground p-2">Noch keine Sitzungsdaten – wartet auf Claude …</p>
+        <p class="text-muted-foreground p-2">{t("Noch keine Sitzungsdaten – wartet auf Claude …")}</p>
       {:else}
         {@const ctx = panel.context}
         {#if ctx.window > 0}
           {@const p = ctx.percent ?? ((ctx.tokens ?? 0) / ctx.window) * 100}
           {@const sub = [
             ctx.tokens === null ? "" : `${tokens(ctx.tokens)} / ${tokens(ctx.window)}`,
-            panel.compactLeft === null ? "" : `Compact in ${tokens(Math.max(0, panel.compactLeft))}`,
+            panel.compactLeft === null ? "" : t("Compact in {n}", { n: tokens(Math.max(0, panel.compactLeft)) }),
           ]
             .filter(Boolean)
             .join(" · ")}
           <section class="border-border/60 mb-2 rounded-lg border p-2">
-            {@render gauge("Kontext", p, sub, true)}
+            {@render gauge(t("Kontext"), p, sub, true)}
           </section>
         {/if}
       {/if}
@@ -624,7 +625,7 @@
                 {@render gauge(label, used, reset(l.resetsAt))}
                 {#if f !== undefined}
                   <div class="mt-0.5 {f > 100 ? 'text-warning' : 'text-muted-foreground'}">
-                    {f > 100 ? "◆ zu schnell → 100% vor Reset" : `◇ im Plan → ~${Math.round(f)}% bei Reset`}
+                    {f > 100 ? t("◆ zu schnell → 100% vor Reset") : t("◇ im Plan → ~{n}% bei Reset", { n: Math.round(f) })}
                   </div>
                 {/if}
               </div>
@@ -635,7 +636,7 @@
         <!-- Live progress above the static stats -->
         {#if panel.active.length}
           <section class="border-border/60 mb-2 rounded-lg border p-2">
-            <div class="text-muted-foreground mb-1">Aktiv</div>
+            <div class="text-muted-foreground mb-1">{t("Aktiv")}</div>
             {#each panel.active as a, i (i)}
               {@const [icon, color, text] = status(ACT[a.state])}
               <div class="flex items-center gap-2">
@@ -649,16 +650,16 @@
         {#if panel.todos.length}
           <section class="border-border/60 mb-2 rounded-lg border p-2">
             <div class="text-muted-foreground mb-1 flex justify-between">
-              <span>Todos</span><span class="tabular-nums">{panel.todos.filter((t) => t.status === "completed").length}/{panel.todos.length}</span>
+              <span>Todos</span><span class="tabular-nums">{panel.todos.filter((td) => td.status === "completed").length}/{panel.todos.length}</span>
             </div>
-            {#each panel.todos as t, i (i)}
+            {#each panel.todos as td, i (i)}
               <div class="flex gap-2">
-                {#if t.status === "completed"}
-                  <span class="text-success">✓</span><span class="text-muted-foreground min-w-0 line-through [overflow-wrap:anywhere]">{t.content}</span>
-                {:else if t.status === "in_progress"}
-                  <span class="text-primary">◐</span><span class="min-w-0 [overflow-wrap:anywhere]">{t.content}</span>
+                {#if td.status === "completed"}
+                  <span class="text-success">✓</span><span class="text-muted-foreground min-w-0 line-through [overflow-wrap:anywhere]">{td.content}</span>
+                {:else if td.status === "in_progress"}
+                  <span class="text-primary">◐</span><span class="min-w-0 [overflow-wrap:anywhere]">{td.content}</span>
                 {:else}
-                  <span class="text-muted-foreground">○</span><span class="min-w-0 [overflow-wrap:anywhere]">{t.content}</span>
+                  <span class="text-muted-foreground">○</span><span class="min-w-0 [overflow-wrap:anywhere]">{td.content}</span>
                 {/if}
               </div>
             {/each}
@@ -675,10 +676,10 @@
         {#if data?.modes.length}
           <!-- Plugin-Modi (caveman, ponytail, ...): eigene kleine Karte unter den Details -->
           <section class="border-border/60 mb-2 rounded-lg border p-2">
-            <div class="text-muted-foreground mb-1">Modi</div>
+            <div class="text-muted-foreground mb-1">{t("Modi")}</div>
             <div class="flex flex-wrap gap-1">
               {#each data.modes as m (m.name)}
-                <Badge variant="secondary" class="text-meta font-normal" title="Plugin-Modus {m.name}"
+                <Badge variant="secondary" class="text-meta font-normal" title={t("Plugin-Modus {name}", { name: m.name })}
                   >{m.name}{#if m.level}<span class="text-muted-foreground">· {m.level}</span>{/if}</Badge
                 >
               {/each}
@@ -687,17 +688,17 @@
         {/if}
       {/if}
     {:else if !data.session}
-      <Empty>Keine laufende Claude-Sitzung gefunden.</Empty>
+      <Empty>{t("Keine laufende Claude-Sitzung gefunden.")}</Empty>
     {:else if inFocus}
       {@render agentLog()}
     {:else if tab === "prompts"}
       {#each [...(data.prompts ?? [])].reverse() as p, i (i)}
-        <Row density="roomy" text="md" class="block" title={p.text} aria-label="In claudes Transkript springen: {p.text.slice(0, 80)}" onclick={() => jump(p)}>
+        <Row density="roomy" text="md" class="block" title={p.text} aria-label={t("In claudes Transkript springen: {text}", { text: p.text.slice(0, 80) })} onclick={() => jump(p)}>
           <div class="line-clamp-2 break-words">{p.text}</div>
           <div class="text-muted-foreground text-meta">{ago(p.at)}</div>
         </Row>
       {:else}
-        <Empty>Noch keine Prompts in dieser Sitzung.</Empty>
+        <Empty>{t("Noch keine Prompts in dieser Sitzung.")}</Empty>
       {/each}
     {:else if tab === "work"}
       {#if data.runs.length}
@@ -716,7 +717,7 @@
               <span class="min-w-0 truncate font-medium" title={r.name}>{r.name}</span>
               <span class="text-muted-foreground min-w-0 flex-1 truncate text-right tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)}</span>
             </SectionToggle>
-            <Button size="2xs" variant="outline" class="mx-1.5" title="Groß anzeigen: alle Agents mit Verlauf und Ergebnis" onclick={() => openBig(r)}
+            <Button size="2xs" variant="outline" class="mx-1.5" title={t("Groß anzeigen: alle Agents mit Verlauf und Ergebnis")} onclick={() => openBig(r)}
               >Details</Button
             >
           </div>
@@ -734,14 +735,14 @@
           {#if !folded.agents}{@render phases(solo)}{/if}
         </section>
       {:else if !data.runs.length}
-        <div class="min-h-0 flex-1"><Empty>Keine Workflows oder Agents in dieser Sitzung.</Empty></div>
+        <div class="min-h-0 flex-1"><Empty>{t("Keine Workflows oder Agents in dieser Sitzung.")}</Empty></div>
       {/if}
     {:else if imgs.length}
       {#each imgGroups as [folder, list] (folder)}
         {#if folder}
           <div class="text-meta text-muted-foreground mt-4 mb-2 flex first:mt-0 items-center gap-2" title={folder}>
             <span class="text-foreground min-w-0 truncate font-mono">{folder.split(/[\\/]/).slice(-2).join("/")}</span>
-            <span class="shrink-0 tabular-nums">{list.length} Dateien</span>
+            <span class="shrink-0 tabular-nums">{t("{n} Dateien", { n: list.length })}</span>
           </div>
         {/if}
         {#if list.length}
@@ -751,7 +752,7 @@
         {/if}
       {/each}
     {:else}
-      <Empty>Noch keine Bilder in dieser Sitzung.</Empty>
+      <Empty>{t("Noch keine Bilder in dieser Sitzung.")}</Empty>
     {/if}
   </div>
 
@@ -759,10 +760,10 @@
   {#if claudeState || live}
     <div class="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 truncate border-t px-2.5 py-1 text-meta whitespace-nowrap">
       {#if claudeState}
-        {@const [i, c, t] = claudeState}
-        <span class={c}>{i}</span><span class="text-foreground truncate">{t}</span>
+        {@const [i, c, label] = claudeState}
+        <span class={c}>{i}</span><span class="text-foreground truncate">{label}</span>
       {:else}
-        <span class="bg-primary size-1.5 shrink-0 animate-pulse rounded-full"></span><span class="truncate">{runningRuns ? "Workflow läuft" : runningAgents ? "Agents laufen" : "läuft"}</span>
+        <span class="bg-primary size-1.5 shrink-0 animate-pulse rounded-full"></span><span class="truncate">{runningRuns ? t("Workflow läuft") : runningAgents ? t("Agents laufen") : t("läuft")}</span>
       {/if}
     </div>
   {/if}
@@ -772,13 +773,13 @@
 {#snippet tile(m: Img)}
   <TextButton tone="plain" class="group block min-w-0 {m.missing ? 'opacity-50' : ''}" onclick={() => (shown = m.id)} title={m.label}>
     <div use:lazy={m} class="bg-background/40 group-hover:ring-primary/40 relative aspect-video overflow-hidden rounded-md ring-1 ring-foreground/5">
-      {#if m.missing}<span class="text-meta text-muted-foreground grid h-full place-items-center">gelöscht</span>
+      {#if m.missing}<span class="text-meta text-muted-foreground grid h-full place-items-center">{t("gelöscht")}</span>
       {:else if thumbs[key(m)]}<img src={thumbs[key(m)]} alt={m.label} decoding="async" class="aspect-video w-full rounded-md object-cover" />
       {:else if noThumb[key(m)]}<span
           class="text-meta text-muted-foreground grid h-full place-content-center px-1 text-center"
-          title="Das Vorschaubild ließ sich nicht erzeugen. Klick öffnet das Original.">Keine Vorschau<span class="opacity-70">Klick zeigt das Original</span></span
+          title={t("Das Vorschaubild ließ sich nicht erzeugen. Klick öffnet das Original.")}>{t("Keine Vorschau")}<span class="opacity-70">{t("Klick zeigt das Original")}</span></span
         >{/if}
-      {#if m.kind === "file"}<span class="bg-secondary text-secondary-foreground text-meta absolute top-1 left-1 rounded px-1.5 leading-4">Datei</span>{/if}
+      {#if m.kind === "file"}<span class="bg-secondary text-secondary-foreground text-meta absolute top-1 left-1 rounded px-1.5 leading-4">{t("Datei")}</span>{/if}
     </div>
     <div class="text-ui mt-1 truncate">{fileName(m)}</div>
     <div class="text-meta text-muted-foreground truncate">{ago(m.at)}</div>
@@ -801,9 +802,9 @@
 
 {#snippet agentLog()}
   {#if !focused}
-    <Empty>Agent nicht mehr in der Liste.</Empty>
+    <Empty>{t("Agent nicht mehr in der Liste.")}</Empty>
   {:else if !log}
-    <Empty>Lade Verlauf …</Empty>
+    <Empty>{t("Lade Verlauf …")}</Empty>
   {:else}
     {@const a = focused.a}
     {@const cs = chunks(log)}
@@ -816,11 +817,11 @@
             {@const e = c.e}
             {#if e.kind === "prompt"}
               <details class="bg-secondary/50 rounded-md px-2 py-1">
-                <summary class="text-muted-foreground cursor-pointer">Auftrag</summary>
+                <summary class="text-muted-foreground cursor-pointer">{t("Auftrag")}</summary>
                 <pre class="mt-1 max-h-64 overflow-auto font-mono text-meta whitespace-pre-wrap">{e.body}</pre>
               </details>
             {:else}
-              {#if i === fin}<div class="{resultHead} mt-2">Ergebnis</div>{/if}
+              {#if i === fin}<div class="{resultHead} mt-2">{t("Ergebnis")}</div>{/if}
               <!-- Breite Tabellen/Code scrollen hier, nicht das ganze Panel unter die Kopfzeile. -->
               <div class="border-primary/40 min-w-0 overflow-x-auto border-l-2 py-0.5 pl-2"><Markdown text={e.body} /></div>
             {/if}
@@ -849,12 +850,12 @@
           {/if}
         </li>
       {:else}
-        <li class="text-muted-foreground p-2">Kein Verlauf gefunden.</li>
+        <li class="text-muted-foreground p-2">{t("Kein Verlauf gefunden.")}</li>
       {/each}
     </ol>
     {#if a.result}
       <div class="border-border/60 mt-2 rounded-lg border p-2">
-        <div class={resultHead}>Ergebnis</div>
+        <div class={resultHead}>{t("Ergebnis")}</div>
         <div class="min-w-0 overflow-x-auto"><Markdown text={a.result} /></div>
       </div>
     {/if}
@@ -865,11 +866,11 @@
   {@const [si, sc, st] =
     e.output !== null
       ? e.error
-        ? ["✕", "text-destructive", "Fehler"]
-        : ["✓", "text-success", "fertig"]
+        ? ["✕", "text-destructive", t("Fehler")]
+        : ["✓", "text-success", t("fertig")]
       : a.state === "running"
-        ? ["◐", "text-primary animate-pulse", "läuft"]
-        : ["⊘", "text-muted-foreground", "ohne Ergebnis"]}
+        ? ["◐", "text-primary animate-pulse", t("läuft")]
+        : ["⊘", "text-muted-foreground", t("ohne Ergebnis")]}
   <details class="hover:bg-accent/40 open:bg-accent/30 rounded-md">
     <summary class="flex cursor-pointer list-none items-center gap-1.5 px-1 py-0.5 font-mono text-meta">
       <span class="text-muted-foreground shrink-0 tabular-nums">{e.at ? clock(e.at) : ""}</span>
@@ -883,7 +884,7 @@
         <pre
           class="bg-background/60 max-h-64 overflow-auto rounded p-1.5 font-mono text-meta whitespace-pre-wrap {e.error
             ? 'text-destructive'
-            : ''}">{e.output || "(leer)"}</pre>
+            : ''}">{e.output || t("(leer)")}</pre>
       {/if}
     </div>
   </details>
@@ -907,7 +908,7 @@
         onclick={() => (openPhases[ok] = !open)}
       >
         <span class={pc} title={pt}>{pi}</span>
-        <span class="min-w-16 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}" title={g.p}>{g.p || "Ohne Phase"}</span>
+        <span class="min-w-16 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}" title={g.p}>{g.p || t("Ohne Phase")}</span>
         <span class="text-muted-foreground min-w-0 truncate tabular-nums"
           >{pt} · {n}/{Math.max(g.agents.length, r.planned[r.phases.indexOf(g.p)] ?? 0)}{#if err}<span class="text-destructive"> · {err} ✕</span>{/if}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
               g.agents.reduce((t, a) => t + a.tokens, 0),
@@ -930,7 +931,7 @@
               selected={!!(dlg && a.id && a.id === focus?.agent)}
               class="group/agent block flex-1 pr-2 disabled:opacity-100"
               disabled={!a.id}
-              title={a.id ? "Verlauf anzeigen" : undefined}
+              title={a.id ? t("Verlauf anzeigen") : undefined}
               onclick={() => openAgent(r, a)}
             >
               <div class="flex items-center gap-2">
@@ -988,7 +989,7 @@
         <Dialog.Title class="flex items-center gap-2 text-title">
           <span class={color} title={text}>{icon}</span><span class="min-w-0 truncate" title={r.name}>{r.name}</span>
         </Dialog.Title>
-        <div class="text-muted-foreground mt-0.5 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)} · {cnt("done")}/{r.agents.length} Agents fertig</div>
+        <div class="text-muted-foreground mt-0.5 tabular-nums">{text} · {dur(r.duration_ms)} · {tokens(r.tokens)} · {t("{done}/{total} Agents fertig", { done: cnt("done"), total: r.agents.length })}</div>
         <!-- Segmentierter Fortschritt: fertig / Fehler / laeuft -->
         <div class="mt-2 flex h-1 overflow-hidden rounded-full bg-foreground/5">
           {#each [["done", "bg-success"], ["error", "bg-destructive"], ["running", "bg-primary animate-pulse"]] as [k, c] (k)}
@@ -999,9 +1000,9 @@
           <Segmented
             value={filter}
             options={[
-              [`Alle ${r.agents.length}`, "all"],
-              [`Laufend ${cnt("running")}`, "running"],
-              [`Fehler ${cnt("error")}`, "error"],
+              [t("Alle {n}", { n: r.agents.length }), "all"],
+              [t("Laufend {n}", { n: cnt("running") }), "running"],
+              [t("Fehler {n}", { n: cnt("error") }), "error"],
             ] as const}
             onchange={(v) => (filter = v)}
           />
@@ -1009,14 +1010,14 @@
       </div>
       <div class="border-border/60 grid min-h-0 flex-1 grid-cols-[minmax(260px,2fr)_3fr] overflow-hidden rounded-lg border">
         <div class="border-border/60 min-h-0 overflow-y-auto border-r">
-          {#if r.agents.some(shows)}{@render phases(r, true)}{:else}<Empty>Keine Agents mit diesem Status.</Empty>{/if}
+          {#if r.agents.some(shows)}{@render phases(r, true)}{:else}<Empty>{t("Keine Agents mit diesem Status.")}</Empty>{/if}
         </div>
         <div class="flex min-h-0 min-w-0 flex-col">
           {#if focus}
             <div class="border-border/60 shrink-0 border-b px-2 pb-1.5">{@render agentHead()}</div>
             <div bind:this={bigScroller} class="min-h-0 flex-1 overflow-y-auto p-2">{@render agentLog()}</div>
           {:else}
-            <Empty>Agent links auswählen.</Empty>
+            <Empty>{t("Agent links auswählen.")}</Empty>
           {/if}
         </div>
       </div>
@@ -1029,19 +1030,19 @@
     {#if current}
       <Dialog.Title class="sr-only">{current.label}</Dialog.Title>
       <div class="flex min-h-0 items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label="Vorheriges Bild" onclick={() => step(-1)}
+        <Button variant="ghost" size="icon-sm" aria-label={t("Vorheriges Bild")} onclick={() => step(-1)}
           ><ChevronLeftIcon class="size-5" /></Button
         >
         <div class="flex min-h-0 min-w-0 flex-1 justify-center">
           {#if current.missing}
-            <p class="text-muted-foreground p-8">Datei gelöscht.</p>
+            <p class="text-muted-foreground p-8">{t("Datei gelöscht.")}</p>
           {:else if fullUrl}
             <ZoomImage src={fullUrl} alt={current.label} onswipe={step} />
           {:else}
-            <p class="text-muted-foreground p-8">Lade …</p>
+            <p class="text-muted-foreground p-8">{t("Lade …")}</p>
           {/if}
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Nächstes Bild" onclick={() => step(1)}
+        <Button variant="ghost" size="icon-sm" aria-label={t("Nächstes Bild")} onclick={() => step(1)}
           ><ChevronRightIcon class="size-5" /></Button
         >
       </div>
@@ -1051,7 +1052,7 @@
         >
         {#if current.kind === "read" || current.kind === "file"}
           <TextButton underline class="shrink-0" onclick={() => navigator.clipboard.writeText(current.label)}
-            >Pfad kopieren</TextButton
+            >{t("Pfad kopieren")}</TextButton
           >
         {/if}
       </div>

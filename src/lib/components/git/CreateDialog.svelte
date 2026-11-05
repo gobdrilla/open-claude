@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { open as pickFolder } from "@tauri-apps/plugin-dialog";
   import { forge, accountId, type Account, type RepoLang } from "$lib/git";
   import { Button, Checkbox, Dialog, FolderField, Input, Segmented } from "$lib/atelier-ui";
@@ -53,7 +54,7 @@
   });
 
   async function browseDest() {
-    const picked = await pickFolder({ directory: true, title: "Zielordner wählen", defaultPath: dest || root });
+    const picked = await pickFolder({ directory: true, title: t("Zielordner wählen"), defaultPath: dest || root });
     if (typeof picked !== "string") return;
     dest = picked;
     destTouched = true;
@@ -63,7 +64,7 @@
     if (busy || done || !valid) return;
     busy = true;
     error = "";
-    status = "Lege Repo an…";
+    status = t("Lege Repo an…");
     // Auswahl festhalten, Controls sind waehrend busy zwar gesperrt, aber sicher ist sicher.
     const acc = account, p = priv;
     try {
@@ -71,13 +72,13 @@
       const path = await forge.create(dest.trim(), name, lang, mit, id);
       let failed = "";
       if (acc) {
-        status = `Lege auf ${acc.host} an…`;
+        status = t("Lege auf {host} an…", { host: acc.host });
         failed = await forge.createRemote(path, name, p).then(() => "", String);
       }
       oncreate(path);
       // Lokal steht; erneutes Anlegen scheiterte an "nicht leer", daher nur noch schliessen.
       if (failed) {
-        error = `Lokal angelegt, Remote fehlgeschlagen: ${failed}`;
+        error = t("Lokal angelegt, Remote fehlgeschlagen: {error}", { error: failed });
         done = true;
         return;
       }
@@ -108,8 +109,8 @@
 <Dialog.Root bind:open={() => open, (v) => { if (!busy) open = v; }}>
   <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-xl">
     <Dialog.Header>
-      <Dialog.Title>Neues Repository</Dialog.Title>
-      <Dialog.Description>Lokal anlegen, optional auf GitHub/GitLab.</Dialog.Description>
+      <Dialog.Title>{t("Neues Repository")}</Dialog.Title>
+      <Dialog.Description>{t("Lokal anlegen, optional auf GitHub/GitLab.")}</Dialog.Description>
     </Dialog.Header>
 
     <fieldset disabled={busy} class="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2.5 text-ui">
@@ -122,28 +123,28 @@
           onkeydown={(e) => e.key === "Enter" && doCreate()}
         />
         {#if name && !NAME.test(name)}
-          <p class="text-destructive mt-1 text-meta">Nur Buchstaben, Ziffern, . _ -</p>
+          <p class="text-destructive mt-1 text-meta">{t("Nur Buchstaben, Ziffern, . _ -")}</p>
         {/if}
       </div>
 
-      <span class="text-muted-foreground pt-2">Ordner</span>
+      <span class="text-muted-foreground pt-2">{t("Ordner")}</span>
       <FolderField bind:value={dest} oninput={() => (destTouched = true)} onbrowse={browseDest} />
 
-      <span class="text-muted-foreground pt-2">Sprache</span>
+      <span class="text-muted-foreground pt-2">{t("Sprache")}</span>
       <div>
         <Segmented
-          label="Sprache"
+          label={t("Sprache")}
           value={lang}
-          options={langs.map((l) => [l.label, l.id, l.tool && !l.found ? `${l.tool} nicht gefunden: nur .gitignore + README` : undefined] as const)}
+          options={langs.map((l) => [l.label, l.id, l.tool && !l.found ? t("{tool} nicht gefunden: nur .gitignore + README", { tool: l.tool }) : undefined] as const)}
           onchange={(v) => (lang = v)}
         />
         {#if missing}
-          <p class="text-muted-foreground mt-1 text-meta">{missing.tool} nicht gefunden: nur .gitignore + README</p>
+          <p class="text-muted-foreground mt-1 text-meta">{t("{tool} nicht gefunden: nur .gitignore + README", { tool: missing.tool ?? "" })}</p>
         {/if}
       </div>
 
       <span></span>
-      <Checkbox bind:checked={mit}>MIT-Lizenz</Checkbox>
+      <Checkbox bind:checked={mit}>{t("MIT-Lizenz")}</Checkbox>
 
       <span class="text-muted-foreground pt-2">Remote</span>
       <div class="space-y-1.5">
@@ -151,16 +152,16 @@
           <Segmented
             label="Remote"
             value={account}
-            options={[["Nur lokal", null] as const, ...accounts.map((a) => [`${a.user}@${a.host}`, a] as const)]}
+            options={[[t("Nur lokal"), null] as const, ...accounts.map((a) => [`${a.user}@${a.host}`, a] as const)]}
             onchange={(v) => (account = v)}
           />
-          <Button variant="outline" size="sm" onclick={onaccounts}>Konto hinzufügen…</Button>
+          <Button variant="outline" size="sm" onclick={onaccounts}>{t("Konto hinzufügen…")}</Button>
         </div>
         {#if account}
           <Segmented
-            label="Sichtbarkeit"
+            label={t("Sichtbarkeit")}
             value={priv}
-            options={[["Privat", true], ["Öffentlich", false]]}
+            options={[[t("Privat"), true], [t("Öffentlich"), false]]}
             onchange={(v) => (priv = v)}
           />
         {/if}
@@ -179,11 +180,11 @@
         variant="ghost"
         size="sm"
         onclick={() => (open = false)}
-        disabled={busy}>{done ? "Schließen" : "Abbrechen"}</Button
+        disabled={busy}>{done ? t("Schließen") : t("Abbrechen")}</Button
       >
       <Button size="sm" class="gap-1.5" disabled={busy || done || !valid} onclick={doCreate}>
         {#if busy}<LoaderCircleIcon class="size-3.5 animate-spin" />{/if}
-        Anlegen
+        {t("Anlegen")}
       </Button>
     </div>
   </Dialog.Content>

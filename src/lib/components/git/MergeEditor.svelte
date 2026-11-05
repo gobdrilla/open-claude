@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { confirm } from "$lib/confirm.svelte";
   import { MOD, SHIFT } from "$lib/editor.logic";
   import Notice from "$lib/components/Notice.svelte";
@@ -110,7 +111,7 @@
   $effect(() => {
     dirty = editing || modified || choices.some(Boolean);
   });
-  const discardOk = async () => !dirty || (await confirm("Entscheidungen und Änderungen im Merge-Editor verwerfen?", "Verwerfen"));
+  const discardOk = async () => !dirty || (await confirm(t("Entscheidungen und Änderungen im Merge-Editor verwerfen?"), t("Verwerfen")));
 
   async function cancel() {
     if (await discardOk()) onclose(false);
@@ -185,9 +186,9 @@
     ({
       ours: sides.ours,
       theirs: sides.theirs,
-      "ours-theirs": `Beide (${sides.ours} zuerst)`,
-      "theirs-ours": `Beide (${sides.theirs} zuerst)`,
-      base: "Basis",
+      "ours-theirs": t("Beide ({side} zuerst)", { side: sides.ours }),
+      "theirs-ours": t("Beide ({side} zuerst)", { side: sides.theirs }),
+      base: t("Basis"),
     })[c];
 </script>
 
@@ -209,7 +210,7 @@
         {@const m = marks[k]}
         <div class="min-h-5 px-3 whitespace-pre {m ? tint : 'text-muted-foreground'}">{#if m}{l.slice(0, m[0])}<span class={strong}>{l.slice(m[0], m[1])}</span>{l.slice(m[1])}{:else}{l}{/if}</div>
       {:else}
-        <div class="text-muted-foreground px-3">(leer)</div>
+        <div class="text-muted-foreground px-3">{t("(leer)")}</div>
       {/each}
     </div>
   </div>
@@ -221,14 +222,14 @@
     <span class="mr-1 min-w-0 flex-1 truncate font-mono text-meta" title={path}>{path}</span>
     <span
       class="shrink-0 font-mono text-meta whitespace-nowrap tabular-nums {open.length ? 'text-destructive' : 'text-primary'}"
-      title={total ? `${total - open.length} von ${total} Konflikten gelöst` : undefined}
+      title={total ? t("{done} von {total} Konflikten gelöst", { done: total - open.length, total }) : undefined}
     >
-      {#if total}{total - open.length}/{total}{:else}keine Konfliktmarker{/if}
+      {#if total}{total - open.length}/{total}{:else}{t("keine Konfliktmarker")}{/if}
     </span>
-    <Button variant="ghost" size="xs" onclick={() => jump(-1)} disabled={!total || editing} title="Vorheriger Konflikt (Umschalt+F7)">
+    <Button variant="ghost" size="xs" onclick={() => jump(-1)} disabled={!total || editing} title={t("Vorheriger Konflikt (Umschalt+F7)")}>
       <ChevronUpIcon class="size-3.5" />
     </Button>
-    <Button variant="ghost" size="xs" onclick={() => jump(1)} disabled={!total || editing} title="Nächster Konflikt (F7)">
+    <Button variant="ghost" size="xs" onclick={() => jump(1)} disabled={!total || editing} title={t("Nächster Konflikt (F7)")}>
       <ChevronDownIcon class="size-3.5" />
     </Button>
     <span class="bg-border h-4 w-px"></span>
@@ -237,7 +238,7 @@
       <DropdownMenu.Trigger
         class="hover:bg-accent flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-meta font-medium whitespace-nowrap disabled:opacity-50"
         disabled={!conflict}
-        >Ganze Datei <ChevronDownIcon class="size-3" /></DropdownMenu.Trigger
+        >{t("Ganze Datei")} <ChevronDownIcon class="size-3" /></DropdownMenu.Trigger
       >
       <DropdownMenu.Portal>
         <DropdownMenu.Content
@@ -246,21 +247,22 @@
           class={cn(menuContent, "max-w-80 min-w-48 rounded-lg shadow-lg")}
         >
           {#each [[sides.ours, conflict?.ours], [sides.theirs, conflict?.theirs]] as [name, text], k (k)}
+            {@const asOn = t("wie auf {name}").split("{name}")}
             <DropdownMenu.Item
               class={cn(menuItem, "gap-1 py-1.5 data-disabled:opacity-50 data-disabled:hover:bg-transparent")}
               disabled={text == null}
               onSelect={() => whole(text ?? null)}
-              >wie auf <span class="truncate font-mono">{name}</span></DropdownMenu.Item
+              >{asOn[0]}<span class="truncate font-mono">{name}</span>{asOn[1]}</DropdownMenu.Item
             >
           {/each}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
-    <Button variant="ghost" size="xs" class="shrink-0" disabled={!conflict} onclick={() => whole(conflict!.merged)} title="Zurücksetzen: alle Entscheidungen verwerfen">
-      <UndoIcon class="size-3.5" /> <span class="hidden @xl:inline">Zurücksetzen</span>
+    <Button variant="ghost" size="xs" class="shrink-0" disabled={!conflict} onclick={() => whole(conflict!.merged)} title={t("Zurücksetzen: alle Entscheidungen verwerfen")}>
+      <UndoIcon class="size-3.5" /> <span class="hidden @xl:inline">{t("Zurücksetzen")}</span>
     </Button>
-    <Button variant="ghost" size="xs" class="shrink-0 {editing ? 'text-primary' : ''}" disabled={!conflict} onclick={() => (editing ? applyEdit() : startEdit())} title={editing ? "Übernehmen" : "Von Hand bearbeiten"}>
-      <PencilIcon class="size-3.5" /> <span class="hidden @xl:inline">{editing ? "Übernehmen" : "Bearbeiten"}</span>
+    <Button variant="ghost" size="xs" class="shrink-0 {editing ? 'text-primary' : ''}" disabled={!conflict} onclick={() => (editing ? applyEdit() : startEdit())} title={editing ? t("Übernehmen") : t("Von Hand bearbeiten")}>
+      <PencilIcon class="size-3.5" /> <span class="hidden @xl:inline">{editing ? t("Übernehmen") : t("Bearbeiten")}</span>
     </Button>
   </div>
 
@@ -269,11 +271,11 @@
 
   {#if !conflict}
     {#if !error}
-      <p class="text-muted-foreground px-3 py-6">Lade Konflikt …</p>
+      <p class="text-muted-foreground px-3 py-6">{t("Lade Konflikt …")}</p>
     {:else}
       <div class="flex min-h-0 flex-1 items-start gap-2 px-3 py-4">
-        <Button variant="outline" size="sm" disabled={busy} onclick={() => side(false)}>{sides.ours} komplett übernehmen</Button>
-        <Button variant="outline" size="sm" disabled={busy} onclick={() => side(true)}>{sides.theirs} komplett übernehmen</Button>
+        <Button variant="outline" size="sm" disabled={busy} onclick={() => side(false)}>{t("{side} komplett übernehmen", { side: sides.ours })}</Button>
+        <Button variant="outline" size="sm" disabled={busy} onclick={() => side(true)}>{t("{side} komplett übernehmen", { side: sides.theirs })}</Button>
       </div>
     {/if}
   {:else if editing}
@@ -294,7 +296,7 @@
           {#if ls.length > head + tail + CONTEXT && !expanded.has(i)}
             {#if head}{@render code(ls.slice(0, head), starts[i])}{/if}
             <TextButton size="sm" class="bg-secondary/40 w-full rounded-none px-3 py-0.5" onclick={() => expanded.add(i)}
-              >… {ls.length - head - tail} unveränderte Zeilen einblenden</TextButton
+              >{t("… {n} unveränderte Zeilen einblenden", { n: ls.length - head - tail })}</TextButton
             >
             {#if tail}{@render code(ls.slice(-tail), starts[i] + ls.length - tail)}{/if}
           {:else}
@@ -319,7 +321,7 @@
                   size="2xs"
                   disabled={hasOurs}
                   onclick={() => choose(n, c === "theirs" ? "theirs-ours" : "ours")}
-                  title={c === "theirs" ? `${sides.ours} zusätzlich anhängen` : `${sides.ours} übernehmen`}
+                  title={c === "theirs" ? t("{side} zusätzlich anhängen", { side: sides.ours }) : t("{side} übernehmen", { side: sides.ours })}
                 >
                   <ChevronsRightIcon class="size-3.5" />
                 </Button>
@@ -329,29 +331,29 @@
             <div class="border-border min-w-0 border-y @3xl:border-x @3xl:border-y-0">
               <div class="bg-secondary/60 flex h-6 items-center gap-1 px-2 font-sans">
                 <span class="min-w-0 flex-1 truncate text-meta font-semibold {c ? 'text-primary' : 'text-destructive'}">
-                  Konflikt {n + 1}{c ? ` · ${label(c)}` : ""}
+                  {t("Konflikt {n}", { n: n + 1 })}{c ? ` · ${label(c)}` : ""}
                 </span>
                 {#if c}
                   <Button variant="ghost" size="2xs" onclick={() => choose(n, null)}>
-                    <UndoIcon class="size-3" /> Rückgängig
+                    <UndoIcon class="size-3" /> {t("Rückgängig")}
                   </Button>
                 {:else if seg.base !== null}
-                  <Button variant="outline" size="2xs" onclick={() => choose(n, "base")}>Basis übernehmen</Button>
+                  <Button variant="outline" size="2xs" onclick={() => choose(n, "base")}>{t("Basis übernehmen")}</Button>
                 {/if}
               </div>
               {#if result.length}
                 <div class="bg-primary/5">{@render code(result, starts[i])}</div>
               {:else if c}
-                <div class="text-muted-foreground bg-primary/5 px-3">(leer)</div>
+                <div class="text-muted-foreground bg-primary/5 px-3">{t("(leer)")}</div>
               {:else if p.base}
-                <div class="text-muted-foreground px-3 font-sans text-meta">Basis</div>
+                <div class="text-muted-foreground px-3 font-sans text-meta">{t("Basis")}</div>
                 {#if p.base.length}
                   <pre class="text-muted-foreground min-h-5 overflow-x-auto px-3 opacity-60">{p.base.join("\n")}</pre>
                 {:else}
-                  <div class="text-muted-foreground px-3 opacity-60">(leer)</div>
+                  <div class="text-muted-foreground px-3 opacity-60">{t("(leer)")}</div>
                 {/if}
               {:else}
-                <div class="text-muted-foreground px-3 font-sans text-meta italic">offen – Seite wählen</div>
+                <div class="text-muted-foreground px-3 font-sans text-meta italic">{t("offen – Seite wählen")}</div>
               {/if}
             </div>
             <div class="min-w-0">
@@ -361,7 +363,7 @@
                   size="2xs"
                   disabled={hasTheirs}
                   onclick={() => choose(n, c === "ours" ? "ours-theirs" : "theirs")}
-                  title={c === "ours" ? `${sides.theirs} zusätzlich anhängen` : `${sides.theirs} übernehmen`}
+                  title={c === "ours" ? t("{side} zusätzlich anhängen", { side: sides.theirs }) : t("{side} übernehmen", { side: sides.theirs })}
                 >
                   <ChevronsLeftIcon class="size-3.5" />
                 </Button>
@@ -376,10 +378,10 @@
   {/if}
 
   <div class="bg-chrome border-border flex items-center justify-end gap-2 border-t px-3 py-1.5">
-    <span class="text-muted-foreground mr-auto min-w-0 truncate text-meta whitespace-nowrap">F7 / {SHIFT}+F7 navigieren · {MOD}+S speichern</span>
-    <Button variant="ghost" size="sm" onclick={cancel}>Schließen</Button>
+    <span class="text-muted-foreground mr-auto min-w-0 truncate text-meta whitespace-nowrap">{t("F7 / {shift}+F7 navigieren · {mod}+S speichern", { shift: SHIFT, mod: MOD })}</span>
+    <Button variant="ghost" size="sm" onclick={cancel}>{t("Schließen")}</Button>
     <Button size="sm" disabled={!conflict || busy || (!editing && open.length > 0)} onclick={save}>
-      Speichern &amp; als gelöst markieren
+      {t("Speichern & als gelöst markieren")}
     </Button>
   </div>
 </div>

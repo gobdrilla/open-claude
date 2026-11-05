@@ -4,6 +4,7 @@
   import { linkerProblems, resolve, type Manifest } from "$lib/extensions.logic";
   import { exts, isOn, rescan, setEnabled, type Entry } from "$lib/extensions.svelte";
   import ExtensionSettingRows from "./ExtensionSettingRows.svelte";
+  import { t } from "$lib/i18n";
 
   // Settings › Erweiterungen. Rescans on open (a manifest only changes while someone develops it), no file watcher.
   rescan();
@@ -11,7 +12,7 @@
   let error = $state("");
   const base = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
   const label = (e: Entry) => (e.manifest ? `${e.manifest.name} ${e.manifest.version}` : base(e.dir ?? e.key));
-  const info = (e: Entry) => (e.source === "user" ? `Eigene Erweiterung · ${base(e.dir!)}` : e.manifest?.description);
+  const info = (e: Entry) => (e.source === "user" ? t("Eigene Erweiterung · {dir}", { dir: base(e.dir!) }) : e.manifest?.description);
   // Link patterns broken by their manifest defaults (own settings are checked while editing).
   const problems = (m: Manifest) => linkerProblems(m, resolve(m.contributes.settings, exts.settings[m.id] ?? {}, {}));
   // Once per section instead of under every row; names the settings only when not all of them are per project.
@@ -19,7 +20,9 @@
     const s = m.contributes.settings;
     const r = s.filter((d) => d.scope === "repo");
     if (!r.length) return "";
-    return `${r.length === s.length ? "Alle Werte" : r.map((d) => d.title).join(", ")} pro Projekt überschreibbar: Git-Ansicht › ⋯ › Erweiterungen für dieses Projekt …`;
+    return r.length === s.length
+      ? t("Alle Werte pro Projekt überschreibbar: Git-Ansicht › ⋯ › Erweiterungen für dieses Projekt …")
+      : t("{names} pro Projekt überschreibbar: Git-Ansicht › ⋯ › Erweiterungen für dieses Projekt …", { names: r.map((d) => d.title).join(", ") });
   }
   async function openDir() {
     error = "";
@@ -31,11 +34,11 @@
   }
 </script>
 
-<SettingsSection title="Installiert">
+<SettingsSection title={t("Installiert")}>
   {#each exts.list as e (e.key)}
     <div>
       <SettingRow label={label(e)} description={info(e)}>
-        <Switch label="{label(e)} einschalten" on={isOn(e)} disabled={!!e.error} onclick={() => setEnabled(e.manifest!.id, !isOn(e))} />
+        <Switch label={t("{name} einschalten", { name: label(e) })} on={isOn(e)} disabled={!!e.error} onclick={() => setEnabled(e.manifest!.id, !isOn(e))} />
       </SettingRow>
       {#if e.error || e.warnings.length}
         <p class="{e.error ? 'text-destructive' : 'text-muted-foreground'} text-meta -mt-1.5 px-2 pb-1.5">{e.error ?? e.warnings.join(" · ")}</p>
@@ -53,11 +56,11 @@
   </SettingsSection>
 {/each}
 
-<SettingsSection title="Eigene Erweiterungen">
-  <SettingRow label="Erweiterungsordner" description="Je Erweiterung ein Ordner mit manifest.json. Neue sind erst aus und lassen sich oben einschalten.">
+<SettingsSection title={t("Eigene Erweiterungen")}>
+  <SettingRow label={t("Erweiterungsordner")} description={t("Je Erweiterung ein Ordner mit manifest.json. Neue sind erst aus und lassen sich oben einschalten.")}>
     <div class="flex items-center gap-2">
       <RefreshButton loading={exts.scanning} onclick={rescan} />
-      <Button variant="outline" size="sm" onclick={openDir}>Ordner öffnen</Button>
+      <Button variant="outline" size="sm" onclick={openDir}>{t("Ordner öffnen")}</Button>
     </div>
   </SettingRow>
   {#if error}<p class="text-destructive text-meta px-2 py-1.5">{error}</p>{/if}

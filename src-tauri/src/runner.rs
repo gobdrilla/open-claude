@@ -103,7 +103,7 @@ fn esc(s: &str) -> String {
 /// Datei relativ zum Projekt, nicht nach draussen und nicht als Option lesbar.
 fn rel(file: &str) -> Result<&str, String> {
     if file.starts_with('-') || crate::git::inside(".", file).is_err() {
-        return Err(format!("Ungültiger Pfad: {file}"));
+        return Err(tr!("Ungültiger Pfad: {file}", "Invalid path: {file}"));
     }
     Ok(file)
 }
@@ -111,7 +111,7 @@ fn rel(file: &str) -> Result<&str, String> {
 /// cargo/dotnet-Namen: nur Bezeichner-Zeichen, damit kein Filter- oder Optionstext entsteht.
 fn name(key: &str) -> Result<&str, String> {
     let ok = !key.is_empty() && !key.starts_with('-') && key.chars().all(|c| c.is_alphanumeric() || "_:.".contains(c));
-    ok.then_some(key).ok_or_else(|| format!("Ungültiger Testname: {key}"))
+    ok.then_some(key).ok_or_else(|| tr!("Ungültiger Testname: {key}", "Invalid test name: {key}"))
 }
 
 /// cargo-Ziel einer Datei: Integrationstest bzw. eigenes Binary, sonst alle.
@@ -194,7 +194,7 @@ fn test_command(fw: Fw, scope: &Scope, prog: &str, reporters: &Path, windows: bo
                 Scope::All { .. } => {}
                 Scope::File { file, keys } => {
                     if keys.is_empty() {
-                        return Err(format!("Keine Tests in {file}"));
+                        return Err(tr!("Keine Tests in {file}", "No tests in {file}"));
                     }
                     a.extend(cargo_target(rel(file)?));
                     a.extend(["--".into(), "--exact".into()]);
@@ -275,11 +275,11 @@ pub(crate) fn local_bin(repo: &Path, cwd: &Path, tool: &str, windows: bool, exis
 /// Reporter ins Cache-Verzeichnis schreiben (nur wenn anders) und den Ordner liefern.
 fn reporters(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("reporters");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Cache-Ordner: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| tr!("Cache-Ordner: {e}", "Cache folder: {e}"))?;
     for (name, text) in REPORTERS {
         let p = dir.join(name);
         if std::fs::read_to_string(&p).ok().as_deref() != Some(text) {
-            std::fs::write(&p, text).map_err(|e| format!("Reporter schreiben: {e}"))?;
+            std::fs::write(&p, text).map_err(|e| tr!("Reporter schreiben: {e}", "Writing reporter: {e}"))?;
         }
     }
     Ok(dir)
@@ -331,7 +331,7 @@ fn start(app: AppHandle, id: String, repo: &str, dir: &str, fw: Fw, scope: &Scop
             let tool = if fw == Fw::Vitest { "vitest" } else { "jest" };
             let root = Path::new(repo).canonicalize().map_err(|e| e.to_string())?;
             let at = cwd.canonicalize().map_err(|e| e.to_string())?;
-            let bin = local_bin(&root, &at, tool, cfg!(windows), Path::is_file).ok_or_else(|| format!("{tool} nicht installiert (npm install)"))?;
+            let bin = local_bin(&root, &at, tool, cfg!(windows), Path::is_file).ok_or_else(|| tr!("{tool} nicht installiert (npm install)", "{tool} not installed (npm install)"))?;
             crate::lsp::plain(bin)
                 .to_string_lossy()
                 .into_owned()
@@ -372,7 +372,7 @@ fn start(app: AppHandle, id: String, repo: &str, dir: &str, fw: Fw, scope: &Scop
     };
     let pid = launch(cmd, move |m| {
         let _ = on.send(m);
-    }, done).map_err(|e| format!("{prog} konnte nicht gestartet werden: {e}"))?;
+    }, done).map_err(|e| tr!("{prog} konnte nicht gestartet werden: {e}", "{prog} could not be started: {e}"))?;
     runs.insert(id, pid);
     Ok(())
 }
@@ -437,7 +437,7 @@ pub async fn test_run(
     on: Channel<Msg>,
 ) -> Result<(), String> {
     if !crate::pty::valid_id(&id) {
-        return Err(format!("Ungültige Lauf-id: {id}"));
+        return Err(tr!("Ungültige Lauf-id: {id}", "Invalid run id: {id}"));
     }
     crate::git::blocking(move || start(app, id, &repo, &dir, fw, &scope, on)).await
 }

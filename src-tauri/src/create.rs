@@ -123,23 +123,23 @@ fn scaffold_args(id: &str, name: &str, mit: bool) -> Option<Vec<String>> {
 pub fn repo_langs() -> Vec<RepoLang> {
     LANGS
         .iter()
-        .map(|l| RepoLang { id: l.id, label: l.label, tool: l.tool, found: l.tool.is_none_or(crate::deps::on_path) })
+        .map(|l| RepoLang { id: l.id, label: if l.id == "none" && crate::l10n::en() { "Empty" } else { l.label }, tool: l.tool, found: l.tool.is_none_or(crate::deps::on_path) })
         .collect()
 }
 
 /// Prueft alles vor dem Anlegen; true = Ordner wurde hier neu angelegt.
 fn prepare(dest: &str, name: &str, lang_id: &str) -> Result<bool, String> {
     if !valid_name(name) {
-        return Err(format!("Ungültiger Name: „{name}“"));
+        return Err(tr!("Ungültiger Name: „{name}“", "Invalid name: “{name}”"));
     }
-    lang(lang_id).ok_or_else(|| format!("Unbekannte Sprache: {lang_id}"))?;
+    lang(lang_id).ok_or_else(|| tr!("Unbekannte Sprache: {lang_id}", "Unknown language: {lang_id}"))?;
     let target = Path::new(dest);
     if !target.is_absolute() {
-        return Err(format!("Zielordner muss ein absoluter Pfad sein: {dest}"));
+        return Err(tr!("Zielordner muss ein absoluter Pfad sein: {dest}", "Target folder must be an absolute path: {dest}"));
     }
     let existed = target.exists();
     if existed && std::fs::read_dir(target).map_or(true, |mut d| d.next().is_some()) {
-        return Err(format!("Zielordner ist nicht leer: {dest}"));
+        return Err(tr!("Zielordner ist nicht leer: {dest}", "Target folder is not empty: {dest}"));
     }
     std::fs::create_dir_all(target).map_err(|e| format!("{dest}: {e}"))?;
     Ok(!existed)
@@ -155,7 +155,7 @@ fn put_new(dest: &str, file: &str, text: &str) -> Result<(), String> {
 }
 
 fn fill(dest: &str, name: &str, lang_id: &str, mit: bool) -> Result<(), String> {
-    let l = lang(lang_id).ok_or_else(|| format!("Unbekannte Sprache: {lang_id}"))?;
+    let l = lang(lang_id).ok_or_else(|| tr!("Unbekannte Sprache: {lang_id}", "Unknown language: {lang_id}"))?;
     if let (Some(tool), Some(args)) = (l.tool.filter(|t| crate::deps::on_path(t)), scaffold_args(l.id, name, mit)) {
         // Aufgeloester Pfad: Windows findet .cmd-Shims (npm, scoop/volta) nicht ueber den nackten Namen.
         let exe = crate::deps::which(tool).map_or_else(|| tool.into(), |p| p.to_string_lossy().into_owned());
@@ -164,7 +164,7 @@ fn fill(dest: &str, name: &str, lang_id: &str, mit: bool) -> Result<(), String> 
             .current_dir(dest)
             .stdin(Stdio::null())
             .output()
-            .map_err(|e| format!("{tool} nicht startbar: {e}"))?;
+            .map_err(|e| tr!("{tool} nicht startbar: {e}", "{tool} cannot be started: {e}"))?;
         if !o.status.success() {
             let err = String::from_utf8_lossy(if o.stderr.is_empty() { &o.stdout } else { &o.stderr }).into_owned();
             let lines: Vec<&str> = err.trim().lines().collect();
@@ -215,10 +215,10 @@ pub async fn repo_create(
         Ok(_) => Ok(dest),
         Err(e) if created => match std::fs::remove_dir_all(&dest) {
             Ok(()) => Err(e),
-            Err(r) => Err(format!("{e}\n(Ordner {dest} konnte nicht entfernt werden: {r})")),
+            Err(r) => Err(tr!("{e}\n(Ordner {dest} konnte nicht entfernt werden: {r})", "{e}\n(folder {dest} could not be removed: {r})")),
         },
         // Vorher schon vorhandene Ordner nie loeschen.
-        Err(e) => Err(format!("{e}\n(Ordner {dest} ist teilweise befüllt)")),
+        Err(e) => Err(tr!("{e}\n(Ordner {dest} ist teilweise befüllt)", "{e}\n(folder {dest} is partially filled)")),
     }
 }
 

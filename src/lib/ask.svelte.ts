@@ -1,11 +1,12 @@
 // Rueckfrage vor Git-Aktionen mit "Nicht erneut anzeigen". Ein Dialog (AskDialog) fuer alle Aufrufer.
+import { t } from "./i18n.ts";
 
 /** Aktionen mit abschaltbarer Rueckfrage; Label fuer die Einstellungen. */
 export const ASKS = {
-  checkout: "Branch wechseln",
-  rebase: "Rebasen",
-  pick: "Cherry-Pick / Revert",
-  stash: "Stash anwenden",
+  checkout: t("Branch wechseln"),
+  rebase: t("Rebasen"),
+  pick: t("Cherry-Pick / Revert"),
+  stash: t("Stash anwenden"),
 } as const;
 export type AskKey = keyof typeof ASKS;
 

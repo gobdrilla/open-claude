@@ -73,11 +73,11 @@ fn kc_read(svc: &str, acct: Option<&str>) -> Option<String> {
 fn kc_write(svc: &str, acct: &str, secret: &str) -> Result<(), String> {
     let hex: String = secret.bytes().map(|b| format!("{b:02x}")).collect();
     let mut child = crate::quiet("security").arg("-i").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
-    writeln!(child.stdin.take().ok_or("stdin fehlt")?, "add-generic-password -U -a \"{acct}\" -s \"{svc}\" -X {hex}").map_err(|e| e.to_string())?;
+    writeln!(child.stdin.take().ok_or_else(|| tr!("stdin fehlt", "stdin missing"))?, "add-generic-password -U -a \"{acct}\" -s \"{svc}\" -X {hex}").map_err(|e| e.to_string())?;
     let out = child.wait_with_output().map_err(|e| e.to_string())?;
     let err = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() || err.contains("error") {
-        return Err(format!("Schlüsselbund: {}", err.trim()));
+        return Err(tr!("Schlüsselbund: {}", "Keychain: {}", err.trim()));
     }
     Ok(())
 }
@@ -130,7 +130,7 @@ mod dpapi {
     }
 
     pub fn protect(data: &[u8]) -> Result<Vec<u8>, String> {
-        run(true, data).ok_or_else(|| "Verschlüsseln (DPAPI) fehlgeschlagen".into())
+        run(true, data).ok_or_else(|| tr!("Verschlüsseln (DPAPI) fehlgeschlagen", "Encryption (DPAPI) failed"))
     }
 
     pub fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
@@ -139,7 +139,7 @@ mod dpapi {
 }
 
 fn private_write(file: &Path, text: &[u8]) -> Result<(), String> {
-    std::fs::create_dir_all(file.parent().ok_or("kein Ordner")?).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(file.parent().ok_or_else(|| tr!("kein Ordner", "no folder"))?).map_err(|e| e.to_string())?;
     let tmp = file.with_extension("tmp");
     {
         let mut o = std::fs::OpenOptions::new();
@@ -177,7 +177,7 @@ fn claude_json(p: &Paths) -> Result<Map<String, Value>, String> {
     match std::fs::read_to_string(claude_json_path(p)) {
         Ok(t) => match serde_json::from_str(&t) {
             Ok(Value::Object(m)) => Ok(m),
-            _ => Err("~/.claude.json ist kein JSON-Objekt".into()),
+            _ => Err(tr!("~/.claude.json ist kein JSON-Objekt", "~/.claude.json is not a JSON object")),
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Map::new()),
         Err(e) => Err(e.to_string()),
@@ -249,9 +249,9 @@ fn save(p: &Paths) -> Result<Option<Account>, String> {
 
 fn switch(p: &Paths, email: &str) -> Result<(), String> {
     if !email_ok(email) {
-        return Err("Ungültige E-Mail".into());
+        return Err(tr!("Ungültige E-Mail", "Invalid email"));
     }
-    let target = stored_read(p, email).ok_or(format!("Keine gemerkte Anmeldung für {email}"))?;
+    let target = stored_read(p, email).ok_or(tr!("Keine gemerkte Anmeldung für {email}", "No saved login for {email}"))?;
     save(p)?;
     creds_write(p, &target.creds)?;
     oauth_write(p, target.oauth)
@@ -259,7 +259,7 @@ fn switch(p: &Paths, email: &str) -> Result<(), String> {
 
 fn forget(p: &Paths, email: &str) -> Result<(), String> {
     if !email_ok(email) {
-        return Err("Ungültige E-Mail".into());
+        return Err(tr!("Ungültige E-Mail", "Invalid email"));
     }
     if p.keychain {
         kc_delete(OWN_SVC, email);
@@ -299,7 +299,7 @@ pub async fn claude_logout(app: tauri::AppHandle) -> Result<(), String> {
     let p = Paths::real(&app)?;
     blocking(move || {
         let was = current(&p).map(|c| c.0.email);
-        let claude = crate::deps::claude_bin().ok_or("claude nicht gefunden")?;
+        let claude = crate::deps::claude_bin().ok_or_else(|| tr!("claude nicht gefunden", "claude not found"))?;
         let out = crate::quiet(&claude.to_string_lossy()).args(["auth", "logout"]).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
         if !out.status.success() {
             return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());

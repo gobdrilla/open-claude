@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
   import { slide } from "svelte/transition";
   import type { Asker } from "$lib/confirm.svelte";
   import { Button } from "./primitives/button/index.js";
@@ -26,7 +27,7 @@
       {/each}
     </div>
     <span class="ml-auto flex shrink-0 gap-1.5">
-      <Button variant="ghost" size="sm" onclick={() => q.done(false)}>Abbrechen</Button>
+      <Button variant="ghost" size="sm" onclick={() => q.done(false)}>{t("Abbrechen")}</Button>
       <Button variant={q.tone === "default" ? "default" : "destructive"} size="sm" onclick={() => q.done(true)}>{q.action}</Button>
     </span>
   </div>

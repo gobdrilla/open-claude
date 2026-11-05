@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LOCALE, t } from "$lib/i18n";
   import Notice from "$lib/components/Notice.svelte";
   import { IconButton, RefreshButton, Segmented, TextButton } from "$lib/atelier-ui";
   import { age } from "$lib/utils";
@@ -25,12 +26,12 @@
   const PAGE = 30;
   const POLL_MS = 10_000;
   const ICON = {
-    success: [CircleCheckIcon, "text-success", "Erfolgreich"],
-    failure: [CircleXIcon, "text-destructive", "Fehlgeschlagen"],
-    running: [LoaderCircleIcon, "animate-spin text-warning", "Läuft"],
-    queued: [CircleDashedIcon, "text-muted-foreground", "Wartet"],
-    cancelled: [CircleSlashIcon, "text-muted-foreground opacity-60", "Abgebrochen"],
-    skipped: [CircleMinusIcon, "text-muted-foreground opacity-60", "Übersprungen"],
+    success: [CircleCheckIcon, "text-success", t("Erfolgreich")],
+    failure: [CircleXIcon, "text-destructive", t("Fehlgeschlagen")],
+    running: [LoaderCircleIcon, "animate-spin text-warning", t("Läuft")],
+    queued: [CircleDashedIcon, "text-muted-foreground", t("Wartet")],
+    cancelled: [CircleSlashIcon, "text-muted-foreground opacity-60", t("Abgebrochen")],
+    skipped: [CircleMinusIcon, "text-muted-foreground opacity-60", t("Übersprungen")],
   } as const;
 
   let originUrl = $state<string | null>(null);
@@ -64,7 +65,8 @@
 
   const ago = (iso: string) => {
     const a = age(iso);
-    return a && a !== "jetzt" ? `vor ${a}` : a;
+    // Digit test instead of comparing with "jetzt": stays right whether age() is translated or not.
+    return /^\d/.test(a) ? t("vor {age}", { age: a }) : a;
   };
 
   async function reload() {
@@ -219,7 +221,7 @@
 
 {#snippet browser(url: string)}
   <IconButton
-    label="Im Browser öffnen"
+    label={t("Im Browser öffnen")}
     onclick={(e) => {
       e.stopPropagation();
       forge.openUrl(url).catch((err) => (error = String(err)));
@@ -235,13 +237,13 @@
     <Segmented
       value={onlyBranch && !!branch}
       options={[
-        ["Alle Branches", false],
-        ["Aktueller Branch", true, branch ?? "Kein Branch ausgecheckt"],
+        [t("Alle Branches"), false],
+        [t("Aktueller Branch"), true, branch ?? t("Kein Branch ausgecheckt")],
       ]}
       onchange={(v) => (onlyBranch = v)}
     />
     <span class="text-muted-foreground min-w-0 flex-1 truncate text-meta">
-      {kind ? label : ""}{active && visible ? " · aktualisiert alle 10 s" : ""}
+      {kind ? label : ""}{active && visible ? t(" · aktualisiert alle 10 s") : ""}
     </span>
     <RefreshButton {loading} onclick={reload} />
   </div>
@@ -250,10 +252,10 @@
 
   <div class="min-h-0 flex-1 overflow-y-auto">
     {#if !loading && !originUrl && !error}
-      <p class="text-muted-foreground px-2 py-4 text-center text-meta">Kein Remote „origin“.</p>
+      <p class="text-muted-foreground px-2 py-4 text-center text-meta">{t("Kein Remote „origin“.")}</p>
     {:else if noAccount && originUrl}
       <p class="text-muted-foreground px-2 py-4 text-center text-meta">
-        Kein GitHub-/GitLab-Konto für {hostOf(originUrl)} – unter Git-Konten anmelden.
+        {t("Kein GitHub-/GitLab-Konto für {host} – unter Git-Konten anmelden.", { host: hostOf(originUrl) })}
       </p>
     {:else}
       {#each runs as r (r.id)}
@@ -277,19 +279,19 @@
               <span class="font-mono">{r.sha.slice(0, 7)}</span>
             </div>
           </div>
-          <span class="text-muted-foreground shrink-0 text-right text-meta tabular-nums" title={new Date(r.created_at).toLocaleString("de-DE")}>
-            {r.duration_s != null ? `Dauer ${duration(r.duration_s)} · ` : ""}{ago(r.created_at)}
+          <span class="text-muted-foreground shrink-0 text-right text-meta tabular-nums" title={new Date(r.created_at).toLocaleString(LOCALE)}>
+            {r.duration_s != null ? t("Dauer {time}", { time: duration(r.duration_s) }) + " · " : ""}{ago(r.created_at)}
           </span>
           <!-- Fixed width for up to three icons, so the time column stays aligned when a row has an extra action. -->
           <span class="flex w-19 shrink-0 justify-end gap-2">
             {#if pending(r.status)}
-              {@render action("Abbrechen", () => act(r.id, r.id, false, "cancel"), SquareIcon, `false:${r.id}`)}
+              {@render action(t("Abbrechen"), () => act(r.id, r.id, false, "cancel"), SquareIcon, `false:${r.id}`)}
             {:else}
               {#if kind === "github"}
-                {@render action("Alle Jobs neu starten", () => act(r.id, r.id, false, "rerun"), RotateCcwIcon, `false:${r.id}`)}
+                {@render action(t("Alle Jobs neu starten"), () => act(r.id, r.id, false, "rerun"), RotateCcwIcon, `false:${r.id}`)}
               {/if}
               {#if r.status === "failure" || r.status === "cancelled"}
-                {@render action("Fehlgeschlagene Jobs neu starten", () => act(r.id, r.id, false, "rerun_failed"), ListRestartIcon, `false:${r.id}`)}
+                {@render action(t("Fehlgeschlagene Jobs neu starten"), () => act(r.id, r.id, false, "rerun_failed"), ListRestartIcon, `false:${r.id}`)}
               {/if}
             {/if}
             {@render browser(r.web_url)}
@@ -306,31 +308,31 @@
                   {@render statusIcon(j.status)}
                   {#if j.stage}<span class="text-muted-foreground shrink-0 text-meta">{j.stage}</span>{/if}
                   <span class="min-w-0 flex-1 truncate text-meta" title={j.name}>{j.name}</span>
-                  <span class="text-muted-foreground shrink-0 text-meta tabular-nums">{#if j.duration_s != null}Dauer {duration(j.duration_s)}{/if}</span>
+                  <span class="text-muted-foreground shrink-0 text-meta tabular-nums">{#if j.duration_s != null}{t("Dauer {time}", { time: duration(j.duration_s) })}{/if}</span>
                   {#if pending(j.status)}
                     {#if kind === "gitlab"}
-                      {@render action("Job abbrechen", () => act(r.id, j.id, true, "cancel"), SquareIcon, `true:${j.id}`)}
+                      {@render action(t("Job abbrechen"), () => act(r.id, j.id, true, "cancel"), SquareIcon, `true:${j.id}`)}
                     {/if}
                   {:else if j.status !== "skipped"}
-                    {@render action("Job neu starten", () => act(r.id, j.id, true, "rerun"), RotateCcwIcon, `true:${j.id}`)}
+                    {@render action(t("Job neu starten"), () => act(r.id, j.id, true, "rerun"), RotateCcwIcon, `true:${j.id}`)}
                   {/if}
                   {@render browser(j.web_url)}
                 </div>
               {:else}
-                <p class="text-muted-foreground px-2 py-1 text-meta">Keine Jobs.</p>
+                <p class="text-muted-foreground px-2 py-1 text-meta">{t("Keine Jobs.")}</p>
               {/each}
             {:else if !jobErr[r.id]}
-              <p class="text-muted-foreground px-2 py-1 text-meta">Lädt …</p>
+              <p class="text-muted-foreground px-2 py-1 text-meta">{t("Lädt …")}</p>
             {/if}
           </div>
         {/if}
       {/each}
       {#if loading}
-        <p class="text-muted-foreground px-2 py-2 text-center text-meta">Lädt …</p>
+        <p class="text-muted-foreground px-2 py-2 text-center text-meta">{t("Lädt …")}</p>
       {:else if !done && runs.length}
-        <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
+        <TextButton size="sm" block onclick={loadMore}>{t("Mehr laden")}</TextButton>
       {:else if !runs.length && !error}
-        <p class="text-muted-foreground px-2 py-4 text-center text-meta">Keine {label}.</p>
+        <p class="text-muted-foreground px-2 py-4 text-center text-meta">{t("Keine {label}.", { label })}</p>
       {/if}
     {/if}
   </div>

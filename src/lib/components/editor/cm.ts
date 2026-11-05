@@ -8,6 +8,8 @@ import { languages } from "@codemirror/language-data";
 import { styleTags, tags as t } from "@lezer/highlight";
 import type { St } from "../../testing.logic.ts";
 import { indentBlock, type GitMark } from "../../editor.logic.ts";
+// tr: t is @lezer/highlight's tags here.
+import { t as tr } from "../../i18n.ts";
 
 const chrome = EditorView.theme(
   {
@@ -207,7 +209,7 @@ class TestMarker extends GutterMarker {
     const s = document.createElement("span");
     s.className = `cm-test-${this.state}`;
     s.textContent = this.state === "passed" ? "✓" : this.state === "failed" ? "✗" : this.state === "running" || this.state === "queued" ? "◌" : "▶";
-    s.title = this.state === "running" || this.state === "queued" ? "Läuft …" : this.state === "idle" ? "Test ausführen" : "Erneut ausführen";
+    s.title = this.state === "running" || this.state === "queued" ? tr("Läuft …") : this.state === "idle" ? tr("Test ausführen") : tr("Erneut ausführen");
     return s;
   }
 }
@@ -245,7 +247,7 @@ class RunMarker extends GutterMarker {
     const s = document.createElement("span");
     s.className = this.running ? "cm-run-on" : "cm-test-idle";
     s.textContent = "▶";
-    s.title = this.running ? `${this.label} läuft – Ausgabe zeigen` : `${this.label} starten`;
+    s.title = this.running ? tr("{name} läuft – Ausgabe zeigen", { name: this.label }) : tr("{name} starten", { name: this.label });
     return s;
   }
 }

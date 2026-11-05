@@ -7,6 +7,7 @@
   import { skills, layers, resolve, adjust, emptyProject, pkey, type SkillsInfo, type ModsInfo, type SkillStore, type ProjectSkills, type Skill, type Source } from "$lib/skills";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
   import { invoke } from "@tauri-apps/api/core";
+  import { t } from "$lib/i18n";
 
   let {
     repo,
@@ -49,7 +50,7 @@
 
   const ps = $derived(s.projects[pkey(repo)]);
   const l = $derived(info && layers(info, s, repo, kind));
-  const byKind = $derived((kind && s.kindProfiles[kind]) || "kein Profil");
+  const byKind = $derived((kind && s.kindProfiles[kind]) || t("kein Profil"));
   const names = $derived(Object.keys(s.profiles).sort());
 
   const match = (sk: Skill) => fuzzy(sk.key, query.trim());
@@ -60,8 +61,8 @@
       .filter((g) => g.items.length || fuzzy(g.id, query.trim())),
   );
 
-  const ORIGIN: Record<Source, string> = { default: "Standard", user: "User", team: "Team", profile: "Profil", project: "angepasst" };
-  const SOURCE = { user: "User", project: "Projekt", plugin: "Plugin" };
+  const ORIGIN: Record<Source, string> = { default: t("Standard"), user: t("User"), team: t("Team"), profile: t("Profil"), project: t("angepasst") };
+  const SOURCE = { user: t("User"), project: t("Projekt"), plugin: t("Plugin") };
 
   // Select-Werte: "" = nach Typ, NONE = kein Profil, sonst der Name (Namen sind nie leer).
   const NONE = "\0";
@@ -91,8 +92,8 @@
   <IconButton
     size="bare"
     class={source === "project" ? "" : "invisible"}
-    label="Zurücksetzen"
-    title="Projekt-Anpassung zurücksetzen"
+    label={t("Zurücksetzen")}
+    title={t("Projekt-Anpassung zurücksetzen")}
     onclick={reset}><RotateCcwIcon class="size-3" /></IconButton
   >
 {/snippet}
@@ -121,23 +122,23 @@
 
     <div class="border-border flex flex-wrap items-center gap-2 border-b px-3 py-2">
       {@render modeSwitch()}
-      <span class="text-muted-foreground">Profil</span>
+      <span class="text-muted-foreground">{t("Profil")}</span>
       <Select
         bind:value={() => (ps?.profile === undefined ? "" : (ps.profile ?? NONE)), setProfile}
-        options={[[`Nach Typ (${byKind})`, ""], ["Kein Profil", NONE], ...names.map((n) => [n, n] as const)]}
-        aria-label="Profil"
+        options={[[t("Nach Typ ({profile})", { profile: byKind }), ""], [t("Kein Profil"), NONE], ...names.map((n) => [n, n] as const)]}
+        aria-label={t("Profil")}
       />
       <span class="flex-1"></span>
-      <Input bind:value={query} placeholder="Skill suchen" density="sm" class="w-48" />
+      <Input bind:value={query} placeholder={t("Skill suchen")} density="sm" class="w-48" />
       <RefreshButton {loading} onclick={reload} />
     </div>
 
     {#if loading && !info}
-      <p class="text-muted-foreground px-3 py-4">Lese Skills …</p>
+      <p class="text-muted-foreground px-3 py-4">{t("Lese Skills …")}</p>
     {:else if l}
       <div class="min-h-0 flex-1 overflow-y-auto">
         {#if !own.length && !plugins.length}
-          <p class="text-muted-foreground px-3 py-4">{query.trim() ? `Kein Skill passt zu „${query.trim()}“.` : "Keine Skills gefunden."}</p>
+          <p class="text-muted-foreground px-3 py-4">{query.trim() ? t("Kein Skill passt zu „{q}“.", { q: query.trim() }) : t("Keine Skills gefunden.")}</p>
         {/if}
         <ul>
           {#each own as sk (sk.key)}{@render row(sk, false)}{/each}
@@ -157,11 +158,11 @@
             <TextButton
               size="sm"
               title={mods.dir}
-              onclick={() => invoke("reveal", { path: mods!.dir }).catch((e) => (error = String(e)))}>Ordner öffnen</TextButton
+              onclick={() => invoke("reveal", { path: mods!.dir }).catch((e) => (error = String(e)))}>{t("Ordner öffnen")}</TextButton
             >
           </SectionHead>
           <p class="text-muted-foreground px-3 py-1.5 text-meta">
-            Mods greifen beim nächsten Claude-Start im Terminal.{mods.mods.length ? "" : " Noch keine Mods installiert."}
+            {t("Mods greifen beim nächsten Claude-Start im Terminal.")}{mods.mods.length ? "" : " " + t("Noch keine Mods installiert.")}
           </p>
           <ul>
             {#each mods.mods as m (m.path)}

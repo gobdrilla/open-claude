@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LOCALE, t } from "$lib/i18n";
   import Notice from "$lib/components/Notice.svelte";
   import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Empty, Input, RefreshButton, Row, Textarea, TextButton } from "$lib/atelier-ui";
   import { confirm } from "$lib/confirm.svelte";
@@ -160,7 +161,7 @@
 
   async function dismissForm() {
     if (busy) return;
-    if (JSON.stringify(form) === formStart || (await confirm("Änderungen am Release verwerfen?", "Verwerfen"))) form = null;
+    if (JSON.stringify(form) === formStart || (await confirm(t("Änderungen am Release verwerfen?"), t("Verwerfen")))) form = null;
   }
 
   function publish(r: Release) {
@@ -195,7 +196,7 @@
 
   {#if (!originUrl && !loading) || noAccount}
     <p class="text-muted-foreground flex items-center justify-center gap-2 px-2 py-4 text-meta">
-      {#if !originUrl}Kein Remote origin.{:else}Kein GitHub-/GitLab-Konto für {host} — unter Git-Konten anmelden.{/if}
+      {#if !originUrl}{t("Kein Remote origin.")}{:else}{t("Kein GitHub-/GitLab-Konto für {host} — unter Git-Konten anmelden.", { host })}{/if}
       <RefreshButton {loading} onclick={() => reload()} />
     </p>
   {:else}
@@ -205,7 +206,7 @@
           <span class="text-muted-foreground flex-1 truncate">{host}</span>
           <RefreshButton {loading} onclick={() => reload()} />
           <Button size="xs" variant="outline" disabled={busy || !kind} onclick={() => openForm(null)}>
-            <PlusIcon class="size-3" />Neues Release
+            <PlusIcon class="size-3" />{t("Neues Release")}
           </Button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Releases">
@@ -233,9 +234,9 @@
             </Row>
           {/each}
           {#if loading}
-            <p class="text-muted-foreground px-2 py-2 text-center text-meta">Lädt …</p>
+            <p class="text-muted-foreground px-2 py-2 text-center text-meta">{t("Lädt …")}</p>
           {:else if items.length && !done}
-            <TextButton size="sm" block onclick={loadMore}>Mehr laden</TextButton>
+            <TextButton size="sm" block onclick={loadMore}>{t("Mehr laden")}</TextButton>
           {/if}
         </div>
       </div>
@@ -247,21 +248,21 @@
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="min-w-0 flex-1 truncate text-body font-semibold">{r.name || r.tag}</h2>
               <Button size="xs" variant="ghost" onclick={() => forge.openUrl(r.web_url).catch((e) => (error = String(e)))}>
-                <ExternalLinkIcon class="size-3" />Im Browser
+                <ExternalLinkIcon class="size-3" />{t("Im Browser")}
               </Button>
               {#if kind === "github" && r.draft}
-                <Button size="xs" disabled={busy} onclick={() => publish(r)}>Veröffentlichen</Button>
+                <Button size="xs" disabled={busy} onclick={() => publish(r)}>{t("Veröffentlichen")}</Button>
               {/if}
-              <Button size="xs" variant="outline" disabled={busy} onclick={() => openForm(r)}>Bearbeiten</Button>
-              <Button size="xs" variant="destructive" disabled={busy} onclick={() => (confirmDelete = r)}>Löschen</Button>
+              <Button size="xs" variant="outline" disabled={busy} onclick={() => openForm(r)}>{t("Bearbeiten")}</Button>
+              <Button size="xs" variant="destructive" disabled={busy} onclick={() => (confirmDelete = r)}>{t("Löschen")}</Button>
             </div>
             <p class="text-muted-foreground text-meta">
-              {#if r.name && r.name !== r.tag}<span class="font-mono">{r.tag}</span> · {/if}{r.author} · {new Date(r.published_at ?? r.created_at).toLocaleString("de-DE")}
+              {#if r.name && r.name !== r.tag}<span class="font-mono">{r.tag}</span> · {/if}{r.author} · {new Date(r.published_at ?? r.created_at).toLocaleString(LOCALE)}
             </p>
             {#if r.body}
               <Markdown text={r.body} base={r.web_url} onerror={(e) => (error = e)} />
             {:else}
-              <p class="text-muted-foreground text-meta italic">Keine Beschreibung.</p>
+              <p class="text-muted-foreground text-meta italic">{t("Keine Beschreibung.")}</p>
             {/if}
             {#if r.assets.length}
               <ul class="border-border space-y-0.5 border-t pt-2">
@@ -271,7 +272,7 @@
                     <Row
                       density="compact"
                       class="group gap-2 px-1"
-                      title={d === "…" ? "Wird heruntergeladen …" : d ? `Im ${FILES_APP} zeigen: ${d}` : "In den Downloads-Ordner laden"}
+                      title={d === "…" ? t("Wird heruntergeladen …") : d ? t("Im {app} zeigen: {path}", { app: FILES_APP, path: d }) : t("In den Downloads-Ordner laden")}
                       onclick={() => download(a)}
                     >
                       {#if d === "…"}
@@ -295,10 +296,10 @@
           </div>
         {:else if !loading}
           <Empty icon={PackageIcon}>
-            Noch keine Releases.
+            {t("Noch keine Releases.")}
             {#snippet action()}
               <Button size="sm" variant="outline" disabled={busy || !kind} onclick={() => openForm(null)}>
-                <PlusIcon class="size-3" />Neues Release
+                <PlusIcon class="size-3" />{t("Neues Release")}
               </Button>
             {/snippet}
           </Empty>
@@ -314,7 +315,7 @@
     {#if form}
       {@const lockTag = form.id !== null && kind === "gitlab"}
       <Dialog.Header>
-        <Dialog.Title>{form.id ? "Release bearbeiten" : "Neues Release"}</Dialog.Title>
+        <Dialog.Title>{form.id ? t("Release bearbeiten") : t("Neues Release")}</Dialog.Title>
       </Dialog.Header>
       <div class="space-y-2 text-ui">
         <label class="block space-y-1">
@@ -323,7 +324,7 @@
         </label>
         {#if !lockTag}
           <label class="block space-y-1">
-            <span class="text-muted-foreground">Ziel, falls der Tag noch nicht existiert (Branch oder SHA)</span>
+            <span class="text-muted-foreground">{t("Ziel, falls der Tag noch nicht existiert (Branch oder SHA)")}</span>
             <Input bind:value={form.target} placeholder={branch || "HEAD"} />
           </label>
         {/if}
@@ -333,15 +334,15 @@
         </label>
         <div class="space-y-1">
           <div class="flex items-center">
-            <label for="release-body" class="text-muted-foreground flex-1">Beschreibung (Markdown)</label>
-            <TextButton size="sm" onclick={() => (preview = !preview)}>{preview ? "Bearbeiten" : "Vorschau"}</TextButton>
+            <label for="release-body" class="text-muted-foreground flex-1">{t("Beschreibung (Markdown)")}</label>
+            <TextButton size="sm" onclick={() => (preview = !preview)}>{preview ? t("Bearbeiten") : t("Vorschau")}</TextButton>
           </div>
           {#if preview}
             <div class="border-input h-[212px] overflow-y-auto rounded-md border px-3 py-2">
               {#if form.body.trim()}
                 <Markdown text={form.body} onerror={(e) => (error = e)} />
               {:else}
-                <p class="text-muted-foreground text-meta italic">Keine Beschreibung.</p>
+                <p class="text-muted-foreground text-meta italic">{t("Keine Beschreibung.")}</p>
               {/if}
             </div>
           {:else}
@@ -357,8 +358,8 @@
       </div>
       {#if formError}<p class="text-destructive text-ui whitespace-pre-wrap">{formError}</p>{/if}
       <div class="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" disabled={busy} onclick={() => (form = null)}>Abbrechen</Button>
-        <Button size="sm" disabled={busy || !form.tag.trim()} onclick={save}>{busy ? "Speichert …" : "Speichern"}</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onclick={() => (form = null)}>{t("Abbrechen")}</Button>
+        <Button size="sm" disabled={busy || !form.tag.trim()} onclick={save}>{busy ? t("Speichert …") : t("Speichern")}</Button>
       </div>
     {/if}
   </Dialog.Content>
@@ -366,9 +367,9 @@
 
 <ConfirmDialog
   open={confirmDelete !== null}
-  title="Release löschen"
-  message={confirmDelete ? `Release „${confirmDelete.name || confirmDelete.tag}“ löschen? Der Git-Tag ${confirmDelete.tag} bleibt erhalten.` : ""}
-  action="Löschen"
+  title={t("Release löschen")}
+  message={confirmDelete ? t("Release „{name}“ löschen? Der Git-Tag {tag} bleibt erhalten.", { name: confirmDelete.name || confirmDelete.tag, tag: confirmDelete.tag }) : ""}
+  action={t("Löschen")}
   onconfirm={doDelete}
   oncancel={() => (confirmDelete = null)}
 />

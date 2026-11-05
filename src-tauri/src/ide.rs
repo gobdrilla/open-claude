@@ -99,7 +99,7 @@ fn drop_pending(f: impl Fn(&Pending) -> bool) -> usize {
 
 fn token() -> Result<String, String> {
     let mut b = [0u8; 16];
-    getrandom::fill(&mut b).map_err(|e| format!("Zufall nicht verfügbar: {e}"))?;
+    getrandom::fill(&mut b).map_err(|e| tr!("Zufall nicht verfügbar: {e}", "Randomness not available: {e}"))?;
     Ok(b.iter().map(|x| format!("{x:02x}")).collect())
 }
 
@@ -225,7 +225,7 @@ pub fn ide_notify(ides: tauri::State<'_, Ides>, repo: String, method: String, pa
 impl<R: Runtime> Ides<R> {
     fn notify(&self, repo: &str, method: &str, params: Value) -> Result<bool, String> {
         if method != "selection_changed" && method != "at_mentioned" {
-            return Err(format!("Unbekannte Notification: {method}"));
+            return Err(tr!("Unbekannte Notification: {method}", "Unknown notification: {method}"));
         }
         let msg = json!({ "jsonrpc": "2.0", "method": method, "params": params }).to_string();
         let mut sent = false;
@@ -362,7 +362,7 @@ async fn rpc<R: Runtime>(ctx: &Ctx<R>, msg: &Value, ide: bool) -> Option<Value> 
                 Err(e) => json!({ "content": [text(&e)], "isError": true }),
             })
         }
-        m => Err(json!({ "code": -32601, "message": format!("Methode unbekannt: {m}") })),
+        m => Err(json!({ "code": -32601, "message": tr!("Methode unbekannt: {m}", "Unknown method: {m}") })),
     };
     Some(match res {
         Ok(r) => json!({ "jsonrpc": "2.0", "id": id, "result": r }),
@@ -378,14 +378,16 @@ fn ide_tools() -> Value {
     let s = |props: Value, req: &[&str]| json!({ "type": "object", "properties": props, "required": req });
     let st = json!({ "type": "string" });
     json!([
-        { "name": "openDiff", "description": "Diff zum Annehmen/Ablehnen zeigen", "inputSchema": s(json!({
+        { "name": "openDiff", "description": tr!("Diff zum Annehmen/Ablehnen zeigen", "Show a diff to accept/reject"), "inputSchema": s(json!({
             "old_file_path": st, "new_file_path": st, "new_file_contents": st, "tab_name": st,
         }), &["old_file_path", "new_file_path", "new_file_contents", "tab_name"]) },
-        { "name": "close_tab", "description": "Diff schliessen", "inputSchema": s(json!({ "tab_name": st }), &["tab_name"]) },
-        { "name": "closeAllDiffTabs", "description": "Alle Diffs schliessen", "inputSchema": s(json!({}), &[]) },
-        { "name": "getDiagnostics", "description": "Fehler und Warnungen der Language-Server im Editor von L'Atelier de Claude \
+        { "name": "close_tab", "description": tr!("Diff schliessen", "Close diff"), "inputSchema": s(json!({ "tab_name": st }), &["tab_name"]) },
+        { "name": "closeAllDiffTabs", "description": tr!("Alle Diffs schliessen", "Close all diffs"), "inputSchema": s(json!({}), &[]) },
+        { "name": "getDiagnostics", "description": tr!("Fehler und Warnungen der Language-Server im Editor von L'Atelier de Claude \
             (nur Projekte mit freigeschalteten Language-Servern; manche Server melden nur für im Editor geöffnete Dateien). \
-            Ohne uri alle Dateien.", "inputSchema": s(json!({ "uri": { "type": "string", "description": "file://-URI einer Datei" } }), &[]) },
+            Ohne uri alle Dateien.", "Errors and warnings of the language servers in the L'Atelier de Claude editor \
+            (only projects with enabled language servers; some servers only report files open in the editor). \
+            Without uri all files."), "inputSchema": s(json!({ "uri": { "type": "string", "description": tr!("file://-URI einer Datei", "file:// URI of a file") } }), &[]) },
     ])
 }
 
@@ -419,7 +421,7 @@ async fn ide_call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec
             let n = close(ctx, |_| true);
             Ok(vec![text(&format!("CLOSED_{n}_DIFF_TABS"))])
         }
-        _ => Err(format!("Tool unbekannt: {name}")),
+        _ => Err(tr!("Tool unbekannt: {name}", "Unknown tool: {name}")),
     }
 }
 
@@ -434,64 +436,74 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
     let target = match crate::forge::mcp_target(&ctx.app, &ctx.repo) {
         Ok((kind, host, base)) => {
             let name = if kind == "github" { "GitHub REST API" } else { "GitLab REST API v4" };
-            format!("{name} auf {host}, angemeldet über L'Atelier de Claude. Dieses Repository: {base}")
+            tr!("{name} auf {host}, angemeldet über L'Atelier de Claude. Dieses Repository: {base}", "{name} on {host}, signed in via L'Atelier de Claude. This repository: {base}")
         }
-        Err(e) => format!("Derzeit nicht nutzbar: {e}. Konto in L'Atelier de Claude unter „Konten“ anmelden"),
+        Err(e) => tr!("Derzeit nicht nutzbar: {e}. Konto in L'Atelier de Claude unter „Konten“ anmelden", "Currently unavailable: {e}. Sign in to an account in L'Atelier de Claude under “Accounts”"),
     };
     let obj = |props: Value, req: &[&str]| json!({ "type": "object", "properties": props, "required": req });
-    let path = json!({ "type": "string", "description": "API-Pfad ab der API-Wurzel, z. B. /repos/o/r/pulls bzw. /projects/<id>/merge_requests" });
-    let query = json!({ "type": "object", "description": "Query-Parameter", "additionalProperties": { "type": ["string", "number", "boolean"] } });
+    let path = json!({ "type": "string", "description": tr!("API-Pfad ab der API-Wurzel, z. B. /repos/o/r/pulls bzw. /projects/<id>/merge_requests", "API path from the API root, e.g. /repos/o/r/pulls or /projects/<id>/merge_requests") });
+    let query = json!({ "type": "object", "description": tr!("Query-Parameter", "Query parameters"), "additionalProperties": { "type": ["string", "number", "boolean"] } });
     json!([
         {
             "name": "git",
-            "description": "git im Repository der Session ausführen, mit dem in L'Atelier de Claude gebundenen Konto authentifiziert \
+            "description": tr!("git im Repository der Session ausführen, mit dem in L'Atelier de Claude gebundenen Konto authentifiziert \
                 (push/pull/fetch ohne gh-Login oder Credential-Helper). Lokale Befehle gehen auch über Bash.",
-            "inputSchema": obj(json!({ "args": { "type": "array", "items": { "type": "string" }, "description": "Argumente ohne \"git\", z. B. [\"push\", \"-u\", \"origin\", \"feature\"]" } }), &["args"]),
+                "Run git in the session's repository, authenticated with the account bound in L'Atelier de Claude \
+                (push/pull/fetch without gh login or credential helper). Local commands also work via Bash."),
+            "inputSchema": obj(json!({ "args": { "type": "array", "items": { "type": "string" }, "description": tr!("Argumente ohne \"git\", z. B. [\"push\", \"-u\", \"origin\", \"feature\"]", "Arguments without \"git\", e.g. [\"push\", \"-u\", \"origin\", \"feature\"]") } }), &["args"]),
         },
         {
             "name": "forge_read",
-            "description": format!("GET-Anfrage an die GitHub-/GitLab-API des Repositorys. {target}. Für PRs/MRs, Issues, Reviews, Kommentare, CI-Runs, Job-Logs, Releases. \
-                accept z. B. application/vnd.github.diff für PR-Diffs."),
+            "description": tr!("GET-Anfrage an die GitHub-/GitLab-API des Repositorys. {target}. Für PRs/MRs, Issues, Reviews, Kommentare, CI-Runs, Job-Logs, Releases. \
+                accept z. B. application/vnd.github.diff für PR-Diffs.",
+                "GET request to the repository's GitHub/GitLab API. {target}. For PRs/MRs, issues, reviews, comments, CI runs, job logs, releases. \
+                accept e.g. application/vnd.github.diff for PR diffs."),
             "inputSchema": obj(json!({ "path": path, "query": query, "accept": { "type": "string" } }), &["path"]),
             "annotations": { "readOnlyHint": true },
         },
         {
             "name": "forge_write",
-            "description": format!("Schreibende Anfrage an die GitHub-/GitLab-API des Repositorys. {target}. Z. B. PR/MR anlegen, kommentieren, mergen, Issue anlegen, CI neu starten."),
+            "description": tr!("Schreibende Anfrage an die GitHub-/GitLab-API des Repositorys. {target}. Z. B. PR/MR anlegen, kommentieren, mergen, Issue anlegen, CI neu starten.", "Write request to the repository's GitHub/GitLab API. {target}. E.g. create, comment on or merge a PR/MR, create an issue, restart CI."),
             "inputSchema": obj(json!({
                 "method": { "type": "string", "enum": ["POST", "PATCH", "PUT", "DELETE"] },
                 "path": path,
                 "query": query,
-                "body": { "type": "object", "description": "JSON-Body" },
+                "body": { "type": "object", "description": tr!("JSON-Body", "JSON body") },
             }), &["method", "path"]),
             "annotations": { "destructiveHint": true },
         },
         {
             "name": "open_file",
-            "description": "Datei im Editor von L'Atelier de Claude öffnen und dem Nutzer zeigen, optional an einer Zeile.",
-            "inputSchema": obj(json!({ "path": { "type": "string", "description": "absolut oder relativ zum Repository" }, "line": { "type": "integer", "description": "1-basiert" } }), &["path"]),
+            "description": tr!("Datei im Editor von L'Atelier de Claude öffnen und dem Nutzer zeigen, optional an einer Zeile.", "Open a file in the L'Atelier de Claude editor and show it to the user, optionally at a line."),
+            "inputSchema": obj(json!({ "path": { "type": "string", "description": tr!("absolut oder relativ zum Repository", "absolute or relative to the repository") }, "line": { "type": "integer", "description": tr!("1-basiert", "1-based") } }), &["path"]),
         },
         {
             "name": "clean_images",
-            "description": "Eingefügte Bilder aus Claude-Transkripten entfernen (Platzhalter statt base64), um Speicherplatz freizugeben. \
+            "description": tr!("Eingefügte Bilder aus Claude-Transkripten entfernen (Platzhalter statt base64), um Speicherplatz freizugeben. \
                 Laufende Sitzungen bleiben unangetastet. Nur auf ausdrücklichen Wunsch des Nutzers (sonst /clean-images).",
+                "Remove pasted images from Claude transcripts (placeholder instead of base64) to free disk space. \
+                Running sessions stay untouched. Only when the user explicitly asks (otherwise /clean-images)."),
             "inputSchema": obj(json!({
-                "args": { "type": "string", "description": "alle (Standard), 1d oder 7d (nur älter als), optional plus hier" },
-                "session": { "type": "string", "description": "Sitzungs-ID für hier" },
+                "args": { "type": "string", "description": tr!("alle (Standard), 1d oder 7d (nur älter als), optional plus hier", "all (default), 1d or 7d (only older than), optionally plus here") },
+                "session": { "type": "string", "description": tr!("Sitzungs-ID für hier", "Session ID for here") },
             }), &[]),
             "annotations": { "destructiveHint": true },
         },
         {
             "name": "editor_state",
-            "description": "Offene Dateien im Editor (dirty/conflict), aktive Datei und Auswahl. Bei Fragen zur offenen Datei/Auswahl aufrufen; \
+            "description": tr!("Offene Dateien im Editor (dirty/conflict), aktive Datei und Auswahl. Bei Fragen zur offenen Datei/Auswahl aufrufen; \
                 vor Edits prüfen, ob die Datei ungespeichert ist.",
+                "Open files in the editor (dirty/conflict), active file and selection. Call for questions about the open file/selection; \
+                before edits check whether the file is unsaved."),
             "inputSchema": obj(json!({}), &[]),
             "annotations": { "readOnlyHint": true },
         },
         {
             "name": "run_state",
-            "description": "Letzte Ausgabe des Run-Panels (Befehl, Status, exit, 200 Zeilen ohne ANSI) und fehlgeschlagene Tests. \
+            "description": tr!("Letzte Ausgabe des Run-Panels (Befehl, Status, exit, 200 Zeilen ohne ANSI) und fehlgeschlagene Tests. \
                 Vor dem Fragen nach Logs oder Testfehlern aufrufen.",
+                "Latest output of the run panel (command, status, exit, 200 lines without ANSI) and failed tests. \
+                Call before asking for logs or test failures."),
             "inputSchema": obj(json!({}), &[]),
             "annotations": { "readOnlyHint": true },
         },
@@ -502,14 +514,14 @@ fn tools<R: Runtime>(ctx: &Ctx<R>) -> Value {
 // shortcut: Hooks und Repo-Config laufen weiter mit Auth-Env, wer per Bash Hooks schreibt, kommt an den Token; erst mit Credential-Helper statt Env dicht.
 fn git_args_ok(args: &[String]) -> Result<(), String> {
     if args.first().is_none_or(|a| a.starts_with('-')) {
-        return Err("Erstes Argument muss der git-Befehl sein, globale Optionen wie -C/-c sind nicht erlaubt".into());
+        return Err(tr!("Erstes Argument muss der git-Befehl sein, globale Optionen wie -C/-c sind nicht erlaubt", "The first argument must be the git command, global options like -C/-c are not allowed"));
     }
     // config/var listen die Env-Config samt Auth-Header; lokal geht beides über Bash.
     if ["config", "var"].contains(&args[0].as_str()) {
-        return Err(format!("git {} nur über Bash", args[0]));
+        return Err(tr!("git {} nur über Bash", "git {} only via Bash", args[0]));
     }
     match args.iter().find(|a| ["--upload-pack", "--receive-pack", "--exec"].iter().any(|o| a.starts_with(o))) {
-        Some(a) => Err(format!("Nicht erlaubt: {a}")),
+        Some(a) => Err(tr!("Nicht erlaubt: {a}", "Not allowed: {a}")),
         None => Ok(()),
     }
 }
@@ -522,14 +534,14 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
     let path = a["path"].as_str().unwrap_or("");
     let out = match name {
         "git" => {
-            let args: Vec<String> = a["args"].as_array().ok_or("args fehlt")?.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+            let args: Vec<String> = a["args"].as_array().ok_or_else(|| tr!("args fehlt", "args missing"))?.iter().filter_map(|x| x.as_str().map(String::from)).collect();
             git_args_ok(&args)?;
             let repo = ctx.repo.clone();
             crate::git::blocking(move || {
                 let o = crate::git::exec(crate::git::net(&repo).args(&args), None)?;
                 let mut out = String::from_utf8_lossy(&o.stdout).into_owned();
                 out.push_str(&String::from_utf8_lossy(&o.stderr));
-                if o.status.success() { Ok(out) } else { Err(format!("git beendet mit {}\n{out}", o.status)) }
+                if o.status.success() { Ok(out) } else { Err(tr!("git beendet mit {}\n{out}", "git exited with {}\n{out}", o.status)) }
             })
             .await?
         }
@@ -537,7 +549,7 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
         "forge_write" => {
             let m = a["method"].as_str().unwrap_or("");
             if !["POST", "PATCH", "PUT", "DELETE"].contains(&m) {
-                return Err(format!("Methode nicht erlaubt: {m}"));
+                return Err(tr!("Methode nicht erlaubt: {m}", "Method not allowed: {m}"));
             }
             let body = a.get("body").filter(|b| !b.is_null());
             crate::forge::mcp_call(&ctx.app, &ctx.repo, m, path, &query, body, None).await?
@@ -545,7 +557,7 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
         "open_file" => {
             let ev = json!({ "repo": ctx.repo, "path": path, "line": a["line"].as_u64() });
             ctx.app.emit("ide-open", ev).map_err(|e| e.to_string())?;
-            format!("Geöffnet: {path}")
+            tr!("Geöffnet: {path}", "Opened: {path}")
         }
         "clean_images" => {
             let (days, here) = crate::images::parse(a["args"].as_str().unwrap_or(""))?;
@@ -553,9 +565,9 @@ async fn call<R: Runtime>(ctx: &Ctx<R>, name: &str, a: &Value) -> Result<Vec<Val
             let r = crate::git::blocking(move || Ok(crate::images::clean(&crate::activity::config_dir(), days, sid.as_deref()))).await?;
             crate::images::summary(&r)
         }
-        "editor_state" => editors().get(&ctx.repo).map_or_else(|| "Editor für dieses Projekt nicht geöffnet.".into(), Value::to_string),
-        "run_state" => runs().get(&ctx.repo).cloned().unwrap_or_else(|| "Kein Run/Test für dieses Projekt.".into()),
-        _ => return Err(format!("Tool unbekannt: {name}")),
+        "editor_state" => editors().get(&ctx.repo).map_or_else(|| tr!("Editor für dieses Projekt nicht geöffnet.", "Editor not open for this project."), Value::to_string),
+        "run_state" => runs().get(&ctx.repo).cloned().unwrap_or_else(|| tr!("Kein Run/Test für dieses Projekt.", "No run/test for this project.")),
+        _ => return Err(tr!("Tool unbekannt: {name}", "Unknown tool: {name}")),
     };
     Ok(vec![text(&clip(&out))])
 }
@@ -568,7 +580,7 @@ fn clip(s: &str) -> String {
     }
     let head = s.floor_char_boundary(HALF);
     let tail = s.ceil_char_boundary(s.len() - HALF);
-    format!("{}\n… {} Zeichen gekürzt …\n{}", &s[..head], tail - head, &s[tail..])
+    tr!("{}\n… {} Zeichen gekürzt …\n{}", "{}\n… {} characters cut …\n{}", &s[..head], tail - head, &s[tail..])
 }
 
 #[cfg(test)]
