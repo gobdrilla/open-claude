@@ -1115,13 +1115,23 @@ mod tests {
         assert_eq!(batch(&rx, idle).unwrap().len(), 2004);
         // Im Strom (gerade gesendet): Nachzuegler innerhalb von 4 ms kommen mit
         let late = tx.clone();
+        let start = Instant::now();
         let t = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(1));
             late.send(b"b".to_vec()).unwrap();
+            Instant::now()
         });
         tx.send(b"a".to_vec()).unwrap();
-        assert_eq!(batch(&rx, Instant::now()).unwrap(), b"ab");
-        t.join().unwrap();
+        let got = batch(&rx, Instant::now()).unwrap();
+        let sent = t.join().unwrap();
+        // CI runners (Windows timer 15 ms, busy macOS) can wake the sender after the window: then "b" is
+        // really late and must come with the next batch instead.
+        if got == b"a" {
+            assert!(sent.duration_since(start) >= Duration::from_millis(4), "b kam rechtzeitig, fehlt aber");
+            assert_eq!(batch(&rx, Instant::now()).unwrap(), b"b");
+        } else {
+            assert_eq!(got, b"ab");
+        }
         // Obergrenze 256 KB, Rest im naechsten Paket
         for _ in 0..60 {
             tx.send(vec![0; 8192]).unwrap();
