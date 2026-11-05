@@ -3,6 +3,7 @@
 // beim Server geoeffnete Dokumente bleiben. didClose erst, wenn der Tab zugeht (closed) oder das Projekt (stop).
 import { t } from "./i18n.ts";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { appDataDir, join } from "@tauri-apps/api/path";
 import { tick } from "svelte";
 import { ChangeSet, Text, type Extension } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap, showDialog, type Command } from "@codemirror/view";
@@ -34,7 +35,7 @@ import { lspFolding } from "./components/editor/lspFold.ts";
 import { breadcrumbs } from "./components/editor/breadcrumbs.ts";
 import { semanticTokens } from "./components/editor/semantic.ts";
 import { linkedEditing } from "./components/editor/linked.ts";
-import { INIT_OPTIONS, SETTINGS } from "./inlay.logic.ts";
+import { initOptions, SETTINGS } from "./inlay.logic.ts";
 import { applyEdits, editsOf, fileUri, flatSymbols, projectScan, renameSummary, serverFor, uriPath, type Edit, type LspPos, type Sym, type TextEdit } from "./lsp.logic.ts";
 import { confirm } from "./confirm.svelte.ts";
 import { toLocs, uniqueLocs, type Loc, type LspRange } from "./nav.logic.ts";
@@ -300,6 +301,8 @@ function connect(repo: string, server: string): Promise<Conn | null> {
       lsp.gen[key] = (lsp.gen[key] ?? 0) + 1;
       clearDiags(repo, server);
     };
+    // Folder of the app-installed servers (lsp.rs: app_data_dir/lsp); read before the start so no await sits between mine() and the client.
+    const lspDir = await join(await appDataDir(), "lsp");
     try {
       await invoke("lsp_start", { repo, server, on: ch });
     } catch (e) {
@@ -317,7 +320,7 @@ function connect(repo: string, server: string): Promise<Conn | null> {
       workspace: (c) => new StoreWorkspace(c, repo),
       // Erste Antworten grosser Server (rust-analyzer beim Indexieren) dauern.
       timeout: 15000,
-      initializationOptions: INIT_OPTIONS[server],
+      initializationOptions: initOptions(server, lspDir),
       // Hover-Markdown landet per innerHTML in der Webview.
       sanitizeHTML: (h) => DOMPurify.sanitize(h),
       notificationHandlers: {

@@ -40,6 +40,16 @@ export const INIT_OPTIONS: Record<string, unknown> = {
   },
 };
 
+/**
+ * INIT_OPTIONS plus, for typescript, typescript-svelte-plugin from the app's LSP folder (src-tauri/src/lsp.rs installs it
+ * in Svelte projects): without it tsserver reads every .svelte import in a .ts file as default-only and reports
+ * "Module '\"*.svelte\"' has no exported member". tsserver skips the plugin where it is missing.
+ */
+export const initOptions = (server: string, lspDir: string): unknown =>
+  server === "typescript"
+    ? { ...(INIT_OPTIONS.typescript as object), plugins: [{ name: "typescript-svelte-plugin", location: lspDir }] }
+    : INIT_OPTIONS[server];
+
 const TS_LENS = {
   referencesCodeLens: { enabled: true, showOnAllFunctions: true },
   implementationsCodeLens: { enabled: true, showOnInterfaceMethods: true },

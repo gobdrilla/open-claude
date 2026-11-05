@@ -203,9 +203,9 @@ test('panelFiles hoechstens 20 eintraege', async ($, on) => {
   on('store.set', (_$, e) => (e.key === 'panelFiles' && sets.push(e.value as never), { value: undefined }) as never)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never)
   // Aelteste fallen raus, die neue Sitzung bleibt
-  expect(Object.keys(sets[0])).toHaveLength(20)
-  expect(sets[0].neu).toBe('/tmp/neu/p.json')
-  expect(sets[0].s0).toBeUndefined()
+  expect(Object.keys(sets[0]!)).toHaveLength(20)
+  expect(sets[0]!.neu).toBe('/tmp/neu/p.json')
+  expect(sets[0]!.s0).toBeUndefined()
 })
 
 test('rueckfrage setzt waiting', async ($, on) => {
@@ -226,7 +226,7 @@ test('clean-images meldet fehler', async ($, on) => {
   on('mcp.call', () => {
     throw new Error('aus')
   })
-  const r = await $.command.run({ command: 'clean-images', args: 'alle' })
+  const r = await $.command.run({ command: 'clean-images', args: 'alle' } as never)
   expect(r.text).toContain("L'Atelier de Claude nicht erreichbar")
   expect(toasts[0]).toBe(r.text)
 })

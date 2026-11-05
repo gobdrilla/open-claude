@@ -43,7 +43,7 @@ test("Edits anwenden: mehrere pro Zeile, mehrzeilig, Emoji, Einfuegen", () => {
 test("problems: nur das Projekt, Fehler zuerst, dann Pfad und Zeile", () => {
   const d = (line: number, severity?: number) => ({ range: { start: { line, character: 0 } }, severity });
   const diags = {
-    "/r\nb.ts": { list: [d(5, 2), d(1)] },
+    "/r\nb.ts": { list: [d(5, 2), d(1), d(7, 4)] },
     "/r\na.ts": { list: [d(9, 1), d(3, 2)] },
     "/r2\na.ts": { list: [d(0, 1)] },
   };

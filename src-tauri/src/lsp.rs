@@ -177,6 +177,14 @@ fn stale_typescript(key: &str, own: &Path) -> bool {
     matches!(key, "typescript" | "svelte") && ts.join("package.json").is_file() && !ts.join("lib").join("tsserver.js").is_file()
 }
 
+const SVELTE_TS_PLUGIN: &str = "typescript-svelte-plugin";
+
+/// Svelte config next to the project, or svelte in package.json.
+fn svelte_project(root: &Path) -> bool {
+    ["svelte.config.js", "svelte.config.ts", "svelte.config.mjs"].iter().any(|f| root.join(f).is_file())
+        || std::fs::read_to_string(root.join("package.json")).is_ok_and(|p| p.contains("\"svelte\""))
+}
+
 /// Automatische Installation aus dem Hinweistext: "npm i -g a b" ins App-eigene Prefix (kein sudo, kein globales
 /// Paket), rustup/go/dotnet wie angegeben. None = nur von Hand (clangd, sourcekit-lsp) oder Werkzeug fehlt.
 fn install_cmd(hint: &str, own: &Path) -> Option<(PathBuf, Vec<String>)> {
@@ -301,6 +309,18 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
             resolve(&root, cmd, npm, &own).ok_or_else(|| tr!("{cmd} nach der Installation nicht gefunden. Von Hand: {hint}", "{cmd} not found after installation. Manually: {hint}"))?
         }
     };
+
+    // tsserver needs typescript-svelte-plugin (initOptions in src/lib/inlay.logic.ts) to see named exports of .svelte
+    // files in .ts files. Best effort: without it the server still runs, only those imports show false errors.
+    // Once per run: offline, npm would delay every start.
+    static TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if key == "typescript"
+        && svelte_project(&root)
+        && !own.join("node_modules").join(SVELTE_TS_PLUGIN).is_dir()
+        && !TRIED.swap(true, std::sync::atomic::Ordering::Relaxed)
+    {
+        let _ = install(SVELTE_TS_PLUGIN, &format!("npm i -g {SVELTE_TS_PLUGIN}"), &own);
+    }
 
     let state = app.state::<Lsps>();
     let id = (root.clone(), key.to_string());
@@ -455,6 +475,21 @@ mod tests {
         std::fs::write(ts.join("lib").join("tsserver.js"), "").unwrap();
         assert!(!stale_typescript("typescript", &own));
         let _ = std::fs::remove_dir_all(&own);
+    }
+
+    #[test]
+    fn erkennt_svelte_projekt() {
+        let dir = std::env::temp_dir().join(format!("ocui-lsp-svelte-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!svelte_project(&dir));
+        std::fs::write(dir.join("package.json"), r#"{"dependencies":{"react":"1"}}"#).unwrap();
+        assert!(!svelte_project(&dir));
+        std::fs::write(dir.join("package.json"), r#"{"devDependencies":{"svelte":"5"}}"#).unwrap();
+        assert!(svelte_project(&dir));
+        std::fs::remove_file(dir.join("package.json")).unwrap();
+        std::fs::write(dir.join("svelte.config.js"), "").unwrap();
+        assert!(svelte_project(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

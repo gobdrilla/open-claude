@@ -141,7 +141,8 @@ export function problems<D extends Diag>(diags: Record<string, { list: D[] }>, r
   const pre = `${repo}\n`;
   return Object.entries(diags)
     .filter(([key]) => key.startsWith(pre))
-    .flatMap(([key, e]) => e.list.map((d) => ({ path: key.slice(pre.length), d })))
+    // Without hints (severity 4, e.g. "declared but never read"), as in VS Code: the editor still greys them out.
+    .flatMap(([key, e]) => e.list.filter((d) => (d.severity ?? 1) < 4).map((d) => ({ path: key.slice(pre.length), d })))
     .sort(
       (a, b) =>
         (a.d.severity ?? 1) - (b.d.severity ?? 1) ||

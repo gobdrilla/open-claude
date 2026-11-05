@@ -385,7 +385,8 @@ export const register: Register = on => {
   on('tool.call', { tool: /^mcp__brain__/ }, async ($, e, next) => {
     const ran = await next(e)
     if (!ran.isError && !('deny' in ran && ran.deny)) {
-      if (e.tool === 'mcp__brain__remember') brain.remember = true
+      // String(): the generated tool union lists only this session's tools, brain may be missing from it.
+      if (String(e.tool) === 'mcp__brain__remember') brain.remember = true
       else brain.recall = true
     }
     return ran
