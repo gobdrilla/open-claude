@@ -34,6 +34,8 @@ const SERVERS: &[(&str, &str, &[&str], bool, &str)] = &[
     ("css", "vscode-css-language-server", &["--stdio"], true, "npm i -g vscode-langservers-extracted"),
     ("html", "vscode-html-language-server", &["--stdio"], true, "npm i -g vscode-langservers-extracted"),
     ("yaml", "yaml-language-server", &["--stdio"], true, "npm i -g yaml-language-server"),
+    // Not a language server: the .NET debug adapter (DAP, same framing), fetched by debug.rs (src/lib/debug.svelte.ts).
+    ("netcoredbg", "netcoredbg", &["--interpreter=vscode"], false, "netcoredbg von github.com/Samsung/netcoredbg"),
 ];
 
 /// Nachrichten an das Frontend: eine LSP-Nachricht (JSON ohne Header) oder das Ende des Prozesses.
@@ -161,7 +163,7 @@ fn resolve(root: &Path, cmd: &str, npm: bool, own: &Path) -> Option<PathBuf> {
     let cargo = env("CARGO_HOME").unwrap_or_else(|| home.join(".cargo")).join("bin");
     // LLVM-Installer (Windows) traegt clangd nur optional in den PATH ein.
     let llvm = env("ProgramFiles").unwrap_or_default().join("LLVM").join("bin");
-    let dirs = [own.join("node_modules").join(".bin"), cargo, gobin, home.join(".dotnet").join("tools"), llvm];
+    let dirs = [own.join("node_modules").join(".bin"), own.join("netcoredbg"), cargo, gobin, home.join(".dotnet").join("tools"), llvm];
     let exts: &[&str] = if cfg!(windows) { &[".cmd", ".exe"] } else { &[""] };
     local
         .or_else(|| crate::deps::which(cmd))
@@ -196,6 +198,10 @@ fn install_cmd(hint: &str, own: &Path) -> Option<(PathBuf, Vec<String>)> {
 static INSTALL: Mutex<()> = Mutex::new(());
 
 fn install(cmd: &str, hint: &str, own: &Path) -> Result<(), String> {
+    if cmd == "netcoredbg" {
+        let _lock = guard(&INSTALL);
+        return crate::debug::fetch(own);
+    }
     let (prog, args) = install_cmd(hint, own).ok_or_else(|| format!("{cmd} nicht gefunden. Installieren: {hint}"))?;
     let _lock = guard(&INSTALL);
     std::fs::create_dir_all(own).map_err(|e| e.to_string())?;
@@ -298,8 +304,15 @@ fn start<R: Runtime>(app: AppHandle<R>, repo: &str, server: &str, on: Channel<Ou
     let mut c = crate::quiet(&plain(prog).to_string_lossy());
     c.args(args).current_dir(plain(root.clone())).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     // dotnet-Tools (csharp-ls) suchen die Runtime nur am Standardort; bei ~/.dotnet, %LOCALAPPDATA% oder Homebrew braucht es DOTNET_ROOT.
-    if key == "csharp" && std::env::var_os("DOTNET_ROOT").is_none() {
+    // netcoredbg starts the debuggee with "dotnet" from PATH, which a GUI app may lack.
+    if matches!(key, "csharp" | "netcoredbg") && std::env::var_os("DOTNET_ROOT").is_none() {
         if let Some(d) = crate::deps::which("dotnet").and_then(|p| p.canonicalize().ok()).and_then(|p| p.parent().map(|d| plain(d.to_path_buf()))) {
+            if key == "netcoredbg" {
+                let path = std::env::join_paths(std::iter::once(d.clone()).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())));
+                if let Ok(path) = path {
+                    c.env("PATH", path);
+                }
+            }
             c.env("DOTNET_ROOT", d);
         }
     }

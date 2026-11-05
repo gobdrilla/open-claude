@@ -4,6 +4,8 @@
   import { basicSetup } from "./setup";
   import { expandSelection } from "./expandSel";
   import { postfix } from "./postfix";
+  import { breakpoints, debuggable, setStopped } from "./breakpoints";
+  import { debug, setBreakpoints } from "$lib/debug.svelte";
   import { EditorState, Transaction } from "@codemirror/state";
   import { keymap } from "@codemirror/view";
   import { indentWithTab, isolateHistory } from "@codemirror/commands";
@@ -118,6 +120,7 @@
         gitGutter((v) => v.dom.dispatchEvent(new CustomEvent("gitdiff", { bubbles: true }))),
         ghost(path, () => prefs.ai),
         postfix(path),
+        debuggable(path) ? breakpoints(debug(repo).bps[path] ?? [], (lines) => setBreakpoints(repo, path, lines)) : [],
         stickyScroll,
         inlineBlame(prefs.blame, repo, path, openCommit),
         EditorView.updateListener.of(
@@ -246,6 +249,14 @@
       v.dispatch({ effects: setRunMarks.of(m) });
     }, 500);
     return () => clearTimeout(t);
+  });
+
+  // Debugger stopped in this file: arrow and highlighted line.
+  const dbg = $derived(debug(repo));
+  $effect(() => {
+    const at = dbg.at;
+    const v = view;
+    if (v && debuggable(path)) v.dispatch({ effects: setStopped.of(at?.path === path ? at.line : null) });
   });
 
   // Git-Gutter: 800 ms nach der letzten Aenderung gegen HEAD vergleichen; nicht bei grossen Dateien.

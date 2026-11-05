@@ -6,6 +6,7 @@ import { confirm } from "./confirm.svelte";
 import { untrack } from "svelte";
 import type { EditorState, StateEffect } from "@codemirror/state";
 import {
+  DEBUG,
   FILES,
   PREVIEW,
   PROBLEMS,
@@ -38,6 +39,8 @@ import { rescan, testCancel } from "./testing.svelte.ts";
 // Zirkulaer (lsp.svelte.ts nutzt open/peek/setText): beide Seiten greifen erst zur Laufzeit zu, nie auf Modulebene.
 import { closed, disk, formatFile, stop as stopLsp } from "./lsp.svelte.ts";
 import { pushEditor } from "./ide.svelte.ts";
+// Circular as well (debug.svelte.ts uses open/setLayout): only used at runtime.
+import { debugStop } from "./debug.svelte.ts";
 
 /** Platte weicht vom Puffer ab, waehrend lokale Aenderungen offen sind. */
 export type Conflict = "changed" | "deleted";
@@ -363,6 +366,7 @@ export async function closeTab(repo: string, panel: PanelId): Promise<boolean> {
   persist(s);
   // Laeuft etwas, ist die Ausgabe im Layout: ohne sie gaebe es keinen Stopp-Knopf mehr.
   if (panel === RUN) void runStop(repo);
+  if (panel === DEBUG) void debugStop(repo);
   return true;
 }
 
@@ -550,7 +554,7 @@ export function focus(repo: string, panel: PanelId): void {
  * Kante des Layouts, tests und search als Tab neben files (wie die Seitenleiste in VS Code), ohne files an die linke Kante;
  * problems als Tab neben der Ausgabe, ohne sie unter die main-Gruppe (wie das Panel unten in VS Code).
  */
-export function togglePanel(repo: string, panel: "files" | "preview" | "tests" | "search" | "problems"): void {
+export function togglePanel(repo: string, panel: "files" | "preview" | "tests" | "search" | "problems" | "debug"): void {
   const s = editor(repo);
   const files = groupOf(s.layout, FILES)?.id;
   const run = groupOf(s.layout, RUN)?.id;
@@ -562,7 +566,7 @@ export function togglePanel(repo: string, panel: "files" | "preview" | "tests" |
       : activate(s.layout, panel)
     : (panel === TESTS || panel === SEARCH) && files
       ? openPanel(s.layout, panel, files)
-      : panel === PROBLEMS
+      : panel === PROBLEMS || panel === DEBUG
         ? run
           ? openPanel(s.layout, panel, run)
           : splitAt(s.layout, panel, mainGroup(s.layout).id, "bottom")
@@ -766,6 +770,7 @@ export async function drop(repo: string, force = false): Promise<boolean> {
   if (!store.has(repo)) return true;
   if (!force && isDirty(repo) && !(await confirm("Ungespeicherte Änderungen im Editor verwerfen?", "Verwerfen"))) return false;
   void runStop(repo);
+  void debugStop(repo);
   void testCancel(repo);
   redetect(repo);
   stopLsp(repo);

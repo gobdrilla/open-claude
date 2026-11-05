@@ -250,7 +250,7 @@ fn test_command(fw: Fw, scope: &Scope, prog: &str, reporters: &Path, windows: bo
 /// Lokales JS-Tool: node_modules/.bin/<tool> ab cwd aufwaerts bis zum Projektordner. Kein npx: kein Netz, kein Overhead.
 /// cargo/dotnet aus ~/.cargo/bin bzw. ~/.dotnet, wenn PATH sie nicht kennt (rustup --no-modify-path,
 /// dotnet-install, unter Windows auch veralteter PATH des App-Prozesses); die Run-Leiste macht das genauso.
-fn sdk(tool: &str) -> String {
+pub(crate) fn sdk(tool: &str) -> String {
     if crate::deps::which(tool).is_some() {
         return tool.into();
     }

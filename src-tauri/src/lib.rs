@@ -25,6 +25,7 @@ mod files;
 // Claude-Sessions: IDE-Protokoll (Diffs, Auswahl) und MCP-Server mit Git/GitHub/GitLab-Tools.
 mod ide;
 // Language-Server fuer den Editor (stdio), Diagnostics auch fuer Claude.
+mod debug;
 mod lsp;
 // Wach-Halt bei zugeklapptem Laptop, nur solange Claude arbeitet.
 mod awake;
@@ -899,6 +900,7 @@ pub fn run() {
             ide::ide_reply,
             ide::ide_editor_state,
             ide::ide_run_state,
+            debug::dbg_build,
             lsp::lsp_start,
             lsp::lsp_send,
             lsp::lsp_stop,

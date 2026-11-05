@@ -19,12 +19,13 @@
   import SlidersIcon from "@lucide/svelte/icons/sliders-horizontal";
   import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
   import SearchIcon from "@lucide/svelte/icons/search";
+  import BugIcon from "@lucide/svelte/icons/bug";
   import { tick } from "svelte";
   import BuildProfilesDialog from "./BuildProfilesDialog.svelte";
   import RunConfigsDialog from "./RunConfigsDialog.svelte";
   import HistoryDialog from "./HistoryDialog.svelte";
   import ListPlusIcon from "@lucide/svelte/icons/list-plus";
-  import { FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, mainGroup, panelPath, splitAt, type PanelId } from "$lib/dock";
+  import { DEBUG, FILES, PREVIEW, PROBLEMS, RUN, SEARCH, TESTS, activate, groupOf, mainGroup, panelPath, splitAt, type PanelId } from "$lib/dock";
   import { closeTab, editor, focus, permanent, resetLayout, save, setLayout, setProfile, setRun, togglePanel, watch } from "$lib/editor.svelte";
   import { allConfigs, chosen, detect, run, runRestart, runStart, runStop } from "$lib/run.svelte";
   import { BUILTIN, type RunConfig } from "$lib/run.logic";
@@ -39,6 +40,8 @@
   import RunPane from "./RunPane.svelte";
   import ProblemsPane from "./ProblemsPane.svelte";
   import SearchPane from "./SearchPane.svelte";
+  import DebugPane from "./DebugPane.svelte";
+  import { debug, debugStart, debugStep, debugStop } from "$lib/debug.svelte";
   import { lsp } from "$lib/lsp.svelte";
   import { problems } from "$lib/lsp.logic";
 
@@ -69,6 +72,8 @@
   const cfgs = $derived(r && allConfigs(repo));
   // Toolbar buttons act on the selected target; other targets keep running (tabs in the output).
   const running = $derived(!!cfg && r.of(cfg.label)?.state === "running");
+  const dbg = $derived(debug(repo));
+  const debugging = $derived(!!dbg.session && dbg.session.phase !== "end");
   const kinds: [RunConfig["target"]["kind"], string][] = [
     ["npm", "npm-Scripts"],
     ["dotnet", ".NET"],
@@ -84,6 +89,7 @@
     if (id === RUN) return { title: "Ausgabe", icon: SquareTerminalIcon, closable: false };
     if (id === PROBLEMS) return { title: "Probleme", icon: CircleAlertIcon, closable: false };
     if (id === SEARCH) return { title: "Suche", icon: SearchIcon, closable: false };
+    if (id === DEBUG) return { title: "Debug", icon: BugIcon, closable: false };
     const path = panelPath(id) ?? "";
     const f = s.files[path];
     // Auf der Platte geloescht, Puffer hat noch Aenderungen: der Tab bleibt und sagt es.
@@ -111,6 +117,16 @@
   }
 
   function onKey(e: KeyboardEvent) {
+    // While debugging, like Visual Studio: F5 continues, Shift+F5 ends, F10/F11/Shift+F11 step.
+    const phase = dbg.session?.phase;
+    if (debugging && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      const step = e.key === "F10" ? "next" : e.key === "F11" ? (e.shiftKey ? "stepOut" : "stepIn") : e.key === "F5" && !e.shiftKey && phase === "pause" ? "continue" : null;
+      if (step || (e.key === "F5" && e.shiftKey)) {
+        e.preventDefault();
+        void (step ? debugStep(repo, step) : debugStop(repo));
+        return;
+      }
+    }
     // Wie VS Code: F5 startet, Umschalt+F5 stoppt, Strg+Umschalt+F5 startet neu. Sonst laedt die WebView die Seite neu.
     if (e.key === "F5" && !e.altKey) {
       e.preventDefault();
@@ -167,6 +183,8 @@
     <ProblemsPane {repo} />
   {:else if id === SEARCH}
     <SearchPane {repo} />
+  {:else if id === DEBUG}
+    <DebugPane {repo} />
   {:else}
     <CodePane {repo} path={panelPath(id) ?? ""} />
   {/if}
@@ -176,7 +194,7 @@
   <Empty icon={FileCodeIcon} hint="{MOD}+P">Datei im Baum wählen oder schnell öffnen.</Empty>
 {/snippet}
 
-{#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems" | "run", label: string, Icon: typeof SaveIcon, title = label)}
+{#snippet toggle(id: "files" | "preview" | "tests" | "search" | "problems" | "run" | "debug", label: string, Icon: typeof SaveIcon, title = label)}
   <!-- Pressed only while visible: a tab behind another one in its group is not -->
   {@const on = groupOf(s.layout, id)?.active === id}
   <!-- Narrow window: icon only, the tooltip keeps the name. -->
@@ -216,7 +234,7 @@
     {/if}
     <span class="bg-background/60 ring-foreground/10 ml-3 flex items-center gap-0.5 rounded-md p-0.5 ring-1">
       {#if running}<span class="bg-success mx-1 size-1.5 animate-pulse rounded-full" title="Läuft"></span>{/if}
-      <span class="text-muted-foreground pl-1.5 text-meta @max-[72rem]:hidden">Startziel</span>
+      <span class="text-muted-foreground pl-1.5 text-meta @max-[88rem]:hidden">Startziel</span>
       {#key pick}
         <Select
           class="h-5 max-w-60 border-0 bg-transparent font-mono text-meta"
@@ -265,6 +283,15 @@
         title="Neu starten ({MOD}+{SHIFT}+F5)"
         onclick={() => runRestart(repo, cfg?.label)}><RotateCcwIcon /> <span class="@max-[72rem]:hidden">Neu starten</span></Button
       >
+      {#if cfg?.target.kind === "dotnet"}
+        <Button
+          variant="quiet"
+          size="xs"
+          disabled={debugging}
+          title="{cfg.label} bauen und debuggen – führt Code aus dem Projekt aus"
+          onclick={() => debugStart(repo, cfg ?? null)}><BugIcon /> <span class="@max-[88rem]:hidden">Debuggen</span></Button
+        >
+      {/if}
     </span>
     <span class="flex-1"></span>
     <span class="bg-muted/60 flex items-center gap-0.5 rounded-md p-0.5">
@@ -274,6 +301,7 @@
       {@render toggle("preview", "Vorschau", PanelRightIcon)}
       {@render toggle("problems", "Probleme", CircleAlertIcon, `Probleme (${MOD}+{SHIFT}+M)`)}
       {#if r.current || groupOf(s.layout, RUN)}{@render toggle("run", "Ausgabe", SquareTerminalIcon)}{/if}
+      {#if dbg.session || groupOf(s.layout, DEBUG)}{@render toggle("debug", "Debug", BugIcon)}{/if}
     </span>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>

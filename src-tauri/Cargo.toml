@@ -34,6 +34,8 @@ ctrlc = "3"
 # native-tls = SChannel: nutzt den Windows-Zertifikatsspeicher (Firmen-Root-CA hinter Proxy)
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "native-tls", "charset", "http2", "system-proxy"] }
 base64 = "0.23.1"
+# netcoredbg-Download pruefen (src/debug.rs)
+sha2 = "0.10"
 # Vorschaubilder fuers Aktivitaets-Panel (nur die Formate, die claude einbettet)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 trash = "5.2.9"
