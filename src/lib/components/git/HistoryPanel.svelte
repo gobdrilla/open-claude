@@ -8,7 +8,7 @@
   import { forge, git, type Commit, type CommitDetail, type ResetMode } from "$lib/git";
   import { findLinks } from "$lib/extensions.logic";
   import { linkers, loadRepo } from "$lib/extensions.svelte";
-  import { layout, type Row as GraphRow } from "$lib/graph";
+  import { createLayout, type Row as GraphRow } from "$lib/graph";
   import { fileDiff, parseDiff, stat, type FileStatus } from "$lib/diff";
   import { dirname } from "$lib/tree";
   import { ask } from "$lib/ask.svelte";
@@ -56,7 +56,8 @@
   const ROW_H = 26;
   const LANE_W = 14;
 
-  let commits = $state<Commit[]>([]);
+  // raw: pages are only replaced or appended, and deep proxies made every pass over thousands of commits slow.
+  let commits = $state.raw<Commit[]>([]);
   let skip = $state(0);
   let loading = $state(false);
   let done = $state(false);
@@ -131,8 +132,27 @@
     if (filtered && filtered.length < 50 && !done && !loading && !error && skip < searchUntil) untrack(() => loadMore());
   });
 
+  // Only the visible rows are in the DOM: with hundreds of open branches every row draws one line per lane.
+  let scrollTop = $state(0);
+  let viewH = $state(0);
+  let viewW = $state(0);
+  const first = $derived(Math.max(0, Math.floor(scrollTop / ROW_H) - 10));
+  const slice = $derived(commits.slice(first, first + Math.ceil(viewH / ROW_H) + 20));
+
+  /** Scrolls to a commit; unfiltered rows outside the window are not rendered, so by index instead of element. */
+  function reveal(sha: string, block: "nearest" | "center") {
+    if (filtered) return void document.getElementById(`commit-${sha}`)?.scrollIntoView({ block });
+    const i = commits.findIndex((c) => c.sha === sha);
+    if (!list || i < 0) return;
+    const top = i * ROW_H;
+    if (block === "center") list.scrollTop = top - (list.clientHeight - ROW_H) / 2;
+    else if (top < list.scrollTop) list.scrollTop = top;
+    else if (top + ROW_H > list.scrollTop + list.clientHeight) list.scrollTop = top + ROW_H - list.clientHeight;
+  }
+
   function onScroll() {
     if (!list) return;
+    scrollTop = list.scrollTop;
     if (list.scrollTop + list.clientHeight >= list.scrollHeight - 400) loadMore();
   }
 
@@ -149,7 +169,7 @@
     selected = next.sha;
     clearTimeout(keyTimer);
     keyTimer = setTimeout(() => selected === next.sha && select(next.sha), 120);
-    document.getElementById(`commit-${next.sha}`)?.scrollIntoView({ block: "nearest" });
+    reveal(next.sha, "nearest");
   }
 
   async function select(sha: string) {
@@ -186,7 +206,7 @@
       return;
     }
     await tick();
-    document.getElementById(`commit-${sha}`)?.scrollIntoView({ block: "center" });
+    reveal(sha, "center");
   }
 
   $effect(() => {
@@ -194,10 +214,27 @@
     if (ref) untrack(() => jump(ref));
   });
 
-  const rows = $derived(layout(commits.map((c) => ({ sha: c.sha, parents: c.parents }))));
+  // shortcut: lanes past MAX_LANES are not drawn (their commits sit on the last column); a horizontally scrollable graph would show them.
+  const MAX_LANES = 32;
+  // Pages only append; reload() bumps gen and starts over. Laying out only the new page keeps scrolling linear.
+  let graph = createLayout(MAX_LANES);
+  let laid: GraphRow[] = [];
+  let laidGen = -1;
+  const rows = $derived.by(() => {
+    if (laidGen !== gen || commits.length < laid.length) {
+      graph = createLayout(MAX_LANES);
+      laid = [];
+      laidGen = gen;
+    }
+    if (commits.length > laid.length) laid = laid.concat(graph(commits.slice(laid.length).map((c) => ({ sha: c.sha, parents: c.parents }))));
+    return laid;
+  });
   const lanes = $derived(
-    rows.reduce((m, r) => Math.max(m, r.lane, ...r.edges.flatMap((e) => [e.from, e.to])), 0) + 1,
+    // Every edge column is below the lane count entering or leaving its row.
+    Math.min(MAX_LANES, rows.reduce((m, r) => Math.max(m, r.lane + 1, r.lanesIn, r.lanesOut), 1)),
   );
+  // The graph takes at most 40 % of the list, the subject keeps the rest.
+  const shownLanes = $derived(Math.min(lanes, Math.max(4, Math.floor((viewW * 0.4) / LANE_W))));
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -410,8 +447,8 @@
         onclick={() => select(c.sha)}
       >
         {#if row}
-          <svg width={lanes * LANE_W} height={ROW_H} class="shrink-0">
-            {#each row.edges as e (e.from + "-" + e.to + "-" + e.kind)}
+          <svg width={shownLanes * LANE_W} height={ROW_H} class="shrink-0">
+            {#each row.edges.filter((e) => e.from < shownLanes && e.to < shownLanes) as e (e.from + "-" + e.to + "-" + e.kind)}
               <line
                 x1={e.from * LANE_W + LANE_W / 2}
                 y1={e.kind === "out" ? ROW_H / 2 : 0}
@@ -422,7 +459,7 @@
               />
             {/each}
             <circle
-              cx={row.lane * LANE_W + LANE_W / 2}
+              cx={Math.min(row.lane, shownLanes - 1) * LANE_W + LANE_W / 2}
               cy={ROW_H / 2}
               r="3"
               fill={PALETTE[row.color % PALETTE.length]}
@@ -540,6 +577,8 @@
     <!-- Liste selbst ist fokussierbar: Pfeiltasten wechseln den Commit statt zu scrollen -->
     <div
       bind:this={list}
+      bind:clientHeight={viewH}
+      bind:clientWidth={viewW}
       onscroll={onScroll}
       onkeydown={onListKey}
       tabindex="0"
@@ -565,9 +604,13 @@
           <p class="text-muted-foreground px-2 py-4 text-center text-meta">{t("Keine Treffer.")}</p>
         {/if}
       {:else}
-        {#each commits as c, i (c.sha)}
-          {@render commitRow(c, rows[i])}
-        {/each}
+        <div class="relative" style="height:{commits.length * ROW_H}px">
+          {#each slice as c, i (c.sha)}
+            <div class="absolute inset-x-0" style="top:{(first + i) * ROW_H}px">
+              {@render commitRow(c, rows[first + i])}
+            </div>
+          {/each}
+        </div>
         {#if loading}
           <p class="text-muted-foreground px-2 py-2 text-center text-meta">{t("Lädt …")}</p>
         {:else if done && !commits.length}

@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { layout, type Row } from "./graph.ts";
+import { createLayout, layout, type Row } from "./graph.ts";
 
 type C = { sha: string; parents: string[] };
 
@@ -123,5 +123,28 @@ test("layout-Invarianten gegen echte git log --all --topo-order", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  }
+});
+
+test("createLayout in Seiten == layout am Stück; maxLane laesst nur Durchlaeufer weg", () => {
+  for (let s = 1; s <= 1000; s++) {
+    seed = s;
+    const commits = randomDag(1 + ri(60));
+    const whole = layout(commits.map((c) => ({ ...c })));
+    const g = createLayout();
+    const paged: Row[] = [];
+    for (let i = 0; i < commits.length; ) {
+      const n = 1 + ri(7);
+      paged.push(...g(commits.slice(i, i + n)));
+      i += n;
+    }
+    assert.deepEqual(paged, whole, `Seed ${s}`);
+    const cap = 1 + ri(4);
+    const capped = layout(commits, cap);
+    capped.forEach((r, i) => {
+      assert.equal(r.lane, whole[i].lane, `Seed ${s} Zeile ${i}: Lane`);
+      const keep = whole[i].edges.filter((e) => e.kind !== "pass" || e.from < cap);
+      assert.deepEqual(r.edges.map((e) => `${e.from}-${e.kind}`), keep.map((e) => `${e.from}-${e.kind}`), `Seed ${s} Zeile ${i}: Kanten`);
+    });
   }
 });

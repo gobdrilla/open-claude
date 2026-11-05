@@ -14,7 +14,15 @@ export type Row = { lane: number; color: number; edges: Edge[]; lanesIn: number;
 
 type Node = { sha: string; parents: string[] };
 
-export function layout(commits: Node[]): Row[] {
+export function layout(commits: Node[], maxLane = Infinity): Row[] {
+  return createLayout(maxLane)(commits);
+}
+
+/**
+ * Stateful layout: each call continues where the previous one stopped, so appended pages cost only their own rows.
+ * maxLane: pass lines from columns at or past it are not created (not drawn anyway; with 1000 open branches they cost millions of objects).
+ */
+export function createLayout(maxLane = Infinity): (commits: Node[]) => Row[] {
   const lanes: (string | null)[] = []; // erwartete SHA je Spalte
   const colors: number[] = [];
   let next = 0;
@@ -26,7 +34,7 @@ export function layout(commits: Node[]): Row[] {
     return i < 0 ? lanes.length : i;
   };
 
-  return commits.map((c) => {
+  return (commits) => commits.map((c) => {
     const edges: Edge[] = [];
     const lanesIn = lanes.length;
     let lane = lanes.indexOf(c.sha);
@@ -38,13 +46,14 @@ export function layout(commits: Node[]): Row[] {
       if (sha === c.sha) {
         edges.push({ from: i, to: lane, kind: "in", color: colors[i] });
         lanes[i] = null;
-      } else edges.push({ from: i, to: i, kind: "pass", color: colors[i] });
+      } else if (i < maxLane) edges.push({ from: i, to: i, kind: "pass", color: colors[i] });
     }
     c.parents.forEach((p, n) => {
       const j = lanes.indexOf(p);
       if (n === 0 && j > lane) {
         // Erster Elternteil wird weiter rechts erwartet: diese Lane nach links holen
-        edges.find((e) => e.kind === "pass" && e.from === j)!.to = lane;
+        const pass = edges.find((e) => e.kind === "pass" && e.from === j);
+        if (pass) pass.to = lane;
         lanes[j] = null;
         lanes[lane] = p;
         colors[lane] = color;
