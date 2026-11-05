@@ -18,6 +18,19 @@ export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & {
   ref?: U | null;
 };
 
+/**
+ * Action: tooltip only while the text is cut off (checked on hover). A tooltip that repeats visible text only
+ * covers what is next to it, e.g. the first entry of a context menu.
+ */
+export function clipTitle(node: HTMLElement, text: string) {
+  const set = () => (node.title = node.scrollWidth > node.clientWidth ? text : "");
+  node.addEventListener("pointerenter", set);
+  return {
+    update: (next: string) => void (text = next),
+    destroy: () => node.removeEventListener("pointerenter", set),
+  };
+}
+
 const AGE_STEPS: [number, string][] = [
   [31536e6, "{n} J"],
   [2592e6, "{n} Mo"],

@@ -622,7 +622,8 @@
 
   <Splitter bind:size={detailH} axis="y" min={80} invert key="git.detail" />
   <!-- max-height: gespeicherte Hoehe aus einem grossen Fenster darf die Liste nicht auf drei Zeilen druecken -->
-  <div class="border-border min-h-0 overflow-y-auto border-t" style="height:{detailH}px; max-height:max(80px, 50%)">
+  <!-- At most 40 %: with 50 % a 600 px window showed only six commits above the details. -->
+  <div class="border-border min-h-0 overflow-y-auto border-t" style="height:{detailH}px; max-height:max(80px, 40%)">
     {#if detailLoading}
       <p class="text-muted-foreground px-2 py-2 text-meta">{t("Lädt …")}</p>
     {:else if detailError}

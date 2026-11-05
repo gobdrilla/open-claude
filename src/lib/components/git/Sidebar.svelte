@@ -550,8 +550,8 @@
             <ContextMenu.Portal>
               <ContextMenu.Content class={menuContent}>
                 {@render pickItems(b, false)}
-                <ContextItem label={t("Auschecken")} onSelect={() => checkout(b)} />
                 {#if !b.current}
+                  <ContextItem label={t("Auschecken")} onSelect={() => checkout(b)} />
                   <ContextItem label={t("In aktuellen mergen …")} onSelect={() => openMerge(b.name)} />
                   <ContextItem
                     label={t("Aktuellen darauf rebasen")}

@@ -362,8 +362,8 @@ export default {
   "Eigene Befehle": "Custom commands",
   "Befehl {name} löschen": "Delete command {name}",
   "Neuer Befehl": "New command",
-  'Läuft im Projektordner (Login-Shell, unter Windows PowerShell). Variablen: $REPO, $SHA, $BRANCH, $FILE – Pfade in Anführungszeichen, z. B. code "$FILE".':
-    'Runs in the project folder (login shell, PowerShell on Windows). Variables: $REPO, $SHA, $BRANCH, $FILE – quote paths, e.g. code "$FILE".',
+  'Läuft im Projektordner (Login-Shell, unter Windows PowerShell). Variablen: $REPO, $SHA, $BRANCH, $FILE – Pfade in Anführungszeichen, z. B. code "$FILE".':
+    'Runs in the project folder (login shell, PowerShell on Windows). Variables: $REPO, $SHA, $BRANCH, $FILE – quote paths, e.g. code "$FILE".',
   "Name, z. B. In VS Code öffnen": "Name, e.g. Open in VS Code",
   "Name gibt es schon": "Name already exists",
   Hinzufügen: "Add",

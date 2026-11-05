@@ -202,7 +202,8 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="flex max-h-[85vh] flex-col sm:max-w-3xl">
+  <!-- Fixed height with a repo list: growing from "Lade…" to the full list moved the centred dialog up. -->
+  <Dialog.Content class="flex {mode !== 'url' && account ? 'h-[min(85vh,640px)]' : 'max-h-[85vh]'} flex-col sm:max-w-3xl">
     <Dialog.Header>
       <Dialog.Title>{t("Repository klonen")}</Dialog.Title>
       <Dialog.Description>{t("Von GitHub/GitLab suchen oder eine Git-URL einfügen.")}</Dialog.Description>
@@ -283,9 +284,12 @@
                   ><StarIcon class="size-3" />{r.stars}</span
                 >
               {/if}
-              {#if r.private}<LockIcon class="text-muted-foreground size-3" />{/if}
-              {#if r.fork}<GitForkIcon class="text-muted-foreground size-3" />{/if}
-              {#if r.archived}<ArchiveIcon class="text-muted-foreground size-3" />{/if}
+              <!-- Fixed width for up to three icons: language badges line up whether a repo is a fork or not. -->
+              <span class="flex w-11 shrink-0 justify-end gap-1">
+                {#if r.private}<LockIcon class="text-muted-foreground size-3" />{/if}
+                {#if r.fork}<GitForkIcon class="text-muted-foreground size-3" />{/if}
+                {#if r.archived}<ArchiveIcon class="text-muted-foreground size-3" />{/if}
+              </span>
               <span class="text-muted-foreground w-12 shrink-0 text-right font-mono text-meta whitespace-nowrap tabular-nums">{age(r.updated_at)}</span>
               <!-- Feste Breite, auch ohne Badge: sonst springen Schloss und Zeit je Zeile -->
               <span class="flex w-14 shrink-0 justify-end">

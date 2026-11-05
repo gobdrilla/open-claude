@@ -73,7 +73,7 @@
       placeholder={sid ? t("Frage … (Enter sendet)") : t("Keine laufende Claude-Sitzung")}
       title={t("Enter sendet, Umschalt+Enter neue Zeile")}
       density="sm"
-      class="max-h-32 min-h-7 py-1"
+      class="max-h-32 min-h-7 resize-none py-1"
       onkeydown={keydown}
     />
     <Button size="sm" disabled={!sid || !text.trim()} onclick={ask}>{t("Fragen")}</Button>

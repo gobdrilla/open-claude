@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { age, cn } from "$lib/utils";
+  import { age, clipTitle, cn } from "$lib/utils";
   import { onMount, tick, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
@@ -1464,10 +1464,14 @@
       </div>
     </div>
 
+    <!-- Alt held: the selected row shows its Alt+N like the others instead of the view actions. -->
     <Command.List
+      aria-label={t("Projekte")}
       class="max-h-none flex-1 overflow-y-auto {showSelected
         ? ''
-        : '[&_[data-selected]]:bg-transparent! [&_[data-selected]_.row-actions]:hidden! [&_[data-selected]_.row-meta]:flex!'}"
+        : '[&_[data-selected]]:bg-transparent! [&_[data-selected]_.row-actions]:hidden! [&_[data-selected]_.row-meta]:flex!'} {altHeld
+        ? '[&_[data-selected]_.row-actions]:hidden! [&_[data-selected]_.row-meta]:flex!'
+        : ''}"
       onpointermove={() => (navigated = true)}
       onpointerleave={() => (navigated = false)}
     >
@@ -1503,8 +1507,8 @@
                     <Command.Item {...props} value={`group:${g.name}`} onSelect={() => launchGroup(g)} class="gap-3 px-3 py-2">
                       <span class="bg-primary/15 text-primary grid size-6 place-items-center rounded-md"><LayersIcon class="size-3.5" /></span>
                       <div class="min-w-0 flex-1">
-                        <div class="truncate text-body font-semibold" title={g.name}>{g.name}</div>
-                        <div class="text-muted-foreground truncate text-meta" title={members}>{members}</div>
+                        <div class="truncate text-body font-semibold" use:clipTitle={g.name}>{g.name}</div>
+                        <div class="text-muted-foreground truncate text-meta" use:clipTitle={members}>{members}</div>
                       </div>
                       {#if live}
                         <Badge variant="outline" class="text-primary gap-1.5 text-meta">
@@ -1561,7 +1565,7 @@
                       </IconButton>
 
                       <div class="min-w-0 flex-1">
-                        <div class="truncate text-body font-semibold" title={item.name}>
+                        <div class="truncate text-body font-semibold" use:clipTitle={item.name}>
                           {#each item.name.split("") as ch, i}<span
                               class={item.marks.includes(i) ? "text-primary" : ""}>{ch}</span
                             >{/each}
