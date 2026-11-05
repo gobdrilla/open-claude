@@ -49,9 +49,10 @@
         {#if (d.severity ?? 1) === 1}<CircleXIcon class="text-destructive size-3.5 shrink-0" />
         {:else if d.severity === 2}<TriangleAlertIcon class="text-warning size-3.5 shrink-0" />
         {:else}<InfoIcon class="text-muted-foreground size-3.5 shrink-0" />{/if}
-        <TextButton tone="plain" class="min-w-0 flex-1 items-baseline gap-2 py-0.5" title={d.message} onclick={() => open(repo, path, line + 1)}>
+        <!-- File name only: the full path took the room and cut the message to a few words; the tooltip has both. -->
+        <TextButton tone="plain" class="min-w-0 flex-1 items-baseline gap-2 py-0.5" title={`${d.message}\n${path}:${line + 1}`} onclick={() => open(repo, path, line + 1)}>
           <span class="truncate">{d.message}</span>
-          <span class="text-muted-foreground shrink-0 font-mono text-meta">{path}:{line + 1}</span>
+          <span class="text-muted-foreground shrink-0 font-mono text-meta">{path.split("/").pop()}:{line + 1}</span>
         </TextButton>
         <Button
           variant="quiet"

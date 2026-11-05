@@ -121,20 +121,21 @@
   </div>
 {/snippet}
 
-<div class="flex h-full min-h-0 flex-col text-ui">
+<!-- @container: in a narrow dock the bar shows icons only (titles name them) instead of wrapping to three rows. -->
+<div class="@container flex h-full min-h-0 flex-col text-ui">
   <div class="{paneBar} flex-wrap py-0.5">
     <Button variant="ghost" size="xs" disabled={!!t.run || t.scanning} title={tr("Alle Tests ausführen")} onclick={() => run("all")}
-      ><PlayIcon /> {tr("Alle")}</Button
+      ><PlayIcon /> <span class="@max-[20rem]:hidden">{tr("Alle")}</span></Button
     >
     <Button
       variant="ghost"
       size="xs"
       disabled={!!t.run || !counts.failed}
       title={tr("Fehlgeschlagene erneut ausführen")}
-      onclick={() => run("failed")}><CircleXIcon /> {tr("Fehlgeschlagene")}</Button
+      onclick={() => run("failed")}><CircleXIcon /> <span class="@max-[20rem]:hidden">{tr("Fehlgeschlagene")}</span></Button
     >
     <Button variant="ghost" size="xs" disabled={!t.run} title={tr("Lauf abbrechen")} onclick={() => testCancel(repo)}
-      ><SquareIcon class="fill-current" /> {tr("Abbrechen")}</Button
+      ><SquareIcon class="fill-current" /> <span class="@max-[20rem]:hidden">{tr("Abbrechen")}</span></Button
     >
     <IconButton size="md" label={tr("Tests neu suchen")} disabled={!!t.run || t.scanning} onclick={() => rescan(repo)}
       ><RefreshCwIcon class="size-3 {t.scanning ? 'animate-spin' : ''}" /></IconButton

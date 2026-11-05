@@ -371,7 +371,8 @@
         onclick={() => move(files, isStaged)}
       >
         <!-- Narrow column: "stagen"/"unstagen", so the list title stays readable. -->
-        <span class="@max-[15rem]:hidden">{isStaged ? t("Alles unstagen") : t("Alles stagen")}</span><span class="hidden @max-[15rem]:inline">{isStaged ? t("unstagen") : t("stagen")}</span>
+        <!-- 17rem: at 900 px window width the column is ~15.5rem and "Nicht gestaged" was cut to "Nicht gestag…". -->
+        <span class="@max-[17rem]:hidden">{isStaged ? t("Alles unstagen") : t("Alles stagen")}</span><span class="hidden @max-[17rem]:inline">{isStaged ? t("unstagen") : t("stagen")}</span>
       </Button>
       {#if !isStaged}
         <!-- Icon only: a text button pushed the list title down to "Nicht …" at 1280 px. -->

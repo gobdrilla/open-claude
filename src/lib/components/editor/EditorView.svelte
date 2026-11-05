@@ -206,7 +206,8 @@
     title={on ? t("{name} ausblenden", { name: title }) : t("{name} einblenden", { name: title })}
     onclick={() => (id === "run" ? toggleRun() : id === "search" && !on ? findInFiles() : togglePanel(repo, id))}
     ><Icon /> <span class="@max-[72rem]:hidden">{label}</span>
-    {#if id === "problems" && found.length}
+    <!-- Also at 0: a badge that appears later widened the button and moved every toggle left of it. -->
+    {#if id === "problems"}
       <span
         class="text-meta rounded-full px-1.5 tabular-nums {worst === 1
           ? 'bg-destructive/15 text-destructive'

@@ -160,7 +160,8 @@
         <img {src} alt={target} class="max-w-full" />
       </div>
     {:else if kind === null}
-      <Empty icon={EyeOffIcon}><span class="[overflow-wrap:anywhere]">{t("Keine Vorschau für {path}.", { path: target })}</span></Empty>
+      <!-- File name only (path in the field above): the full path broke mid-word in a narrow pane. -->
+      <Empty icon={EyeOffIcon}><span class="break-words" title={target}>{t("Keine Vorschau für {path}.", { path: target.split("/").pop() ?? target })}</span></Empty>
     {:else if !f}
       <Empty>{t("Lädt …")}</Empty>
     {:else if kind === "markdown"}

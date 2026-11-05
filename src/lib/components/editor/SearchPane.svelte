@@ -47,7 +47,8 @@
 
   // Treffer in der (getrimmten) Zeile finden und etwas Kontext davor behalten, damit er
   // im schmalen Panel nicht hinter dem Abschneiden verschwindet.
-  const LEAD = 12;
+  // 5, not 12: next to the line number 12 characters of lead still pushed the match out of view.
+  const LEAD = 5;
   function snippet(text: string): [string, string, string] {
     let at = -1;
     let len = 0;
