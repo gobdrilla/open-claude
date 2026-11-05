@@ -1,6 +1,7 @@
 //! ocui-sh: schlanke Shell fuers App-Terminal. Startet erst `claude`, danach eine REPL.
 //! Einfache Zeilen laufen direkt (Konsole wird vererbt), alles mit Pipes, Umleitungen,
 //! Variablen oder Globs geht an eine echte Shell (Git-Bash, sonst cmd; Unix: sh).
+//! `--only-claude` (Claude-Sitzungen der App): die REPL fuehrt nur `claude ...` aus, direkt ohne Shell.
 
 use std::borrow::Cow;
 use std::io::{BufRead, IsTerminal, Write};
@@ -29,6 +30,7 @@ fn main() {
         return;
     }
     let no_claude = args.iter().any(|a| a == "--no-claude");
+    let only_claude = args.iter().any(|a| a == "--only-claude");
     // Ctrl+C gehoert dem Kind: Handler (nicht vererbt) haelt nur die Shell am Leben.
     let _ = ctrlc::set_handler(|| {});
     // Geerbtes "Ctrl+C ignorieren" (z. B. vom GUI-Parent) loeschen, wie cmd.exe es tut;
@@ -40,7 +42,7 @@ fn main() {
         }
         unsafe { SetConsoleCtrlHandler(None, 0) };
     }
-    let mut sh = Shell::new();
+    let mut sh = Shell::new(only_claude);
     if !no_claude {
         // Pfad von pty_open (App-Daten, ohne " oder $), siehe theme_settings.
         match std::env::var("OPEN_CLAUDE_SETTINGS") {
@@ -76,7 +78,7 @@ fn repl(sh: &mut Shell) {
     );
     let mut ed = Reedline::create()
         .with_edit_mode(Box::new(Emacs::new(kb)))
-        .with_completer(Box::new(Comp { cmds: path_commands() }))
+        .with_completer(Box::new(Comp { cmds: if sh.only_claude { vec!["claude".into()] } else { path_commands() } }))
         .with_menu(ReedlineMenu::EngineCompleter(Box::new(
             ColumnarMenu::default().with_name("completion_menu"),
         )))
@@ -117,10 +119,12 @@ struct Shell {
     oldpwd: Option<PathBuf>,
     #[cfg_attr(not(windows), allow(dead_code))]
     bash: Option<PathBuf>,
+    /// Only `claude ...` runs; anything else is refused.
+    only_claude: bool,
 }
 
 impl Shell {
-    fn new() -> Self {
+    fn new(only_claude: bool) -> Self {
         let git = if cfg!(windows) { git_root() } else { None };
         if cfg!(windows) {
             // claude liegt oft in ~/.local/bin, Unix-Tools (ls, grep, ...) in <Git>\usr\bin.
@@ -143,13 +147,24 @@ impl Shell {
                 std::env::set_var("LANG", "C.UTF-8");
             }
         }
-        Shell { status: 0, oldpwd: None, bash: git.map(|g| g.join("bin").join("bash.exe")) }
+        Shell { status: 0, oldpwd: None, bash: git.map(|g| g.join("bin").join("bash.exe")), only_claude }
     }
 
     /// Fuehrt eine Zeile aus; false = Shell beenden.
     fn run(&mut self, line: &str) -> bool {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
+            return true;
+        }
+        if self.only_claude {
+            // Words taken literally: no expansion, no ; | & or $(...), so nothing but claude can start.
+            let words = split(line, &home().to_string_lossy());
+            self.status = if words[0] == "claude" {
+                self.spawn(&words, line)
+            } else {
+                eprintln!("ocui-sh: nur claude-Befehle, z. B. claude --resume");
+                126
+            };
             return true;
         }
         // Reine Zuweisung(en) wie "FOO=bar" sonst: is_complex faengt sie (wegen '=') ab,
@@ -242,6 +257,11 @@ impl Shell {
             match resolve(&words[0], &path, &ext, |p| p.is_file()) {
                 // .bat/.cmd startet std selbst sicher ueber cmd.exe.
                 Some(p) if has_ext(&p, &[".exe", ".com", ".bat", ".cmd"]) => Command::new(p),
+                // cmd /c below would interpret & | in the arguments.
+                Some(_) | None if self.only_claude => {
+                    eprintln!("ocui-sh: claude nicht gefunden");
+                    return 127;
+                }
                 Some(p) => {
                     let mut c = Command::new("cmd");
                     c.arg("/d").arg("/c").arg(p);
@@ -755,6 +775,41 @@ mod tests {
         child.stdin.take()?.write_all(script.as_bytes()).ok()?;
         let out = child.wait_with_output().ok()?;
         Some((String::from_utf8_lossy(&out.stdout).into_owned(), out.status.code().unwrap_or(-1)))
+    }
+
+    /// --only-claude: claude runs with its arguments taken literally, everything else is refused.
+    #[cfg(unix)]
+    #[test]
+    fn nur_claude() {
+        use std::os::unix::fs::PermissionsExt;
+        let exe = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("ocui-sh");
+        if !exe.is_file() {
+            return;
+        }
+        let d = pipe_dir("only");
+        let fake = d.join("claude");
+        std::fs::write(&fake, "#!/bin/sh\necho \"claude[$*]\"\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut child = Command::new(exe)
+            .arg("--only-claude")
+            .current_dir(&d)
+            .env_remove("OPEN_CLAUDE_SETTINGS")
+            .env("PATH", format!("{}:/usr/bin:/bin", d.display()))
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let script = "claude --resume 'a b'\ntouch x\nclaude; touch y\nclaude $(touch z) && touch w\ncd sub\nexit\n";
+        child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
+        let out = child.wait_with_output().unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(stdout, "claude[]\nclaude[--resume a b]\nclaude[$(touch z) && touch w]\n", "{stdout}");
+        assert_eq!(String::from_utf8_lossy(&out.stderr).matches("nur claude-Befehle").count(), 4);
+        for f in ["x", "y", "z", "w"] {
+            assert!(!d.join(f).exists(), "{f}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     fn pipe_dir(name: &str) -> PathBuf {

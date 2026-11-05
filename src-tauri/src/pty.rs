@@ -115,8 +115,9 @@ fn parent(dir: &str) -> Option<&str> {
 /// Fallback ohne $SHELL: Standard-Shell des Systems.
 pub(crate) const UNIX_SHELL: &str = if cfg!(target_os = "macos") { "/bin/zsh" } else { "/bin/bash" };
 
-/// Welche Shell `claude` startet. Unix: $SHELL als Login-Shell. Windows: zuerst die eigene
-/// ocui-sh (`own`, liegt neben der App), sonst Git-Bash, pwsh, cmd.
+/// Welche Shell `claude` startet: die eigene ocui-sh (`own`, liegt neben der App) mit --only-claude, danach nimmt
+/// das Terminal nur weitere claude-Befehle an. Unix ueber $SHELL als Login-Shell (PATH, Env), Pfad in $OCUI_SH.
+/// Ohne ocui-sh nur claude selbst, danach endet das Terminal (Windows ueber Git-Bash, pwsh, cmd).
 /// `settings`: claude bekommt `--settings` aus $OPEN_CLAUDE_SETTINGS (Shell expandiert, kein Quoting).
 fn shell(
     windows: bool,
@@ -130,13 +131,13 @@ fn shell(
         let sh = env("SHELL")
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| UNIX_SHELL.into());
-        // Login-Shell fuer PATH; nach claude bleibt dieselbe Shell offen (auch zsh/fish).
-        let rest = format!("{claude}; exec {sh} -li");
+        // Login-Shell nur fuer PATH und Env; "$OCUI_SH" in Quotes geht in sh, zsh, bash und fish.
+        let rest = if exists(own) { "exec \"$OCUI_SH\" --only-claude".to_string() } else { format!("exec {claude}") };
         return (sh, vec!["-lic".into(), rest]);
     }
-    // ocui-sh (fuer Git-Bash gebaut) startet claude selbst, danach ihre REPL.
+    // ocui-sh startet claude selbst, danach ihre REPL.
     if exists(own) {
-        return (own.into(), vec![]);
+        return (own.into(), vec!["--only-claude".into()]);
     }
 
     let path = env("PATH").unwrap_or_default();
@@ -162,15 +163,15 @@ fn shell(
         bash.extend([up1, up2].into_iter().flatten().map(|g| join(g, "bin\\bash.exe")));
     }
     if let Some(b) = bash.into_iter().find(|b| exists(b)) {
-        return (b, vec!["-lic".into(), format!("{claude}; exec bash -li")]);
+        return (b, vec!["-lic".into(), format!("exec {claude}")]);
     }
 
     if let Some(pwsh) = on_path("pwsh.exe") {
         let claude = if settings { "claude --settings $env:OPEN_CLAUDE_SETTINGS" } else { "claude" };
-        return (pwsh, vec!["-NoExit".into(), "-Command".into(), claude.into()]);
+        return (pwsh, vec!["-Command".into(), claude.into()]);
     }
     // ponytail: cmd ohne --settings (Pfad mit Leerzeichen nicht sauber quotebar), Theme bleibt dann wie gewaehlt.
-    ("cmd.exe".into(), vec!["/k".into(), "claude".into()])
+    ("cmd.exe".into(), vec!["/c".into(), "claude".into()])
 }
 
 #[tauri::command]
@@ -216,6 +217,8 @@ pub fn pty_open(
     if let Some(s) = &settings {
         env.push(("OPEN_CLAUDE_SETTINGS", s));
     }
+    // Unix: the login shell execs ocui-sh from here (see shell).
+    env.push(("OCUI_SH", &own));
     // CLAUDE.md der weiteren Repos mitladen, damit claude deren Regeln und Aufbau kennt.
     if !extra.is_empty() {
         env.push(("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1"));
@@ -1340,9 +1343,9 @@ mod tests {
     #[test]
     fn eigene_shell_hat_vorrang() {
         let bash = "C:\\Program Files\\Git\\bin\\bash.exe";
-        assert_eq!(run(true, WIN_ENV, &[OWN, bash]), (OWN.to_string(), vec![]));
-        // Unix: ocui-sh ist fuer Git-Bash gebaut, direkt die Login-Shell.
-        assert_eq!(run(false, &[("SHELL", "/bin/zsh")], &[OWN]).0, "/bin/zsh");
+        assert_eq!(run(true, WIN_ENV, &[OWN, bash]), (OWN.to_string(), vec!["--only-claude".to_string()]));
+        // Unix: login shell for PATH, then ocui-sh from $OCUI_SH.
+        assert_eq!(run(false, &[("SHELL", "/bin/zsh")], &[OWN]).1, ["-lic", "exec \"$OCUI_SH\" --only-claude"]);
     }
 
     #[test]
@@ -1354,7 +1357,7 @@ mod tests {
 
         let (p, a) = run(true, WIN_ENV, &[pf, la, git, via_path]);
         assert_eq!(p, pf);
-        assert_eq!(a, ["-lic", "claude; exec bash -li"]);
+        assert_eq!(a, ["-lic", "exec claude"]);
         assert_eq!(run(true, WIN_ENV, &[la, git, via_path]).0, la);
         assert_eq!(run(true, WIN_ENV, &[git, via_path]).0, via_path);
         // git.exe unter mingw64\bin -> zwei Ebenen hoch.
@@ -1367,11 +1370,11 @@ mod tests {
     fn windows_faellt_auf_pwsh_dann_cmd_zurueck() {
         let (p, a) = run(true, WIN_ENV, &["C:\\ps\\pwsh.exe"]);
         assert_eq!(p, "C:\\ps\\pwsh.exe");
-        assert_eq!(a, ["-NoExit", "-Command", "claude"]);
+        assert_eq!(a, ["-Command", "claude"]);
         // git ohne bash daneben zaehlt nicht.
         let (p, a) = run(true, WIN_ENV, &["D:\\Tools\\Git\\cmd\\git.exe"]);
         assert_eq!(p, "cmd.exe");
-        assert_eq!(a, ["/k", "claude"]);
+        assert_eq!(a, ["/c", "claude"]);
         assert_eq!(run(true, &[], &[]).0, "cmd.exe");
     }
 
@@ -1379,7 +1382,7 @@ mod tests {
     fn unix_nimmt_shell_sonst_bash() {
         let (p, a) = run(false, &[("SHELL", "/bin/zsh")], &[]);
         assert_eq!(p, "/bin/zsh");
-        assert_eq!(a, ["-lic", "claude; exec /bin/zsh -li"]);
+        assert_eq!(a, ["-lic", "exec claude"]);
         assert_eq!(run(false, &[], &[]).0, UNIX_SHELL);
         assert_eq!(run(false, &[("SHELL", " ")], &[]).0, UNIX_SHELL);
     }
@@ -1387,7 +1390,8 @@ mod tests {
     #[test]
     fn settings_nur_mit_flag() {
         let s = |w| shell(w, OWN, true, |k| (k == "SHELL").then(|| "/bin/fish".into()), |p| p == "C:\\ps\\pwsh.exe" || p == OWN);
-        assert_eq!(s(false).1, ["-lic", "claude --settings \"$OPEN_CLAUDE_SETTINGS\"; exec /bin/fish -li"]);
+        let fallback = shell(false, OWN, true, |k| (k == "SHELL").then(|| "/bin/fish".into()), |_| false);
+        assert_eq!(fallback.1, ["-lic", "exec claude --settings \"$OPEN_CLAUDE_SETTINGS\""]);
         // ocui-sh liest die Env selbst.
         assert_eq!(s(true).0, OWN);
     }
