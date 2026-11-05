@@ -42,7 +42,8 @@ const chrome = EditorView.theme(
       backgroundColor: "color-mix(in oklch, var(--primary) 12%, transparent)",
       outline: "1px solid color-mix(in oklch, var(--primary) 45%, transparent)",
     },
-    ".cm-panels": { backgroundColor: "var(--card)", color: "var(--foreground)" },
+    // CM's own z-index 300 put the breadcrumb bar above dialogs (z-50); the panels sit outside the scroller anyway.
+    ".cm-panels": { backgroundColor: "var(--card)", color: "var(--foreground)", zIndex: 1 },
     ".cm-panels.cm-panels-top": { borderBottom: "1px solid color-mix(in oklch, var(--border) 60%, transparent)" },
     ".cm-panels.cm-panels-bottom": { borderTop: "1px solid color-mix(in oklch, var(--border) 60%, transparent)" },
     ".cm-textfield": { backgroundColor: "var(--background)", border: "1px solid var(--input)", borderRadius: "6px" },
