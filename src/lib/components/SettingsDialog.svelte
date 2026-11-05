@@ -119,6 +119,21 @@
     return () => asker.q?.done(false);
   });
 
+  // Each section starts at the top; the scroll position of the previous one would cut off the new heading.
+  let body = $state<HTMLElement>();
+  $effect(() => {
+    void tab;
+    if (body) body.scrollTop = 0;
+  });
+  // Reopens on the last section: focus its entry, not the first one.
+  let nav = $state<HTMLElement>();
+  const focusActive = (e: Event) => {
+    const row = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row) return;
+    e.preventDefault();
+    row.focus();
+  };
+
   let updateMsg = $state("");
   $effect(() => {
     if (!open) updateMsg = "";
@@ -129,8 +144,8 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="flex h-[560px] max-h-full gap-0 overflow-hidden p-0 sm:max-w-[880px]">
-    <nav class="bg-background/60 border-border flex w-52 shrink-0 flex-col gap-0.5 border-r px-2.5 py-4">
+  <Dialog.Content class="flex h-[560px] max-h-full gap-0 overflow-hidden p-0 sm:max-w-[880px]" onOpenAutoFocus={focusActive}>
+    <nav bind:this={nav} class="bg-background/60 border-border flex w-52 shrink-0 flex-col gap-0.5 border-r px-2.5 py-4">
       <Dialog.Title class="text-title mx-2 mb-3">{t("Einstellungen")}</Dialog.Title>
       {#each TABS as [label, key, Icon] (key)}
         <Row text="md" density="roomy" class="gap-2.5" active={tab === key} aria-current={tab === key ? "page" : undefined} onclick={() => (tab = key)}>
@@ -142,7 +157,8 @@
 
     <div class="flex min-w-0 flex-1 flex-col">
       <h3 class="border-border text-title flex h-13 shrink-0 items-center border-b px-7">{TABS.find((t) => t[1] === tab)?.[0]}</h3>
-      <div class="flex-1 space-y-5 overflow-y-auto px-7 py-5">
+      <!-- stable gutter: cards keep their width whether a section scrolls or not -->
+      <div bind:this={body} class="flex-1 space-y-5 overflow-y-auto px-7 py-5 [scrollbar-gutter:stable]">
         <ConfirmBar {asker} />
         {#if tab === "general"}
           <SettingsSection title={t("Start und Fenster")}>
@@ -260,7 +276,7 @@
             {/each}
             <SettingRow
               label={t("Neuer Befehl")}
-              description={t('Läuft im Projektordner (Login-Shell, unter Windows PowerShell). Variablen: $REPO, $SHA, $BRANCH, $FILE – Pfade in Anführungszeichen, z. B. code "$FILE".')}
+              description={t('Läuft im Projektordner (Login-Shell, unter Windows PowerShell). Variablen: $REPO, $SHA, $BRANCH, $FILE – Pfade in Anführungszeichen, z. B. code "$FILE".')}
             >
               <div class="flex w-56 shrink-0 flex-col gap-1.5">
                 <Input bind:value={cmdName} density="sm" placeholder={t("Name, z. B. In VS Code öffnen")} onkeydown={cmdEnter} />
