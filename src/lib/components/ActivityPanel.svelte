@@ -910,9 +910,9 @@
         <span class={pc} title={pt}>{pi}</span>
         <span class="min-w-16 flex-1 truncate font-medium {g.p ? '' : 'text-muted-foreground'}" title={g.p}>{g.p || t("Ohne Phase")}</span>
         <span class="text-muted-foreground min-w-0 truncate tabular-nums"
-          >{pt} · {n}/{Math.max(g.agents.length, r.planned[r.phases.indexOf(g.p)] ?? 0)}{#if err}<span class="text-destructive"> · {err} ✕</span>{/if}{#if span(g.agents)} · {dur(span(g.agents))}{/if}{#if g.agents.some((a) => a.tokens)} · {tokens(
-              g.agents.reduce((t, a) => t + a.tokens, 0),
-            )}{/if}</span
+          >{pt} · {n}/{Math.max(g.agents.length, r.planned[r.phases.indexOf(g.p)] ?? 0)}{#if err}<span class="text-destructive">{` · ${err} ✕`}</span>{/if}{span(g.agents) ? ` · ${dur(span(g.agents))}` : ""}{g.agents.some((a) => a.tokens)
+              ? ` · ${tokens(g.agents.reduce((t, a) => t + a.tokens, 0))}`
+              : ""}</span
         >
       </SectionToggle>
     {/if}
@@ -938,7 +938,7 @@
                 <span class={ac} title={at}>{ai}</span>
                 <span class="min-w-16 flex-1 truncate" title={a.label || a.id}>{a.label || a.id}</span>
                 <span class="text-muted-foreground min-w-0 truncate tabular-nums"
-                  >{dur(agentDur(r, a))}{#if a.tokens} · {tokens(a.tokens)}{/if}</span
+                  >{dur(agentDur(r, a))}{a.tokens ? ` · ${tokens(a.tokens)}` : ""}</span
                 >
                 {#if a.id}<ChevronRightIcon class="text-muted-foreground size-3.5 shrink-0 opacity-0 group-hover/agent:opacity-100" />{/if}
               </div>
@@ -1030,7 +1030,7 @@
     {#if current}
       <Dialog.Title class="sr-only">{current.label}</Dialog.Title>
       <div class="flex min-h-0 items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label={t("Vorheriges Bild")} onclick={() => step(-1)}
+        <Button variant="ghost" size="icon-sm" class={ordered.length > 1 ? "" : "invisible"} aria-label={t("Vorheriges Bild")} onclick={() => step(-1)}
           ><ChevronLeftIcon class="size-5" /></Button
         >
         <div class="flex min-h-0 min-w-0 flex-1 justify-center">
@@ -1042,7 +1042,7 @@
             <p class="text-muted-foreground p-8">{t("Lade …")}</p>
           {/if}
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label={t("Nächstes Bild")} onclick={() => step(1)}
+        <Button variant="ghost" size="icon-sm" class={ordered.length > 1 ? "" : "invisible"} aria-label={t("Nächstes Bild")} onclick={() => step(1)}
           ><ChevronRightIcon class="size-5" /></Button
         >
       </div>

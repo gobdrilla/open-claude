@@ -161,7 +161,9 @@
   </div>
   <div class="border-border flex items-center gap-2 border-b px-2 py-1">
     <Input density="xs" class="min-w-0 flex-1" placeholder="Filter …" aria-label={tr("Tests filtern")} bind:value={t.filter} />
-    <Checkbox size="sm" muted class="shrink-0" bind:checked={t.failedOnly}>{tr("nur Fehler")}</Checkbox>
+    <Checkbox size="sm" muted class="shrink-0" title={tr("nur Fehler")} bind:checked={t.failedOnly}
+      ><span class="@max-[14rem]:sr-only">{tr("nur Fehler")}</span></Checkbox
+    >
   </div>
   <Notice bind:text={() => t.error, (v) => (t.error = v)} timeout={0} />
   <Notice bind:text={() => t.note, (v) => (t.note = v)} kind="note" timeout={0} />
@@ -227,7 +229,7 @@
               {/if}
               {#if n.kind === "file"}
                 <span
-                  class="bg-muted text-muted-foreground shrink-0 rounded px-1 text-[10px]"
+                  class="bg-muted text-muted-foreground shrink-0 rounded px-1 text-[10px] @max-[16rem]:hidden"
                   title={n.fw === "jest" || n.fw === "pytest" ? tr("Experimentell: nicht gegen ein echtes Projekt geprüft") : undefined}
                   >{n.fw}{n.fw === "jest" || n.fw === "pytest" ? "*" : ""}</span
                 >

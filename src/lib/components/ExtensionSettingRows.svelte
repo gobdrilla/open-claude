@@ -39,7 +39,7 @@
 
 {#each decls as d (d.key)}
   <SettingRow label={d.title} description={d.description}>
-    <div class="flex w-64 shrink-0 flex-col items-end gap-1">
+    <div class="flex w-72 shrink-0 flex-col items-end gap-1">
       {#if d.type === "string"}
         <Input
           density="sm"

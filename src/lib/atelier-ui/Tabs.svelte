@@ -41,14 +41,14 @@
   </div>
 {:else}
   <!-- Zu schmal: Tabs scrollen in ihrer Leiste (ohne Balken). Sonst schob der Fokus eines verdeckten Tabs das ganze Panel zur Seite. -->
-  <div class="flex items-center gap-1 px-2 shadow-[inset_0_-1px_0_var(--border)]">
+  <div class="flex items-center gap-1 {dense ? 'px-1' : 'px-2'} shadow-[inset_0_-1px_0_var(--border)]">
     <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
     {#each tabs as t (t.id)}
       <button
         role="tab"
         aria-selected={value === t.id}
         title={t.title}
-        class="shrink-0 border-b-2 px-2 whitespace-nowrap {dense ? 'py-1 text-meta' : 'py-1.5'} {value === t.id
+        class="shrink-0 border-b-2 whitespace-nowrap {dense ? 'px-1.5 py-1 text-meta' : 'px-2 py-1.5'} {value === t.id
           ? 'border-primary text-foreground'
           : 'text-muted-foreground hover:text-foreground border-transparent'}"
         onclick={() => (value = t.id)}

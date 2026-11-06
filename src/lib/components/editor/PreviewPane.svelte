@@ -107,7 +107,7 @@
       aria-invalid={bad}
       spellcheck={false}
       density="xs"
-      class="min-w-0 flex-1 font-mono"
+      class="min-w-0 flex-1 font-mono text-ellipsis"
       onkeydown={(e) => e.key === "Enter" && go()}
     />
     <Button

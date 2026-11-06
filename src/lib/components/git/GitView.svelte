@@ -563,11 +563,11 @@
             pill
             bind:value={tab}
             tabs={[
-              { id: "changes", label: t("Änderungen"), title: "Alt+1", count: status.files.length },
-              { id: "history", label: t("Verlauf"), title: "Alt+2" },
-              { id: "releases", label: "Releases", title: "Alt+3" },
+              { id: "changes", label: t("Änderungen"), title: `${t("Änderungen")} (Alt+1)`, count: status.files.length },
+              { id: "history", label: t("Verlauf"), title: `${t("Verlauf")} (Alt+2)` },
+              { id: "releases", label: "Releases", title: "Releases (Alt+3)" },
               { id: "ci", label: "CI", title: `${ciKind === "gitlab" ? "GitLab Pipelines" : ciKind === "github" ? "GitHub Actions" : "CI"} (Alt+4)` },
-              ...(isUnity ? [{ id: "unity" as const, label: "Unity", title: "Alt+5" }] : []),
+              ...(isUnity ? [{ id: "unity" as const, label: "Unity", title: "Unity (Alt+5)" }] : []),
             ]}
           />
           <div class="min-h-0 flex-1">

@@ -119,13 +119,23 @@
     }
   }
 
+  // FitAddon zieht immer 14 px fuer die Scrollbar ab, die unten per CSS ausgeblendet ist: rechts blieb ein leerer Streifen.
+  function fitFull() {
+    const t = term;
+    const p = fit.proposeDimensions();
+    if (!t || !p) return;
+    const cell: number | undefined = (t as any)._core?._renderService?.dimensions?.css?.cell?.width;
+    const cols = cell ? Math.max(2, Math.floor(el.clientWidth / cell)) : p.cols;
+    if (cols !== t.cols || p.rows !== t.rows) t.resize(cols, p.rows);
+  }
+
   function refit() {
     // Versteckt liefert der Container 0x0 und wuerde die PTY auf 0 Spalten setzen.
     if (!term || !visible || !el.clientWidth || !el.clientHeight) return;
     snap();
     // Gast: Groesse gibt der Host vor (share-size), das PTY hat nur eine. Schrift so skalieren, dass sein Raster passt.
     if (guest) return fitGuest();
-    fit.fit();
+    fitFull();
     const size = `${term.cols}x${term.rows}`;
     if (!sent || size === sent) return;
     sent = size;
@@ -311,7 +321,7 @@
     );
     loadGl();
     snap();
-    fit.fit();
+    fitFull();
     // Anderer Monitor/andere Skalierung bei gleicher Fenstergroesse: kein ResizeObserver, aber neue DPR.
     // Nach open() angemeldet, also nach xterms eigenem Listener (misst neu); endet mit dem Terminal.
     (t as any)._core?._coreBrowserService?.onDprChange(refit);

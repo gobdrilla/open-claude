@@ -21,7 +21,7 @@
         "type": "string",
         "scope": "repo",
         "title": "Projektschlüssel",
-        "description": "Kommagetrennt, z. B. ABC, OPS. Leer: jeder Schlüssel wie ABC-123 (auch UTF-8 oder SHA-256).",
+        "description": "Kommagetrennt, z. B. ABC, OPS. Leer: jeder Schlüssel wie ABC‑123 (auch UTF-8 oder SHA-256).",
         "placeholder": "ABC, OPS"
       },
       {

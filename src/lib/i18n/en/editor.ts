@@ -162,7 +162,7 @@ export default {
   // QuickOpen
   "Datei öffnen": "Open file",
   "Datei im Projekt suchen": "Search a file in the project",
-  "Datei öffnen (@ Symbol in Datei, # Symbol im Projekt, : Zeile)": "Open file (@ symbol in file, # symbol in project, : line)",
+  "Datei suchen (@ Symbol, # im Projekt, : Zeile)": "Find file (@ symbol, # in project, : line)",
   "Zeilennummer eingeben, z. B. :42 oder :42:7": "Enter a line number, e.g. :42 or :42:7",
   "Keine Datei geöffnet.": "No file open.",
   "Keine Symbole gefunden (Language-Server aktiv?).": "No symbols found (language server running?).",

@@ -13,7 +13,9 @@ export const confirming = $state<{ q: Question | null }>({ q: null });
 /** true = bestaetigt. Eine neue Frage beantwortet eine noch offene mit nein. */
 export function confirm(message: string, action = t("Fortfahren"), title = t("Sicher?"), opts: Opts = {}): Promise<boolean> {
   confirming.q?.resolve(false);
-  return new Promise((resolve) => (confirming.q = { title, message, action, resolve, ...opts }));
+  return new Promise((resolve) => {
+    confirming.q = { title, message, action, resolve, ...opts };
+  });
 }
 
 export function answer(ok: boolean) {

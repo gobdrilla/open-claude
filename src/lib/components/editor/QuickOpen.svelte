@@ -100,7 +100,7 @@
 </script>
 
 <Command.Dialog bind:open shouldFilter={false} title={t("Datei öffnen")} description={t("Datei im Projekt suchen")}>
-  <Command.Input bind:value={query} placeholder={t("Datei öffnen (@ Symbol in Datei, # Symbol im Projekt, : Zeile)")} />
+  <Command.Input bind:value={query} placeholder={t("Datei suchen (@ Symbol, # im Projekt, : Zeile)")} />
   <Command.List>
     <Command.Empty>
       {mode === ":"
