@@ -389,6 +389,14 @@ pub fn forge_logout(app: AppHandle, kind: String, host: String, user: String) ->
     }
 }
 
+/// Ob fuer das Konto ein Token im Schluesselbund liegt; ohne ist es gelistet, aber unbrauchbar.
+#[tauri::command]
+pub fn forge_has_token(app: AppHandle, kind: String, host: String, user: String) -> Result<bool, String> {
+    check_kind(&kind)?;
+    let host = norm_host(&host)?;
+    Ok(token(&kind, &host, &user, &known(&app))?.is_some())
+}
+
 /// Token aus `gh auth token` bzw. `glab config get token` holen und wie beim Login pruefen.
 #[tauri::command]
 pub async fn forge_import_cli(kind: String, host: String) -> Result<Account, String> {
@@ -426,11 +434,16 @@ pub async fn forge_repos(
     // Ohne user (aelteres Frontend): erstes bekanntes Konto dieser Art fuer den Host.
     let known = known(&app);
     let user = user.or_else(|| known.iter().find(|(k, h, _)| *k == kind && *h == host).map(|(_, _, u)| u.clone()));
-    let tok = match user {
-        Some(u) => token(&kind, &host, &u, &known)?,
-        None => None,
+    let Some(user) = user else {
+        return Err(tr!("Kein Konto für {host}", "No account for {host}"));
     };
-    let tok = tok.ok_or_else(|| tr!("Kein Konto für {host}", "No account for {host}"))?;
+    // Konto bekannt, Token weg (Schluesselbund geleert, anderer Rechner): sagen, was zu tun ist.
+    let tok = token(&kind, &host, &user, &known)?.ok_or_else(|| {
+        tr!(
+            "Für {user}@{host} ist kein Token gespeichert. Bitte das Konto neu anmelden.",
+            "No token stored for {user}@{host}. Please sign in to the account again."
+        )
+    })?;
     let page = page.max(1).to_string();
     let q = query.trim().to_string();
     let per = ("per_page", "50".to_string());

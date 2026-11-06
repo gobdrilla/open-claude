@@ -74,9 +74,24 @@
     dest = name ? `${root}${root.includes("\\") ? "\\" : "/"}${name}` : "";
   });
 
-  // Preselect the first account on open (or once one was added) and list its repos right away.
+  // Preselect the first account with a token on open (or once one was added) and list its repos right away.
+  // Without any token the first account, so its error says what to do.
+  let picking = false;
   $effect(() => {
-    if (open && !account && mode === "browse" && accounts.length) untrack(() => selectAccount(accounts[0]));
+    if (!open || account || mode !== "browse" || !accounts.length || picking) return;
+    picking = true;
+    untrack(async () => {
+      const list = accounts;
+      let usable = list[0];
+      for (const a of list) {
+        if (await forge.hasToken(a.kind, a.host, a.user).catch(() => false)) {
+          usable = a;
+          break;
+        }
+      }
+      picking = false;
+      if (open && !account && mode === "browse") selectAccount(usable);
+    });
   });
 
   async function selectAccount(a: Account) {
@@ -260,6 +275,12 @@
       <div class="border-border min-h-0 flex-1 overflow-y-auto rounded border">
         {#if loading && !results.length}
           <p class="text-muted-foreground px-3 py-6 text-center text-ui">{t("Lade…")}</p>
+        {:else if error && !results.length}
+          <!-- Fehler statt "Keine Treffer.", z. B. Konto ohne Token: direkt zu den Konten -->
+          <div class="flex flex-col items-center gap-2 px-3 py-6 text-center">
+            <p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>
+            <Button variant="outline" size="sm" onclick={onaccounts}>{t("Konten verwalten …")}</Button>
+          </div>
         {:else if !results.length}
           <p class="text-muted-foreground px-3 py-6 text-center text-ui">{t("Keine Treffer.")}</p>
         {:else}
@@ -329,7 +350,7 @@
         <div class="truncate font-mono text-meta">{progress.line}</div>
       </div>
     {/if}
-    {#if error}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
+    {#if error && (mode === "url" || !account || results.length)}<p class="text-destructive text-ui whitespace-pre-wrap">{error}</p>{/if}
 
     <div class="flex justify-end gap-1.5">
       <Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={cloning}>{t("Abbrechen")}</Button>

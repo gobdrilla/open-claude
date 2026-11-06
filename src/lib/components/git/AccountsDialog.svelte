@@ -24,6 +24,14 @@
   $effect(() => {
     if (!open) asking = "";
   });
+  // Konten ohne Token im Schluesselbund: gelistet, aber Klonen/Pull Requests scheitern damit.
+  let noToken = $state<Set<string>>(new Set());
+  $effect(() => {
+    if (!open) return;
+    const list = accounts;
+    Promise.all(list.map((a) => forge.hasToken(a.kind, a.host, a.user).then((ok) => (ok ? "" : keyOf(a)), () => "")))
+      .then((keys) => (noToken = new Set(keys.filter(Boolean))));
+  });
 
   // Host-Feld beim Wechsel des Anbieters auf den ueblichen Default setzen.
   $effect(() => {
@@ -114,6 +122,16 @@
                 <span class="font-medium">{a.user}</span>
                 <span class="text-muted-foreground font-mono text-meta">@{a.host}</span>
               </span>
+              {#if noToken.has(keyOf(a))}
+                <!-- Klick fuellt das Anmeldeformular unten fuer dieses Konto vor -->
+                <Button
+                  variant="outline"
+                  size="2xs"
+                  class="text-warning shrink-0"
+                  title={t("Kein Token gespeichert. Unten neu anmelden.")}
+                  onclick={() => ((kind = a.kind), (host = a.host))}>{t("Token fehlt")}</Button
+                >
+              {/if}
               <Badge variant="outline" class="text-muted-foreground shrink-0 text-meta"
                 >{a.kind === "github" ? "GitHub" : "GitLab"}</Badge
               >

@@ -289,6 +289,8 @@ export const forge = {
   login: (kind: ForgeKind, host: string, token: string) =>
     call<Account>("forge_login", { kind, host, token }),
   logout: (kind: ForgeKind, host: string, user: string) => call<void>("forge_logout", { kind, host, user }),
+  /** false: Konto gelistet, aber kein Token im Schluesselbund (neu anmelden). */
+  hasToken: (kind: ForgeKind, host: string, user: string) => call<boolean>("forge_has_token", { kind, host, user }),
   /** Token aus `gh auth token` (GitHub) bzw. `glab auth token` uebernehmen, falls installiert. */
   importCli: (kind: ForgeKind, host: string) => call<Account>("forge_import_cli", { kind, host }),
   /** query leer = eigene Repos (zuletzt aktiv zuerst), sonst Suche. page ab 1. */

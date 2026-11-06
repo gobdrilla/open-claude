@@ -151,6 +151,13 @@
   const acctFor = $derived(accounts.find((a) => accountId(a) === acct?.effective) ?? null);
   const hostAccounts = $derived(accounts.filter((a) => a.host === acct?.host));
 
+  // Konten ohne Token im Schluesselbund: im Kontomenue markiert (Pull Requests, Releases, CI gehen damit nicht).
+  let noToken = $state<Set<string>>(new Set());
+  async function checkTokens() {
+    const missing = await Promise.all(hostAccounts.map((a) => forge.hasToken(a.kind, a.host, a.user).then((ok) => (ok ? "" : accountId(a)), () => "")));
+    noToken = new Set(missing.filter(Boolean));
+  }
+
   async function loadAccount() {
     const r = cur;
     try {
@@ -436,7 +443,7 @@
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
     {#if acct}
-      <DropdownMenu.Root onOpenChange={(o) => o && loadAccount()}>
+      <DropdownMenu.Root onOpenChange={(o) => o && (loadAccount(), checkTokens())}>
         <DropdownMenu.Trigger
           class="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta whitespace-nowrap"
           title={acct.name || acct.email ? t("Commit als: {name} <{email}>", { name: acct.name ?? "?", email: acct.email ?? "?" }) : t("Keine Commit-Identität gesetzt")}
@@ -468,6 +475,7 @@
               >
                 <CheckIcon class="size-3 {acct.account === accountId(a) ? '' : 'invisible'}" />
                 {a.user}<span class="text-muted-foreground font-mono text-meta">@{a.host}</span>
+                {#if noToken.has(accountId(a))}<span class="text-warning ml-auto pl-3 text-meta">{t("Token fehlt")}</span>{/if}
               </DropdownMenu.Item>
             {/each}
             <DropdownMenu.Item

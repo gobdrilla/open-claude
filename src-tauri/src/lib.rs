@@ -814,6 +814,7 @@ pub fn run() {
             accounts::claude_logout,
             forge::forge_login,
             forge::forge_logout,
+            forge::forge_has_token,
             forge::forge_import_cli,
             forge::forge_repos,
             forge::forge_pulls,

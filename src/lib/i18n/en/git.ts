@@ -249,6 +249,8 @@ export default {
   "System-Git": "System Git",
   "Automatisch (System-Git)": "Automatic (system Git)",
   "Konten verwalten …": "Manage accounts …",
+  "Kein Token gespeichert. Unten neu anmelden.": "No token stored. Sign in again below.",
+  "Token fehlt": "Token missing",
   "{action} läuft …": "{action} running …",
   "{op} läuft – 1 Konflikt offen": "{op} in progress – 1 conflict open",
   "{op} läuft – {n} Konflikte offen": "{op} in progress – {n} conflicts open",
