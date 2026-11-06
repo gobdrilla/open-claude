@@ -120,7 +120,8 @@
 
   const isUnity = (repo: Repo) => repo.kind === "Unity";
   /** Badges: der Projekttyp sagt mehr als die Sprache (Unity statt C#). */
-  const tags = (repo: Repo) => (repo.kind ? [repo.kind] : (repo.langs ?? []));
+  // Ohne erkannten Typ ist kind die Hauptsprache: dann weiter alle Sprachen zeigen.
+  const tags = (repo: Repo) => (repo.kind && !repo.langs?.includes(repo.kind) ? [repo.kind] : (repo.langs ?? []));
 
   // raw: die Store-Instanz nicht proxien; null bis onMount geladen hat.
   let store = $state.raw<Store>(null!);

@@ -58,7 +58,7 @@ struct Repo {
     branch: String,
     last_commit: String,
     langs: Vec<String>,
-    /// Projekttyp (Unity, Tauri, ...); die Liste zeigt ihn statt der Sprachen.
+    /// Projekttyp (Unity, Tauri, ...), ohne erkannten Typ die Hauptsprache; die Liste zeigt ihn statt der Sprachen.
     kind: Option<String>,
 }
 
@@ -143,7 +143,14 @@ fn read_langs(repo: &Path) -> (Vec<String>, Option<String>) {
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
-    (langs_in(&names), kind_in(&names, unity::is_project(repo)))
+    let langs = langs_in(&names);
+    let kind = kind_or_lang(&names, &langs, unity::is_project(repo));
+    (langs, kind)
+}
+
+/// Projekttyp, sonst die Hauptsprache: so laesst sich jedem Projekt per Typ ein Skill-Profil zuordnen (C#, Rust, ...).
+fn kind_or_lang(names: &[String], langs: &[String], unity: bool) -> Option<String> {
+    kind_in(names, unity).or_else(|| langs.first().cloned())
 }
 
 /// Wie dev.bat: %DEV% wenn gesetzt, sonst %USERPROFILE%\Dev bzw. ~/Dev.
@@ -1021,7 +1028,7 @@ mod tests {
         assert_eq!(nav("javascript:alert(1)"), Some(false));
     }
 
-    use super::{branch_from_head, kind_in, langs_in, scan_blocking, strip_appdir, trashable, HOOK_VARS};
+    use super::{branch_from_head, kind_in, kind_or_lang, langs_in, scan_blocking, strip_appdir, trashable, HOOK_VARS};
 
     const APPDIR: &str = "/tmp/.mount_OpenCl42";
 
@@ -1172,6 +1179,19 @@ mod tests {
         // Nur Sprache, kein Typ; Ordner namens "Assets" allein ist kein Unity.
         assert_eq!(k(&["Cargo.toml", "src"], false), None);
         assert_eq!(k(&["Assets"], false), None);
+    }
+
+    #[test]
+    fn ohne_typ_zaehlt_die_sprache() {
+        let k = |list: &[&str]| {
+            let n = names(list);
+            kind_or_lang(&n, &langs_in(&n), false)
+        };
+        assert_eq!(k(&["Game.csproj", "Game.sln"]).as_deref(), Some("C#"));
+        assert_eq!(k(&["Cargo.toml", "src"]).as_deref(), Some("Rust"));
+        // Ein erkannter Typ geht vor.
+        assert_eq!(k(&["src-tauri", "package.json"]).as_deref(), Some("Tauri"));
+        assert_eq!(k(&["README.md"]), None);
     }
 
     #[test]
