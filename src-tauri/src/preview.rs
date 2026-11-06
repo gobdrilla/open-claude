@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use tauri::http::{header, Method, Request, Response, StatusCode};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use crate::files::within;
@@ -232,8 +232,8 @@ pub fn editor_dirty(dirty: bool) {
     DIRTY.store(dirty, Ordering::Relaxed);
 }
 
-/// Quit without the native question: the frontend already asked (Esc on the start page, +page.svelte closeWindow),
-/// in its own dialog where Cancel has the focus. The native one preselects Quit, so Enter would end all sessions.
+/// Quit without asking again: the frontend already asked in its own dialog where Cancel has the focus
+/// (Esc on the start page, +page.svelte closeWindow; "quit-ask" from quit). The native one preselects Quit.
 #[tauri::command]
 pub fn quit_now(app: tauri::AppHandle) {
     app.exit(0);
@@ -263,15 +263,18 @@ pub fn quit(app: &tauri::AppHandle) {
     }
     // Aus dem Tray heraus ist das Fenster versteckt: zeigen, worum es geht.
     crate::reopen(app);
-    let mut dialog = app
+    // The app's own dialog (+page.svelte, "quit-ask"), it answers with quit_now; native only without a window.
+    if let Some(w) = app.get_webview_window("main") {
+        if w.emit("quit-ask", &lost).is_ok() {
+            return;
+        }
+    }
+    let dialog = app
         .dialog()
         .message(lost)
         .title(tr!("L'Atelier de Claude beenden?", "Quit L'Atelier de Claude?"))
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(tr!("Beenden", "Quit"), tr!("Abbrechen", "Cancel")));
-    if let Some(w) = app.get_webview_window("main") {
-        dialog = dialog.parent(&w);
-    }
     let app = app.clone();
     dialog.show(move |ok| {
         if ok {

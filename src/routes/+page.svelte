@@ -894,6 +894,14 @@
     editRepo = repo;
   }
 
+  // Beenden mit laufenden Sitzungen oder Ungespeichertem (preview::quit): eigener Dialog statt des nativen.
+  onMount(() => {
+    const off = listen<string>("quit-ask", async (e) => {
+      if (await confirm(e.payload, t("Beenden"), t("L'Atelier de Claude beenden?"))) await invoke("quit_now");
+    });
+    return () => void off.then((f) => f());
+  });
+
   // Wach-Halt nicht moeglich (Passwort abgebrochen, Richtlinie, kein logind): Rust hat ihn schon abgeschaltet.
   onMount(() => {
     const off = listen<string>("awake-error", (e) => {
