@@ -205,6 +205,9 @@
     const key = e.key.toLowerCase();
     // false = xterm ignoriert das Event, es blubbert zum App-Handler am window.
     if (e.shiftKey && key === "w") return false;
+    // Linux: WebKitGTK lehnt clipboard.readText() ab. Strg+(Umschalt+)V als natives Einfuegen durchlassen,
+    // xterm nimmt den Text aus dem paste-Event (wie Cmd+V am Mac), statt ^V an die Shell zu schicken.
+    if (linux && key === "v" && !e.altKey) return false;
     // Gast: leeres Einfuegen liesse claude beim Host dessen Zwischenablage lesen.
     const t = term!;
     const target = guest ? { hasSelection: () => t.hasSelection(), getSelection: () => t.getSelection(), clearSelection: () => t.clearSelection(), paste: (s: string) => s && t.paste(s) } : t;
