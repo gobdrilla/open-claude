@@ -1152,6 +1152,14 @@
       return;
     }
     if (e.key === "Escape") overlayOnEsc = !!document.querySelector(OVERLAY);
+    // F1 in jeder Ansicht, auch aus xterm (sendet sonst eine Escape-Folge) und CodeMirror.
+    if (e.key === "F1") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (help) help = false;
+      else if (!anyDialog && !document.querySelector(OVERLAY)) help = true;
+      return;
+    }
     // WebView2 wuerde neu laden: Sitzungen verwaisen. Im Terminal gehoert Strg+R/F5 der Shell (xterm verhindert selbst).
     const reload = e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r");
     if (reload && !(e.target instanceof Element && e.target.closest(".xterm"))) e.preventDefault();
@@ -1177,6 +1185,13 @@
   );
 
   function onKey(e: KeyboardEvent) {
+    // Strg+/ in jeder Ansicht; im Editor kommentiert CodeMirror damit aus (defaultPrevented), xterm behaelt sie.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "/" && !e.defaultPrevented) {
+      if (help) help = false;
+      else if (!anyDialog && !document.querySelector(OVERLAY)) help = true;
+      e.preventDefault();
+      return;
+    }
     // Im Terminal gehoeren fast alle Kuerzel der Shell (Readline: Strg+R/K/E/P/O/G ...).
     // Die Git-Ansicht hat ihre eigenen Kuerzel in GitView.svelte.
     // Der Editor hat Strg+S/Esc selbst (EditorView, CodeMirror); Esc verlaesst ihn nicht.
@@ -1198,11 +1213,6 @@
     if (e.key === "Escape" && (overlayOnEsc || e.defaultPrevented)) return;
     // Ohne Alt: AltGr ist unter Windows Strg+Alt und loest sonst Kuerzel statt Zeichen aus.
     const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey;
-    if (e.key === "F1" || (ctrl && e.key === "/")) {
-      if (!anyDialog) help = !help;
-      e.preventDefault();
-      return;
-    }
     // Offene Dialoge bekommen ihre Tasten selbst.
     if (help || anyDialog) return;
 
