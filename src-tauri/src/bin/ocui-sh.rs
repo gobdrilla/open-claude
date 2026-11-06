@@ -845,7 +845,8 @@ mod tests {
         let Some((out, _)) = pipe("cd $OCUI_T\npwd\ncd ..\ncd su*\npwd\ncd $OCUI_T/fehlt\necho $?\n", &d) else { return };
         let lines: Vec<&str> = out.lines().collect();
         assert!(lines[0].ends_with("sub") && lines[1].ends_with("sub"), "{out}");
-        assert_eq!(lines[2], "1", "{out}");
+        // The failing cd runs in the system sh: bash exits 1, dash (Ubuntu) 2.
+        assert_ne!(lines[2], "0", "{out}");
         let _ = std::fs::remove_dir_all(&d);
     }
 
