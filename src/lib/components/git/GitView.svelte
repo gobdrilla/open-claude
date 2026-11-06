@@ -327,7 +327,8 @@
 
 <svelte:window {onkeydown} onfocus={() => refresh(false)} />
 
-{#snippet tool(label: string, title: string, onclick: () => void, Icon: typeof CloudDownloadIcon, hot = false)}
+<!-- iconOnly: unter lg nur das Icon (Tooltip behaelt den Text), damit der Branch-Name im Kopf Platz hat. -->
+{#snippet tool(label: string, title: string, onclick: () => void, Icon: typeof CloudDownloadIcon, hot = false, iconOnly = false)}
   <Button
     variant={hot ? "glow" : "ghost"}
     size="sm"
@@ -337,7 +338,7 @@
     disabled={!!busy}
   >
     <Icon class="size-3.5" />
-    {label}
+    <span class={iconOnly ? "max-lg:sr-only" : ""}>{label}</span>
   </Button>
 {/snippet}
 
@@ -410,8 +411,8 @@
     {@render tool(status?.ahead ? `Push ${status.ahead}` : "Push", `Push (${MOD}+${SHIFT}+P)`, push, UploadIcon, hot === "push")}
     {@render menu([["Force-Push (--force-with-lease) …", forcePush]], t("Push-Optionen"))}
     <span class="bg-border mx-1.5 h-4 w-px"></span>
-    {@render tool("Stash", t("Änderungen stashen"), () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon)}
-    {@render tool("Branch", t("Neuer Branch ab HEAD"), () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon)}
+    {@render tool("Stash", t("Änderungen stashen"), () => ((stash = { message: "", untracked: true }), (stashOpen = true)), ArchiveIcon, false, true)}
+    {@render tool("Branch", t("Neuer Branch ab HEAD"), () => ((branchName = ""), (branchOpen = true)), GitBranchPlusIcon, false, true)}
     <span class="flex-1"></span>
     <!-- Narrow window: Explorer and account drop their text, the tooltip keeps it. -->
     <Button variant="ghost" size="sm" class="gap-1.5 rounded-full" onclick={reveal} title={t("Ordner im {app} öffnen ({mod}+{shift}+E)", { app: FILES_APP, mod: MOD, shift: SHIFT })}>
@@ -539,7 +540,7 @@
   {#if status}
     <!-- Sidebar und Inhalt in einer gemeinsamen Karte -->
     <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex min-h-0 flex-1 overflow-hidden">
-      <div class="border-border/60 shrink-0 border-r" style="width:{side}px; max-width:max(160px, 25%)">
+      <div class="border-border/60 shrink-0 border-r" style="width:{side}px; max-width:max(240px, 25%)">
         <Sidebar
           repo={cur}
           {status}

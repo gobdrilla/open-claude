@@ -19,6 +19,8 @@
   import FileDiffIcon from "@lucide/svelte/icons/file-diff";
   import CheckIcon from "@lucide/svelte/icons/check";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import MinusIcon from "@lucide/svelte/icons/minus";
 
   let {
     repo,
@@ -355,7 +357,8 @@
 
 {#snippet list(title: string, files: FileChange[], isStaged: boolean)}
   {@const picked = chosenIn(files, isStaged)}
-  <div class="bg-background/50 ring-foreground/5 @container flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1">
+  <!-- min-h: Kopf plus gut zwei Dateien; bei wenig Hoehe scrollt die Spalte, statt die Listen zu zerquetschen. -->
+  <div class="bg-background/50 ring-foreground/5 @container flex min-h-20 flex-1 flex-col overflow-hidden rounded-xl ring-1">
     <div class="flex items-center gap-2 px-2 py-1.5 whitespace-nowrap {isStaged ? 'bg-success/8' : 'bg-warning/8'}">
       <span class="size-2 shrink-0 rounded-full {isStaged ? 'bg-success shadow-success/50' : 'bg-warning shadow-warning/50'} shadow-[0_0_6px]"></span>
       <span class="min-w-0 flex-1 truncate text-meta font-semibold">{title}</span>
@@ -367,12 +370,14 @@
         variant="ghost"
         size="2xs"
         class="shrink-0"
+        title={isStaged ? t("Alles unstagen") : t("Alles stagen")}
         disabled={files.length === 0}
         onclick={() => move(files, isStaged)}
       >
-        <!-- Narrow column: "stagen"/"unstagen", so the list title stays readable. -->
-        <!-- 17rem: at 900 px window width the column is ~15.5rem and "Nicht gestaged" was cut to "Nicht gestag…". -->
-        <span class="@max-[17rem]:hidden">{isStaged ? t("Alles unstagen") : t("Alles stagen")}</span><span class="hidden @max-[17rem]:inline">{isStaged ? t("unstagen") : t("stagen")}</span>
+        <!-- Narrow column: "stagen"/"unstagen", then only + / −, so the list title stays readable. -->
+        <!-- At 900 px window width the column is ~15rem: with "stagen" the title was cut to "Nicht ge…". -->
+        <span class="@max-[17rem]:hidden">{isStaged ? t("Alles unstagen") : t("Alles stagen")}</span><span class="hidden @max-[17rem]:inline @max-[16rem]:hidden">{isStaged ? t("unstagen") : t("stagen")}</span>
+        {#if isStaged}<MinusIcon class="hidden @max-[16rem]:block" />{:else}<PlusIcon class="hidden @max-[16rem]:block" />{/if}
       </Button>
       {#if !isStaged}
         <!-- Icon only: a text button pushed the list title down to "Nicht …" at 1280 px. -->
@@ -517,7 +522,8 @@
   <Notice bind:text={error} />
   <div class="flex min-h-0 flex-1">
     <!-- Schrumpft mit, damit auch im kleinen Fenster Platz fuer den Diff bleibt -->
-    <div class="border-border/60 flex w-2/5 max-w-80 min-w-48 shrink-0 flex-col gap-2 border-r p-2">
+    <!-- Unter lg die halbe Breite: bei 900 px wurden sonst Listentitel und Commit-Bereich gequetscht -->
+    <div class="border-border/60 flex w-2/5 max-w-80 min-w-48 shrink-0 flex-col gap-2 overflow-y-auto border-r p-2 max-lg:w-1/2">
       {#if conflicts.length}
         <div class="ring-destructive/30 max-h-40 shrink-0 overflow-y-auto rounded-xl p-1 ring-1">
           <div class="bg-destructive/15 text-destructive flex items-center gap-1.5 rounded-md px-2 py-1 font-semibold">
@@ -554,9 +560,10 @@
           }}
         />
         {#if (types.length || ticket || canSuggest) && !amend}
-          <div class="flex flex-wrap gap-1">
+          <!-- Schmale Chips: die Typen passen auch in der schmalen Spalte in eine Zeile -->
+          <div class="flex flex-wrap gap-0.5">
             {#each types as ty (ty)}
-              <Button variant="ghost" size="2xs" class="font-mono" title={t("Am Anfang einfügen")} onclick={() => hint(withPrefix(message, ty + ": "))}>
+              <Button variant="ghost" size="2xs" class="px-1 font-mono" title={t("Am Anfang einfügen")} onclick={() => hint(withPrefix(message, ty + ": "))}>
                 {ty}:
               </Button>
             {/each}

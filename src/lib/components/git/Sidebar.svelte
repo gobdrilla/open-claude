@@ -429,8 +429,8 @@
             (merges < open.length ? t(" · {n} Merges reichen, eingerückte kommen mit", { n: merges }) : "")}
         >
           <span class="bg-muted-foreground/15 text-muted-foreground grid size-5 shrink-0 place-items-center rounded-md"><GitMergeIcon class="size-3" /></span>
-          <!-- origin/ dropped so the branch name fits; the tooltip has the full ref -->
-          <span class="min-w-0 flex-1 truncate">{notIn[0]}<span class="font-mono">{base.replace(/^origin\//, "")}</span>{notIn[1]}</span>
+          <!-- origin/ dropped and no mono font, so "Nicht in master" fits at 900 px; the tooltip has the full ref -->
+          <span class="min-w-0 flex-1 truncate">{notIn[0]}<span>{base.replace(/^origin\//, "")}</span>{notIn[1]}</span>
           <span class="font-mono text-meta {open.length ? 'text-warning' : 'text-muted-foreground'}"
             >{open.length}</span
           >
