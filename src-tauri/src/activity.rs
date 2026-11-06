@@ -708,7 +708,8 @@ fn sum_agent(st: &mut State, path: &Path) -> Sum {
         }
         for c in content(&v) {
             match str_of(c, "type") {
-                "tool_use" => {
+                // SubagentHandback gibt nur den Bericht an den Aufrufer zurueck: kein Arbeitsschritt.
+                "tool_use" if str_of(c, "name") != "SubagentHandback" => {
                     s.tool_calls += 1;
                     s.steps.push(step(c, at));
                     if s.steps.len() > 5 {
