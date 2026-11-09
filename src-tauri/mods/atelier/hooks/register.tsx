@@ -128,12 +128,13 @@ let timers = false
 // Writes laufen nacheinander und schreiben den aktuellen Atom-Stand, sonst ueberholt ein aelterer Snapshot.
 let chain = Promise.resolve()
 // Fehler duerfen weder Tool-Calls noch die Kette kippen.
+// The file write is not awaited: the hooks run before next(e), so one hanging write (AV scanner, locked file on
+// Windows) would stall every later turn without an error. A stuck write now only freezes the app panel.
 const put = ($: EngineInterface, f: (s: Panel) => Panel) =>
   update($, panel, f)
     .then(async () => {
       file ??= await $.env.get('OPEN_CLAUDE_PANEL')
       if (file) chain = chain.then(async () => $.fs.write(file!, JSON.stringify(await read($, panel)))).catch(() => {})
-      return chain
     })
     .catch(() => {})
 

@@ -306,3 +306,14 @@ test('shell-regel immer, atelier-regel nur mit editor_state', async ($, on) => {
   expect(await ids(['mcp__plugin_atelier_atelier__editor_state'])).toEqual(['atelier:shell', 'atelier:atelier'])
   expect(await ids(['Bash'])).toEqual(['atelier:shell'])
 })
+
+test('haengender panel-write blockiert claude nicht', async ($, on) => {
+  mock.env(on, { OPEN_CLAUDE_PANEL: '/tmp/x/p.json' })
+  let writes = 0
+  // Windows: AV scanner or a locked file can keep a write from ever returning.
+  on('fs.write', () => (writes++, new Promise<never>(() => {})))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  await $.turn.start({ text: 'los', turnId: 't1' })
+  await $.turn.start({ text: 'weiter', turnId: 't2' })
+  expect(writes).toBe(1)
+})
