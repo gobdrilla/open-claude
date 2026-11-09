@@ -121,6 +121,15 @@ jobs:
           security find-identity -v -p codesigning "$kc" | grep -q "Atelier Self-Signed"
           echo "APPLE_SIGNING_IDENTITY=Atelier Self-Signed" >> "$GITHUB_ENV"
 
+      # Bundler-Werkzeuge (NSIS, WiX, linuxdeploy, AppRun) laedt tauri sonst bei jedem Lauf ohne Wiederholung von GitHub;
+      # ein einzelnes 504 dort liess den Job platzen. Mit Cache faellt der Download weg. macOS laedt nichts.
+      - uses: actions/cache@v6
+        if: runner.os != 'macOS'
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/tauri' || '~/.cache/tauri' }}
+          key: tauri-tools-${{ matrix.name }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: tauri-tools-${{ matrix.name }}-
+
       - uses: tauri-apps/tauri-action@v0
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         env:
