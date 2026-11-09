@@ -796,14 +796,15 @@
   }
 
   /** Repo-Gruppe: eine Sitzung im Haupt-Repo, die anderen Repos als weitere Arbeitsordner. Offene zeigen. */
-  async function launchGroup(g: RepoGroup) {
+  /** neu: weitere Sitzung der Gruppe statt zur offenen zu wechseln. */
+  async function launchGroup(g: RepoGroup, neu = false) {
     const [main, ...rest] = g.paths.map((p) => repos.find((r) => r.path === p)).filter((r) => r !== undefined);
     // Nicht still ein anderes Repo zum Haupt-Repo machen: claude startete sonst im falschen Ordner
     if (main?.path !== g.paths[0]) return void (notice = t("Gruppe „{name}“: Haupt-Repo nicht gefunden ({path}).", { name: g.name, path: g.paths[0] }));
     if (gitRepo && gitView && !(await gitView.canLeave())) return;
     leaveGit();
     editRepo = null;
-    let s = sessions.find((s) => s.group === g.name);
+    let s = neu ? undefined : sessions.find((s) => s.group === g.name);
     if (!s) sessions.push((s = { id: crypto.randomUUID(), repo: main, group: g.name, dirs: rest.map((r) => r.path) }));
     active = s.id;
   }
@@ -880,7 +881,10 @@
   );
   // Ab der zweiten Sitzung im selben Projekt durchnummeriert
   const label = (s: (typeof sessions)[number]) => {
-    if (s.group) return s.group;
+    if (s.group) {
+      const n = sessions.filter((o) => o.group === s.group).indexOf(s);
+      return s.group + (n > 0 ? ` ${n + 1}` : "");
+    }
     if (s.guest) return t("Gast: {host}", { host: s.host ? split(s.host)[1] : t("verbinde …") });
     const n = sessions.filter((o) => !o.group && o.repo.path === s.repo.path).indexOf(s);
     return (isFree(s.repo) ? t("Ohne Projekt") : split(s.repo.rel)[1]) + (n > 0 ? ` ${n + 1}` : "");
@@ -1728,6 +1732,7 @@
   <div class="flex min-h-0 flex-1 flex-col {view === 'term' ? '' : 'hidden'}">
     {#if activeSession}
       {@const s = activeSession}
+      {@const g = s.group ? repoGroups.find((x) => x.name === s.group) : undefined}
       <ClaudeBar
         id={s.id}
         mode={modes[s.id]}
@@ -1736,7 +1741,7 @@
         {side}
         ontoggleside={toggleSide}
         share={s.guest ? undefined : { on: !!shares[s.id], guests: shares[s.id]?.guests ?? 0, open: () => (shareOpen = true) }}
-        onnew={s.group || s.guest ? undefined : () => launch(s.repo, true)}
+        onnew={s.guest ? undefined : s.group ? g && (() => launchGroup(g, true)) : () => launch(s.repo, true)}
         onskills={s.group || s.guest || isFree(s.repo) ? undefined : () => (skillsOpen = true)}
         onsettings={() => (claudeOpen = true)}
       />
