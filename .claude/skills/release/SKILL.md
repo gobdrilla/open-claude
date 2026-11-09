@@ -78,7 +78,7 @@ git tag v1.0.7 && git push origin master v1.0.7
 **Draft sofort danach selbst anlegen.** Das Actions-Token bekommt seit 1.0.6 beim *Anlegen* eines Releases 403 `Resource not accessible by integration` (Ursache unklar; Rechte, Settings, Rulesets waren alle ok). *Hochladen* in einen vorhandenen Draft klappt. Die Jobs brauchen ~5 min bis zum Upload, also reicht es direkt nach dem Push:
 
 ```sh
-gh api repos/marlon-schmitz-289/open-claude/releases \
+gh api repos/gobdrilla/open-claude/releases \
   -f tag_name=v1.0.7 -f name="L'Atelier de Claude 1.0.7" -F draft=true \
   -f body="- Stichpunkt 1
 - Stichpunkt 2"
