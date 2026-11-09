@@ -14,7 +14,7 @@
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import { allowLsp, cursorAt, diff, edited, editor, flush, keep, navigate, peek, gitHook, prefs, reload, save, snapKey, snapshots, togglePanel, toggleWrap } from "$lib/editor.svelte";
   import { detectIndent, gutterMarks, huge, span } from "$lib/editor.logic";
-  import { gitGutter, indentFolding, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setRunMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
+  import { foldArrows, gitGutter, indentFolding, indentGuides, indentOf, lang, language, lspExt, setGitMarks, setRunMarks, setTestMarks, testGutter, theme, wrap } from "./cm";
   import { allConfigs, detect, run, runStart } from "$lib/run.svelte";
   import { runLines } from "$lib/run.logic";
   import { ghost } from "./ghost";
@@ -102,6 +102,7 @@
         indentOf(detectIndent(doc)),
         indentGuides,
         indentFolding,
+        foldArrows,
         wordHighlight,
         bracketColors,
         lang.of([]),

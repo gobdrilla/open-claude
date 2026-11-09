@@ -1,8 +1,19 @@
 // CodeMirror-Zubehoer fuer CodePane: Thema aus den CSS-Variablen der App und Sprachwahl nach Dateiname.
 import { EditorView } from "codemirror";
 import { Compartment, RangeSet, StateEffect, StateField, type EditorState, type Extension } from "@codemirror/state";
-import { GutterMarker, gutter } from "@codemirror/view";
-import { HighlightStyle, LanguageDescription, LanguageSupport, foldService, foldable, indentUnit, syntaxHighlighting } from "@codemirror/language";
+import { Decoration, GutterMarker, ViewPlugin, WidgetType, gutter, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import {
+  HighlightStyle,
+  LanguageDescription,
+  LanguageSupport,
+  foldEffect,
+  foldService,
+  foldable,
+  foldedRanges,
+  indentUnit,
+  syntaxHighlighting,
+  syntaxTree,
+} from "@codemirror/language";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { languages } from "@codemirror/language-data";
 import { styleTags, tags as t } from "@lezer/highlight";
@@ -30,12 +41,26 @@ const chrome = EditorView.theme(
       color: "color-mix(in oklch, var(--muted-foreground) 55%, transparent)",
       border: "none",
     },
-    // Fold arrows sit right next to the number, as in Rider.
-    ".cm-lineNumbers .cm-gutterElement": { padding: "0 2px 0 12px" },
+    ".cm-lineNumbers .cm-gutterElement": { padding: "0 8px 0 12px" },
     ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--foreground)" },
-    // Faltpfeile nur beim Ueberfahren der Gutter
-    ".cm-foldGutter .cm-gutterElement": { opacity: 0, transition: "opacity .15s" },
-    ".cm-gutters:hover .cm-foldGutter .cm-gutterElement": { opacity: 1 },
+    // Faltpfeile sitzen an der Klammer (foldArrows); die Gutter-Spalte aus basicSetup bleibt verborgen.
+    ".cm-foldGutter": { display: "none" },
+    // Platz links fuer die Spalte der Faltpfeile.
+    ".cm-line": { paddingLeft: "16px" },
+    // Breite 0: der Pfeil verschiebt keinen Text, er ragt nur nach links in den Zeilenrand.
+    ".cm-foldInline": {
+      display: "inline-block",
+      width: "0",
+      textIndent: "-13px",
+      whiteSpace: "nowrap",
+      cursor: "pointer",
+      color: "var(--muted-foreground)",
+      opacity: 0,
+      transition: "opacity .15s",
+    },
+    // Wie Rider: alle Pfeile sichtbar, solange die Maus im Editor ist.
+    "&:hover .cm-foldInline": { opacity: 1 },
+    ".cm-foldInline:hover": { color: "var(--foreground)" },
     ".cm-foldPlaceholder": { backgroundColor: "var(--muted)", border: "none", color: "var(--muted-foreground)" },
     ".cm-selectionMatch": { backgroundColor: "color-mix(in oklch, var(--primary) 18%, transparent)" },
     ".cm-searchMatch": { backgroundColor: "oklch(0.8 0.13 85 / 0.3)" },
@@ -141,6 +166,65 @@ export const indentFolding: Extension = foldService.of((state, from, to) => {
   const last = indentBlock((i) => doc.line(i).text, n, doc.lines, state.tabSize);
   return last ? { from: to, to: doc.line(last).to } : null;
 });
+
+// Faltpfeil wie in Rider: feste Spalte direkt links vom Code (Zeilenrand), nicht hinter den anderen Gutters.
+// Eingeklappt bleibt nur der Platzhalter, der per Klick wieder aufklappt.
+class FoldArrow extends WidgetType {
+  constructor(
+    readonly from: number,
+    readonly to: number,
+  ) {
+    super();
+  }
+  eq(o: FoldArrow) {
+    return o.from === this.from && o.to === this.to;
+  }
+  toDOM(view: EditorView) {
+    const el = document.createElement("span");
+    el.className = "cm-foldInline";
+    el.textContent = "⌄";
+    el.title = tr("Zuklappen");
+    el.onmousedown = (e) => {
+      e.preventDefault();
+      view.dispatch({ effects: foldEffect.of({ from: this.from, to: this.to }) });
+    };
+    return el;
+  }
+  ignoreEvent() {
+    return true;
+  }
+}
+
+const arrows = (view: EditorView): DecorationSet => {
+  const { state } = view;
+  const folded = foldedRanges(state);
+  const out = [];
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to; ) {
+      const line = state.doc.lineAt(pos);
+      const r = foldable(state, line.from, line.to);
+      let shut = false;
+      if (r) folded.between(r.from, r.from, (a) => void (a === r.from && (shut = true)));
+      if (r && !shut) out.push(Decoration.widget({ widget: new FoldArrow(r.from, r.to), side: -1 }).range(line.from));
+      pos = line.to + 1;
+    }
+  }
+  return Decoration.set(out, true);
+};
+
+export const foldArrows = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = arrows(view);
+    }
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state) || foldedRanges(u.startState) !== foldedRanges(u.state))
+        this.decorations = arrows(u.view);
+    }
+  },
+  { decorations: (p) => p.decorations },
+);
 
 /** Language-Server-Anbindung (lsp.svelte.ts attach); leer ohne Freigabe oder Server. */
 export const lspExt = new Compartment();
