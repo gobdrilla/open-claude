@@ -170,11 +170,13 @@ export const indentFolding: Extension = foldService.of((state, from, to) => {
 // Faltpfeil wie in Rider: feste Spalte direkt links vom Code (Zeilenrand), nicht hinter den anderen Gutters.
 // Eingeklappt bleibt nur der Platzhalter, der per Klick wieder aufklappt.
 class FoldArrow extends WidgetType {
-  constructor(
-    readonly from: number,
-    readonly to: number,
-  ) {
+  readonly from: number;
+  readonly to: number;
+  // Keine parameter properties: node --test (Strip-Only-TypeScript) kann sie nicht.
+  constructor(from: number, to: number) {
     super();
+    this.from = from;
+    this.to = to;
   }
   eq(o: FoldArrow) {
     return o.from === this.from && o.to === this.to;
