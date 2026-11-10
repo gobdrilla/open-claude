@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Popover } from "bits-ui";
-  import { Input, Slider, menuContent } from "$lib/atelier-ui";
+  import { IconButton, Input, Slider, menuContent } from "$lib/atelier-ui";
   import { css, fromHex, hex, type Oklch } from "$lib/color";
   import { t } from "$lib/i18n";
 
-  // OKLCH picker: swatch button, popover with native range sliders (keyboard and screen reader for free) and a
-  // hex field. `lightness` false: hue/chroma seeds whose lightness the theme picks per mode.
+  // OKLCH picker: swatch button, popover with ready-made colors, native range sliders (keyboard and screen reader
+  // for free) and a hex field. `lightness` false: hue/chroma seeds whose lightness the theme picks per mode.
   let {
     value,
     label,
@@ -19,6 +19,21 @@
     text = hex(value);
   });
 
+  // OKLCH hue 0 is pink; the hue track starts at red instead.
+  const RED = 29;
+  // Tints (small maxC, e.g. base tone) get a third of the range, so a click does not flood the surfaces.
+  const vivid = $derived(maxC < 0.16 ? maxC / 3 : 0.16);
+  const SWATCHES: [string, number][] = [
+    ["Rot", RED],
+    ["Orange", 55],
+    ["Gelb", 95],
+    ["Grün", 145],
+    ["Türkis", 190],
+    ["Blau", 255],
+    ["Lila", 295],
+    ["Pink", 350],
+  ];
+
   const set = (k: keyof Oklch, v: number) => onchange({ ...value, [k]: v });
   function typed() {
     const c = fromHex(text);
@@ -29,7 +44,7 @@
   const tracks = $derived({
     l: `linear-gradient(to right in oklch, ${at({ l: 0 })}, ${at({ l: 1 })})`,
     c: `linear-gradient(to right in oklch, ${at({ c: 0 })}, ${at({ c: maxC })})`,
-    h: `linear-gradient(to right in oklch longer hue, ${at({ h: 0 })}, ${at({ h: 359.9 })})`,
+    h: `linear-gradient(to right in oklch longer hue, ${at({ h: RED })}, ${at({ h: RED - 0.1 })})`,
   });
 </script>
 
@@ -39,22 +54,27 @@
     <span class="font-mono text-meta">{hex(value)}</span>
   </Popover.Trigger>
   <Popover.Portal>
-    <Popover.Content class="{menuContent} flex w-64 flex-col gap-2 p-3" sideOffset={4} align="end" collisionPadding={8}>
-      <div class="h-8 rounded ring-1 ring-foreground/10" style:background={css(value)}></div>
+    <Popover.Content class="{menuContent} flex w-64 flex-col gap-2.5 p-3" sideOffset={4} align="end" collisionPadding={8}>
+      <div class="grid grid-cols-9 gap-1">
+        {#each SWATCHES as [name, h] (name)}
+          <IconButton size="bare" class="ring-foreground/15 aspect-square w-full rounded-full ring-1" label={t(name)} style="background: {at({ h, c: vivid })}" onclick={() => onchange({ ...value, h, c: vivid })} />
+        {/each}
+        <IconButton size="bare" class="ring-foreground/15 aspect-square w-full rounded-full ring-1" label={t("Grau")} style="background: {at({ c: 0 })}" onclick={() => set("c", 0)} />
+      </div>
+      <label class="flex flex-col gap-1 text-meta">
+        <span class="text-muted-foreground">{t("Farbton")}</span>
+        <Slider class="picker-track w-full" min={0} max="360" step="1" value={(value.h - RED + 360) % 360} style="--track: {tracks.h}" oninput={(e) => set("h", (+e.currentTarget.value + RED) % 360)} />
+      </label>
+      <label class="flex flex-col gap-1 text-meta">
+        <span class="text-muted-foreground">{t("Sättigung")}</span>
+        <Slider class="picker-track w-full" min={0} max={maxC} step="0.002" value={value.c} style="--track: {tracks.c}" oninput={(e) => set("c", +e.currentTarget.value)} />
+      </label>
       {#if lightness}
-        <label class="flex flex-col gap-0.5 text-meta">
-          <span class="text-muted-foreground flex justify-between">{t("Helligkeit")}<span class="font-mono">{Math.round(value.l * 100)}</span></span>
+        <label class="flex flex-col gap-1 text-meta">
+          <span class="text-muted-foreground">{t("Helligkeit")}</span>
           <Slider class="picker-track w-full" min={0} max="1" step="0.005" value={value.l} style="--track: {tracks.l}" oninput={(e) => set("l", +e.currentTarget.value)} />
         </label>
       {/if}
-      <label class="flex flex-col gap-0.5 text-meta">
-        <span class="text-muted-foreground flex justify-between">{t("Sättigung")}<span class="font-mono">{value.c.toFixed(3)}</span></span>
-        <Slider class="picker-track w-full" min={0} max={maxC} step="0.002" value={value.c} style="--track: {tracks.c}" oninput={(e) => set("c", +e.currentTarget.value)} />
-      </label>
-      <label class="flex flex-col gap-0.5 text-meta">
-        <span class="text-muted-foreground flex justify-between">{t("Farbton")}<span class="font-mono">{Math.round(value.h)}°</span></span>
-        <Slider class="picker-track w-full" min={0} max="360" step="1" value={value.h} style="--track: {tracks.h}" oninput={(e) => set("h", +e.currentTarget.value)} />
-      </label>
       <label class="flex items-center gap-2 text-meta">
         <span class="text-muted-foreground">Hex</span>
         <Input
