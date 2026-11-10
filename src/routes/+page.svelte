@@ -330,6 +330,9 @@
       .sort((a, b) => (q ? b.score - a.score : a.repo.rel.localeCompare(b.repo.rel)));
   });
 
+  // Only by name: a member match would put the group on top and Enter would launch it instead of the project.
+  const shownGroups = $derived(query.trim() ? repoGroups.filter((g) => fuzzy(g.name, query.trim())) : repoGroups);
+
   /** Angepinntes zuerst, dann Laufendes, sonst nach Ordner gruppiert — bei Suche eine Liste nach Relevanz. */
   const groups = $derived.by(() => {
     // Laufende Sessions oben, sonst bleibt die Reihenfolge (sort ist stabil).
@@ -1519,9 +1522,9 @@
             {t("Projekte")} <span class="font-normal">{repos.length}</span>
           </h2>
         {/if}
-        {#if repoGroups.length && !query.trim()}
+        {#if shownGroups.length}
           <Command.Group heading={t("Gruppen")} class={subHead}>
-            {#each repoGroups as g (g.name)}
+            {#each shownGroups as g (g.name)}
               {@const live = sessions.some((s) => s.group === g.name)}
               {@const members = g.paths.map((p) => split(repos.find((r) => r.path === p)?.rel ?? p)[1]).join(" · ")}
               <ContextMenu.Root>
