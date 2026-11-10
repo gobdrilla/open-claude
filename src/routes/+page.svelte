@@ -1450,6 +1450,8 @@
           class="h-12! text-body!"
         />
       </div>
+      <!-- Belongs to the list it reloads, not to the three actions. -->
+      <IconButton size="md" onclick={rescan} label={t("Neu einlesen ({mod}+R)", { mod })}><RefreshIcon class="size-3.5 {scanning ? 'animate-spin' : ''}" /></IconButton>
       <!-- At most three actions, all labelled except the gear; the rest lives in the + Projekt menu and the settings. -->
       <div class="flex items-center gap-1.5">
         <Button
@@ -1836,7 +1838,6 @@
       {#if scanning}{t("Lese ein …")}{:else if fromCache}{t("Stand gespeichert")}{:else if scannedAt}{t("aktualisiert {time}", {
           time: new Date(scannedAt).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }),
         })}{/if}
-      <IconButton size="sm" onclick={rescan} label={t("Neu einlesen ({mod}+R)", { mod })}><RefreshIcon class="size-3 {scanning ? 'animate-spin' : ''}" /></IconButton>
     </span>
     <TextButton tone="plain" class="gap-1.5" onclick={() => (help = true)}>
       {@render kbd("F1")} {t("Hilfe")}
