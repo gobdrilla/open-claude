@@ -6,6 +6,7 @@
 <script lang="ts">
   import { Button, Checkbox, Dialog, Input, TextButton } from "$lib/atelier-ui";
   import { t } from "$lib/i18n";
+  import { fuzzy } from "$lib/fuzzy";
 
   type Repo = { path: string; rel: string };
 
@@ -27,9 +28,12 @@
 
   let name = $state("");
   let paths = $state<string[]>([]);
+  let query = $state("");
   $effect(() => {
-    if (group) (name = group.name), (paths = [...group.paths]);
+    if (group) (name = group.name), (paths = [...group.paths]), (query = "");
   });
+  // Chosen repos stay visible, so the search never hides what is in the group.
+  const shown = $derived(query.trim() ? repos.filter((r) => paths.includes(r.path) || fuzzy(r.rel, query.trim())) : repos);
 
   // Verschoben oder geloescht: bleibt sichtbar und entfernbar, zaehlt aber nicht als Repo
   const missing = $derived(paths.filter((p) => !repos.some((r) => r.path === p)));
@@ -62,6 +66,7 @@
       <Dialog.Description>{t("Claude startet im Haupt-Repo und kennt die anderen als weitere Arbeitsordner, samt ihrer CLAUDE.md.")}</Dialog.Description>
     </Dialog.Header>
     <Input bind:value={name} placeholder={t("Name, z. B. Shop (Frontend + API)")} onkeydown={(e) => e.key === "Enter" && save()} autofocus />
+    <Input bind:value={query} placeholder={t("Projekt suchen")} aria-label={t("Projekt suchen")} />
     <ul class="border-border/60 divide-border/60 min-h-0 flex-1 divide-y overflow-y-auto rounded-lg border">
       {#each missing as p (p)}
         <li class="flex items-center gap-2.5 px-3 py-1.5">
@@ -72,7 +77,7 @@
           <TextButton tone="danger" size="sm" onclick={() => toggle(p)}>{t("Entfernen")}</TextButton>
         </li>
       {/each}
-      {#each repos as r (r.path)}
+      {#each shown as r (r.path)}
         {@const on = paths.includes(r.path)}
         <li class="flex items-center gap-2.5 px-3 py-1.5">
           <Checkbox checked={on} onchange={() => toggle(r.path)} aria-label={t("{name} in die Gruppe", { name: label(r) })} />
