@@ -13,7 +13,9 @@ import {
   indentUnit,
   syntaxHighlighting,
   syntaxTree,
+  unfoldEffect,
 } from "@codemirror/language";
+import { foldsChanged } from "./setup.ts";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { languages } from "@codemirror/language-data";
 import { styleTags, tags as t } from "@lezer/highlight";
@@ -43,10 +45,10 @@ const chrome = EditorView.theme(
     },
     ".cm-lineNumbers .cm-gutterElement": { padding: "0 8px 0 12px" },
     ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--foreground)" },
-    // Faltpfeile sitzen an der Klammer (foldArrows); die Gutter-Spalte aus basicSetup bleibt verborgen.
-    ".cm-foldGutter": { display: "none" },
-    // Platz links fuer die Spalte der Faltpfeile.
+    // Platz links fuer die Spalte der Faltpfeile (foldArrows).
     ".cm-line": { paddingLeft: "16px" },
+    // Einrueckungslinien starten sonst bei 2px statt am Text (Bibliothek rechnet mit Standard-Padding).
+    ".cm-line.cm-indent-markers::before": { left: "16px" },
     // Breite 0: der Pfeil verschiebt keinen Text, er ragt nur nach links in den Zeilenrand.
     ".cm-foldInline": {
       display: "inline-block",
@@ -60,6 +62,8 @@ const chrome = EditorView.theme(
     },
     // Wie Rider: alle Pfeile sichtbar, solange die Maus im Editor ist.
     "&:hover .cm-foldInline": { opacity: 1 },
+    // Eingeklappt immer sichtbar, sonst findet man den Weg zurueck nicht.
+    ".cm-foldInline.cm-folded": { opacity: 1 },
     ".cm-foldInline:hover": { color: "var(--foreground)" },
     ".cm-foldPlaceholder": { backgroundColor: "var(--muted)", border: "none", color: "var(--muted-foreground)" },
     ".cm-selectionMatch": { backgroundColor: "color-mix(in oklch, var(--primary) 18%, transparent)" },
@@ -168,27 +172,30 @@ export const indentFolding: Extension = foldService.of((state, from, to) => {
 });
 
 // Faltpfeil wie in Rider: feste Spalte direkt links vom Code (Zeilenrand), nicht hinter den anderen Gutters.
-// Eingeklappt bleibt nur der Platzhalter, der per Klick wieder aufklappt.
+// Eingeklappt bleibt der Pfeil (›) und klappt per Klick wieder auf.
 class FoldArrow extends WidgetType {
   readonly from: number;
   readonly to: number;
+  readonly shut: boolean;
   // Keine parameter properties: node --test (Strip-Only-TypeScript) kann sie nicht.
-  constructor(from: number, to: number) {
+  constructor(from: number, to: number, shut: boolean) {
     super();
     this.from = from;
     this.to = to;
+    this.shut = shut;
   }
   eq(o: FoldArrow) {
-    return o.from === this.from && o.to === this.to;
+    return o.from === this.from && o.to === this.to && o.shut === this.shut;
   }
   toDOM(view: EditorView) {
     const el = document.createElement("span");
-    el.className = "cm-foldInline";
-    el.textContent = "⌄";
-    el.title = tr("Zuklappen");
+    el.className = this.shut ? "cm-foldInline cm-folded" : "cm-foldInline";
+    el.textContent = this.shut ? "›" : "⌄";
+    el.title = tr(this.shut ? "Aufklappen" : "Zuklappen");
     el.onmousedown = (e) => {
       e.preventDefault();
-      view.dispatch({ effects: foldEffect.of({ from: this.from, to: this.to }) });
+      const range = { from: this.from, to: this.to };
+      view.dispatch({ effects: (this.shut ? unfoldEffect : foldEffect).of(range) });
     };
     return el;
   }
@@ -204,10 +211,11 @@ const arrows = (view: EditorView): DecorationSet => {
   for (const { from, to } of view.visibleRanges) {
     for (let pos = from; pos <= to; ) {
       const line = state.doc.lineAt(pos);
-      const r = foldable(state, line.from, line.to);
-      let shut = false;
-      if (r) folded.between(r.from, r.from, (a) => void (a === r.from && (shut = true)));
-      if (r && !shut) out.push(Decoration.widget({ widget: new FoldArrow(r.from, r.to), side: -1 }).range(line.from));
+      // Folded range first: foldable() may answer differently (or not at all) while the block is shut.
+      let shut: { from: number; to: number } | null = null;
+      folded.between(line.to, line.to, (a, b) => void (a === line.to && (shut = { from: a, to: b })));
+      const r = shut ?? foldable(state, line.from, line.to);
+      if (r) out.push(Decoration.widget({ widget: new FoldArrow(r.from, r.to, !!shut), side: -1 }).range(line.from));
       pos = line.to + 1;
     }
   }
@@ -221,7 +229,8 @@ export const foldArrows = ViewPlugin.fromClass(
       this.decorations = arrows(view);
     }
     update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state) || foldedRanges(u.startState) !== foldedRanges(u.state))
+      const lsp = u.transactions.some((t) => t.effects.some((e) => e.is(foldsChanged)));
+      if (lsp || u.docChanged || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state) || foldedRanges(u.startState) !== foldedRanges(u.state))
         this.decorations = arrows(u.view);
     }
   },

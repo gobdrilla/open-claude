@@ -1,6 +1,5 @@
-// codemirror's basicSetup, copied as its docs suggest for customizing: the only change is that the fold gutter
-// also redraws on foldsChanged. Folds that arrive later (language server) otherwise got no arrow until the next
-// edit or scroll, because the gutter only rebuilds on doc, viewport, fold state or syntax tree changes.
+// codemirror's basicSetup, copied as its docs suggest for customizing: without the fold gutter, the fold arrows
+// sit next to the code (foldArrows in cm.ts). foldsChanged redraws them when folds arrive later (language server).
 import { EditorState, StateEffect } from "@codemirror/state";
 import {
   crosshairCursor,
@@ -13,7 +12,7 @@ import {
   lineNumbers,
   rectangularSelection,
 } from "@codemirror/view";
-import { bracketMatching, defaultHighlightStyle, foldGutter, foldKeymap, indentOnInput, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, codeFolding, defaultHighlightStyle, foldKeymap, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
@@ -27,7 +26,7 @@ export const basicSetup = [
   highlightActiveLineGutter(),
   highlightSpecialChars(),
   history(),
-  foldGutter({ foldingChanged: (u) => u.transactions.some((tr) => tr.effects.some((e) => e.is(foldsChanged))) }),
+  codeFolding(),
   drawSelection(),
   dropCursor(),
   EditorState.allowMultipleSelections.of(true),
