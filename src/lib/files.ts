@@ -159,3 +159,6 @@ export const previewKind = (path: string): PreviewKind | null =>
 
 /** Bilder, die fs.read ablehnt: sie oeffnen nur in der Vorschau, nie als Editor-Tab. svg ist Text und beides. */
 export const isBinaryImage = (path: string) => previewKind(path) === "image" && !/\.svg$/i.test(path);
+
+/** Image from git as data: URL; rev "HEAD", "" (index) or a commit, null = working tree. png/jpg/gif/webp only. */
+export const gitImage = (repo: string, rev: string | null, path: string) => call<string>("git_image", { repo, rev, path });

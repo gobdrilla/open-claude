@@ -18,6 +18,7 @@
   import FileCodeIcon from "@lucide/svelte/icons/file-code";
   import { review } from "$lib/review.svelte";
   import { dirname } from "$lib/tree";
+  import { gitImage } from "$lib/files";
 
   let {
     diff,
@@ -26,6 +27,7 @@
     busy = false,
     repo,
     rev,
+    sides,
     onopen,
   }: {
     diff: string;
@@ -34,6 +36,8 @@
     busy?: boolean;
     repo?: string;
     rev?: string;
+    /** Revisions of old and new side for image previews (see gitImage, null = working tree); default from rev. */
+    sides?: [string, string | null];
     /** Open the file in the editor (header button, double-click on a line jumps to it). */
     onopen?: (path: string, line?: number) => void;
   } = $props();
@@ -42,6 +46,16 @@
   const newLine = (hunk: Hunk, li: number) => hunk.lines.slice(0, li + 1).findLast((l) => l.new)?.new ?? Math.max(1, hunk.newStart);
 
   const files = $derived(parseDiff(diff));
+  const revs = $derived(sides ?? (rev ? ([`${rev}^`, rev] as [string, string]) : null));
+  const isImage = (path: string) => /\.(png|jpe?g|gif|webp)$/i.test(path);
+
+  // Tiny textures (16x16 icons) scaled up without blur; larger images stay at most their natural size.
+  function grow(e: Event) {
+    const img = e.currentTarget as HTMLImageElement;
+    if (img.naturalWidth > 128) return;
+    img.style.width = `${Math.min(256, img.naturalWidth * 8)}px`;
+    img.style.imageRendering = "pixelated";
+  }
 
   // Gewaehlte Zeilen je Hunk ("datei:hunk" -> Indizes in hunk.lines), Anker fuer Shift-Klick.
   let selected = $state<Record<string, number[]>>({});
@@ -136,7 +150,29 @@
           <span class="bg-destructive/15 text-destructive shrink-0 rounded-full px-1.5 font-mono text-[10px]">−{count(file, "del")}</span>
         {/if}
       </div>
-      {#if file.binary}
+      {#if file.binary && repo && revs && isImage(file.newPath)}
+        <div class="flex flex-wrap gap-4 p-3 font-sans">
+          {#each [{ label: t("Vorher"), r: revs[0], p: file.oldPath, has: file.status !== "added" }, { label: t("Nachher"), r: revs[1], p: file.newPath, has: file.status !== "deleted" }] as { label, r, p, has } (label)}
+            {#if has}
+              <figure class="flex min-w-0 flex-col gap-1">
+                <figcaption class="text-muted-foreground text-meta">{label}</figcaption>
+                {#await gitImage(repo, r, p)}
+                  <p class="text-muted-foreground text-meta">{t("Lädt …")}</p>
+                {:then src}
+                  <img
+                    {src}
+                    alt={p}
+                    onload={grow}
+                    class="max-h-80 max-w-full rounded border [background:repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)_0_0/16px_16px] object-contain"
+                  />
+                {:catch e}
+                  <p class="text-destructive text-meta">{String(e)}</p>
+                {/await}
+              </figure>
+            {/if}
+          {/each}
+        </div>
+      {:else if file.binary}
         <p class="text-muted-foreground px-2 py-1 font-sans">{t("Binärdatei")}</p>
       {:else if file.hunks.length === 0}
         <p class="text-muted-foreground px-2 py-1 font-sans">{t("Keine Inhaltsänderung.")}</p>

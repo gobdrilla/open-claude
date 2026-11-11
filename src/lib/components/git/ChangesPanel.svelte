@@ -633,7 +633,7 @@
           <Button size="xs" variant="outline" class="self-start" onclick={() => onsubmodule(sel!.path)}>{t("Submodul öffnen")}</Button>
         </div>
       {:else if sel}
-        <DiffView diff={diff ?? ""} {actions} {busy} {repo} onopen={onedit} />
+        <DiffView diff={diff ?? ""} {actions} {busy} {repo} sides={sel.staged ? ["HEAD", ""] : ["", null]} onopen={onedit} />
       {:else if status.files.length}
         <Empty icon={FileDiffIcon} hint={t("↑↓ wechseln · Leertaste stagen")}>{t("Datei links auswählen, um den Diff zu sehen.")}</Empty>
       {:else}

@@ -890,6 +890,7 @@ pub fn run() {
             unity::unity_close,
             unity::unity_test,
             files::fs_image,
+            files::git_image,
             files::fs_list,
             files::fs_read,
             files::fs_write,

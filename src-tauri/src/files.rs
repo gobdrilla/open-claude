@@ -433,6 +433,38 @@ pub async fn fs_image(path: String) -> Result<String, String> {
     .await
 }
 
+/// Image for the binary diff as data: URL: `rev` "HEAD", "" (index) or a commit; None = working tree.
+#[tauri::command]
+pub async fn git_image(repo: String, rev: Option<String>, path: String) -> Result<String, String> {
+    use base64::Engine;
+    let mt = image_type(&path).ok_or_else(|| tr!("Kein Bild (png, jpg, gif, webp)", "Not an image (png, jpg, gif, webp)"))?;
+    blocking(move || {
+        let b = match rev {
+            None => {
+                let file = within(&repo, &path)?;
+                if std::fs::metadata(&file).map_err(|e| e.to_string())?.len() > 50 << 20 {
+                    return Err(tr!("Bild groesser als 50 MB", "Image larger than 50 MB"));
+                }
+                std::fs::read(&file).map_err(|e| e.to_string())?
+            }
+            Some(rev) => {
+                inside(&repo, &path)?;
+                // A leading "-" would turn the spec into an option.
+                if rev.starts_with('-') {
+                    return Err(tr!("Ungültige Revision: {rev}", "Invalid revision: {rev}"));
+                }
+                let o = exec(git(&repo).arg("show").arg(format!("{rev}:./{path}")), None)?;
+                if !o.status.success() {
+                    return Err(String::from_utf8_lossy(&o.stderr).trim().to_string());
+                }
+                o.stdout
+            }
+        };
+        Ok(format!("data:{mt};base64,{}", base64::engine::general_purpose::STANDARD.encode(b)))
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn fs_list(repo: String, dir: String) -> Result<Vec<Entry>, String> {
     blocking(move || list(&repo, &dir)).await

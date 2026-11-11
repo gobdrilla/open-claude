@@ -85,6 +85,8 @@ export default {
   "Im Editor öffnen": "Open in editor",
   "Im Editor öffnen (Doppelklick auf eine Zeile springt dorthin)": "Open in editor (double-click a line to jump there)",
   "Binärdatei": "Binary file",
+  "Vorher": "Before",
+  "Nachher": "After",
   "Keine Inhaltsänderung.": "No content change.",
   "{n} Zeilen – anzeigen": "{n} lines – show",
   "Kommentieren": "Comment",
