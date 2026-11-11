@@ -92,6 +92,13 @@ export function pushEditor(repo: string, snap: EditorSnap | null) {
   else snaps.delete(repo);
   // Auswahl gilt nur fuer die aktive Datei, sonst meldet editor_state eine veraltete.
   if (!snap || sels.get(repo)?.path !== snap.active) sels.delete(repo);
+  // No file open: claude must drop the last file from its context. It ignores a notification without a range,
+  // but takes an empty range without filePath as "nothing selected".
+  if (!snap?.active) {
+    clearTimeout(timer);
+    const zero = { line: 0, character: 0 };
+    void notify(repo, "selection_changed", { text: "", selection: { start: zero, end: zero, isEmpty: true } });
+  }
   clearTimeout(pushTimers.get(repo));
   pushTimers.set(
     repo,
