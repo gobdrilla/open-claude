@@ -1,11 +1,11 @@
 ---
 name: release
-description: Neues Atelier-Release erstellen (Version bumpen, testen, taggen, Draft anlegen, Release-Run überwachen). Nutzen, wenn der User "release", "neues Release", "Version raus" o. ä. sagt.
+description: Neues Atelier-Release erstellen (Version bumpen, testen, taggen, Draft anlegen, Release-Run überwachen, veröffentlichen). Nutzen, wenn der User "release", "neues Release", "Version raus" o. ä. sagt.
 ---
 
 # Release erstellen
 
-Ablauf von "was ist neu" bis "Draft mit allen Dateien". **Veröffentlichen macht der User selbst**, außer er sagt es explizit.
+Ablauf von "was ist neu" bis zum veröffentlichten Release. **Veröffentlichen ohne Rückfrage**, sobald der Run grün ist und alle 15 Assets im Draft liegen (Entscheidung des Users, 2026-11-11: er sagt sowieso jedes Mal ja). Nur wenn der User ausdrücklich „nur Draft“ o. ä. sagt, beim Draft bleiben.
 
 ## 1. Was kommt rein?
 
@@ -104,6 +104,17 @@ Fehler:
 - Tests rot → fixen, neuen Patch-Release (Tags nicht verschieben, sobald gepusht).
 - Einzelner Job transient rot → `gh run rerun $id --failed`.
 
-## 6. Übergabe
+## 6. Veröffentlichen
 
-Dem User melden: Version, was drin ist, Run grün, 15 Assets im Draft. Er veröffentlicht den Draft (erst dann sehen Auto-Updates die Version).
+Nur wenn **alle** Jobs `success` sind und der Draft **15 Assets** hat (sonst Draft stehen lassen und dem User melden, was rot ist):
+
+```sh
+gh release edit v1.0.7 --draft=false --latest
+gh release view v1.0.7 --json isDraft,assets -q '"draft=\(.isDraft) assets=\(.assets|length)"'
+```
+
+Erst danach sehen Auto-Updates die Version.
+
+## 7. Übergabe
+
+Dem User melden: Version, was drin ist, Run grün, 15 Assets, veröffentlicht (Link zum Release).
