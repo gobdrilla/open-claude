@@ -179,7 +179,11 @@
               ? 'cursor-pointer'
               : ''} {noted ? 'outline-warning outline-1 -outline-offset-1 outline-dashed' : ''}"
             title={noted?.text}
-            onclick={(e) => change && pickable && pick(key, hunk, li, e.shiftKey)}
+            onclick={(e) => {
+              // A drag that selected text (to copy it) is no line pick.
+              if (!e.shiftKey && !window.getSelection()?.isCollapsed) return;
+              if (change && pickable) pick(key, hunk, li, e.shiftKey);
+            }}
             ondblclick={onopen && file.status !== "deleted" ? () => onopen(file.newPath, newLine(hunk, li)) : undefined}
           >
             <span class="text-muted-foreground/60 w-10 shrink-0 pr-1 text-right select-none">{line.old ?? ""}</span>
@@ -191,7 +195,7 @@
                   ? 'text-destructive'
                   : ''}">{sign[line.kind]}</span
             >
-            <span class="pr-2 whitespace-pre">{line.text}</span>
+            <span class="pr-2 whitespace-pre select-text">{line.text}</span>
           </div>
         {/each}
         </div></div>
