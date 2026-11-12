@@ -1399,10 +1399,10 @@
             ? 'bg-background text-foreground shadow-[inset_0_-2px_0_var(--primary)]'
             : 'text-muted-foreground hover:text-foreground'}"
         >
-          <!-- -mx-1 px-1: focus ring gets air around the text without moving the label. -->
+          <!-- Negative margins: the button covers the whole tab (incl. the underline), the label stays in place. -->
           <TextButton
             tone="plain"
-            class="-mx-1 inline px-1"
+            class="-my-1 -mr-1 -ml-2 block py-1 pr-1 pl-2"
             role="tab"
             aria-selected={on}
             onclick={() => openSessionTab(s.id)}
