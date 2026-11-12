@@ -1398,7 +1398,10 @@
           class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {on
             ? 'bg-background text-foreground shadow-[inset_0_-2px_0_var(--primary)]'
             : 'text-muted-foreground hover:text-foreground'}"
+          onmousedown={(e: MouseEvent) => e.button === 1 && e.preventDefault()}
+          onauxclick={(e: MouseEvent) => e.button === 1 && endSession(s.id)}
         >
+          <!-- Middle click closes like the x (mousedown preventDefault: no autoscroll on Windows). -->
           <!-- Negative margins: the button covers the whole tab (incl. the underline), the label stays in place. -->
           <TextButton
             tone="plain"
