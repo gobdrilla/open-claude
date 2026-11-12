@@ -242,6 +242,13 @@ pub fn pty_open(
     if cfg!(windows) {
         env.push(("CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT", "1"));
     }
+    // Long turns (big outputs, long thinking without bytes) hit claude's 3-10 min defaults and show up as
+    // connection errors. 30 min = the byte watchdog's cap; the user's own env or settings.json still win.
+    for k in ["API_TIMEOUT_MS", "CLAUDE_STREAM_IDLE_TIMEOUT_MS", "CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS"] {
+        if std::env::var_os(k).is_none() {
+            env.push((k, "1800000"));
+        }
+    }
     spawn(app, &ptys, id, &cwd, &program, args, cols, rows, &env, false, out)
 }
 
