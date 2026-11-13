@@ -153,7 +153,15 @@ fn list(c: &Path, cwd: &str) -> Vec<Past> {
             let t = match cache.get(&path) {
                 Some((k, t)) if *k == (at, len) => t.clone(),
                 _ => {
-                    let t = tail(&path, len);
+                    let mut t = tail(&path, len);
+                    // One huge line (a screenshot Claude read) can fill the whole tail: keep what was read before.
+                    if let Some((_, old)) = cache.get(&path) {
+                        for (new, old) in [(&mut t.title, &old.title), (&mut t.prompt, &old.prompt), (&mut t.branch, &old.branch)] {
+                            if new.is_empty() {
+                                new.clone_from(old);
+                            }
+                        }
+                    }
                     cache.insert(path, ((at, len), t.clone()));
                     t
                 }
@@ -218,6 +226,20 @@ mod tests {
             got,
             [("aa", "Von Hand", "mach mal", "main", false), ("bb", "Nur KI", "", "", true), ("dd", "Umbenannt", "", "", true)]
         );
+    }
+
+    #[test]
+    fn grosse_zeile_am_ende_loescht_nichts() {
+        let c = tmp("big");
+        let f = c.join("projects/-w-p/aa.jsonl");
+        let head = concat!(r#"{"type":"user","gitBranch":"main"}"#, "\n", r#"{"type":"ai-title","aiTitle":"T"}"#, "\n");
+        fs::write(&f, head).unwrap();
+        assert_eq!(list(&c, "/w/p")[0].branch, "main");
+        // Screenshot as tool result: larger than the tail, branch and title are out of reach now.
+        let big = format!(r#"{{"type":"user","x":"{}"}}"#, "y".repeat(TAIL as usize + 10));
+        fs::write(&f, format!("{head}{big}\n{}\n", r#"{"type":"last-prompt","lastPrompt":"p"}"#)).unwrap();
+        let p = &list(&c, "/w/p")[0];
+        assert_eq!((p.title.as_str(), p.prompt.as_str(), p.branch.as_str()), ("T", "p", "main"));
     }
 
     #[test]
