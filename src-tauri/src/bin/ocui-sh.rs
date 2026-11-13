@@ -44,10 +44,16 @@ fn main() {
     }
     let mut sh = Shell::new(only_claude);
     if !no_claude {
+        // Earlier session from the Verlauf panel; pty_open allows only hex and "-".
+        let resume = std::env::var("OPEN_CLAUDE_RESUME")
+            .ok()
+            .filter(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-'))
+            .map(|r| format!(" --resume {r}"))
+            .unwrap_or_default();
         // Pfad von pty_open (App-Daten, ohne " oder $), siehe theme_settings.
         match std::env::var("OPEN_CLAUDE_SETTINGS") {
-            Ok(p) if !p.is_empty() => sh.run(&format!("claude --settings \"{p}\"")),
-            _ => sh.run("claude"),
+            Ok(p) if !p.is_empty() => sh.run(&format!("claude --settings \"{p}\"{resume}")),
+            _ => sh.run(&format!("claude{resume}")),
         };
     }
     if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {

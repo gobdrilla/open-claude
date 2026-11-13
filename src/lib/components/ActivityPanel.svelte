@@ -17,6 +17,7 @@
   import Markdown from "$lib/components/Markdown.svelte";
   import ZoomImage from "$lib/components/ZoomImage.svelte";
   import BtwPanel from "$lib/components/BtwPanel.svelte";
+  import HistoryPanel, { type OpenSession } from "$lib/components/HistoryPanel.svelte";
   import { age } from "$lib/utils";
   import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -80,7 +81,18 @@
   type Activity = { session: string | null; alive: boolean; runs: Run[]; agents: Agent[]; images: Img[]; prompts: Prompt[]; panel: Panel | null; limits: Limit[] | null; modes: Mode[] };
 
   // guest: Gast-Sitzung, Daten kommen vom Host (share_call), Vorlagen bearbeiten und btw nur dort.
-  let { cwd, id, guest = false }: { cwd: string; id: string; guest?: boolean } = $props();
+  // history: the project's sessions for the Verlauf tab (not for guests: their transcripts live on the host).
+  let {
+    cwd,
+    id,
+    guest = false,
+    history,
+  }: {
+    cwd: string;
+    id: string;
+    guest?: boolean;
+    history?: { open: OpenSession[]; onopen: (id: string) => void; onresume: (sid: string, here: boolean) => void };
+  } = $props();
   const call = <T,>(cmd: string, args: Record<string, unknown>) => (guest ? invoke<T>("share_call", { id, cmd, args }) : invoke<T>(cmd, args));
 
   let data = $state<Activity | null>(null);
@@ -88,7 +100,7 @@
   // Fehler einer Aktion (Springen, Verlauf, Bild): eigene Zeile, error ersetzt den ganzen Inhalt und blitzt nur auf.
   let actionError = $state("");
   let tplError = $state("");
-  let tab = $state<"session" | "work" | "img" | "prompts">("session");
+  let tab = $state<"session" | "work" | "img" | "prompts" | "history">("session");
   // Session-Daten der Mod im Terminal; Countdowns rechnen gegen now.
   let panel = $state<Panel | null>(null);
   let now = $state(Date.now());
@@ -224,6 +236,10 @@
   }
   $effect(() => {
     if (tab === "work") loadTemplates();
+  });
+  // Switched to a guest session: it has no Verlauf.
+  $effect(() => {
+    if (tab === "history" && !history) tab = "session";
   });
 
   const tpls = $derived(
@@ -506,6 +522,7 @@
       { id: "work", label: t("Arbeit"), title: t("Workflows und Agents"), count: (data?.runs.length ?? 0) + (data?.agents.length ?? 0), live: runningRuns + runningAgents },
       { id: "img", label: t("Bilder"), count: imgs.length },
       { id: "prompts", label: "Prompts", count: data?.prompts.length },
+      ...(history ? [{ id: "history", label: t("Verlauf"), title: t("Alle Sitzungen dieses Projekts, wie /resume") }] : []),
     ]}
   />
 
@@ -590,7 +607,9 @@
         <IconButton size="bare" tone="inherit" label={t("Meldung schließen")} title="" onclick={() => (actionError = "")}>✕</IconButton>
       </p>
     {/if}
-    {#if error}
+    {#if tab === "history" && history}
+      <HistoryPanel {cwd} active={id} {...history} />
+    {:else if error}
       <p class="text-destructive p-2">{error}</p>
     {:else if !data}
       <Empty>{t("Lade …")}</Empty>

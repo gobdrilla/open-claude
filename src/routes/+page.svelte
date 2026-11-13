@@ -42,6 +42,10 @@
   import ClaudeBar from "$lib/components/ClaudeBar.svelte";
   import { bannerText, tabState, type TabState } from "$lib/claudemode";
   import ActivityPanel from "$lib/components/ActivityPanel.svelte";
+  import SessionTabs, { type TabGroupView } from "$lib/components/SessionTabs.svelte";
+  import type { Past } from "$lib/components/HistoryPanel.svelte";
+  import { arrange, groupKey } from "$lib/sessiontabs.logic";
+  import { typeCommand } from "$lib/claudecmd";
   import Splitter, { stored } from "$lib/components/Splitter.svelte";
   import GitView from "$lib/components/git/GitView.svelte";
   import EditorView from "$lib/components/editor/EditorView.svelte";
@@ -152,7 +156,8 @@
   // group/dirs: Sitzung einer Repo-Gruppe, startet in repo und kennt dirs als weitere Arbeitsordner
   // guest: Einladung einer geteilten Sitzung, claude laeuft beim Host; host = dessen cwd (nach dem Verbinden).
   // repo bleibt dann leer (frei), sonst hielte die App den Host-Ordner fuer ein eigenes Projekt.
-  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[]; guest?: string; host?: string }[]>([]);
+  // resume: earlier session this tab continues (claude --resume), from the Verlauf panel.
+  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[]; guest?: string; host?: string; resume?: string }[]>([]);
   // Projekt-Sitzung, bei mehreren die aktive. Nie eine Gruppen-Sitzung.
   const sessionOf = (p: string) => {
     const own = sessions.filter((s) => !s.group && s.repo.path === p);
@@ -176,11 +181,11 @@
   let banners = $state<Record<string, string>>({});
   // Last session panel per session (context, current tool, todos) for the start page; filled by the tab poll.
   let panels = $state<Record<string, Panel>>({});
-  const TAB: Record<string, [string, string, string]> = {
-    run: ["◐", "text-primary animate-pulse", t("Claude arbeitet")],
-    ask: ["?", "text-warning font-bold", t("Claude wartet auf dich")],
-    done: ["✓", "text-success", t("Claude ist fertig")],
-  };
+  // Tab order as the user arranged it (ids); groups stay by project, see sessiontabs.logic.ts.
+  let order = $state<string[]>([]);
+  // Session title per tab (claude's /rename or automatic title), only polled for projects with 2+ tabs.
+  let titles = $state<Record<string, string>>({});
+  const tabGroups = $derived(arrange(sessions, order));
   const activeSession = $derived(sessions.find((s) => s.id === active));
   $effect(() => {
     const s = activeSession;
@@ -882,16 +887,64 @@
       ...(viewRepo?.path ? [["Git", "git", `Git (${mod}+3)`, GitBranchIcon] as const] : []),
     ] as const satisfies readonly (readonly [string, ViewKey, string, typeof TerminalIcon])[],
   );
-  // Ab der zweiten Sitzung im selben Projekt durchnummeriert
-  const label = (s: (typeof sessions)[number]) => {
-    if (s.group) {
-      const n = sessions.filter((o) => o.group === s.group).indexOf(s);
-      return s.group + (n > 0 ? ` ${n + 1}` : "");
-    }
-    if (s.guest) return t("Gast: {host}", { host: s.host ? split(s.host)[1] : t("verbinde …") });
-    const n = sessions.filter((o) => !o.group && o.repo.path === s.repo.path).indexOf(s);
-    return (isFree(s.repo) ? t("Ohne Projekt") : split(s.repo.rel)[1]) + (n > 0 ? ` ${n + 1}` : "");
+  type Session = (typeof sessions)[number];
+  /** Project (or repo group) name, as a single tab and a group's chip show it. */
+  const baseName = (s: Session) =>
+    s.group ??
+    (s.guest ? t("Gast: {host}", { host: s.host ? split(s.host)[1] : t("verbinde …") }) : isFree(s.repo) ? t("Ohne Projekt") : split(s.repo.rel)[1]);
+  /** Name for notices and the start page: with 2+ tabs in the project also the session title. */
+  const label = (s: Session) => {
+    const g = tabGroups.find((x) => x.key === groupKey(s));
+    return g && g.list.length > 1 ? `${baseName(s)} · ${titles[s.id] ?? t("Neue Sitzung")}` : baseName(s);
   };
+  const tabView = $derived<TabGroupView[]>(
+    tabGroups.map((g) => ({
+      key: g.key,
+      name: baseName(g.list[0]),
+      layers: !!g.list[0].group,
+      items: g.list.map((s) => ({ id: s.id, title: titles[s.id], state: tabs[s.id], banner: banners[s.id], rename: !s.guest })),
+    })),
+  );
+
+  // Titles for tabs in groups: claude's /resume data of the project folder, matched by the session id the mod reports.
+  async function pollTitles() {
+    for (const g of tabGroups.filter((g) => g.list.length > 1 && !g.list[0].guest)) {
+      const list = await invoke<Past[]>("claude_sessions", { cwd: g.list[0].repo.path }).catch(() => null);
+      if (!list) continue;
+      const by = new Map(list.map((p) => [p.sid, p.title]));
+      for (const s of g.list) {
+        const sid = panels[s.id]?.sid;
+        const title = (sid && by.get(sid)) || undefined;
+        if (titles[s.id] === title) continue;
+        if (title) titles[s.id] = title;
+        else delete titles[s.id];
+      }
+    }
+  }
+  onMount(() => {
+    const timer = setInterval(pollTitles, 4000);
+    return () => clearInterval(timer);
+  });
+  // A project just got its second tab: titles right away, not only on the next round.
+  $effect(() => {
+    void tabGroups.filter((g) => g.list.length > 1).length;
+    untrack(pollTitles);
+  });
+
+  /** Earlier session from the Verlauf: a new tab with claude --resume (it joins the project's group), or /resume here. */
+  function resumeSession(sid: string, here: boolean) {
+    const cur = activeSession;
+    if (!cur) return;
+    if (here) return void typeCommand(cur.id, "resume", sid).catch((e) => (notice = String(e)));
+    const s = { id: crypto.randomUUID(), repo: cur.repo, group: cur.group, dirs: cur.dirs, resume: sid };
+    sessions.push(s);
+    active = s.id;
+  }
+  /** /rename in that session; claude keeps the name (also for /resume). Shown at once, confirmed by the next poll. */
+  function renameSession(id: string, name: string) {
+    titles[id] = name;
+    typeCommand(id, "rename", name).catch((e) => (notice = String(e)));
+  }
 
   /** Editor-Ansicht fuer das Projekt; Terminal laeuft weiter, ungespeicherte Puffer bleiben beim Wechsel erhalten. */
   async function openEdit(repo?: Repo) {
@@ -1122,7 +1175,9 @@
     if (await confirm(t("Ein laufender claude-Prozess wird abgebrochen."), t("Beenden"), t("Sitzung beenden?"))) closeSession(id);
   }
 
-  const forget = (id: string) => (delete tabs[id], delete modes[id], delete efforts[id], delete banners[id], delete panels[id], delete shares[id]);
+  const forget = (id: string) => (
+    delete tabs[id], delete modes[id], delete efforts[id], delete banners[id], delete panels[id], delete shares[id], delete titles[id]
+  );
 
   /** Geteilter Sitzung beitreten: eigener Tab, das Terminal verbindet sich zum Host. */
   async function join(ticket: string) {
@@ -1139,7 +1194,7 @@
     forget(id);
     sessions = sessions.filter((s) => s.id !== id);
     // Wie bei Tabs ueblich zur letzten verbliebenen Session, erst ohne Session zurueck zur Liste.
-    if (active === id) sessions.length ? (active = sessions.at(-1)!.id) : back();
+    if (active === id) sessions.length ? (active = tabGroups.flatMap((g) => g.list).at(-1)!.id) : back();
   }
 
   // Esc gehoert offenen Dialogen/Menues. Die schliessen schon vor onKey, daher hier vorher nachsehen.
@@ -1390,49 +1445,7 @@
   <Notice bind:text={ide.notice} kind="note" timeout={3000} />
   <!-- Session tabs at the top in every view (also the start page), from the first session on. -->
   {#if sessions.length}
-    <div class="bg-chrome border-border text-ui flex shrink-0 gap-px overflow-x-auto border-b px-1" role="tablist" aria-label={t("Sitzungen")}>
-      {#each sessions as s (s.id)}
-        {@const on = s.id === active}
-        <ContextMenu.Root>
-        <ContextMenu.Trigger
-          class="group flex shrink-0 items-center gap-1 rounded-t px-2 py-1 {on
-            ? 'bg-background text-foreground shadow-[inset_0_-2px_0_var(--primary)]'
-            : 'text-muted-foreground hover:text-foreground'}"
-          onmousedown={(e: MouseEvent) => e.button === 1 && e.preventDefault()}
-          onauxclick={(e: MouseEvent) => e.button === 1 && endSession(s.id)}
-        >
-          <!-- Middle click closes like the x (mousedown preventDefault: no autoscroll on Windows). -->
-          <!-- Negative margins: the button covers the whole tab (incl. the underline), the label stays in place. -->
-          <TextButton
-            tone="plain"
-            class="-my-1 -mr-1 -ml-2 block py-1 pr-1 pl-2"
-            role="tab"
-            aria-selected={on}
-            onclick={() => openSessionTab(s.id)}
-          >
-            {#if tabs[s.id]}{@const [i, c, tip] = TAB[tabs[s.id]!]}<span class="mr-1 {c}" title={tip}>{i}</span>{/if}{#if s.group}<LayersIcon
-                class="text-primary mr-1 inline size-3"
-              />{/if}{label(s)}{#if banners[s.id]}<span
-                class="text-warning ml-1.5 inline-block max-w-80 truncate align-bottom"
-                title={banners[s.id]}>{banners[s.id]}</span
-              >{/if}
-          </TextButton>
-          <IconButton
-            size="xs"
-            tone="danger"
-            reveal={!on}
-            onclick={() => endSession(s.id)}
-            label={t("Sitzung beenden")}><XIcon class="size-3" /></IconButton
-          >
-        </ContextMenu.Trigger>
-        <ContextMenu.Portal>
-          <ContextMenu.Content class={cn(menuContent, "min-w-44 rounded-lg shadow-lg")}>
-            <ContextItem label={t("Sitzung beenden …")} destructive onSelect={() => endSession(s.id)} />
-          </ContextMenu.Content>
-        </ContextMenu.Portal>
-        </ContextMenu.Root>
-      {/each}
-    </div>
+    <SessionTabs groups={tabView} {active} onopen={openSessionTab} onend={endSession} onrename={renameSession} onreorder={(ids) => (order = ids)} />
   {/if}
   <Command.Root
     shouldFilter={false}
@@ -1763,6 +1776,7 @@
           id={s.id}
           cwd={s.repo.path}
           dirs={s.dirs}
+          resume={s.resume}
           guest={s.guest}
           onguest={(cwd) => (s.host = cwd)}
           visible={s.id === active}
@@ -1780,7 +1794,22 @@
     {#if side && activeSession && view === "term"}
       <Splitter bind:size={sideW} invert min={260} max={720} key="term.side" />
       <div class="min-h-0 shrink-0 py-2 pr-2" style="width:{sideW}px; max-width:max(260px, 40%)">
-        <ActivityPanel cwd={activeSession.host ?? activeSession.repo.path} id={activeSession.id} guest={!!activeSession.guest} />
+        <!-- Verlauf: every tab in this folder counts as open, also those of a repo group starting here. -->
+        <ActivityPanel
+          cwd={activeSession.host ?? activeSession.repo.path}
+          id={activeSession.id}
+          guest={!!activeSession.guest}
+          history={activeSession.guest
+            ? undefined
+            : {
+                open: tabGroups
+                  .flatMap((g) => g.list)
+                  .filter((s) => !s.guest && s.repo.path === activeSession.repo.path)
+                  .map((s) => ({ id: s.id, sid: panels[s.id]?.sid, state: tabs[s.id] })),
+                onopen: openSessionTab,
+                onresume: resumeSession,
+              }}
+        />
       </div>
     {/if}
   </div>

@@ -158,7 +158,8 @@ test('befehle aus der app', async ($, on) => {
   on('session.model', () => ({ value: model }) as never)
   on('store.get', () => ({ value: true }) as never)
   on('store.set', () => ({ value: undefined }) as never)
-  on('session.id', () => ({ value: 's1' }) as never)
+  let sid = 's1'
+  on('session.id', () => ({ value: sid }) as never)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never)
   // Zweiter Start im selben Prozess legt keine zweiten Timer an
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true } as never)
@@ -185,7 +186,19 @@ test('befehle aus der app', async ($, on) => {
   await clock.advance(500)
   expect(fills).toEqual(['/mcp'])
   expect(JSON.parse(w.at(-1)!.text).filled).toBe(4)
+  // /resume and /rename with their argument, the same way
+  cmd = JSON.stringify({ at: 6, command: 'resume', args: 'ab-12' })
+  await clock.advance(500)
+  cmd = JSON.stringify({ at: 7, command: 'rename', args: 'Folding' })
+  await clock.advance(500)
+  expect(fills).toEqual(['/mcp', '/resume ab-12', '/rename Folding'])
+  expect(JSON.parse(w.at(-1)!.text).filled).toBe(7)
   expect(runs).toHaveLength(3)
+  // /resume switched the session in this process: the panel follows the new id without a session.start
+  expect(JSON.parse(w.at(-1)!.text).sid).toBe('s1')
+  sid = 's2'
+  await clock.advance(1000)
+  expect(JSON.parse(w.at(-1)!.text).sid).toBe('s2')
 })
 
 test('panel-pfad aus dem store nach reload', async ($, on) => {

@@ -3,6 +3,8 @@
 
   // Subset of the mod's session panel (claude_panel), see src-tauri/mods/atelier/types/index.d.ts.
   export type Panel = {
+    /** claude's session id; changes with /clear and /resume. */
+    sid?: string;
     context?: { tokens: number | null; window: number; percent: number | null };
     active?: { tool: string; target: string; state: string }[];
     todos?: { content: string; status: string }[];

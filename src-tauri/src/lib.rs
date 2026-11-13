@@ -41,6 +41,8 @@ pub use awake::lid_guard;
 mod preview;
 mod deps;
 mod activity;
+// Sitzungen eines Projekts wie /resume (Verlauf im Panel, Tab-Titel).
+mod history;
 mod images;
 mod accounts;
 mod workflows;
@@ -923,6 +925,7 @@ pub fn run() {
             activity::claude_image,
             activity::claude_thumb,
             activity::claude_agent_log,
+            history::claude_sessions,
             workflows::workflows_list,
             workflows::workflows_save,
             workflows::workflows_delete,

@@ -39,10 +39,13 @@
     onfile,
     guest,
     onguest,
+    resume,
   }: {
     id: string;
     cwd: string;
     dirs?: string[];
+    /** Earlier session to continue (claude --resume), from the Verlauf panel. */
+    resume?: string;
     visible: boolean;
     onexit: () => void;
     onmode?: (mode: string) => void;
@@ -403,7 +406,7 @@
         onguest?.(h.cwd);
       });
     Promise.all(unlisten)
-      .then(() => (dead ? undefined : guest ? join(guest) : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, out })))
+      .then(() => (dead ? undefined : guest ? join(guest) : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, resume, out })))
       .then(() => {
         if (dead) return invoke("pty_close", { id });
         sent = `${cols}x${rows}`;

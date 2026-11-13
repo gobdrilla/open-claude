@@ -185,6 +185,16 @@ export const brainHint = (t: BrainTurn, tool: string, input: Record<string, unkn
   return null
 }
 
+const FILL = new Set(['mcp', 'resume', 'rename'])
+// /resume and /clear switch the session inside the same process without a new session.start: the app matches tab
+// titles and the activity panel by this id, so follow it.
+let lastSid = ''
+const followSid = async ($: EngineInterface) => {
+  const id = await $.session.id().catch(() => '')
+  if (!id || id === lastSid) return
+  lastSid = id
+  await put($, s => (s.sid === id ? s : { ...s, sid: id }))
+}
 let lastCmd: number | undefined
 const pollCmd = async ($: EngineInterface) => {
   if (!file) return
@@ -197,9 +207,10 @@ const pollCmd = async ($: EngineInterface) => {
   lastCmd = c?.at ?? 0
   if (first || !c) return
   // Dialog-Befehle wie /mcp oeffnen per command.run nichts: ins leere Eingabefeld setzen, Enter drueckt die App.
-  if (c.command === 'mcp') {
-    if ((await $.prompt.read()).text.trim()) return $.ui.toast('Erst die Eingabe leeren, dann MCP')
-    const { isFilled } = await $.prompt.fill({ text: `/${c.command}` })
+  // /resume and /rename from the tab strip and the Verlauf panel go the same way, exactly as if typed.
+  if (FILL.has(c.command)) {
+    if ((await $.prompt.read()).text.trim()) return $.ui.toast(`Erst die Eingabe leeren, dann /${c.command}`)
+    const { isFilled } = await $.prompt.fill({ text: `/${c.command}${c.args ? ` ${c.args}` : ''}` })
     if (isFilled) await put($, s => ({ ...s, filled: c.at }))
     return
   }
@@ -234,7 +245,7 @@ export const register: Register = on => {
     await put($, s => ({
       ...(s.startedAt === usage.startedAt ? s : fresh(usage.startedAt)),
       // App ordnet das Aktivitaets-Panel per SID zu (mehrere Sitzungen im selben Projekt)
-      sid: id,
+      sid: (lastSid = id),
       context: { tokens: usage.context.tokens ?? null, window: usage.context.window, percent: usage.context.percent ?? null },
       limits: limitsOf(usage.rateLimits),
       cost: usage.cost?.usd ?? null,
@@ -244,6 +255,7 @@ export const register: Register = on => {
     if (!timers) {
       timers = true
       $.clock.every(500, () => pollCmd($))
+      $.clock.every(1000, () => followSid($))
       $.clock.every(30_000, async () => {
         $.ui.invalidate('ui.render')
         if (!(await read($, panel)).busy) return

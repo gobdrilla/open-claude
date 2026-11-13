@@ -9,6 +9,7 @@
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import { Button, Select } from "$lib/atelier-ui";
   import { MODES } from "$lib/claudemode";
+  import { typeCommand } from "$lib/claudecmd";
   import { t } from "$lib/i18n";
 
   // Steuert claude im Terminal: Slash-Commands gehen ueber die atelier-Mod (claude_command), der Modus per Umschalt+Tab.
@@ -85,16 +86,12 @@
       (e) => ((error = String(e)), 0),
     );
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const panelOf = () => invoke<{ filled?: number } | null>("claude_panel", { id }).catch(() => null);
 
-  // Die Mod setzt /mcp nur ins leere Eingabefeld und meldet das per filled; dann hier Enter.
-  async function mcp() {
-    const at = await run("mcp");
-    for (let i = 0; at && i < 20; i++) {
-      await sleep(150);
-      if ((await panelOf())?.filled === at) return invoke("pty_write", { id, data: "\r" });
-    }
-  }
+  // Die Mod setzt /mcp nur ins leere Eingabefeld und meldet das per filled; dann Enter.
+  const mcp = () => typeCommand(id, "mcp").then(
+    () => (error = ""),
+    (e) => (error = String(e)),
+  );
 
   // Ein Modus laesst sich nur per Umschalt+Tab weiterschalten: so oft, bis die Fusszeile ihn zeigt.
   let cycling = false;

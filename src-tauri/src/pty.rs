@@ -119,14 +119,18 @@ pub(crate) const UNIX_SHELL: &str = if cfg!(target_os = "macos") { "/bin/zsh" } 
 /// das Terminal nur weitere claude-Befehle an. Unix ueber $SHELL als Login-Shell (PATH, Env), Pfad in $OCUI_SH.
 /// Ohne ocui-sh nur claude selbst, danach endet das Terminal (Windows ueber Git-Bash, pwsh, cmd).
 /// `settings`: claude bekommt `--settings` aus $OPEN_CLAUDE_SETTINGS (Shell expandiert, kein Quoting).
+/// `resume`: earlier session to continue (`--resume`); only hex and `-` (checked in pty_open), safe in every shell.
+/// ocui-sh reads it from $OPEN_CLAUDE_RESUME itself.
 fn shell(
     windows: bool,
     own: &str,
     settings: bool,
+    resume: Option<&str>,
     env: impl Fn(&str) -> Option<String>,
     exists: impl Fn(&str) -> bool,
 ) -> (String, Vec<String>) {
-    let claude = if settings { "claude --settings \"$OPEN_CLAUDE_SETTINGS\"" } else { "claude" };
+    let tail = resume.map(|r| format!(" --resume {r}")).unwrap_or_default();
+    let claude = format!("{}{tail}", if settings { "claude --settings \"$OPEN_CLAUDE_SETTINGS\"" } else { "claude" });
     if !windows {
         let sh = env("SHELL")
             .filter(|s| !s.trim().is_empty())
@@ -168,10 +172,10 @@ fn shell(
 
     if let Some(pwsh) = on_path("pwsh.exe") {
         let claude = if settings { "claude --settings $env:OPEN_CLAUDE_SETTINGS" } else { "claude" };
-        return (pwsh, vec!["-Command".into(), claude.into()]);
+        return (pwsh, vec!["-Command".into(), format!("{claude}{tail}")]);
     }
     // ponytail: cmd ohne --settings (Pfad mit Leerzeichen nicht sauber quotebar), Theme bleibt dann wie gewaehlt.
-    ("cmd.exe".into(), vec!["/c".into(), "claude".into()])
+    ("cmd.exe".into(), vec!["/c".into(), format!("claude{tail}")])
 }
 
 #[tauri::command]
@@ -186,8 +190,14 @@ pub fn pty_open(
     rows: u16,
     theme: String,
     dirs: Option<Vec<String>>,
+    resume: Option<String>,
     out: Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
+    // Session id from the Verlauf panel: never let anything else reach the command line.
+    let resume = resume.filter(|r| !r.is_empty());
+    if resume.as_ref().is_some_and(|r| !r.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')) {
+        return Err(tr!("Ungueltige Sitzung", "Invalid session"));
+    }
     // Repo-Gruppe: weitere Repos, die claude neben cwd kennt und bearbeiten darf. Nur vorhandene Ordner.
     let extra: Vec<String> = dirs
         .unwrap_or_default()
@@ -202,7 +212,7 @@ pub fn pty_open(
         .unwrap_or_default();
     let settings = session_settings(&app, &theme, &extra).map(|p| p.to_string_lossy().into_owned());
     let (program, args) =
-        shell(cfg!(windows), &own, settings.is_some(), |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
+        shell(cfg!(windows), &own, settings.is_some(), resume.as_deref(), |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
     let dirs = mod_dirs(&app);
     // Ordner vorher sicher anlegen; geht das nicht (fremder Besitzer), laeuft die Sitzung ohne Panel.
     let panel = crate::activity::ensure_panel_dir()
@@ -216,6 +226,9 @@ pub fn pty_open(
     }
     if let Some(s) = &settings {
         env.push(("OPEN_CLAUDE_SETTINGS", s));
+    }
+    if let Some(r) = &resume {
+        env.push(("OPEN_CLAUDE_RESUME", r));
     }
     // Unix: the login shell execs ocui-sh from here (see shell).
     env.push(("OCUI_SH", &own));
@@ -1338,6 +1351,7 @@ mod tests {
             windows,
             OWN,
             false,
+            None,
             |k| env.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string()),
             |p| files.contains(&p),
         )
@@ -1400,9 +1414,13 @@ mod tests {
 
     #[test]
     fn settings_nur_mit_flag() {
-        let s = |w| shell(w, OWN, true, |k| (k == "SHELL").then(|| "/bin/fish".into()), |p| p == "C:\\ps\\pwsh.exe" || p == OWN);
-        let fallback = shell(false, OWN, true, |k| (k == "SHELL").then(|| "/bin/fish".into()), |_| false);
+        let s = |w| shell(w, OWN, true, None, |k| (k == "SHELL").then(|| "/bin/fish".into()), |p| p == "C:\\ps\\pwsh.exe" || p == OWN);
+        let fallback = shell(false, OWN, true, None, |k| (k == "SHELL").then(|| "/bin/fish".into()), |_| false);
         assert_eq!(fallback.1, ["-lic", "exec claude --settings \"$OPEN_CLAUDE_SETTINGS\""]);
+        let resumed = shell(false, OWN, true, Some("ab-12"), |_| None, |_| false);
+        assert_eq!(resumed.1, ["-lic", "exec claude --settings \"$OPEN_CLAUDE_SETTINGS\" --resume ab-12"]);
+        let cmd = shell(true, OWN, false, Some("ab-12"), |_| None, |_| false);
+        assert_eq!(cmd.1, ["/c", "claude --resume ab-12"]);
         // ocui-sh liest die Env selbst.
         assert_eq!(s(true).0, OWN);
     }
