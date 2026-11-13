@@ -75,6 +75,40 @@ fn tail(path: &Path, len: u64) -> Tail {
     out
 }
 
+/// sessions/<pid>.json stays behind when claude is killed hard (Windows: taskkill /F when a tab closes), so the
+/// file alone does not mean it runs.
+// shortcut: a reused pid counts as running; compare procStart with the process start time if that shows up.
+#[cfg(windows)]
+fn alive(pid: u32) -> bool {
+    use std::ffi::c_void;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn GetExitCodeProcess(h: *mut c_void, code: *mut u32) -> i32;
+        fn CloseHandle(h: *mut c_void) -> i32;
+    }
+    const QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+    // SAFETY: plain Win32 calls; the handle is closed before returning.
+    unsafe {
+        let h = OpenProcess(QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return false;
+        }
+        let mut code = 0;
+        let running = GetExitCodeProcess(h, &mut code) != 0 && code == STILL_ACTIVE;
+        CloseHandle(h);
+        running
+    }
+}
+
+#[cfg(unix)]
+fn alive(pid: u32) -> bool {
+    let Ok(pid) = i32::try_from(pid) else { return false };
+    // SAFETY: signal 0 only checks that the process exists.
+    unsafe { libc::kill(pid, 0) == 0 } || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
 fn same_cwd(a: &str, b: &str) -> bool {
     // Windows: spelling can differ from the realpath (c:\dev vs C:\Dev)
     if cfg!(windows) { a.eq_ignore_ascii_case(b) } else { a == b }
@@ -90,6 +124,7 @@ fn list(c: &Path, cwd: &str) -> Vec<Past> {
         .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
         .filter_map(|e| serde_json::from_str::<Value>(&fs::read_to_string(e.path()).ok()?).ok())
         .filter(|v| same_cwd(str_of(v, "cwd"), cwd))
+        .filter(|v| v.get("pid").and_then(Value::as_u64).and_then(|p| u32::try_from(p).ok()).is_none_or(alive))
         .map(|v| str_of(&v, "sessionId").to_string())
         .collect();
     let mut files: Vec<(u64, u64, PathBuf, String)> = fs::read_dir(c.join("projects").join(slug(cwd)))
@@ -170,8 +205,11 @@ mod tests {
         fs::write(p.join("../evil.jsonl"), "").unwrap();
         // The process name survives /resume into another session: never taken as the title.
         fs::write(c.join("sessions/1.json"), r#"{"sessionId":"dd","cwd":"/w/p","name":"Alter Name","nameSource":"user"}"#).unwrap();
-        fs::write(c.join("sessions/2.json"), r#"{"sessionId":"bb","cwd":"/w/p","name":"p-f6","nameSource":"derived"}"#).unwrap();
+        let me = std::process::id();
+        fs::write(c.join("sessions/2.json"), format!(r#"{{"sessionId":"bb","cwd":"/w/p","pid":{me},"name":"p-f6","nameSource":"derived"}}"#)).unwrap();
         fs::write(c.join("sessions/3.json"), r#"{"sessionId":"aa","cwd":"/anders","name":"X","nameSource":"user"}"#).unwrap();
+        // Killed hard, file left behind: not running.
+        fs::write(c.join("sessions/4.json"), r#"{"sessionId":"aa","cwd":"/w/p","pid":2147483632}"#).unwrap();
 
         let mut l = list(&c, "/w/p");
         l.sort_by(|a, b| a.sid.cmp(&b.sid));
