@@ -1,4 +1,4 @@
-// OKLCH math for the theme editor: sRGB gamut mapping, hex conversion and WCAG 2 contrast.
+// OKLCH math for the theme editor: sRGB as displayed, hex conversion and WCAG 2 contrast.
 // Matrices from Björn Ottosson's OKLab definition.
 
 export type Oklch = { l: number; c: number; h: number };
@@ -19,28 +19,17 @@ function linear({ l, c, h }: Oklch): Rgb {
   ];
 }
 
-const inside = (rgb: Rgb) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const gamma = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
 const ungamma = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 
-/** Into the sRGB gamut by lowering chroma at constant L and h (CSS Color 4 style, without the JND shortcut). */
-export function toGamut(col: Oklch): Oklch {
-  const c0 = { l: clamp01(col.l), c: Math.max(0, col.c), h: col.h };
-  if (inside(linear(c0))) return c0;
-  let lo = 0;
-  let hi = c0.c;
-  for (let i = 0; i < 20; i++) {
-    const mid = (lo + hi) / 2;
-    if (inside(linear({ ...c0, c: mid }))) lo = mid;
-    else hi = mid;
-  }
-  return { ...c0, c: lo };
-}
+/** sRGB as the webview shows it: out-of-gamut channels are clipped (WebKit, Chromium), not mapped in by chroma.
+ *  Otherwise a saturated accent renders pure red while its hex says salmon. */
+const shown = (col: Oklch): Rgb => linear(col).map(clamp01) as Rgb;
 
 /** Relative luminance (WCAG 2) of the color as displayed. */
 export function luminance(col: Oklch): number {
-  const [r, g, b] = linear(toGamut(col)).map(clamp01);
+  const [r, g, b] = shown(col);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
@@ -55,7 +44,7 @@ const encode = (v: number) => Math.round(255 * gamma(clamp01(v)));
 
 /** "#rrggbb", or "#rrggbbaa" with alpha 0..1. */
 export function hex(col: Oklch, alpha?: number): string {
-  const parts = linear(toGamut(col)).map(encode);
+  const parts = shown(col).map(encode);
   if (alpha !== undefined) parts.push(Math.round(clamp01(alpha) * 255));
   return "#" + parts.map((v) => v.toString(16).padStart(2, "0")).join("");
 }
@@ -70,8 +59,8 @@ export function fromHex(s: string): Oklch | undefined {
 
 /** `top` with opacity `alpha` (0..1) over `bottom`, blended in gamma-encoded sRGB like browsers composite. */
 export function over(top: Oklch, alpha: number, bottom: Oklch): Oklch {
-  const t = linear(toGamut(top)).map((v) => gamma(clamp01(v)));
-  const b = linear(toGamut(bottom)).map((v) => gamma(clamp01(v)));
+  const t = shown(top).map(gamma);
+  const b = shown(bottom).map(gamma);
   const a = clamp01(alpha);
   return fromLinear(t.map((v, i) => ungamma(v * a + b[i] * (1 - a))) as Rgb);
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { contrast, fit, fromHex, hex, over, toGamut } from "./color.ts";
+import { contrast, fit, fromHex, hex, over } from "./color.ts";
 import { DEFAULTS, PRESETS, TOKENS, blankTheme, derive, gradientCss, origin, parseTheme, terminalColors, themeCss } from "./themes.ts";
 
 test("color: hex round trip and WCAG extremes", () => {
@@ -11,10 +11,9 @@ test("color: hex round trip and WCAG extremes", () => {
   assert.equal(hex({ l: 0.5, c: 0, h: 0 }, 0.25).length, 9);
 });
 
-test("color: out-of-gamut colors map in by chroma, keeping lightness", () => {
-  const g = toGamut({ l: 0.7, c: 0.4, h: 150 });
-  assert.ok(g.c < 0.4 && g.c > 0.1);
-  assert.equal(g.l, 0.7);
+test("color: out-of-gamut colors show as the webview clips them", () => {
+  // The old slider allowed this accent; WebKit draws it as rgb(255, 0, 0).
+  assert.equal(hex({ l: 0.72, c: 0.37, h: 29 }), "#ff0000");
 });
 
 test("color: fit moves just far enough, in the right direction", () => {
