@@ -135,7 +135,7 @@ export default {
   "Klick in der App auf eine Stelle, um ihre Farbe hier zu öffnen. Esc beendet die Auswahl.": "Click a spot in the app to open its color here. Esc ends picking.",
   "„{name}“ ist eingebaut. Die erste Änderung legt eine Kopie an.": "“{name}” is built in. The first change creates a copy.",
   "Wird sofort gespeichert": "Saved right away",
-  "Rückgängig (Strg+Z)": "Undo (Ctrl+Z)",
+  "Rückgängig ({key})": "Undo ({key})",
   Fertig: "Done",
   "Verläufe und Effekte": "Gradients and effects",
   Schimmer: "Glow",

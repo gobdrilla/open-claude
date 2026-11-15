@@ -5,6 +5,7 @@
   import XIcon from "@lucide/svelte/icons/x";
   import { theme, setMode } from "$lib/theme.svelte";
   import { t } from "$lib/i18n";
+  import { MOD } from "$lib/editor.logic";
   import { css, hex } from "$lib/color";
   import { DEFAULTS, TOKENS, derive, isPreset, type ColorId } from "$lib/themes";
   import { canUndo, current, themeEditor, undoTheme } from "$lib/themes.svelte";
@@ -188,7 +189,7 @@
     </div>
     <div class="border-border flex shrink-0 items-center gap-1.5 border-t px-3 py-2">
       <span class="text-muted-foreground text-meta flex-1">{t("Wird sofort gespeichert")}</span>
-      <Button variant="ghost" size="sm" disabled={!canUndo()} title={t("Rückgängig (Strg+Z)")} onclick={undoTheme}><Undo2Icon class="size-3.5" />{t("Rückgängig")}</Button>
+      <Button variant="ghost" size="sm" disabled={!canUndo()} title={t("Rückgängig ({key})", { key: `${MOD}+Z` })} onclick={undoTheme}><Undo2Icon class="size-3.5" />{t("Rückgängig")}</Button>
       <Button size="sm" onclick={close}>{t("Fertig")}</Button>
     </div>
   </aside>
