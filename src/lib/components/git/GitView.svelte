@@ -370,7 +370,8 @@
 <div class="flex h-full min-h-0 flex-col gap-2 p-2 text-ui">
   <div class="bg-card glow ring-foreground/5 rounded-xl shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 flex items-center gap-0.5 px-2 py-1.5">
     {#if status}
-      <div class="mr-3 flex min-w-0 items-center gap-2.5" title={status.upstream ?? t("Kein Upstream")}>
+      <!-- min-w-8: when narrow (e.g. theme editor open) only the text truncates, the icon never slides under Fetch. -->
+      <div class="mr-3 flex min-w-8 items-center gap-2.5 overflow-hidden" title={status.upstream ?? t("Kein Upstream")}>
         <div
           class="from-primary to-[var(--primary-2,color-mix(in_oklab,var(--primary)_50%,transparent))] text-primary-foreground shadow-primary/30 grid size-8 shrink-0 place-items-center rounded-lg bg-linear-to-br shadow-md"
         >
