@@ -2,6 +2,8 @@
 //! HTTP on 127.0.0.1 with a random port and token, both in <temp>/ocui-dev-bridge.json (0600).
 //! POST /eval: the body is the body of an async JS function, run in the main webview; its return value comes back as JSON.
 //! POST /size?w=&h=: logical window size.
+//! POST /shot: PNG of the main webview as base64, rendered by the engine itself (no focus, works while covered).
+//! Windows only (WebView2 CapturePreview); macOS uses screencapture in scripts/ui.mjs.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -130,12 +132,84 @@ async fn conn(mut s: TcpStream, app: &AppHandle, token: &str) -> std::io::Result
         ("200 OK", json!({ "ok": r.is_ok(), "value": r.err() }))
     } else if target == "/eval" {
         ("200 OK", eval(app, &body).await)
+    } else if target == "/shot" {
+        ("200 OK", shot(app).await)
     } else {
-        ("404 Not Found", json!({ "ok": false, "value": "POST /eval or /size" }))
+        ("404 Not Found", json!({ "ok": false, "value": "POST /eval, /size or /shot" }))
     };
     let text = out.to_string();
     let res = format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}", text.len());
     s.write_all(res.as_bytes()).await
+}
+
+type Png = oneshot::Sender<Result<Vec<u8>, String>>;
+
+async fn shot(app: &AppHandle) -> Value {
+    let Some(w) = app.get_webview_window("main") else { return json!({ "ok": false, "value": "no main window" }) };
+    let (tx, rx) = oneshot::channel();
+    let r = match capture(&w, tx) {
+        Ok(()) => tokio::time::timeout(Duration::from_secs(30), rx).await.map_err(|_| "timeout (30 s)".to_string()).and_then(|r| r.map_err(|_| "capture dropped".to_string())).and_then(|r| r),
+        Err(e) => Err(e),
+    };
+    match r {
+        Ok(png) => {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            json!({ "ok": true, "value": STANDARD.encode(png) })
+        }
+        Err(e) => json!({ "ok": false, "value": e }),
+    }
+}
+
+/// WebView2 renders the page into a PNG stream; works while other windows cover the app, not while minimized.
+#[cfg(windows)]
+fn capture(w: &tauri::WebviewWindow, tx: Png) -> Result<(), String> {
+    let tx = std::sync::Arc::new(Mutex::new(Some(tx)));
+    let send = move |r: Result<Vec<u8>, String>| {
+        if let Some(tx) = tx.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = tx.send(r);
+        }
+    };
+    w.with_webview(move |wv| unsafe {
+        use webview2_com::CapturePreviewCompletedHandler;
+        use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG;
+        use windows::Win32::Foundation::HGLOBAL;
+        use windows::Win32::System::Com::StructuredStorage::{CreateStreamOnHGlobal, GetHGlobalFromStream};
+        use windows::Win32::System::Com::STREAM_SEEK_CUR;
+        use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+        let done = send.clone();
+        let start = || -> windows::core::Result<()> {
+            let core = wv.controller().CoreWebView2()?;
+            let stream = CreateStreamOnHGlobal(HGLOBAL::default(), true)?;
+            let out = stream.clone();
+            let handler = CapturePreviewCompletedHandler::create(Box::new(move |r| {
+                let png = r.and_then(|()| {
+                    // The stream position is the PNG's length (the HGLOBAL may be larger).
+                    let mut len = 0u64;
+                    out.Seek(0, STREAM_SEEK_CUR, Some(&mut len))?;
+                    let h = GetHGlobalFromStream(&out)?;
+                    let p = GlobalLock(h) as *const u8;
+                    if p.is_null() {
+                        return Err(windows::core::Error::from_thread());
+                    }
+                    let v = std::slice::from_raw_parts(p, len as usize).to_vec();
+                    let _ = GlobalUnlock(h);
+                    Ok(v)
+                });
+                done(png.map_err(|e| e.to_string()));
+                Ok(())
+            }));
+            core.CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, &stream, &handler)
+        };
+        if let Err(e) = start() {
+            send(Err(e.to_string()));
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+fn capture(_: &tauri::WebviewWindow, _: Png) -> Result<(), String> {
+    Err("shot via the bridge: Windows only (macOS: scripts/ui.mjs uses screencapture)".into())
 }
 
 async fn eval(app: &AppHandle, body: &str) -> Value {

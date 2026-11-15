@@ -50,6 +50,9 @@ iroh = "1.4"
 # keyring ohne Plattform-Feature haelt den Token nur im RAM, darum je Ziel ein echter Speicher
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+# Dev bridge screenshot via WebView2 CapturePreview (src/devbridge.rs); same versions as wry, already in the lock
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Memory"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }

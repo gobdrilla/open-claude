@@ -33,7 +33,7 @@ node scripts/ui.mjs snap -- click "label=Settings" -- wait "[role=dialog]" -- sn
 | `press <taste> [ziel]` | `Enter`, `Escape`, `Mod+k` (Mod = Cmd/Ctrl); auf das fokussierte Element oder `ziel` |
 | `wait` / `gone <ziel> [ms]` | wartet, bis das Ziel da bzw. weg ist (Standard 5000 ms) |
 | `text <ziel>` | sichtbarer Text; CodeMirror: ganzes Dokument; Terminal: ganzer Puffer |
-| `shot <datei.png>` | Screenshot nur des App-Fensters (macOS, `screencapture -l`), auch wenn es verdeckt ist. Danach mit Read ansehen. |
+| `shot <datei.png>` | Screenshot nur des App-Inhalts, auch wenn das Fenster verdeckt ist, ohne Fokus (macOS: `screencapture -l`; Windows: WebView2 rendert ihn über die Dev-Bridge, nicht bei minimiertem Fenster). Datei in den Scratchpad legen, danach mit Read ansehen. |
 | `eval <js>` | Rumpf einer async-Funktion im Webview, `return` liefert JSON |
 | `size <w> <h>`, `reload`, `sleep <ms>` | Fenstergröße, Seite neu laden, warten |
 

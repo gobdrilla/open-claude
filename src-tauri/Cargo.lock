@@ -4052,6 +4052,8 @@ dependencies = [
  "trash",
  "walkdir",
  "webkit2gtk",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]

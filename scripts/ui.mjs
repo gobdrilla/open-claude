@@ -8,7 +8,7 @@
 //   reload, sleep <ms>.
 // Text escapes in fill/type/term: \n \r \t \e (Escape). Keys: Enter, Escape, Mod+k (Mod = Cmd on macOS, Ctrl elsewhere).
 import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -369,8 +369,9 @@ async function run({ cmd, args }) {
   if (cmd === "size") return post(`/size?w=${args[0]}&h=${args[1]}`).then(() => "ok");
   if (cmd === "sleep") return new Promise((r) => setTimeout(() => r("ok"), Number(args[0])));
   if (cmd === "shot") {
-    if (process.platform !== "darwin") throw new Error("shot: macOS only so far");
-    execFileSync("screencapture", ["-x", "-o", "-l", windowId(B.pid), args[0]]);
+    if (process.platform === "darwin") execFileSync("screencapture", ["-x", "-o", "-l", windowId(B.pid), args[0]]);
+    // Windows: the bridge renders the webview to PNG (WebView2 CapturePreview), no focus needed, works while covered.
+    else writeFileSync(args[0], Buffer.from(await post("/shot"), "base64"));
     return args[0];
   }
   if (cmd === "reload") {
