@@ -13,7 +13,7 @@
   // Ziehen laeuft ueber Pointer-Events; HTML5-Drag-and-drop geht in WebView2 nicht, solange Tauris Drop-Handler an ist.
   import type { Snippet } from "svelte";
   import Splitter from "$lib/components/Splitter.svelte";
-  import { activate, edgeAt, groupOf, moveTab, resize, splitAt, type Edge, type Group, type Layout, type Node, type PanelId } from "$lib/dock";
+  import { FILES, activate, edgeAt, groupOf, moveTab, panelPath, resize, splitAt, type Edge, type Group, type Layout, type Node, type PanelId } from "$lib/dock";
 
   let {
     layout,
@@ -145,6 +145,9 @@
     } else return;
     e.preventDefault();
   }
+
+  /** Theme area of a group (own color for the file tree and file tabs, themes.ts EXTRA); the rest uses the panel color. */
+  const areaOf = (active: PanelId | null): "files" | "editor" | "card" => (active === FILES ? "files" : active && panelPath(active) ? "editor" : "card");
 </script>
 
 <svelte:window
@@ -184,7 +187,8 @@
     <!-- Aeusseres div bleibt Split-Kind (pair() misst es samt Abstand), die Karte liegt darin. -->
     <div class="flex min-h-0 min-w-0 flex-col p-1" style="flex:{grow} 1 0">
       <div
-        class="bg-card glow ring-foreground/5 focus-within:ring-primary/30 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg shadow-sm ring-1 shadow-black/5 transition-shadow dark:shadow-black/20"
+        data-theme-area={areaOf(n.active)}
+        class="{{ files: 'bg-files', editor: 'bg-editor', card: 'bg-card' }[areaOf(n.active)]} glow ring-foreground/5 focus-within:ring-primary/30 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg shadow-sm ring-1 shadow-black/5 transition-shadow dark:shadow-black/20"
       >
         <div
           data-bar={n.id}

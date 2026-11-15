@@ -1,6 +1,6 @@
 // Active theme and the user's own themes. localStorage, like the light/dark choice: app.html needs the generated
 // CSS before the first paint ("themeCss"). Everything read back goes through parseTheme again.
-import { PRESETS, isPreset, newId, parseTheme, terminalColors, themeCss, type Theme } from "./themes";
+import { PRESETS, blankTheme, isPreset, newId, parseTheme, terminalColors, themeCss, type ColorId, type Theme } from "./themes";
 import { t } from "./i18n";
 
 const OWN = "themes";
@@ -71,13 +71,42 @@ export function selectTheme(id: string) {
   apply();
 }
 
+/** Theme editor docked beside the app (ThemeEditor.svelte): open, pick mode (click into the app), selected color. */
+export const themeEditor = $state<{ open: boolean; picking: boolean; sel: ColorId | null }>({ open: false, picking: false, sel: null });
+
+// Undo: the theme as it was before each burst of edits (a slider drag is one step, not one per frame).
+const history = $state<Theme[]>([]);
+let lastEdit = 0;
+export const canUndo = () => history.length > 0;
+
 /** Changes the active theme; a built-in one is copied first (presets stay as shipped). */
 export function editTheme(fn: (th: Theme) => void) {
   if (isPreset(themes.active)) copyTheme();
   const th = themes.own.find((x) => x.id === themes.active);
   if (!th) return;
+  if (Date.now() - lastEdit > 500) history.push($state.snapshot(th) as Theme);
+  if (history.length > 50) history.shift();
+  lastEdit = Date.now();
   fn(th);
   apply();
+}
+
+/** Back to the state before the last burst of edits (also switches back to that theme). */
+export function undoTheme() {
+  const prev = history.pop();
+  if (!prev) return;
+  const i = themes.own.findIndex((x) => x.id === prev.id);
+  if (i < 0) return;
+  themes.own[i] = prev;
+  themes.active = prev.id;
+  lastEdit = 0;
+  apply();
+}
+
+/** A new theme with the built-in colors, selected right away. */
+export function newTheme() {
+  themes.own.push(blankTheme(newId(), t("Neues Theme")));
+  selectTheme(themes.own[themes.own.length - 1].id);
 }
 
 export function copyTheme() {

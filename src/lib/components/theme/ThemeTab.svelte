@@ -1,32 +1,32 @@
 <script lang="ts">
   import { Button, IconButton, Input, Segmented, Select, SettingRow, SettingsSection, Slider, Switch, TextButton, Textarea } from "$lib/atelier-ui";
-  import CheckIcon from "@lucide/svelte/icons/check";
-  import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
-  import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
+  import PaletteIcon from "@lucide/svelte/icons/palette";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import TrashIcon from "@lucide/svelte/icons/trash-2";
   import { theme, setMode } from "$lib/theme.svelte";
   import { t } from "$lib/i18n";
   import { css } from "$lib/color";
-  import { GLOW_AT, PRESETS, REFS, TOKENS, derive, gradientCss, isPreset, refColor, report, type Theme } from "$lib/themes";
-  import { copyTheme, current, deleteTheme, editTheme, exportTheme, importTheme, selectTheme, themes } from "$lib/themes.svelte";
-  import { GLOW_LABELS, REF_LABELS } from "./labels";
-  import ColorPicker from "./ColorPicker.svelte";
+  import { CODE_SCHEMES, GLOW_AT, PRESETS, REFS, derive, gradientCss, isPreset, refColor, type CodeScheme, type Theme } from "$lib/themes";
+  import { copyTheme, current, deleteTheme, editTheme, exportTheme, importTheme, newTheme, selectTheme, themeEditor, themes } from "$lib/themes.svelte";
+  import { GLOW_LABELS, REF_LABELS, SCHEME_LABELS } from "./labels";
   import GradientEditor from "./GradientEditor.svelte";
+
+  // onclose: closes the settings dialog, so the editor beside the app is not covered.
+  let { onclose }: { onclose?: () => void } = $props();
 
   const th = $derived(current());
   const preset = $derived(isPreset(th.id));
-  const modeName = $derived(theme.dark ? t("Dunkel") : t("Hell"));
-  const tokens = $derived(derive(th, theme.dark));
-  const checks = $derived(report(th, theme.dark));
   const all = $derived([...PRESETS, ...themes.own]);
 
-  // Seeds without lightness get a mid preview lightness in the picker.
-  const seed = (v: { h: number; c: number }) => ({ l: theme.dark ? 0.72 : 0.55, c: v.c, h: v.h });
+  function adjust() {
+    themeEditor.open = true;
+    onclose?.();
+  }
 
   /** Card preview: background, backdrop gradient and accent dot of the theme in the current mode. */
   function look(x: Theme) {
     const tk = derive(x, theme.dark);
-    const bg = x.backdrop.on ? `${gradientCss(x.backdrop.gradient, true, (r) => css(refColor(x, tk, r, theme.dark)))}, ` : "";
+    const bg = x.backdrop.on ? `${gradientCss(x.backdrop.gradient, true, (r) => css(refColor(tk, r)))}, ` : "";
     return { bg: `${bg}${css(tk.background)}`, fg: css(tk.foreground), dot: css(tk.primary), card: css(tk.card) };
   }
 
@@ -40,7 +40,7 @@
   }
   function doImport() {
     const x = importTheme(pasted);
-    note = x ? t("„{name}“ importiert.", { name: x.name }) : t("Kein gültiges Theme (JSON mit \"version\": 1).");
+    note = x ? t("„{name}“ importiert.", { name: x.name }) : t("Kein gültiges Theme (JSON mit \"version\": 1 oder 2).");
     if (x) importing = false;
   }
   async function doExport() {
@@ -49,9 +49,6 @@
       () => (note = t("Zwischenablage nicht verfügbar.")),
     );
   }
-
-  let advanced = $state(false);
-  const overrides = $derived(theme.dark ? th.overrides.dark : th.overrides.light);
 </script>
 
 <div class="flex flex-col gap-6">
@@ -73,6 +70,11 @@
           <span class="text-ui truncate font-medium" style:color={l.fg}>{x.name}</span>
         </TextButton>
       {/each}
+      <TextButton
+        tone="plain"
+        class="border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 flex h-16 items-center justify-center gap-1.5 rounded-lg border border-dashed"
+        onclick={() => ((note = ""), newTheme())}><PlusIcon class="size-3.5" />{t("Neues Theme")}</TextButton
+      >
     </div>
     <SettingRow label={t("Modus")} description={t("Hell, dunkel oder wie das System. Jedes Theme hat beide Varianten.")}>
       <Segmented value={theme.mode} options={[["System", "system"], [t("Hell"), "light"], [t("Dunkel"), "dark"]] as const} onchange={setMode} />
@@ -109,23 +111,11 @@
   {/if}
 
   <SettingsSection title={t("Farben")}>
-    <SettingRow label={t("Akzent")} description={t("Buttons, Auswahl, Fokus. Die Helligkeit wählt die App je Modus für guten Kontrast.")}>
-      <ColorPicker value={seed(th.accent)} lightness={false} label={t("Akzent")} onchange={(v) => editTheme((x) => (x.accent = { h: v.h, c: v.c }))} />
+    <SettingRow label={t("Farben anpassen")} description={t("Öffnet den Editor neben der App: jede Farbe einzeln, für Hell und Dunkel. Jede Änderung siehst du sofort in der echten Oberfläche.")}>
+      <Button size="sm" onclick={adjust}><PaletteIcon class="size-3.5" />{t("Anpassen")}</Button>
     </SettingRow>
-    <SettingRow label={t("Zweiter Akzent")} description={t("Endfarbe der Verläufe auf Buttons und Logo.")}>
-      {#if th.accent2}
-        <ColorPicker value={seed(th.accent2)} lightness={false} label={t("Zweiter Akzent")} onchange={(v) => editTheme((x) => (x.accent2 = { h: v.h, c: v.c }))} />
-      {/if}
-      <Switch on={!!th.accent2} label={t("Zweiter Akzent")} onclick={() => editTheme((x) => (x.accent2 = x.accent2 ? null : { h: (x.accent.h + 60) % 360, c: x.accent.c }))} />
-    </SettingRow>
-    <SettingRow label={t("Grundton")} description={t("Färbt Flächen und Text leicht ein; Sättigung 0 ist reines Grau.")}>
-      <ColorPicker value={seed(th.base)} lightness={false} maxC={0.08} label={t("Grundton")} onchange={(v) => editTheme((x) => (x.base = { h: v.h, c: v.c }))} />
-    </SettingRow>
-    <SettingRow label={t("Flächen")} description={t("Tiefer oder heller als Standard.")}>
-      <Slider class="w-32" min={-100} max={100} value={th.surface} aria-label={t("Flächen")} oninput={(e) => editTheme((x) => (x.surface = +e.currentTarget.value))} />
-    </SettingRow>
-    <SettingRow label={t("Kontrast")} description={t("Abstand zwischen Flächen, Rändern und Text. Text bleibt immer lesbar (WCAG AA).")}>
-      <Slider class="w-32" min={0} max={100} value={th.contrast} aria-label={t("Kontrast")} oninput={(e) => editTheme((x) => (x.contrast = +e.currentTarget.value))} />
+    <SettingRow label={t("Editor-Farbschema")} description={t("Farben für Code im Editor, unabhängig vom Theme.")}>
+      <Select value={th.code} options={CODE_SCHEMES.map((s) => [SCHEME_LABELS[s], s] as const)} aria-label={t("Editor-Farbschema")} onchange={(v) => editTheme((x) => (x.code = v as CodeScheme))} />
     </SettingRow>
   </SettingsSection>
 
@@ -147,37 +137,5 @@
     <SettingRow label={t("Körnung")} description={t("Feines Rauschen über dem Hintergrund, glättet Stufen im Verlauf.")}>
       <Slider class="w-24" min={0} max={100} value={th.grain} aria-label={t("Körnung")} oninput={(e) => editTheme((x) => (x.grain = +e.currentTarget.value))} />
     </SettingRow>
-  </SettingsSection>
-
-  <SettingsSection title={t("Kontrast ({mode})", { mode: modeName })}>
-    {#each checks as c (c.label)}
-      {@const ok = c.ratio >= c.min}
-      <div class="flex items-center gap-2 px-2 py-1.5 text-ui">
-        <span class="flex-1">{c.label}</span>
-        <span class="font-mono text-meta {ok ? 'text-muted-foreground' : 'text-warning'}">{c.ratio.toFixed(1)} : 1</span>
-        {#if ok}<CheckIcon class="text-success size-3.5" aria-label={t("ausreichend")} />{:else}<TriangleAlertIcon class="text-warning size-3.5" aria-label={t("unter {min} : 1", { min: c.min })} />{/if}
-      </div>
-    {/each}
-  </SettingsSection>
-
-  <SettingsSection title={t("Einzelne Farben ({mode})", { mode: modeName })}>
-    <SettingRow label={t("Farben einzeln festlegen")} description={t("Überschreibt die abgeleiteten Werte exakt; ohne Kontrast-Garantie.")}>
-      <Switch on={advanced} label={t("Farben einzeln festlegen")} onclick={() => (advanced = !advanced)} />
-    </SettingRow>
-    {#if advanced}
-      {#each TOKENS as name (name)}
-        <div class="flex items-center gap-2 px-2 py-1 text-ui">
-          <span class="flex-1 font-mono text-meta {overrides[name] ? 'text-foreground' : 'text-muted-foreground'}">--{name}</span>
-          {#if overrides[name]}
-            <IconButton
-              size="md"
-              label={t("{name} zurücksetzen", { name })}
-              onclick={() => editTheme((x) => delete (theme.dark ? x.overrides.dark : x.overrides.light)[name])}><RotateCcwIcon class="size-3.5" /></IconButton
-            >
-          {/if}
-          <ColorPicker value={tokens[name]} label={name} onchange={(v) => editTheme((x) => ((theme.dark ? x.overrides.dark : x.overrides.light)[name] = v))} />
-        </div>
-      {/each}
-    {/if}
   </SettingsSection>
 </div>

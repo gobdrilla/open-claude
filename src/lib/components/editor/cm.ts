@@ -26,25 +26,25 @@ import { t as tr } from "../../i18n.ts";
 
 const chrome = EditorView.theme(
   {
-    "&": { height: "100%", color: "var(--foreground)", backgroundColor: "var(--card)", fontSize: "13px" },
+    "&": { height: "100%", color: "var(--code-text)", backgroundColor: "var(--editor)", fontSize: "13px" },
     // body hat user-select: none; ohne das laesst WebKit im Editor weder markieren noch tippen.
     ".cm-content": { caretColor: "var(--primary)", userSelect: "text", WebkitUserSelect: "text", padding: "8px 0" },
     ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.6" },
     "&.cm-focused": { outline: "none" },
     ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--primary)" },
     // Fokussiert kraeftiger als unfokussiert
-    ".cm-selectionBackground": { backgroundColor: "color-mix(in oklch, var(--primary) 20%, transparent)" },
+    ".cm-selectionBackground": { backgroundColor: "color-mix(in oklch, var(--code-selection) 66%, transparent)" },
     "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: "color-mix(in oklch, var(--primary) 30%, transparent)",
+      backgroundColor: "var(--code-selection)",
     },
-    ".cm-activeLine": { backgroundColor: "color-mix(in oklch, var(--primary) 5%, transparent)" },
+    ".cm-activeLine": { backgroundColor: "var(--current-line)" },
     ".cm-gutters": {
-      backgroundColor: "var(--card)",
-      color: "color-mix(in oklch, var(--muted-foreground) 55%, transparent)",
+      backgroundColor: "var(--editor)",
+      color: "var(--line-number)",
       border: "none",
     },
     ".cm-lineNumbers .cm-gutterElement": { padding: "0 8px 0 12px" },
-    ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--foreground)" },
+    ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--code-text)" },
     // Platz links fuer die Spalte der Faltpfeile (foldArrows).
     ".cm-line": { paddingLeft: "16px" },
     // Einrueckungslinien starten sonst bei 2px statt am Text (Bibliothek rechnet mit Standard-Padding).
@@ -74,7 +74,7 @@ const chrome = EditorView.theme(
       outline: "1px solid color-mix(in oklch, var(--primary) 45%, transparent)",
     },
     // CM's own z-index 300 put the breadcrumb bar above dialogs (z-50); the panels sit outside the scroller anyway.
-    ".cm-panels": { backgroundColor: "var(--card)", color: "var(--foreground)", zIndex: 1 },
+    ".cm-panels": { backgroundColor: "var(--editor)", color: "var(--code-text)", zIndex: 1 },
     ".cm-panels.cm-panels-top": { borderBottom: "1px solid color-mix(in oklch, var(--border) 60%, transparent)" },
     ".cm-panels.cm-panels-bottom": { borderTop: "1px solid color-mix(in oklch, var(--border) 60%, transparent)" },
     ".cm-textfield": { backgroundColor: "var(--background)", border: "1px solid var(--input)", borderRadius: "6px" },
@@ -107,11 +107,11 @@ const chrome = EditorView.theme(
 
 // Spezifischere Tags gewinnen (definition(...) vor variableName), die Reihenfolge ist egal.
 const highlight = HighlightStyle.define([
-  { tag: t.comment, color: "var(--muted-foreground)", fontStyle: "italic" },
-  { tag: t.docComment, color: "var(--muted-foreground)" },
+  { tag: t.comment, color: "var(--syn-comment)", fontStyle: "italic" },
+  { tag: t.docComment, color: "var(--syn-comment)" },
   { tag: [t.macroName, t.annotation, t.processingInstruction, t.meta], color: "var(--syn-meta)" },
-  { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "var(--primary)" },
-  { tag: [t.controlKeyword, t.moduleKeyword], color: "var(--primary)", fontStyle: "italic" },
+  { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "var(--syn-keyword)" },
+  { tag: [t.controlKeyword, t.moduleKeyword], color: "var(--syn-keyword)", fontStyle: "italic" },
   { tag: [t.string, t.special(t.string), t.attributeValue, t.monospace], color: "var(--syn-string)" },
   { tag: [t.regexp, t.escape], color: "var(--syn-regexp)" },
   { tag: [t.number, t.bool, t.null, t.atom, t.color, t.unit], color: "var(--syn-number)" },
@@ -120,9 +120,9 @@ const highlight = HighlightStyle.define([
   { tag: [t.definition(t.typeName), t.definition(t.className)], color: "var(--syn-type)", fontWeight: "500" },
   { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "var(--syn-fn)" },
   { tag: t.function(t.definition(t.variableName)), color: "var(--syn-fn)", fontWeight: "500" },
-  { tag: [t.definition(t.variableName), t.definition(t.propertyName)], color: "var(--foreground)", fontWeight: "500" },
+  { tag: [t.definition(t.variableName), t.definition(t.propertyName)], color: "var(--code-text)", fontWeight: "500" },
   { tag: [t.propertyName, t.attributeName, t.tagName], color: "var(--syn-prop)" },
-  { tag: [t.operator, t.punctuation, t.bracket], color: "var(--muted-foreground)" },
+  { tag: [t.operator, t.punctuation, t.bracket], color: "var(--syn-operator)" },
   { tag: t.heading, color: "var(--primary)", fontWeight: "bold" },
   { tag: t.quote, color: "var(--muted-foreground)" },
   { tag: t.strong, fontWeight: "bold" },

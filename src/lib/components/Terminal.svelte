@@ -453,7 +453,8 @@
   <!-- Dezenter Primary-Schimmer, scheint durchs transparente Terminal. -->
   <div
     style:background-color={fixedBg}
-    class="bg-card glow h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 ring-foreground/5 transition-shadow duration-300 focus-within:ring-primary/40 focus-within:shadow-primary/10"
+    data-theme-area="terminal"
+    class="bg-terminal glow h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 dark:shadow-black/30 ring-foreground/5 transition-shadow duration-300 focus-within:ring-primary/40 focus-within:shadow-primary/10"
   >
     <!-- Auswahl beim Rechtsklick merken: das Menue nimmt den Fokus, danach waere sie evtl. weg. -->
     <ContextMenu.Root>

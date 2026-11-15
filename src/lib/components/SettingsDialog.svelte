@@ -220,7 +220,7 @@
             {/if}
           </SettingsSection>
         {:else if tab === "themes"}
-          <ThemeTab />
+          <ThemeTab onclose={() => (open = false)} />
         {:else if tab === "terminal"}
           {#if claudeCfg}
             <SettingsSection title={t("Claude (neue Sitzungen)")}>

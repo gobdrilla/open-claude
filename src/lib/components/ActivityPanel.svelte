@@ -514,7 +514,7 @@
   }
 </script>
 
-<div class="bg-card glow flex h-full flex-col overflow-hidden rounded-xl text-ui ring-1 ring-foreground/5">
+<div data-theme-area="activity" class="bg-activity glow flex h-full flex-col overflow-hidden rounded-xl text-ui ring-1 ring-foreground/5">
   <Tabs
     bind:value={tab}
     tabs={[

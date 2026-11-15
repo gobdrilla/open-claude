@@ -31,6 +31,8 @@
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import ClaudeSettingsDialog from "$lib/components/ClaudeSettingsDialog.svelte";
   import SettingsDialog from "$lib/components/SettingsDialog.svelte";
+  import ThemeEditor from "$lib/components/theme/ThemeEditor.svelte";
+  import { themeEditor } from "$lib/themes.svelte";
   import { initExtensions } from "$lib/extensions.svelte";
   import { ContextMenu, DropdownMenu } from "bits-ui";
   import Notice from "$lib/components/Notice.svelte";
@@ -1319,6 +1321,7 @@
 {#if amongUs.on}<IdleAmongUs rate={amongUs.rate} volume={amongUs.volume} />{/if}
 
 <div
+  data-theme-area="chrome"
   class="bg-chrome border-border flex h-9 items-center border-b {lights ? '' : 'pl-3.5'}"
   style:padding-left={lights ? `${8000 / zoom}px` : undefined}
   data-tauri-drag-region
@@ -1437,7 +1440,8 @@
   {/if}
 </div>
 
-<div class="flex h-[calc(100vh-2.25rem)] flex-col">
+<!-- The theme editor docks on the right (fixed, 340px): the app keeps working beside it as the live preview. -->
+<div class="flex h-[calc(100vh-2.25rem)] flex-col" style:padding-right={themeEditor.open ? "340px" : undefined}>
   <Notice bind:text={skillNotice} />
   <!-- Ueber allen Ansichten: Fehler aus Update, Wach-Halt oder Alt+E kommen auch aus Terminal und Git -->
   <Notice bind:text={notice} />
@@ -1928,6 +1932,8 @@
     </div>
   </Dialog.Content>
 </Dialog.Root>
+
+<ThemeEditor />
 
 <SettingsDialog
   bind:open={settingsOpen}

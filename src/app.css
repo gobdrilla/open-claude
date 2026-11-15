@@ -46,6 +46,20 @@
   --bracket-1: oklch(0.57 0.12 75);
   --bracket-2: oklch(0.55 0.18 330);
   --bracket-3: oklch(0.53 0.16 250);
+
+  /* Follow other tokens until a theme sets them (EXTRA in themes.ts); one definition serves both modes. */
+  --primary-2: color-mix(in oklab, var(--primary) 50%, transparent);
+  --terminal: var(--card);
+  --activity: var(--card);
+  --files: var(--card);
+  --editor: var(--card);
+  --code-text: var(--foreground);
+  --syn-keyword: var(--primary);
+  --syn-comment: var(--muted-foreground);
+  --syn-operator: var(--muted-foreground);
+  --line-number: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
+  --current-line: color-mix(in oklch, var(--primary) 5%, transparent);
+  --code-selection: color-mix(in oklch, var(--primary) 30%, transparent);
 }
 
 .dark {
@@ -117,6 +131,10 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chrome: var(--chrome);
+  --color-terminal: var(--terminal);
+  --color-activity: var(--activity);
+  --color-files: var(--files);
+  --color-editor: var(--editor);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);

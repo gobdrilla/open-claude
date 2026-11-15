@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { contrast, fit, fromHex, hex, over, toGamut } from "./color.ts";
-import { DEFAULTS, PRESETS, TOKENS, derive, gradientCss, parseTheme, report, terminalColors, themeCss, type Theme } from "./themes.ts";
+import { DEFAULTS, PRESETS, TOKENS, blankTheme, derive, gradientCss, origin, parseTheme, terminalColors, themeCss } from "./themes.ts";
 
 test("color: hex round trip and WCAG extremes", () => {
   for (const h of ["#7046cf", "#000000", "#ffffff", "#e8be62", "#181b21"]) assert.equal(hex(fromHex(h)!), h);
@@ -37,7 +37,7 @@ test("color: over blends toward the top color by alpha", () => {
   assert.match(hex(over(white, 0.5, black)), /^#(7f7f7f|808080)$/);
 });
 
-test("derive: the built-in seeds reproduce app.css exactly", () => {
+test("derive: the built-in theme reproduces app.css exactly", () => {
   for (const dark of [false, true]) {
     const got = derive(PRESETS[0], dark);
     const want = dark ? DEFAULTS.dark : DEFAULTS.light;
@@ -49,65 +49,101 @@ test("derive: the built-in seeds reproduce app.css exactly", () => {
   assert.equal(terminalColors(PRESETS[0], true), undefined);
 });
 
-test("derive: any seeds keep text readable (WCAG AA) in both modes", () => {
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const themes: Theme[] = [...PRESETS];
-  for (let i = 0; i < 300; i++) {
-    themes.push({
-      ...PRESETS[0],
-      id: "r" + i,
-      base: { h: rnd() * 360, c: rnd() * 0.1 },
-      accent: { h: rnd() * 360, c: rnd() * 0.37 },
-      accent2: rnd() < 0.5 ? null : { h: rnd() * 360, c: rnd() * 0.3 },
-      surface: rnd() * 200 - 100,
-      contrast: rnd() * 100,
-    });
-  }
-  for (const th of themes) {
-    for (const dark of [false, true]) {
-      for (const c of report(th, dark)) assert.ok(c.ratio >= c.min - 1e-6, `${th.id} ${dark ? "dark" : "light"} ${c.label}: ${c.ratio.toFixed(2)}`);
-      const tk = derive(th, dark);
-      for (const k of ["success", "warning", "info", "destructive", "syn-fn", "syn-string"] as const) assert.ok(contrast(tk[k], tk.card) >= 4.5 - 1e-6, `${th.id} ${k}`);
-      const term = terminalColors(th, dark)!;
-      if (th.id !== "atelier") for (const v of Object.values(term)) assert.match(v, /^#[0-9a-f]{6}([0-9a-f]{2})?$/);
-    }
-  }
+test("derive: colors follow their parent until set, own colors are used exactly", () => {
+  const card = fromHex("#123456")!;
+  const th = blankTheme("x", "X");
+  th.colors.dark = { card };
+  const v = derive(th, true);
+  for (const k of ["terminal", "activity", "files", "editor", "popover"] as const) assert.deepEqual(v[k], card, k);
+  assert.equal(origin(th, true, "terminal"), "follows");
+  // Built-in value until the parent changes.
+  assert.deepEqual(v.muted, DEFAULTS.dark.muted);
+  assert.equal(origin(th, true, "muted"), "default");
+  th.colors.dark.secondary = fromHex("#222222")!;
+  assert.deepEqual(derive(th, true).muted, th.colors.dark.secondary);
+  // No contrast correction: unreadable on purpose stays unreadable.
+  th.colors.dark.foreground = card;
+  assert.deepEqual(derive(th, true).foreground, card);
+  assert.equal(origin(th, true, "foreground"), "own");
+  // The other mode is untouched.
+  assert.deepEqual(derive(th, false).card, DEFAULTS.light.card);
 });
 
-test("derive: contrast slider spreads surfaces and text", () => {
-  const lo = derive({ ...PRESETS[0], contrast: 0 }, true);
-  const hi = derive({ ...PRESETS[0], contrast: 100 }, true);
-  assert.ok(hi.border.l > lo.border.l);
-  assert.ok(contrast(hi.foreground, hi.background) > contrast(lo.foreground, lo.background));
+test("themeCss: derived variables only when the theme sets them, so the rest follows in CSS", () => {
+  const th = blankTheme("x", "X");
+  th.colors.dark = { card: fromHex("#123456")! };
+  assert.ok(!themeCss(th).includes("--terminal:"));
+  th.colors.dark.terminal = fromHex("#000000")!;
+  const s = themeCss(th);
+  assert.match(s, /:root\.dark\{[^}]*--terminal:oklch\(0 0 0\);/);
+  assert.ok(!/:root:not\(\.dark\)\{[^}]*--terminal:/.test(s));
+});
+
+test("code schemes: scheme colors apply, own colors win", () => {
+  const th = blankTheme("x", "X");
+  th.code = "clear";
+  assert.equal(origin(th, true, "syn-keyword"), "scheme");
+  assert.notDeepEqual(derive(th, true)["syn-keyword"], DEFAULTS.dark.primary);
+  assert.ok(themeCss(th).includes("--syn-keyword:"));
+  const own = fromHex("#ff0000")!;
+  th.colors.dark["syn-keyword"] = own;
+  assert.deepEqual(derive(th, true)["syn-keyword"], own);
+  th.code = "theme";
+  delete th.colors.dark["syn-keyword"];
+  assert.deepEqual(derive(th, true)["syn-keyword"], DEFAULTS.dark.primary);
+});
+
+test("OLED: black background and terminal in dark mode, built-in colors in light mode", () => {
+  const oled = PRESETS.find((p) => p.id === "oled")!;
+  assert.equal(hex(derive(oled, true).background), "#000000");
+  assert.equal(terminalColors(oled, true)!.background, "#00000000");
+  assert.deepEqual(derive(oled, false).background, DEFAULTS.light.background);
+});
+
+test("terminalColors: own ANSI colors and text are used exactly", () => {
+  const th = blankTheme("x", "X");
+  th.colors.dark = { "ansi-red": fromHex("#ff0000")!, "term-text": fromHex("#abcdef")! };
+  const term = terminalColors(th, true)!;
+  assert.equal(term.red, "#ff0000");
+  assert.equal(term.foreground, "#abcdef");
+  for (const v of Object.values(term)) assert.match(v, /^#[0-9a-f]{6}([0-9a-f]{2})?$/);
+});
+
+test("parseTheme: version 1 themes are converted with their look kept", () => {
+  const forest = PRESETS.find((p) => p.id === "forest")!;
+  const old = parseTheme({ version: 1, name: "Wald alt", base: { h: 160, c: 0.014 }, accent: { h: 152, c: 0.13 }, accent2: { h: 110, c: 0.12 } })!;
+  assert.equal(old.version, 2);
+  assert.deepEqual(old.colors, forest.colors);
+  const ov = parseTheme({ version: 1, surface: 50, overrides: { dark: { background: "#101010" } } })!;
+  assert.equal(hex(derive(ov, true).background), "#101010");
+  assert.notDeepEqual(derive(ov, false).background, DEFAULTS.light.background);
 });
 
 test("parseTheme: rejects non-themes, clamps numbers, drops unknown keys", () => {
   assert.equal(parseTheme(null), undefined);
   assert.equal(parseTheme({ name: "x" }), undefined);
-  assert.equal(parseTheme({ version: 2 }), undefined);
+  assert.equal(parseTheme({ version: 3 }), undefined);
   const th = parseTheme({
-    version: 1,
+    version: 2,
     id: "../../etc",
     name: "  Nacht  ",
-    contrast: 900,
-    surface: -Infinity,
-    accent: { h: 400, c: 2 },
+    glow: 900,
+    code: "x) url(evil",
     glowAt: "top right; background:url(x)",
     glowRef: "x) url(evil",
     evil: "@import url(x)",
-    overrides: { dark: { background: "#101010", foreground: "url(x)", nope: "#fff" } },
+    colors: { dark: { background: "#101010", foreground: "url(x)", nope: "#fff", card: { l: 9, c: 2, h: 400 } } },
     backdrop: { on: true, gradient: { kind: "radial", stops: Array.from({ length: 20 }, (_, i) => ({ color: { ref: "card" }, alpha: 50, pos: i * 5 })) } },
   })!;
   assert.notEqual(th.id, "../../etc");
   assert.equal(th.name, "Nacht");
-  assert.equal(th.contrast, 100);
-  assert.equal(th.surface, 0);
-  assert.deepEqual(th.accent, { h: 40, c: 0.4 });
+  assert.equal(th.glow, 30);
+  assert.equal(th.code, "theme");
   assert.equal(th.glowAt, "top right");
   assert.equal(th.glowRef, "primary");
   assert.equal("evil" in th, false);
-  assert.deepEqual(Object.keys(th.overrides.dark), ["background"]);
+  assert.deepEqual(Object.keys(th.colors.dark).sort(), ["background", "card"]);
+  assert.deepEqual(th.colors.dark.card, { l: 1, c: 0.4, h: 40 });
   assert.equal(th.backdrop.gradient.stops.length, 8);
 });
 

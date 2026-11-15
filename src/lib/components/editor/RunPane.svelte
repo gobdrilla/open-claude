@@ -193,7 +193,8 @@
   <!-- Karte wie die alte Claude-Shell: dezenter Primary-Schimmer scheint durchs transparente Terminal. -->
   <div class="min-h-0 flex-1 p-2">
     <div
-      class="bg-card glow ring-foreground/5 focus-within:ring-primary/40 focus-within:shadow-primary/10 h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 transition-shadow duration-300 dark:shadow-black/30"
+      data-theme-area="terminal"
+      class="bg-terminal glow ring-foreground/5 focus-within:ring-primary/40 focus-within:shadow-primary/10 h-full overflow-hidden rounded-xl px-3 py-2.5 shadow-lg ring-1 shadow-black/10 transition-shadow duration-300 dark:shadow-black/30"
     >
       <div bind:this={el} class="h-full"></div>
     </div>
