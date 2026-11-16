@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { contrast, fit, fromHex, hex, over } from "./color.ts";
+import { contrast, fit, fromHex, hex, inGamut, over, toGamut } from "./color.ts";
 import { DEFAULTS, PRESETS, TOKENS, blankTheme, derive, gradientCss, origin, parseTheme, terminalColors, themeCss } from "./themes.ts";
 
 test("color: hex round trip and WCAG extremes", () => {
@@ -11,9 +11,15 @@ test("color: hex round trip and WCAG extremes", () => {
   assert.equal(hex({ l: 0.5, c: 0, h: 0 }, 0.25).length, 9);
 });
 
-test("color: out-of-gamut colors show as the webview clips them", () => {
-  // The old slider allowed this accent; WebKit draws it as rgb(255, 0, 0).
-  assert.equal(hex({ l: 0.72, c: 0.37, h: 29 }), "#ff0000");
+test("color: stored colors are displayable, sliders stop at the gamut edge", () => {
+  // The old slider allowed this accent; WebKit drew it as rgb(255, 0, 0), so that is what it becomes.
+  const red = parseTheme({ version: 2, colors: { dark: { primary: { l: 0.72, c: 0.37, h: 29 } } } })!.colors.dark.primary!;
+  assert.equal(hex(red), "#ff0000");
+  assert.equal(hex(fromHex(hex(red))!), hex(red));
+  const inside = { l: 0.5, c: 0.05, h: 265 };
+  assert.equal(inGamut(inside), inside);
+  const g = toGamut({ l: 0.7, c: 0.4, h: 150 });
+  assert.ok(g.c < 0.4 && g.c > 0.1 && g.l === 0.7);
 });
 
 test("color: fit moves just far enough, in the right direction", () => {
@@ -112,7 +118,9 @@ test("parseTheme: version 1 themes are converted with their look kept", () => {
   const forest = PRESETS.find((p) => p.id === "forest")!;
   const old = parseTheme({ version: 1, name: "Wald alt", base: { h: 160, c: 0.014 }, accent: { h: 152, c: 0.13 }, accent2: { h: 110, c: 0.12 } })!;
   assert.equal(old.version, 2);
-  assert.deepEqual(old.colors, forest.colors);
+  // Out-of-gamut preset colors are stored as the webview shows them: same look, same hex.
+  const hexes = (m: Record<string, Parameters<typeof hex>[0]>) => Object.fromEntries(Object.entries(m).map(([k, c]) => [k, hex(c)]));
+  for (const mode of ["light", "dark"] as const) assert.deepEqual(hexes(old.colors[mode]), hexes(forest.colors[mode]));
   const ov = parseTheme({ version: 1, surface: 50, overrides: { dark: { background: "#101010" } } })!;
   assert.equal(hex(derive(ov, true).background), "#101010");
   assert.notDeepEqual(derive(ov, false).background, DEFAULTS.light.background);
@@ -142,7 +150,7 @@ test("parseTheme: rejects non-themes, clamps numbers, drops unknown keys", () =>
   assert.equal(th.glowRef, "primary");
   assert.equal("evil" in th, false);
   assert.deepEqual(Object.keys(th.colors.dark).sort(), ["background", "card"]);
-  assert.deepEqual(th.colors.dark.card, { l: 1, c: 0.4, h: 40 });
+  assert.equal(hex(th.colors.dark.card!), hex({ l: 1, c: 0.4, h: 40 }));
   assert.equal(th.backdrop.gradient.stops.length, 8);
 });
 

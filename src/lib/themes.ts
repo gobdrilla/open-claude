@@ -4,7 +4,7 @@
 // them; the store is themes.svelte.ts.
 // Security: themes are imported from text, so CSS is only ever built here from clamped numbers and enum values,
 // never from strings out of the theme file (no url(), no free CSS).
-import { css, fit, fromHex, hex, over, type Oklch } from "./color.ts";
+import { css, fit, fromHex, hex, inGamut, over, type Oklch } from "./color.ts";
 import { t } from "./i18n.ts";
 
 export type { Oklch } from "./color.ts";
@@ -370,7 +370,7 @@ const hue = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite
 function color(v: unknown): Oklch | undefined {
   if (typeof v === "string") return fromHex(v);
   if (!isObj(v) || typeof v.l !== "number") return undefined;
-  return { l: num(v.l, 0, 1, 0.5), c: num(v.c, 0, 0.4, 0), h: hue(v.h, 0) };
+  return inGamut({ l: num(v.l, 0, 1, 0.5), c: num(v.c, 0, 0.4, 0), h: hue(v.h, 0) });
 }
 const hc = (v: unknown, d: { h: number; c: number }) => (isObj(v) ? { h: hue(v.h, d.h), c: num(v.c, 0, 0.4, d.c) } : d);
 
@@ -420,7 +420,8 @@ export function parseTheme(v: unknown): Theme | undefined {
       contrast: num(v.contrast, 0, 100, 50),
     };
     const ov = isObj(v.overrides) ? v.overrides : {};
-    cols = { light: { ...fromSeeds(s, false), ...colors(ov.light) }, dark: { ...fromSeeds(s, true), ...colors(ov.dark) } };
+    const seeded = (dark: boolean): Colors => Object.fromEntries(Object.entries(fromSeeds(s, dark)).map(([k, c]) => [k, inGamut(c)]));
+    cols = { light: { ...seeded(false), ...colors(ov.light) }, dark: { ...seeded(true), ...colors(ov.dark) } };
   } else {
     const c = isObj(v.colors) ? v.colors : {};
     cols = { light: colors(c.light), dark: colors(c.dark) };

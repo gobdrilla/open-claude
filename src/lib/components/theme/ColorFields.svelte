@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Input, Slider } from "$lib/atelier-ui";
-  import { css, fromHex, hex, type Oklch } from "$lib/color";
+  import { css, fromHex, hex, toGamut, type Oklch } from "$lib/color";
   import { t } from "$lib/i18n";
 
   // OKLCH sliders for hue, saturation (chroma) and lightness, plus a hex field. Native ranges: keyboard and screen
@@ -16,7 +16,7 @@
   const RED = 29;
   const MAX_C = 0.37;
 
-  const set = (k: keyof Oklch, v: number) => onchange({ ...value, [k]: v });
+  const set = (k: keyof Oklch, v: number) => onchange(toGamut({ ...value, [k]: v }));
   function typed() {
     const c = fromHex(text);
     if (c) onchange(c);

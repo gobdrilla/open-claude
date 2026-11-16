@@ -19,13 +19,32 @@ function linear({ l, c, h }: Oklch): Rgb {
   ];
 }
 
+const inside = (rgb: Rgb) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const gamma = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
 const ungamma = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 
-/** sRGB as the webview shows it: out-of-gamut channels are clipped (WebKit, Chromium), not mapped in by chroma.
- *  Otherwise a saturated accent renders pure red while its hex says salmon. */
+/** sRGB as the webview shows it: out-of-gamut channels are clipped (WebKit, Chromium). Only derived colors can
+ *  still be out of gamut; stored ones go through inGamut. */
 const shown = (col: Oklch): Rgb => linear(col).map(clamp01) as Rgb;
+
+/** A stored color is always displayable, so value, hex and screen agree. Out-of-gamut colors (older themes, the
+ *  old slider) become what the webview showed for them. */
+export const inGamut = (col: Oklch): Oklch => (inside(linear(col)) ? col : fromLinear(shown(col)));
+
+/** For the sliders: lowers chroma at constant L and h until displayable, so the thumb stops at the gamut edge. */
+export function toGamut(col: Oklch): Oklch {
+  const c0 = { l: clamp01(col.l), c: Math.max(0, col.c), h: col.h };
+  if (inside(linear(c0))) return c0;
+  let lo = 0;
+  let hi = c0.c;
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (inside(linear({ ...c0, c: mid }))) lo = mid;
+    else hi = mid;
+  }
+  return { ...c0, c: lo };
+}
 
 /** Relative luminance (WCAG 2) of the color as displayed. */
 export function luminance(col: Oklch): number {
