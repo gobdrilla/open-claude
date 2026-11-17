@@ -187,7 +187,8 @@
     // Nach /clear zaehlt claude neu: alte Blob-URL zu gleichem n sonst nie freigegeben.
     const old = pasted.local[id]?.[n];
     if (old) URL.revokeObjectURL(old.url);
-    (pasted.local[id] ??= {})[n] = pend;
+    pasted.local[id] ??= {};
+    pasted.local[id][n] = pend;
     pend = null;
   }
   async function grabClipboard() {
@@ -281,7 +282,9 @@
         const links = [...line.matchAll(/\[Image #(\d+)\]/g)].map((m) => ({
           text: m[0],
           range: { start: { x: m.index + 1, y }, end: { x: m.index + m[0].length, y } },
-          activate: () => (pasted.req = { id, n: Number(m[1]) }),
+          activate: () => {
+            pasted.req = { id, n: Number(m[1]) };
+          },
         }));
         cb(links.length ? links : undefined);
       },

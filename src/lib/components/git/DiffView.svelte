@@ -85,7 +85,8 @@
 
   function saveNote() {
     if (!note || !repo) return;
-    const notes = (review[repo] ??= {});
+    review[repo] ??= {};
+    const notes = review[repo];
     // Leerer Text loescht den Kommentar
     if (noteText.trim()) notes[note.key] = { text: noteText.trim(), lines: note.lines };
     else delete notes[note.key];

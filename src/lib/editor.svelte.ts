@@ -249,7 +249,9 @@ export function editor(repo: string): RepoEditor {
     const off = $effect.root(() => {
       $effect(() => {
         const a = s.active;
-        if (a !== null) untrack(() => (s.recent = touch(s.recent, a)));
+        if (a !== null) untrack(() => {
+            s.recent = touch(s.recent, a);
+          });
       });
       $effect(() => pushEditor(repo, { active: s.active, files: Object.values(s.files).map((f) => ({ path: f.path, dirty: f.dirty, conflict: f.conflict })) }));
     });

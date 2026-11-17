@@ -22,7 +22,9 @@
     if (!open || shares[id]) return;
     error = "";
     invoke<string>("share_start", { id, cwd }).then(
-      (ticket) => (shares[id] ??= { ticket, guests: 0, write: false }),
+      (ticket) => {
+        shares[id] ??= { ticket, guests: 0, write: false };
+      },
       (e) => (error = String(e)),
     );
   });

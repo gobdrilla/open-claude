@@ -62,7 +62,9 @@
     <label for="btw-{id}" class="text-meta text-muted-foreground min-w-0 flex-1 truncate" title={t("Läuft parallel, stört die Sitzung nicht; Claude kann nur lesen.")}
       >{t("Nebenfrage an Claude")}</label
     >
-    {#if list.length}<IconButton size="xs" label={t("Antworten ausblenden")} onclick={() => (history[id] = [])}>✕</IconButton>{/if}
+    {#if list.length}<IconButton size="xs" label={t("Antworten ausblenden")} onclick={() => {
+          history[id] = [];
+        }}>✕</IconButton>{/if}
   </div>
   <div class="flex items-end gap-1.5">
     <Textarea

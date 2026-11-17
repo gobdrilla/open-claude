@@ -52,7 +52,9 @@ export function listenIde(onopen: (repo: string, path: string, line?: number) =>
   const offs = [
     listen<IdeDiff>("ide-diff", (e) => ide.diffs.push(e.payload)),
     // claude hat den Diff selbst geschlossen (im Terminal entschieden, Abbruch, neue Runde).
-    listen<number[]>("ide-close", (e) => (ide.diffs = ide.diffs.filter((d) => !e.payload.includes(d.id)))),
+    listen<number[]>("ide-close", (e) => {
+      ide.diffs = ide.diffs.filter((d) => !e.payload.includes(d.id));
+    }),
     listen<Open>("ide-open", (e) => onopen(e.payload.repo, rel(e.payload.repo, e.payload.path), e.payload.line ?? undefined)),
   ];
   return Promise.all(offs).then((fns) => () => fns.forEach((f) => f()));
