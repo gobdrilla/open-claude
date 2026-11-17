@@ -100,7 +100,17 @@ export function ancestors(path: string): string[] {
 }
 
 /** Zu gross fuer Highlighting: ueber 1 MB oder eine Zeile ab 10 000 Zeichen (minifiziert); beides macht den Parser zaeh. */
-export const huge = (text: string) => text.length > 1_000_000 || /[^\n]{10000}/.test(text);
+// A line scan, not /[^\n]{10000}/: the regex backtracks on lines just under the limit (seconds for 500 KB).
+export function huge(text: string) {
+  if (text.length > 1_000_000) return true;
+  for (let i = 0; i <= text.length; ) {
+    const end = text.indexOf("\n", i);
+    const j = end < 0 ? text.length : end;
+    if (j - i >= 10_000) return true;
+    i = j + 1;
+  }
+  return false;
+}
 
 /** Modifier-Taste fuer Tastenkuerzel in Texten, wie in +page.svelte. */
 export const MOD = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac") ? "⌘" : tr("Strg");

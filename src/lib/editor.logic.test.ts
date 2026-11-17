@@ -102,6 +102,8 @@ test("huge: Groesse und minifizierte Zeilen", () => {
   assert.equal(huge("x".repeat(1_000_001)), true);
   assert.equal(huge("a\n" + "x".repeat(10_000) + "\n"), true);
   assert.equal(huge(("x".repeat(9_999) + "\n").repeat(50)), false);
+  assert.equal(huge("a\n" + "x".repeat(10_000)), true);
+  assert.equal(huge(""), false);
 });
 
 test("Pfade zwischen claude (absolut) und Editor (relativ)", () => {
