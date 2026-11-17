@@ -125,7 +125,11 @@
     login = { id, out: "", account, fresh };
     code = "";
     const out = new Channel<ArrayBuffer>((buf) => {
-      if (login?.id === id) login.out = (login.out + plain(dec.decode(new Uint8Array(buf), { stream: true }))).slice(-4000);
+      if (login?.id !== id) return;
+      const raw = dec.decode(new Uint8Array(buf), { stream: true });
+      // Windows ConPTY asks for the cursor position and starts claude only after an answer; no xterm here gives one
+      if (raw.includes("\x1b[6n")) invoke("pty_write", { id, data: "\x1b[1;1R" }).catch(() => {});
+      login.out = (login.out + plain(raw)).slice(-4000);
     });
     off = [
       listen<number | null>(`pty-exit:${id}`, async (e) => {
