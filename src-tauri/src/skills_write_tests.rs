@@ -1,11 +1,9 @@
 use super::*;
+use crate::test_util::Tmp;
 use serde_json::json;
 
-fn tmp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ocui-skills-write-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn tmp(name: &str) -> Tmp {
+    Tmp::new(&format!("skills-write-{name}"))
 }
 
 fn obj(v: Value) -> Option<Map<String, Value>> {
@@ -38,13 +36,6 @@ fn user_settings_schreiben_nur_wenn_unveraendert() {
 }
 
 #[test]
-fn nichts_zu_schreiben_legt_nichts_an() {
-    let repo = tmp("none");
-    write_local(&repo, None, None).unwrap();
-    assert!(!repo.join(".claude").exists());
-}
-
-#[test]
 fn schreibt_und_erhaelt_andere_keys() {
     let repo = tmp("keep");
     std::fs::create_dir_all(repo.join(".claude")).unwrap();
@@ -54,10 +45,9 @@ fn schreibt_und_erhaelt_andere_keys() {
         read(&repo),
         json!({"permissions": {"allow": ["Bash"]}, "skillOverrides": {"a": "off"}, "enabledPlugins": {"p@m": false}})
     );
-    // null entfernt die Keys, Rest bleibt; kein .tmp liegen gelassen.
+    // null entfernt die Keys, Rest bleibt.
     write_local(&repo, None, None).unwrap();
     assert_eq!(read(&repo), json!({"permissions": {"allow": ["Bash"]}}));
-    assert!(!repo.join(".claude/settings.local.json.tmp").exists());
     // Leeres Objekt ist ein Wert (ueberdeckt User/Team), kein Entfernen.
     write_local(&repo, obj(json!({})), None).unwrap();
     assert_eq!(read(&repo)["skillOverrides"], json!({}));
@@ -67,19 +57,20 @@ fn schreibt_und_erhaelt_andere_keys() {
 fn kaputtes_json_wird_nicht_ueberschrieben() {
     let repo = tmp("broken");
     std::fs::create_dir_all(repo.join(".claude")).unwrap();
-    for text in ["{kaputt", "[1]"] {
+    // Auch "Keys entfernen" (no own keys) darf kaputte Dateien nicht anfassen.
+    let cases = [("{kaputt", true), ("[1]", true), ("{\"a\":", false), ("", false), ("null", false), ("\"s\"", false)];
+    for (text, with_keys) in cases {
         std::fs::write(local(&repo), text).unwrap();
-        assert!(write_local(&repo, obj(json!({"a": "off"})), None).is_err());
+        let so = if with_keys { obj(json!({"a": "off"})) } else { None };
+        assert!(write_local(&repo, so, None).is_err(), "{text:?}");
         assert_eq!(std::fs::read_to_string(local(&repo)).unwrap(), text);
     }
 }
 
 #[test]
 fn traegt_in_git_exclude_ein() {
-    let repo = tmp("exclude");
-    git(&repo, &["init", "-q"]);
-    // Globale Ignore-Datei des Rechners ausblenden (kann settings.local.json schon ignorieren).
-    git(&repo, &["config", "core.excludesFile", "keine-datei"]);
+    // git_repo blendet die globale Ignore-Datei des Rechners aus (kann settings.local.json schon ignorieren).
+    let repo = git_repo("exclude");
     let exclude = repo.join(".git/info/exclude");
     write_local(&repo, obj(json!({"a": "off"})), None).unwrap();
     let text = std::fs::read_to_string(&exclude).unwrap();
@@ -88,9 +79,15 @@ fn traegt_in_git_exclude_ein() {
     write_local(&repo, obj(json!({"b": "off"})), None).unwrap();
     assert_eq!(std::fs::read_to_string(&exclude).unwrap(), text);
     assert!(!repo.join(".gitignore").exists());
+    // Exclude ohne Schlusszeilenumbruch: Eintrag auf eigener Zeile, genau einmal.
+    std::fs::write(&exclude, "*.log").unwrap();
+    for i in 0..3 {
+        write_local(&repo, obj(json!({ format!("s{i}"): "off" })), None).unwrap();
+    }
+    assert_eq!(std::fs::read_to_string(&exclude).unwrap(), "*.log\n**/.claude/settings.local.json\n");
 }
 
-fn git_repo(name: &str) -> PathBuf {
+fn git_repo(name: &str) -> Tmp {
     let repo = tmp(name);
     git(&repo, &["init", "-q"]);
     git(&repo, &["config", "core.excludesFile", "keine-datei"]);
@@ -125,13 +122,6 @@ fn verschachtelte_fremde_keys_bleiben_exakt() {
 }
 
 #[test]
-fn claude_ordner_fehlt_wird_angelegt() {
-    let repo = tmp("nodir");
-    write_local(&repo, None, obj(json!({"p@m": false}))).unwrap();
-    assert_eq!(read(&repo), json!({"enabledPlugins": {"p@m": false}}));
-}
-
-#[test]
 fn leeres_ergebnis_ohne_eigene_keys_fasst_datei_nicht_an() {
     let repo = tmp("untouched");
     std::fs::create_dir_all(repo.join(".claude")).unwrap();
@@ -140,8 +130,10 @@ fn leeres_ergebnis_ohne_eigene_keys_fasst_datei_nicht_an() {
     std::fs::write(local(&repo), text).unwrap();
     write_local(&repo, None, None).unwrap();
     assert_eq!(std::fs::read_to_string(local(&repo)).unwrap(), text);
-    // Leere .claude ohne Datei: nichts anlegen.
+    // Ohne .claude: nichts anlegen; leere .claude ohne Datei: auch nicht.
     let repo = tmp("emptydir");
+    write_local(&repo, None, None).unwrap();
+    assert!(!repo.join(".claude").exists());
     std::fs::create_dir_all(repo.join(".claude")).unwrap();
     write_local(&repo, None, None).unwrap();
     assert!(!local(&repo).exists());
@@ -164,35 +156,11 @@ fn idempotent_und_ohne_neuschreiben() {
 }
 
 #[test]
-fn keine_temp_dateien_bleiben_liegen() {
-    let repo = tmp("notmp");
-    for i in 0..3 {
-        write_local(&repo, obj(json!({ format!("s{i}"): "off" })), None).unwrap();
-    }
-    write_local(&repo, None, None).unwrap();
-    let names: Vec<_> = std::fs::read_dir(repo.join(".claude"))
-        .unwrap()
-        .map(|e| e.unwrap().file_name().into_string().unwrap())
-        .collect();
-    assert_eq!(names, ["settings.local.json"]);
-    assert_eq!(read(&repo), json!({}));
-}
-
-#[test]
-fn kaputtes_json_bei_leerem_ergebnis_und_leere_datei() {
-    let repo = tmp("broken2");
-    std::fs::create_dir_all(repo.join(".claude")).unwrap();
-    // Auch "Keys entfernen" darf kaputte Dateien nicht anfassen.
-    for text in ["{\"a\":", "", "null", "\"s\""] {
-        std::fs::write(local(&repo), text).unwrap();
-        assert!(write_local(&repo, None, None).is_err(), "{text:?}");
-        assert_eq!(std::fs::read_to_string(local(&repo)).unwrap(), text);
-    }
-}
-
-#[test]
 fn repo_ohne_git_schreibt_ohne_git_ordner() {
     let repo = tmp("nogit");
+    // Fehlender .claude-Ordner wird angelegt.
+    write_local(&repo, None, obj(json!({"p@m": false}))).unwrap();
+    assert_eq!(read(&repo), json!({"enabledPlugins": {"p@m": false}}));
     write_local(&repo, obj(json!({"a": "off"})), None).unwrap();
     assert_eq!(read(&repo), json!({"skillOverrides": {"a": "off"}}));
     assert!(!repo.join(".git").exists());
@@ -205,18 +173,6 @@ fn gitignore_ignoriert_schon_kein_exclude_eintrag() {
     write_local(&repo, obj(json!({"a": "off"})), None).unwrap();
     assert_eq!(entries(&repo.join(".git/info/exclude")), 0);
     assert_eq!(std::fs::read_to_string(repo.join(".gitignore")).unwrap(), ".claude/settings.local.json\n");
-}
-
-#[test]
-fn exclude_ohne_schlusszeilenumbruch_und_genau_einmal() {
-    let repo = git_repo("nonl");
-    let exclude = repo.join(".git/info/exclude");
-    std::fs::create_dir_all(exclude.parent().unwrap()).unwrap();
-    std::fs::write(&exclude, "*.log").unwrap();
-    for i in 0..3 {
-        write_local(&repo, obj(json!({ format!("s{i}"): "off" })), None).unwrap();
-    }
-    assert_eq!(std::fs::read_to_string(&exclude).unwrap(), "*.log\n**/.claude/settings.local.json\n");
 }
 
 #[test]
@@ -262,6 +218,14 @@ fn parallele_schreiber_zerstoeren_sich_keine_temp_datei() {
     let names: Vec<_> = std::fs::read_dir(repo.join(".claude")).unwrap().map(|e| e.unwrap().file_name()).collect();
     assert_eq!(names, ["settings.local.json"]);
     assert_eq!(read(&repo)["skillOverrides"].as_object().unwrap().len(), 1);
+    // Sequential writes leave no temp files either.
+    for i in 0..3 {
+        write_local(&repo, obj(json!({ format!("s{i}"): "off" })), None).unwrap();
+    }
+    write_local(&repo, None, None).unwrap();
+    let names: Vec<_> = std::fs::read_dir(repo.join(".claude")).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(names, ["settings.local.json"]);
+    assert_eq!(read(&repo), json!({}));
 }
 
 #[test]

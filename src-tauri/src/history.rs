@@ -183,10 +183,10 @@ pub async fn claude_sessions(cwd: String) -> Result<Vec<Past>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_util::Tmp;
 
-    fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("ocui-hist-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
+    fn tmp(name: &str) -> Tmp {
+        let d = Tmp::new(&format!("hist-{name}"));
         fs::create_dir_all(d.join("projects/-w-p")).unwrap();
         fs::create_dir_all(d.join("sessions")).unwrap();
         d

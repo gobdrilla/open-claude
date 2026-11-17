@@ -563,16 +563,17 @@ mod tests {
         assert_eq!(image_type("png"), None);
     }
 
-    fn tmp(name: &str) -> String {
-        let dir = std::env::temp_dir().join(format!("ocui-files-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+    /// Temp repo with `src/`; keep the guard alive, it removes the dir on drop.
+    fn tmp(name: &str) -> (crate::test_util::Tmp, String) {
+        let dir = crate::test_util::Tmp::new(&format!("files-{name}"));
         std::fs::create_dir_all(dir.join("src")).unwrap();
-        dir.to_string_lossy().into_owned()
+        let s = dir.to_string_lossy().into_owned();
+        (dir, s)
     }
 
     #[test]
     fn kein_ausbruch() {
-        let repo = tmp("ausbruch");
+        let (_repo, repo) = tmp("ausbruch");
         for bad in ["../x", "src/../../x", "/etc/passwd", ".git/config", "src/.git/x", ""] {
             assert!(within(&repo, bad).is_err(), "{bad}");
             assert!(write(&repo, bad, "x", false, false, None, true).is_err(), "{bad}");
@@ -583,8 +584,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn kein_ausbruch_per_symlink() {
-        let repo = tmp("symlink");
-        let outside = tmp("symlink-ziel");
+        let (_repo, repo) = tmp("symlink");
+        let (_outside, outside) = tmp("symlink-ziel");
         std::os::unix::fs::symlink(&outside, Path::new(&repo).join("raus")).unwrap();
         assert!(within(&repo, "raus/x.txt").is_err());
         assert!(write(&repo, "raus/x.txt", "x", false, false, None, true).is_err());
@@ -594,7 +595,7 @@ mod tests {
     /// Junction (Windows, ohne Admin) bzw. Symlink auf .git darf .git nicht schreibbar machen.
     #[test]
     fn kein_git_per_link() {
-        let repo = tmp("gitlink");
+        let (_repo, repo) = tmp("gitlink");
         let git = Path::new(&repo).join(".git");
         std::fs::create_dir_all(&git).unwrap();
         let link = Path::new(&repo).join("x");
@@ -610,7 +611,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn schreibgeschuetzt_ohne_temp_rest() {
-        let repo = tmp("readonly");
+        let (_repo, repo) = tmp("readonly");
         let file = Path::new(&repo).join("a.txt");
         std::fs::write(&file, "alt").unwrap();
         let mut p = std::fs::metadata(&file).unwrap().permissions();
@@ -623,7 +624,7 @@ mod tests {
 
     #[test]
     fn crlf_und_bom_bleiben() {
-        let repo = tmp("crlf");
+        let (_repo, repo) = tmp("crlf");
         let file = Path::new(&repo).join("a.xaml");
         std::fs::write(&file, "\u{feff}<a>\r\n</a>\r\n").unwrap();
         let t = read(&repo, "a.xaml").unwrap();
@@ -634,7 +635,7 @@ mod tests {
 
     #[test]
     fn konflikt_statt_ueberschreiben() {
-        let repo = tmp("konflikt");
+        let (_repo, repo) = tmp("konflikt");
         let file = Path::new(&repo).join("a.txt");
         std::fs::write(&file, "alt").unwrap();
         let t = read(&repo, "a.txt").unwrap();
@@ -653,7 +654,7 @@ mod tests {
 
     #[test]
     fn binaer_abgelehnt_und_liste_ohne_git() {
-        let repo = tmp("liste");
+        let (_repo, repo) = tmp("liste");
         std::fs::write(Path::new(&repo).join("b.bin"), [0u8, 159, 146, 150]).unwrap();
         std::fs::create_dir_all(Path::new(&repo).join(".git")).unwrap();
         assert!(read(&repo, "b.bin").is_err());
@@ -670,7 +671,7 @@ mod tests {
 
     #[test]
     fn umbenennen_nur_gross_klein() {
-        let repo = tmp("gross");
+        let (_repo, repo) = tmp("gross");
         let at = |p: &str| Path::new(&repo).join(p);
         std::fs::write(at("readme.md"), "klein").unwrap();
         // Auf Dateisystemen mit Gross-/Kleinschreibung ist README.md eine zweite Datei und bleibt unberuehrt.
@@ -688,7 +689,7 @@ mod tests {
 
     #[test]
     fn einzelnes_cr_wird_lf() {
-        let repo = tmp("cr");
+        let (_repo, repo) = tmp("cr");
         std::fs::write(Path::new(&repo).join("a.txt"), "a\rb\r\r\nc").unwrap();
         let t = read(&repo, "a.txt").unwrap();
         assert_eq!((t.content.as_str(), t.crlf), ("a\nb\n\nc", true));
@@ -696,7 +697,7 @@ mod tests {
 
     #[test]
     fn mtime_passt_zur_platte() {
-        let repo = tmp("mtime");
+        let (_repo, repo) = tmp("mtime");
         let file = Path::new(&repo).join("a.txt");
         let neu = write(&repo, "a.txt", "x", false, false, None, false).unwrap();
         assert_eq!(Some(neu), mtime(&file));
@@ -707,7 +708,7 @@ mod tests {
 
     #[test]
     fn diff_gegen_platte() {
-        let repo = tmp("diff");
+        let (_repo, repo) = tmp("diff");
         std::fs::write(Path::new(&repo).join("a.txt"), "eins\r\nzwei\r\n").unwrap();
         // Zeilenenden sind wie beim Lesen normalisiert: kein Unterschied.
         assert_eq!(diff(&repo, "a.txt", "eins\nzwei\n").unwrap(), "");
@@ -723,7 +724,7 @@ mod tests {
 
     #[test]
     fn gutter_gegen_head() {
-        let repo = tmp("gutter");
+        let (_repo, repo) = tmp("gutter");
         let git_ok = |args: &[&str]| assert!(exec(git(&repo).args(args), None).unwrap().status.success(), "{args:?}");
         git_ok(&["init"]);
         std::fs::write(Path::new(&repo).join("a.txt"), "eins\r\nzwei\r\ndrei\r\n").unwrap();
@@ -741,7 +742,7 @@ mod tests {
 
     #[test]
     fn blame_des_puffers() {
-        let repo = tmp("blame");
+        let (_repo, repo) = tmp("blame");
         let git_ok = |args: &[&str]| assert!(exec(git(&repo).args(args), None).unwrap().status.success(), "{args:?}");
         let commit = |m: &str| git_ok(&["-c", "core.autocrlf=false", "-c", "user.name=Anna Beispiel", "-c", "user.email=a@b", "commit", "--author=Anna Beispiel <a@b>", "-qam", m]);
         git_ok(&["init"]);
@@ -771,14 +772,14 @@ mod tests {
         assert_eq!(blame(&repo, "neu.txt", "x\n").unwrap(), Blame::default());
         assert!(blame(&repo, "../a.txt", "x").is_err());
         // No git at all: nothing either.
-        let plain = tmp("blame-ohne-git");
+        let (_plain, plain) = tmp("blame-ohne-git");
         std::fs::write(Path::new(&plain).join("a.txt"), "x\n").unwrap();
         assert_eq!(blame(&plain, "a.txt", "x\n").unwrap(), Blame::default());
     }
 
     #[test]
     fn dateiliste_ohne_ignorierte() {
-        let repo = tmp("dateien");
+        let (_repo, repo) = tmp("dateien");
         assert!(exec(git(&repo).arg("init"), None).unwrap().status.success());
         for (p, c) in [(".gitignore", "weg/\n"), ("src/b.rs", ""), ("a.txt", "")] {
             std::fs::write(Path::new(&repo).join(p), c).unwrap();
@@ -790,7 +791,7 @@ mod tests {
 
     #[test]
     fn suche_im_projekt() {
-        let repo = tmp("suche");
+        let (_repo, repo) = tmp("suche");
         let at = |p: &str| Path::new(&repo).join(p);
         std::fs::write(at("a.rs"), "let x = a.b(1);\nAB ab\n").unwrap();
         std::fs::write(at("src/u.txt"), "äöü 😀 ziel\r\n").unwrap();

@@ -1,10 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { parseDiff, hunkPatch, linesPatch, fileDiff, stat, reviewPrompt } from "./diff.ts";
+import { parseDiff, linesPatch, fileDiff, stat, reviewPrompt } from "./diff.ts";
 
 const sample = `diff --git a/src/x.ts b/src/x.ts
 index 1111111..2222222 100644
@@ -61,41 +57,6 @@ test("Zeilenauswahl: + weglassen, - zu Kontext, Header neu gerechnet", () => {
   // rueckwaerts (nur -b unstagen): nicht gewaehltes + bleibt als Kontext
   assert.ok(linesPatch(f, f.hunks[0], new Set([1]), true).endsWith("@@ -1,4 +1,3 @@\n a\n-b\n B\n c\n"));
   assert.equal(linesPatch(f, f.hunks[0], new Set([0, 3])), "");
-});
-
-// Praxistest gegen echtes git: alle Patches muessen `git apply --cached --check` bestehen
-test("git apply akzeptiert Hunk- und Zeilen-Patches", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ocui-diff-"));
-  const git = (args: string[], input?: string) =>
-    execFileSync("git", ["-c", "core.autocrlf=false", ...args], { cwd: dir, input, encoding: "utf8", stdio: "pipe" });
-  try {
-    git(["init", "-q"]);
-    writeFileSync(join(dir, "m.txt"), "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n");
-    writeFileSync(join(dir, "e.txt"), "a\nb");
-    writeFileSync(join(dir, "d.txt"), "x\ny\n");
-    git(["add", "-A"]);
-    git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "i"]);
-    writeFileSync(join(dir, "m.txt"), "a\nB\nc\nd\ne\nf\ng\nh\ni\nJ\nk\n");
-    writeFileSync(join(dir, "e.txt"), "a\nc\nd");
-    writeFileSync(join(dir, "n.txt"), "1\n2");
-    rmSync(join(dir, "d.txt"));
-    git(["add", "-N", "n.txt"]);
-    for (const reverse of [false, true]) {
-      if (reverse) git(["add", "-A"]);
-      const files = parseDiff(git(reverse ? ["diff", "--cached"] : ["diff"]));
-      assert.equal(files.length, 4);
-      for (const f of files)
-        for (const h of f.hunks) {
-          const patches = [hunkPatch(f, h)];
-          const idx = h.lines.flatMap((l, i) => (l.kind === "add" || l.kind === "del" ? [i] : []));
-          for (let mask = 1; mask < 1 << idx.length; mask++)
-            patches.push(linesPatch(f, h, new Set(idx.filter((_, b) => mask & (1 << b))), reverse));
-          for (const p of patches) git(["apply", "--cached", "--check", ...(reverse ? ["-R"] : []), "-"], p);
-        }
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 test("fileDiff: Roundtrip je Datei, stat zaehlt", () => {

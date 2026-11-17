@@ -302,7 +302,8 @@ fn legacy_forget(p: &Paths, email: &str) -> Result<(), String> {
     if !email_ok(email) {
         return Err(tr!("Ungültige E-Mail", "Invalid email"));
     }
-    if cfg!(target_os = "macos") {
+    // Never touch the real keychain from tests.
+    if cfg!(target_os = "macos") && !cfg!(test) {
         let _ = crate::quiet("security").args(["delete-generic-password", "-s", LEGACY_SVC, "-a", email]).stdin(Stdio::null()).output();
     }
     let _ = std::fs::remove_file(p.own.join(format!("{email}.json")));
@@ -525,18 +526,19 @@ pub async fn claude_account_legacy_forget(app: tauri::AppHandle, email: String) 
 mod tests {
     use super::*;
 
-    fn tmp(name: &str) -> Paths {
-        let d = std::env::temp_dir().join(format!("ocui-acct-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
+    /// Keep the guard alive, it removes the dir on drop.
+    fn tmp(name: &str) -> (crate::test_util::Tmp, Paths) {
+        let d = crate::test_util::Tmp::new(&format!("acct-{name}"));
         std::fs::create_dir_all(d.join(".claude/skills")).unwrap();
         std::fs::write(d.join(".claude/settings.json"), "{\"a\":1}").unwrap();
         std::fs::write(d.join(".claude.json"), r#"{"theme":"dark","hasCompletedOnboarding":true,"oauthAccount":{"emailAddress":"x@y.z"}}"#).unwrap();
-        Paths { claude: d.join(".claude"), json: d.join(".claude.json"), own: d.join("own") }
+        let p = Paths { claude: d.join(".claude"), json: d.join(".claude.json"), own: d.join("own") };
+        (d, p)
     }
 
     #[test]
     fn eigener_ordner_teilt_per_link() {
-        let p = tmp("links");
+        let (_d, p) = tmp("links");
         let id = add(&p).unwrap();
         assert!(id_ok(&id));
         let dir = p.dir(&id);
@@ -572,12 +574,11 @@ mod tests {
         assert!(!dir.exists());
         assert!(p.claude.join("settings.json").is_file() && p.claude.join("skills").is_dir());
         assert!(idx.accounts.is_empty());
-        let _ = std::fs::remove_dir_all(p.claude.parent().unwrap());
     }
 
     #[test]
     fn ids_und_alte_anmeldungen() {
-        let p = tmp("ids");
+        let (_d, p) = tmp("ids");
         for bad in ["", "a", "../x", "a/../b", "b123", "aXYZ"] {
             assert!(!id_ok(bad), "{bad}");
             assert!(entry(&index(&p).unwrap(), bad).is_err());
@@ -598,7 +599,6 @@ mod tests {
         assert_eq!(legacy(&p), ["a@x.de"]);
         legacy_forget(&p, "a@x.de").unwrap();
         assert!(legacy(&p).is_empty() && !p.own.join("a@x.de.json").exists());
-        let _ = std::fs::remove_dir_all(p.claude.parent().unwrap());
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { contrast, fit, fromHex, hex, inGamut, over, toGamut } from "./color.ts";
 import { DEFAULTS, PRESETS, TOKENS, blankTheme, derive, gradientCss, origin, parseTheme, terminalColors, themeCss } from "./themes.ts";
 
@@ -52,6 +53,19 @@ test("derive: the built-in theme reproduces app.css exactly", () => {
   }
   assert.equal(themeCss(PRESETS[0]), "");
   assert.equal(terminalColors(PRESETS[0], true), undefined);
+  // DEFAULTS must match app.css itself, which paints the app before any theme loads.
+  const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+  const block = (sel: string) => css.slice(css.indexOf(`${sel} {`), css.indexOf("\n}", css.indexOf(`${sel} {`)));
+  for (const [sel, want] of [[":root", DEFAULTS.light], [".dark", DEFAULTS.dark]] as const) {
+    let n = 0;
+    for (const [, k, l, c, h] of block(sel).matchAll(/--([a-z0-9-]+): oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/g)) {
+      if (!(TOKENS as readonly string[]).includes(k)) continue;
+      const w = want[k as (typeof TOKENS)[number]];
+      assert.deepEqual([+l, +c, +h], [w.l, w.c, w.h], `${sel} --${k}`);
+      n++;
+    }
+    assert.ok(n >= 20, `${sel}: only ${n} tokens found in app.css`);
+  }
 });
 
 test("derive: colors follow their parent until set, own colors are used exactly", () => {

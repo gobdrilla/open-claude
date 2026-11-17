@@ -318,14 +318,15 @@ fn client() -> Result<reqwest::Client, String> {
         // Umbenannte Repos antworten mit 301 auf denselben Host. Fremde Hosts nie:
         // reqwest wuerde PRIVATE-TOKEN dorthin mitschicken.
         .redirect(reqwest::redirect::Policy::custom(|a| {
-            let first = &a.previous()[0];
-            let same = a.url().scheme() == "https"
-                && a.url().host_str() == first.host_str()
-                && a.url().port_or_known_default() == first.port_or_known_default();
-            if same && a.previous().len() < 5 { a.follow() } else { a.stop() }
+            if same_origin(a.url(), &a.previous()[0]) && a.previous().len() < 5 { a.follow() } else { a.stop() }
         }))
         .build()
         .map_err(|e| e.to_string())
+}
+
+/// Redirect target is https on the same host and port as the original request.
+fn same_origin(next: &reqwest::Url, first: &reqwest::Url) -> bool {
+    next.scheme() == "https" && next.host_str() == first.host_str() && next.port_or_known_default() == first.port_or_known_default()
 }
 
 fn api_error(host: &str, status: reqwest::StatusCode, body: &Value) -> String {
@@ -1410,6 +1411,14 @@ mod tests {
         assert_eq!(p("C:/Users/x/repo"), None);
         assert_eq!(p("https://github.com/nurowner"), None);
         assert_eq!(p("file:///c/repo"), None);
+        assert_eq!(p("http://GitLab.local/g/p"), hp("gitlab.local", "g/p"));
+        assert_eq!(p("github.com:o/r.git"), hp("github.com", "o/r"));
+        assert_eq!(p("git://github.com/o/r.git"), hp("github.com", "o/r"));
+        assert_eq!(p("  https://github.com/o/r.git/  "), hp("github.com", "o/r"));
+        assert_eq!(p("https://user:pa@ss@github.com/o/r"), hp("github.com", "o/r"));
+        assert_eq!(p("D:\\x\\repo"), None);
+        assert_eq!(p(""), None);
+        assert_eq!(encode("a b/ü"), "a%20b%2F%C3%BC");
     }
 
     #[test]
@@ -1438,32 +1447,12 @@ mod tests {
         assert!(!valid_url("file:///C:/Windows/system32/calc.exe"));
         assert!(!valid_url("https://x.de\" & calc"));
         assert!(!valid_url("C:\\Windows"));
-    }
-
-    #[test]
-    fn parst_weitere_remote_formen() {
-        assert_eq!(p("http://GitLab.local/g/p"), hp("gitlab.local", "g/p"));
-        assert_eq!(p("github.com:o/r.git"), hp("github.com", "o/r"));
-        assert_eq!(p("git://github.com/o/r.git"), hp("github.com", "o/r"));
-        assert_eq!(p("  https://github.com/o/r.git/  "), hp("github.com", "o/r"));
-        assert_eq!(p("https://user:pa@ss@github.com/o/r"), hp("github.com", "o/r"));
-        assert_eq!(p("D:\\x\\repo"), None);
-        assert_eq!(p(""), None);
-        assert_eq!(encode("a b/ü"), "a%20b%2F%C3%BC");
-    }
-
-    #[test]
-    fn open_url_grenzen() {
         assert!(valid_url("HTTPS://github.com/x"));
         assert!(!valid_url("https://"));
         assert!(!valid_url("javascript:alert(1)"));
         assert!(!valid_url("https://a.de\nb"));
         assert!(!valid_url("ms-settings:"));
-    }
-
-    // Nutzer tippen die Host-URL oft mit http:// oder in Grossbuchstaben ab.
-    #[test]
-    fn norm_host_nimmt_http_und_grossgeschriebenes_schema() {
+        // Nutzer tippen die Host-URL oft mit http:// oder in Grossbuchstaben ab.
         assert_eq!(norm_host("HTTPS://gitlab.com").unwrap(), "gitlab.com");
         assert_eq!(norm_host("http://gitlab.firma.de").unwrap(), "gitlab.firma.de");
         assert!(norm_host("ftp://x.de").is_err());
@@ -1618,6 +1607,13 @@ mod tests {
         assert_eq!(parse_account("github:octocat"), None);
         assert_eq!(parse_account("github:evil.com/x:u"), None);
         assert_eq!(parse_account(""), None);
+        assert_eq!(parse_account("gitlab:gitlab.com:ich"), acc("gitlab", "gitlab.com", "ich"));
+        assert_eq!(parse_account("GitHub:github.com:octo"), None);
+        assert_eq!(parse_account("github:github.com"), None);
+        assert_eq!(parse_account("github::octo"), None);
+        assert_eq!(parse_account("github:a b:octo"), None);
+        assert_eq!(parse_account(":::"), None);
+        assert_eq!(parse_account("github"), None);
     }
 
     #[test]
@@ -1645,6 +1641,14 @@ mod tests {
         assert_eq!(pick(None, "gitlab.com", &known), acc("github", "gitlab.com", "x"));
         assert_eq!(pick(None, "gitlab.firma.de", &known), None);
         assert_eq!(pick(None, "github.com", &[k("github", "github.com", "")]), None);
+        let k = |kind: &str, h: &str, u: &str| (kind.to_string(), h.to_string(), u.to_string());
+        let known = [k("gitlab", "gitlab.com", "g1"), k("gitlab", "gitlab.com", "g2"), k("github", "ghe.de:8443", "p")];
+        assert_eq!(pick(Some("gitlab:gitlab.com:g2"), "gitlab.com", &known), acc("gitlab", "gitlab.com", "g2"));
+        assert_eq!(pick(Some("gitlab:gitlab.com:"), "gitlab.com", &known), acc("gitlab", "gitlab.com", "g1"));
+        assert_eq!(pick(Some("github:ghe.de:8443:q"), "ghe.de:8443", &known), acc("github", "ghe.de:8443", "q"));
+        // Port gehoert zum Host: ohne Port kein Treffer.
+        assert_eq!(pick(None, "ghe.de", &known), None);
+        assert_eq!(pick(Some("github:github.com:x"), "gitlab.firma.de", &[]), None);
     }
 
     #[test]
@@ -1658,6 +1662,13 @@ mod tests {
         let gl = json!({"username": "ich", "name": "Ich", "commit_email": "c@x.de", "email": "e@x.de"});
         assert_eq!(identity("gitlab", &gl), ("Ich".into(), "c@x.de".into()));
         assert_eq!(identity("gitlab", &json!({"username": "ich", "email": "e@x.de"})).1, "e@x.de");
+        let gh = json!({"login": "octo", "id": 7, "name": "Octo", "email": ""});
+        assert_eq!(identity("github", &gh), ("Octo".into(), "7+octo@users.noreply.github.com".into()));
+        let gh = json!({"login": "octo", "id": 7, "name": "", "email": "o@c.de"});
+        assert_eq!(identity("github", &gh), ("octo".into(), "o@c.de".into()));
+        let gl = json!({"username": "ich", "commit_email": null, "public_email": "", "email": "e@x.de"});
+        assert_eq!(identity("gitlab", &gl), ("ich".into(), "e@x.de".into()));
+        assert_eq!(identity("gitlab", &json!({"username": "ich"})), ("ich".into(), String::new()));
     }
 
     #[test]
@@ -1670,40 +1681,6 @@ mod tests {
         let [_, k, v] = auth_env("gitlab", "gitlab.firma.de:8443", "T0K");
         assert_eq!(k.1, "http.https://gitlab.firma.de:8443/.extraHeader");
         assert_eq!(v.1, format!("Authorization: Basic {}", b64("oauth2:T0K")));
-    }
-
-    #[test]
-    fn konto_ids_grenzfaelle() {
-        assert_eq!(parse_account("gitlab:gitlab.com:ich"), acc("gitlab", "gitlab.com", "ich"));
-        assert_eq!(parse_account("GitHub:github.com:octo"), None);
-        assert_eq!(parse_account("github:github.com"), None);
-        assert_eq!(parse_account("github::octo"), None);
-        assert_eq!(parse_account("github:a b:octo"), None);
-        assert_eq!(parse_account(":::"), None);
-        assert_eq!(parse_account("github"), None);
-    }
-
-    #[test]
-    fn waehlt_konto_mit_mockliste() {
-        let k = |kind: &str, h: &str, u: &str| (kind.to_string(), h.to_string(), u.to_string());
-        let known = [k("gitlab", "gitlab.com", "g1"), k("gitlab", "gitlab.com", "g2"), k("github", "ghe.de:8443", "p")];
-        assert_eq!(pick(Some("gitlab:gitlab.com:g2"), "gitlab.com", &known), acc("gitlab", "gitlab.com", "g2"));
-        assert_eq!(pick(Some("gitlab:gitlab.com:"), "gitlab.com", &known), acc("gitlab", "gitlab.com", "g1"));
-        assert_eq!(pick(Some("github:ghe.de:8443:q"), "ghe.de:8443", &known), acc("github", "ghe.de:8443", "q"));
-        // Port gehoert zum Host: ohne Port kein Treffer.
-        assert_eq!(pick(None, "ghe.de", &known), None);
-        assert_eq!(pick(Some("github:github.com:x"), "gitlab.firma.de", &[]), None);
-    }
-
-    #[test]
-    fn identitaet_weitere_profile() {
-        let gh = json!({"login": "octo", "id": 7, "name": "Octo", "email": ""});
-        assert_eq!(identity("github", &gh), ("Octo".into(), "7+octo@users.noreply.github.com".into()));
-        let gh = json!({"login": "octo", "id": 7, "name": "", "email": "o@c.de"});
-        assert_eq!(identity("github", &gh), ("octo".into(), "o@c.de".into()));
-        let gl = json!({"username": "ich", "commit_email": null, "public_email": "", "email": "e@x.de"});
-        assert_eq!(identity("gitlab", &gl), ("ich".into(), "e@x.de".into()));
-        assert_eq!(identity("gitlab", &json!({"username": "ich"})), ("ich".into(), String::new()));
     }
 
     /// Mock-Server: nimmt eine Verbindung an, antwortet 404 und liefert den Request-Kopf.
@@ -1820,7 +1797,9 @@ mod tests {
     }
 
     // Echter, lesender Aufruf gegen gitlab.com; offline wird nur uebersprungen.
+    // No mock: api_base is https-only.
     #[test]
+    #[ignore = "network: gitlab.com"]
     fn api_401_mit_falschem_token() {
         match tauri::async_runtime::block_on(api_get("gitlab", "gitlab.com", "glpat-falsch", "/user", &[])) {
             Err(e) if e.contains("nicht erreichbar") => {}
@@ -1833,7 +1812,9 @@ mod tests {
     }
 
     // gitlab-org/gitlab-ce wurde umbenannt; die API antwortet mit 301 auf denselben Host.
+    // No mock_http variant: api_base and the redirect policy are https-only; same_origin is covered offline below.
     #[test]
+    #[ignore = "network: gitlab.com"]
     fn api_folgt_redirect_auf_gleichem_host() {
         let r = tauri::async_runtime::block_on(api_get(
             "gitlab",
@@ -1844,5 +1825,16 @@ mod tests {
         ));
         // offline: uebersprungen wie api_401_mit_falschem_token
         assert!(r.is_ok() || r.as_ref().is_err_and(|e| e.contains("nicht erreichbar")), "{r:?}");
+    }
+
+    #[test]
+    fn redirect_nur_auf_gleichen_https_host() {
+        let u = |s: &str| reqwest::Url::parse(s).unwrap();
+        let first = u("https://gitlab.com/api/v4/projects/a");
+        assert!(same_origin(&u("https://gitlab.com/api/v4/projects/b"), &first));
+        assert!(same_origin(&u("https://gitlab.com:443/x"), &first));
+        assert!(!same_origin(&u("http://gitlab.com/x"), &first));
+        assert!(!same_origin(&u("https://evil.com/x"), &first));
+        assert!(!same_origin(&u("https://gitlab.com:8443/x"), &first));
     }
 }

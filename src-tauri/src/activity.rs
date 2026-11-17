@@ -1070,10 +1070,13 @@ pub fn claude_panel(id: String) -> Option<Value> {
     if !crate::pty::valid_id(&id) {
         return None;
     }
-    let p = panel_file(&id);
-    let mut v: Value = serde_json::from_str(&fs::read_to_string(&p).ok()?).ok()?;
+    read_panel(&panel_file(&id))
+}
+
+fn read_panel(p: &Path) -> Option<Value> {
+    let mut v: Value = serde_json::from_str(&fs::read_to_string(p).ok()?).ok()?;
     // busy without the mod's heartbeat: mod gone or claude died mid-turn, the tab must not show "working" forever.
-    if v["busy"] == true && !crate::awake::fresh(&p, SystemTime::now()) {
+    if v["busy"] == true && !crate::awake::fresh(p, SystemTime::now()) {
         v["busy"] = false.into();
     }
     Some(v)
@@ -1173,28 +1176,24 @@ pub async fn claude_thumb(sid: String, id: usize) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_util::Tmp;
     use std::io::Write;
 
     const SID: &str = "0000aaaa-1111-2222-3333-444455556666";
 
     #[test]
     fn panel_busy_nur_mit_heartbeat() {
-        fs::create_dir_all(panel_dir()).unwrap();
-        let id = format!("test-busy-{}", std::process::id());
-        let p = panel_file(&id);
+        let d = tmp("busy");
+        let p = d.join("t1.json");
         fs::write(&p, r#"{"busy":true,"waiting":false}"#).unwrap();
-        assert_eq!(claude_panel(id.clone()).unwrap()["busy"], true);
+        assert_eq!(read_panel(&p).unwrap()["busy"], true);
         // Mod gone or claude dead: no write for minutes.
         File::options().write(true).open(&p).unwrap().set_modified(SystemTime::now() - std::time::Duration::from_secs(600)).unwrap();
-        assert_eq!(claude_panel(id.clone()).unwrap()["busy"], false);
-        let _ = fs::remove_file(&p);
+        assert_eq!(read_panel(&p).unwrap()["busy"], false);
     }
 
-    fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("ocui-act-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        fs::create_dir_all(&d).unwrap();
-        d
+    fn tmp(name: &str) -> Tmp {
+        Tmp::new(&format!("act-{name}"))
     }
 
     fn put(path: &Path, text: &str) {
@@ -1207,7 +1206,7 @@ mod tests {
     }
 
     /// Config-Ordner mit Projekt fuer /w/p; alive = sessions-Datei mit startedAt 0.
-    fn setup(name: &str, alive: bool) -> (PathBuf, PathBuf) {
+    fn setup(name: &str, alive: bool) -> (Tmp, PathBuf) {
         let c = tmp(name);
         if alive {
             put(&c.join("sessions/1.json"), &format!(r#"{{"sessionId":"{SID}","cwd":"/w/p","startedAt":0,"updatedAt":1}}"#));
@@ -1333,7 +1332,8 @@ mod tests {
         assert_eq!(prompt_of(&v).unwrap(), "Projekt: x\n  - eingerueckt\n\nEnde");
         let anfrage = serde_json::json!({"type":"user","message":{"content":"[Workflow harness — user request] Relay:\n  mach was"}});
         assert_eq!(prompt_of(&anfrage), None);
-        let f = tmp("relay").join("agent-a1.jsonl");
+        let d = tmp("relay");
+        let f = d.join("agent-a1.jsonl");
         put(&f, &format!("{anfrage}\n{v}\n"));
         assert_eq!(first_prompt(&f).as_deref(), Some("Projekt: x\n  - eingerueckt\n\nEnde"));
         assert_eq!(sum_agent(&mut State::default(), &f).prompt.as_deref(), Some("Projekt: x\n  - eingerueckt\n\nEnde"));
@@ -1353,7 +1353,8 @@ mod tests {
 
     #[test]
     fn agent_zeitleiste() {
-        let f = tmp("log").join("agent-a1.jsonl");
+        let d = tmp("log");
+        let f = d.join("agent-a1.jsonl");
         put(
             &f,
             concat!(
@@ -1689,7 +1690,6 @@ mod tests {
         scan_images(&mut st, &path);
         eprintln!("transkript_200mb: {mb} MB, {} Bilder, {:?}", st.imgs.len(), t.elapsed());
         assert_eq!(st.imgs.len(), 100);
-        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]

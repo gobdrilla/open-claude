@@ -294,9 +294,8 @@ mod tests {
         assert_eq!(losses(true, 1), "1 laufende Claude-Sitzung wird beendet.\nUngespeicherte Änderungen im Editor gehen verloren.");
     }
 
-    fn tmp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("ocui-preview-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+    fn tmp(name: &str) -> crate::test_util::Tmp {
+        let dir = crate::test_util::Tmp::new(&format!("preview-{name}"));
         std::fs::create_dir_all(dir.join("sub dir/.git")).unwrap();
         std::fs::write(dir.join("index.html"), "<p>").unwrap();
         std::fs::write(dir.join("sub dir/index.html"), "<b>").unwrap();

@@ -279,6 +279,11 @@ fn editor_state(cli: &str, dir: &Path) -> Result<Option<bool>, String> {
 // ---------- Info ----------
 
 fn info_blocking(path: &str) -> Result<UnityInfo, String> {
+    info_with(path, cli().ok().as_deref())
+}
+
+/// `info_blocking` with the CLI injected (None = not installed).
+fn info_with(path: &str, cli: Option<&str>) -> Result<UnityInfo, String> {
     let dir = PathBuf::from(path);
     if !dir.is_dir() {
         return Err(tr!("Ordner nicht gefunden: {path}", "Folder not found: {path}"));
@@ -289,13 +294,13 @@ fn info_blocking(path: &str) -> Result<UnityInfo, String> {
         skill: dir.join(".claude").join("skills").join("unity-cli").is_dir(),
         ..Default::default()
     };
-    let Ok(cli) = cli() else { return Ok(info) };
+    let Some(cli) = cli else { return Ok(info) };
     info.cli = true;
     if let Some(v) = &info.version {
-        info.editor_installed = unity(&cli, &dir, &["editors", "path", v, "--json"], SHORT)
+        info.editor_installed = unity(cli, &dir, &["editors", "path", v, "--json"], SHORT)
             .is_ok_and(|o| envelope(&o).is_ok());
     }
-    if let Some(reachable) = editor_state(&cli, &dir)? {
+    if let Some(reachable) = editor_state(cli, &dir)? {
         info.editor_open = true;
         info.connected = reachable;
     }
@@ -976,11 +981,12 @@ mod tests {
     fn negativfaelle_kein_panic() {
         // Kein Unity-Projekt: kein Absturz, informativ statt Fehler (version: None traegt das Signal).
         let dir = tmp("kein-unity");
-        let info = info_blocking(&dir.to_string_lossy()).unwrap();
+        // No CLI: never run the real one from ~/.unity/bin here, it writes UnityHub files into the home.
+        let info = info_with(&dir.to_string_lossy(), None).unwrap();
         assert_eq!(info.version, None);
         assert!(!info.editor_open && !info.pipeline && !info.skill);
         assert!(test_blocking(&dir.to_string_lossy(), "Foo").unwrap_err().contains("Testmodus"));
-        assert!(info_blocking("/pfad/existiert/nicht/xyz").unwrap_err().contains("nicht gefunden"));
+        assert!(info_with("/pfad/existiert/nicht/xyz", None).unwrap_err().contains("nicht gefunden"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -1025,7 +1031,7 @@ mod e2e {
     #[test]
     #[ignore]
     fn ablauf_zu_offen_zu() {
-        let Some(p) = kopie() else { return };
+        let p = kopie().expect("skipped: UNITY_E2E_PROJECT not set");
         let _zu = Zu(p.clone());
         close_blocking(&p, true).unwrap();
 

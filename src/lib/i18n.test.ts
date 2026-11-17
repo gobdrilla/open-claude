@@ -7,6 +7,7 @@ import app from "./i18n/en/app.ts";
 import panels from "./i18n/en/panels.ts";
 import misc from "./i18n/en/misc.ts";
 import logic from "./i18n/en/logic.ts";
+import themes from "./i18n/en/themes.ts";
 
 test("system language: German only for German locales", () => {
   assert.equal(systemLang(["de-DE", "en-US"]), "de");
@@ -25,7 +26,8 @@ test("t stays German under node, fills placeholders", () => {
 
 test("every English text keeps the placeholders of its German key", () => {
   const ph = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join();
-  const all = [editor, git, app, panels, misc, logic];
+  // Same list as i18n.ts
+  const all = [editor, git, app, panels, misc, logic, themes];
   const seen = new Map<string, string>();
   for (const d of all)
     for (const [de, text] of Object.entries(d as Record<string, string>)) {

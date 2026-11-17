@@ -10,7 +10,7 @@
 //! selbst, getDiagnostics vor/nach Edits und als Tool mcp__ide__getDiagnostics fuers Modell.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -106,6 +106,11 @@ fn token() -> Result<String, String> {
 
 /// Startet beide Server fuer die Session und liefert die Env-Variablen fuer claude.
 pub fn start<R: Runtime>(app: &AppHandle<R>, ides: &Ides<R>, session: &str, repo: &str) -> Result<Vec<(String, String)>, String> {
+    start_in(app, ides, session, repo, &crate::activity::config_dir())
+}
+
+/// `start` with the Claude config dir injected (the lockfile goes to `<config>/ide`).
+fn start_in<R: Runtime>(app: &AppHandle<R>, ides: &Ides<R>, session: &str, repo: &str, config: &Path) -> Result<Vec<(String, String)>, String> {
     let bind = || -> Result<std::net::TcpListener, String> {
         let l = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| format!("IDE-Server: {e}"))?;
         l.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -121,7 +126,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, ides: &Ides<R>, session: &str, repo
         token: token()?,
         clients: Mutex::default(),
     });
-    let lock = write_lock(ws_port, &ctx)?;
+    let lock = write_lock(&config.join("ide"), ws_port, &ctx)?;
     let tasks = [
         tauri::async_runtime::spawn(serve(ws, ctx.clone(), true)),
         tauri::async_runtime::spawn(serve(http, ctx.clone(), false)),
@@ -136,9 +141,8 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, ides: &Ides<R>, session: &str, repo
 }
 
 /// Format wie die VS-Code-Extension; pid = App, damit claude veraltete Dateien selbst aufraeumt.
-fn write_lock<R: Runtime>(port: u16, ctx: &Ctx<R>) -> Result<PathBuf, String> {
-    let dir = crate::activity::config_dir().join("ide");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("IDE-Lockfile: {e}"))?;
+fn write_lock<R: Runtime>(dir: &Path, port: u16, ctx: &Ctx<R>) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("IDE-Lockfile: {e}"))?;
     let path = dir.join(format!("{port}.lock"));
     let body = json!({
         "pid": std::process::id(),
@@ -720,16 +724,16 @@ mod tests {
         use tauri::Listener;
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
         let app = tauri::test::mock_app();
-        let repo = std::env::temp_dir().join(format!("ocui-ide-{}", std::process::id()));
-        std::fs::create_dir_all(&repo).unwrap();
-        assert!(crate::git::exec(std::process::Command::new("git").arg("-C").arg(&repo).arg("init"), None).unwrap().status.success());
+        let repo = crate::test_util::Tmp::new("ide");
+        let config = crate::test_util::Tmp::new("ide-config");
+        assert!(crate::git::exec(std::process::Command::new("git").arg("-C").arg(&*repo).arg("init"), None).unwrap().status.success());
         let repo_s = repo.to_string_lossy().into_owned();
         let ides = Ides::default();
-        let env: HashMap<_, _> = start(app.handle(), &ides, "t1", &repo_s).unwrap().into_iter().collect();
+        let env: HashMap<_, _> = start_in(app.handle(), &ides, "t1", &repo_s, &config).unwrap().into_iter().collect();
         let ws_port = env["CLAUDE_CODE_SSE_PORT"].clone();
         let http_port = env["OPEN_CLAUDE_MCP_URL"].trim_start_matches("http://127.0.0.1:").trim_end_matches("/mcp").to_string();
         let tok = env["OPEN_CLAUDE_MCP_TOKEN"].clone();
-        let lock = crate::activity::config_dir().join("ide").join(format!("{ws_port}.lock"));
+        let lock = config.join("ide").join(format!("{ws_port}.lock"));
         let l: Value = serde_json::from_str(&std::fs::read_to_string(&lock).unwrap()).unwrap();
         assert_eq!((l["authToken"].as_str(), l["transport"].as_str()), (Some(tok.as_str()), Some("ws")));
 
@@ -824,7 +828,6 @@ mod tests {
 
         ides.stop("t1");
         assert!(!lock.exists());
-        let _ = std::fs::remove_dir_all(&repo);
     }
 
     #[test]

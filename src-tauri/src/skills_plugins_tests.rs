@@ -1,10 +1,8 @@
 use super::*;
+use crate::test_util::Tmp;
 
-fn tmp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ocui-skills-plugins-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn tmp(name: &str) -> Tmp {
+    Tmp::new(&format!("skills-plugins-{name}"))
 }
 
 fn put(path: &Path, text: &str) {

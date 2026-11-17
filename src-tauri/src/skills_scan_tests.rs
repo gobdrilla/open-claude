@@ -1,10 +1,9 @@
 use super::*;
 
-fn tmp(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ocui-skills-scan-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+use crate::test_util::Tmp;
+
+fn tmp(name: &str) -> Tmp {
+    Tmp::new(&format!("skills-scan-{name}"))
 }
 
 fn put(path: &Path, text: &str) {
@@ -12,29 +11,39 @@ fn put(path: &Path, text: &str) {
     std::fs::write(path, text).unwrap();
 }
 
-fn fm(text: &str) -> (Option<String>, Option<String>) {
-    frontmatter(text)
-}
-
 #[test]
-fn frontmatter_einfach_crlf_bom() {
-    assert_eq!(fm("---\nname: a\ndescription: Tut was\n---\nbody"), (Some("a".into()), Some("Tut was".into())));
-    assert_eq!(fm("\u{feff}---\r\nname: b\r\ndescription: \"x: y\"\r\n---\r\n"), (Some("b".into()), Some("x: y".into())));
-    assert_eq!(fm("name: kein block"), (None, None));
-    assert_eq!(fm(""), (None, None));
+fn frontmatter_einfach_quotes_escapes() {
+    assert_eq!(frontmatter("---\nname: a\ndescription: Tut was\n---\nbody"), (Some("a".into()), Some("Tut was".into())));
+    assert_eq!(frontmatter("\u{feff}---\r\nname: b\r\ndescription: \"x: y\"\r\n---\r\n"), (Some("b".into()), Some("x: y".into())));
+    assert_eq!(frontmatter("name: kein block"), (None, None));
+    assert_eq!(frontmatter(""), (None, None));
     // Ohne schliessendes --- nicht crashen.
-    assert_eq!(fm("---\nname: c"), (Some("c".into()), None));
+    assert_eq!(frontmatter("---\nname: c"), (Some("c".into()), None));
+    // Leere description = None, nicht "".
+    assert_eq!(frontmatter("---\nname: a\ndescription:\n---\n"), (Some("a".into()), None));
+    assert_eq!(frontmatter("---\nname: a\ndescription: \"\"\n---\n"), (Some("a".into()), None));
+    // Plain-Scalar ueber mehrere Zeilen.
+    assert_eq!(frontmatter("---\ndescription:\n  eins\n  zwei\n---\n"), (None, Some("eins zwei".into())));
+    // Doppelpunkt im Wert, Einzel-Quotes, CRLF mit >-.
+    assert_eq!(frontmatter("---\ndescription: Use when: x\n---\n").1.as_deref(), Some("Use when: x"));
+    assert_eq!(frontmatter("---\nname: 'q'\n---\n").0.as_deref(), Some("q"));
+    assert_eq!(frontmatter("---\r\ndescription: >-\r\n  a\r\n  b\r\n---\r\n").1.as_deref(), Some("a b"));
+    // Nur ein Quote ist kein Quoting.
+    assert_eq!(frontmatter("---\nname: \"halb\n---\n").0.as_deref(), Some("\"halb"));
+    // YAML: '' in Einzel-Quotes ist ein ', \" in Doppel-Quotes ein ".
+    assert_eq!(frontmatter("---\ndescription: 'it''s'\n---\n").1.as_deref(), Some("it's"));
+    assert_eq!(frontmatter("---\ndescription: \"sag \\\"hi\\\"\"\n---\n").1.as_deref(), Some("sag \"hi\""));
 }
 
 #[test]
 fn frontmatter_mehrzeilig() {
     let t = "---\nname: a\ndescription: >\n  Zeile eins\n  Zeile zwei\nother: x\n---\n";
-    assert_eq!(fm(t), (Some("a".into()), Some("Zeile eins Zeile zwei".into())));
+    assert_eq!(frontmatter(t), (Some("a".into()), Some("Zeile eins Zeile zwei".into())));
     let t = "---\ndescription: |-\n  erste\n\n  zweite\nname: z\n---\n";
-    assert_eq!(fm(t), (Some("z".into()), Some("erste zweite".into())));
+    assert_eq!(frontmatter(t), (Some("z".into()), Some("erste zweite".into())));
     // Folgezeilen fremder Keys landen nicht in description.
     let t = "---\ndescription: d\nmeta:\n  name: falsch\n---\n";
-    assert_eq!(fm(t), (None, Some("d".into())));
+    assert_eq!(frontmatter(t), (None, Some("d".into())));
 }
 
 #[test]
@@ -84,53 +93,6 @@ fn fehlendes_und_kaputtes_ist_leer() {
         "user": { "skillOverrides": {}, "enabledPlugins": {} },
         "team": { "skillOverrides": {}, "enabledPlugins": {} },
     }));
-}
-
-/// Nur lesend gegen das echte ~/.claude und dieses Repo: cargo test -- --ignored real_home_smoke
-#[test]
-#[ignore]
-fn real_home_smoke() {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let info = list(&home(), repo);
-    let keys: Vec<(&str, &str)> = info.skills.iter().map(|s| (s.key.as_str(), s.source)).collect();
-    for k in ["commit", "release", "cleanup"] {
-        assert!(keys.contains(&(k, "project")), "{k} fehlt: {keys:?}");
-    }
-    for k in ["caveman:caveman", "caveman:caveman-commit", "ponytail:ponytail", "ponytail:ponytail-audit"] {
-        assert!(keys.contains(&(k, "plugin")), "{k} fehlt: {keys:?}");
-    }
-    let pony = info.skills.iter().find(|s| s.key == "ponytail:ponytail").unwrap();
-    assert_eq!(pony.plugin.as_deref(), Some("ponytail@ponytail"));
-    assert!(!pony.description.is_empty());
-    // Plugins ohne skills-Ordner tauchen trotzdem als Plugin auf.
-    assert!(info.plugins.iter().any(|p| p == "rust-analyzer-lsp@claude-plugins-official"), "{:?}", info.plugins);
-    assert_eq!(info.user.skill_overrides.get("ponytail:ponytail-help").map(String::as_str), Some("off"));
-    // Jeder Key aus den echten skillOverrides muss einem gefundenen Skill entsprechen,
-    // sonst greift der Schalter in der UI nicht (z.B. caveman:compress, Ordner "compress", name "caveman-compress").
-    let missing: Vec<_> = info.user.skill_overrides.keys().filter(|k| !keys.iter().any(|(s, _)| s == k)).collect();
-    assert!(missing.is_empty(), "Override-Keys ohne Skill: {missing:?}; gefunden: {keys:?}");
-}
-
-#[test]
-fn frontmatter_leer_und_quotes() {
-    // Leere description = None, nicht "".
-    assert_eq!(fm("---\nname: a\ndescription:\n---\n"), (Some("a".into()), None));
-    assert_eq!(fm("---\nname: a\ndescription: \"\"\n---\n"), (Some("a".into()), None));
-    // Plain-Scalar ueber mehrere Zeilen.
-    assert_eq!(fm("---\ndescription:\n  eins\n  zwei\n---\n"), (None, Some("eins zwei".into())));
-    // Doppelpunkt im Wert, Einzel-Quotes, CRLF mit >-.
-    assert_eq!(fm("---\ndescription: Use when: x\n---\n").1.as_deref(), Some("Use when: x"));
-    assert_eq!(fm("---\nname: 'q'\n---\n").0.as_deref(), Some("q"));
-    assert_eq!(fm("---\r\ndescription: >-\r\n  a\r\n  b\r\n---\r\n").1.as_deref(), Some("a b"));
-    // Nur ein Quote ist kein Quoting.
-    assert_eq!(fm("---\nname: \"halb\n---\n").0.as_deref(), Some("\"halb"));
-}
-
-#[test]
-fn frontmatter_yaml_escapes() {
-    // YAML: '' in Einzel-Quotes ist ein ', \" in Doppel-Quotes ein ".
-    assert_eq!(fm("---\ndescription: 'it''s'\n---\n").1.as_deref(), Some("it's"));
-    assert_eq!(fm("---\ndescription: \"sag \\\"hi\\\"\"\n---\n").1.as_deref(), Some("sag \"hi\""));
 }
 
 #[test]

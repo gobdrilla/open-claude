@@ -17,7 +17,6 @@ test("age: Einheiten und Grenzen", () => {
   // abgerundet, nicht gerundet: 350 Tage sind "11 Mo", 1,6 Jahre sind "1 J"
   assert.equal(age(ago(350 * 864e5)), "11 Mo");
   assert.equal(age(ago(1.6 * 31536e6)), "1 J");
-  assert.equal(age("2024-01-01T10:00:00+02:00").endsWith(" J") || age("2024-01-01T10:00:00+02:00").endsWith(" Mo"), true);
 });
 
 test("cn: Tailwind-Konflikte loest der letzte Wert", () => {

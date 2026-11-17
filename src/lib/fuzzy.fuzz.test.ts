@@ -53,3 +53,15 @@ test("Umlaute ohne Punkte tippen: uber findet Überprüfung", () => {
   assert.deepEqual(fuzzy("Überprüfung", "uber")?.hits, [0, 1, 2, 3]);
   assert.ok(fuzzy("Überprüfung", "über"));
 });
+
+test("bewertet zusammenhaengende Treffer hoeher als verstreute", () => {
+  const solid = fuzzy("vestigo", "vest")!.score;
+  const spread = fuzzy("vorher-etwas-sonst-tja", "vest")!.score;
+  assert.ok(solid > spread, `${solid} > ${spread}`);
+});
+
+test("bevorzugt den kuerzeren Namen bei gleichem Treffer", () => {
+  const short = fuzzy("ae-core-hcv", "core")!.score;
+  const long = fuzzy("ae-core-graphics-wpf", "core")!.score;
+  assert.ok(short > long, `${short} > ${long}`);
+});

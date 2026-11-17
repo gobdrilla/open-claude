@@ -52,6 +52,8 @@ mod runner;
 mod share;
 // App extensions (declarative manifests).
 mod extensions;
+#[cfg(test)]
+pub(crate) mod test_util;
 
 #[derive(Serialize)]
 struct Repo {
