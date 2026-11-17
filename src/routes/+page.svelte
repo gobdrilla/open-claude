@@ -214,6 +214,19 @@
   let editRepo = $state<Repo | null>(null);
   const view = $derived(editRepo ? "edit" : gitRepo ? "git" : active ? "term" : "list");
   const viewRepo = $derived(editRepo ?? gitRepo ?? activeSession?.repo);
+  // Group session the editor/git view was opened from: all its repos stay switchable there, Claude goes back to it.
+  let groupFrom = $state<string | null>(null);
+  $effect(() => {
+    if (view === "term") groupFrom = activeSession?.group ? activeSession.id : null;
+    else if (view === "list") groupFrom = null;
+  });
+  const groupRepos = $derived.by(() => {
+    const s = sessions.find((x) => x.id === groupFrom);
+    if (!s || view === "term") return [];
+    const list = [s.repo, ...(s.dirs ?? []).flatMap((p) => repos.filter((r) => r.path === p))];
+    // Opened elsewhere (Claude's open_file in another project): no stale group picker.
+    return list.some((r) => r.path === viewRepo?.path) ? list : [];
+  });
   // Rust fragt vor dem Beenden nach, solange irgendwo ungespeicherte Aenderungen liegen.
   $effect(() => {
     editorDirty(isDirty()).catch(() => {});
@@ -866,7 +879,15 @@
   }
 
   // Title bar view switcher: fixed order, Editor/Git only where the project has a folder here.
-  const VIEW_OPEN = { term: (r?: Repo) => launch(r), edit: openEdit, git: openGit } as const;
+  const VIEW_OPEN = { term: (r?: Repo) => (groupFrom && groupRepos.length ? openSessionTab(groupFrom) : launch(r)), edit: openEdit, git: openGit } as const;
+  /** Another repo of the group in the same view; the git view may hold back (unfinished merge etc.). */
+  async function switchRepo(r: Repo) {
+    if (view === "git") {
+      if (gitView && !(await gitView.canLeave())) return;
+      leaveGit();
+      openGit(r);
+    } else await openEdit(r);
+  }
   type ViewKey = keyof typeof VIEW_OPEN;
   const ROW_VIEWS = [
     ["Claude", "term", TerminalIcon, 1],
@@ -1343,9 +1364,32 @@
       title={t("Zurück zu den Projekten ({mod}+Umschalt+W)", { mod })}><ArrowLeftIcon class="size-3.5" /> {t("Projekte")}</Button
     >
     <div class="flex min-w-0 items-center gap-2 overflow-hidden" title={viewRepo.path} data-tauri-drag-region>
-      <span class="text-ui truncate font-semibold" data-tauri-drag-region>
-        {split(viewRepo.rel)[1]}
-      </span>
+      {#if groupRepos.length > 1}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+              <Button {...props} variant="quiet" size="xs" class="min-w-0 gap-1 font-semibold" title={t("Anderes Projekt der Gruppe")}>
+                <span class="truncate">{split(viewRepo.rel)[1]}</span>
+                <ChevronDownIcon class="size-3 shrink-0" />
+              </Button>
+            {/snippet}
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="start" sideOffset={4} class={cn(menuContent, "min-w-48 rounded-lg shadow-lg")}>
+              {#each groupRepos as r (r.path)}
+                <DropdownMenu.Item class={cn(menuItem, "py-1.5", r.path === viewRepo.path && "font-semibold")} onSelect={() => r.path !== viewRepo?.path && switchRepo(r)}>
+                  <span class="flex-1 truncate">{split(r.rel)[1]}</span>
+                  {#if r.branch}<span class="text-muted-foreground text-meta font-mono">{r.branch}</span>{/if}
+                </DropdownMenu.Item>
+              {/each}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      {:else}
+        <span class="text-ui truncate font-semibold" data-tauri-drag-region>
+          {split(viewRepo.rel)[1]}
+        </span>
+      {/if}
       {#if split(viewRepo.rel)[0]}
         <span
           class="text-muted-foreground text-meta hidden truncate font-mono sm:block"

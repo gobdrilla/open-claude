@@ -102,6 +102,7 @@ export default {
   "Gruppe „{name}“ löschen?": "Delete group “{name}”?",
   "Gruppe „{name}“: Haupt-Repo nicht gefunden ({path}).": "Group “{name}”: main repo not found ({path}).",
   "Die Projekte selbst bleiben unverändert.": "The projects themselves stay unchanged.",
+  "Anderes Projekt der Gruppe": "Other project in the group",
   "Nicht mehr anpinnen": "Unpin",
   "Anpinnen": "Pin",
   "Skill-Profil": "Skill profile",
