@@ -220,6 +220,12 @@ pub fn pty_open(
         .ok()
         .map(|_| crate::activity::panel_file(&id).to_string_lossy().into_owned());
     let mut env: Vec<_> = dirs.iter().map(|d| ("CLAUDE_CODE_PLUGIN_DIRS", d.as_str())).collect();
+    // Extra Claude account: its own config folder (login), shared parts are linked to ~/.claude.
+    // Errors stop the session: starting it silently on another account would be worse.
+    let account = crate::accounts::active_dir(&app)?.map(|d| d.to_string_lossy().into_owned());
+    if let Some(a) = &account {
+        env.push(("CLAUDE_CONFIG_DIR", a));
+    }
     // Die Mod schreibt ihre Session-Daten dorthin, das App-Panel liest sie.
     if let Some(p) = &panel {
         env.push(("OPEN_CLAUDE_PANEL", p));
@@ -718,11 +724,28 @@ fn tool_ok(cwd: &Path, name: &str) -> bool {
 
 /// `claude auth login` in einer PTY: oeffnet die Anmeldung im Browser, fragt evtl. nach einem Code. Ausgabe kommt
 /// wie beim Terminal ueber `out`, das Ende als pty-exit:<id>.
+/// `account`: config folder of that account ("" = standard ~/.claude); `email` pre-fills the login page (renew).
 #[tauri::command]
-pub fn claude_login(app: AppHandle, ptys: State<'_, Ptys>, id: String, out: Channel<InvokeResponseBody>) -> Result<(), String> {
+pub fn claude_login(
+    app: AppHandle,
+    ptys: State<'_, Ptys>,
+    id: String,
+    account: Option<String>,
+    email: Option<String>,
+    out: Channel<InvokeResponseBody>,
+) -> Result<(), String> {
     let claude = crate::deps::claude_bin().ok_or_else(|| tr!("claude nicht gefunden", "claude not found"))?;
     let home = crate::skills::home();
-    spawn(app, &ptys, id, &home.to_string_lossy(), &claude.to_string_lossy(), vec!["auth".into(), "login".into()], 100, 30, &[], true, out)
+    let dir = crate::accounts::dir_for(&app, account.as_deref().unwrap_or(""))?.map(|d| d.to_string_lossy().into_owned());
+    let mut args = vec!["auth".to_string(), "login".into()];
+    if let Some(e) = email.filter(|e| !e.is_empty()) {
+        if !crate::accounts::email_ok(&e) {
+            return Err(tr!("Ungültige E-Mail", "Invalid email"));
+        }
+        args.extend(["--email".into(), e]);
+    }
+    let env: Vec<(&str, &str)> = dir.iter().map(|d| ("CLAUDE_CONFIG_DIR", d.as_str())).collect();
+    spawn(app, &ptys, id, &home.to_string_lossy(), &claude.to_string_lossy(), args, 100, 30, &env, true, out)
 }
 
 /// Was vor dem Start von `target` installiert werden muesste; das Frontend fragt damit vor `run_start` nach.

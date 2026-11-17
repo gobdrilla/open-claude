@@ -293,7 +293,7 @@
             <SettingRow label={t("Claude-Einstellungen")} description={t("Modell, Berechtigungen und Darstellung wie /config im Terminal.")}>
               <Button variant="outline" size="sm" onclick={onclaude}>{t("Öffnen")}</Button>
             </SettingRow>
-            <SettingRow label={t("Claude-Konten")} description={t("An- und abmelden, zwischen gemerkten Konten wechseln.")}>
+            <SettingRow label={t("Claude-Konten")} description={t("Mehrere Konten, jedes in eigenem Ordner; Ablauf und Erneuern.")}>
               <Button variant="outline" size="sm" onclick={onclaudeaccounts}>{t("Verwalten")}</Button>
             </SettingRow>
             <SettingRow label={t("Skill-Profile")} description={t("Vorlagen für Skills und Plugins je Projekttyp oder Projekt.")}>
