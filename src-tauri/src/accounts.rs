@@ -134,11 +134,26 @@ fn linked(p: &Paths, dir: &Path, name: &str) -> bool {
     let link = dir.join(name);
     #[cfg(windows)]
     if link.is_file() {
-        // shortcut: files are hard links on Windows (symlinks need developer mode); same content counts as linked.
-        return std::fs::read(&link).ok().is_some_and(|a| std::fs::read(p.claude.join(name)).ok().is_some_and(|b| a == b));
+        // Files are hard links on Windows (symlinks need developer mode). An equal copy is not linked: toggling off
+        // leaves one behind, and counting it would keep the switch on without a link.
+        return same_file(&link, &p.claude.join(name));
     }
     let _ = p;
     std::fs::read_link(link).is_ok()
+}
+
+/// Same file on disk (volume + file index), i.e. hard links of each other.
+#[cfg(windows)]
+fn same_file(a: &Path, b: &Path) -> bool {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::{Foundation::HANDLE, Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION}};
+    let id = |p: &Path| {
+        let f = std::fs::File::open(p).ok()?;
+        let mut i = BY_HANDLE_FILE_INFORMATION::default();
+        unsafe { GetFileInformationByHandle(HANDLE(f.as_raw_handle()), &mut i) }.ok()?;
+        Some((i.dwVolumeSerialNumber, i.nFileIndexHigh, i.nFileIndexLow))
+    };
+    id(a).is_some_and(|x| id(b) == Some(x))
 }
 
 fn make_link(target: &Path, link: &Path) -> Result<(), String> {
