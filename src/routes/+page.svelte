@@ -1204,7 +1204,12 @@
   const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"]';
   // Alt held: the start page shows the Alt+1..9 hints only then.
   let altHeld = $state(false);
-  const noteAlt = (e: KeyboardEvent) => (altHeld = e.altKey && !e.ctrlKey && !e.metaKey);
+  const noteAlt = (e: KeyboardEvent) => {
+    altHeld = e.altKey && !e.ctrlKey && !e.metaKey;
+    // Windows: a bare Alt release enters the window's menu mode, the next Alt only leaves it and never reaches the
+    // page, so quick presses seemed to lag. preventDefault keeps Chromium/WebView2 from handing it to the system.
+    if (e.key === "Alt") e.preventDefault();
+  };
   const noteCtrl = (e: KeyboardEvent) => {
     noteAlt(e);
     // Capture am Fenster: vor xterm und CodeMirror, die Shell bekommt die Taste nicht.
