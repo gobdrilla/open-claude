@@ -608,7 +608,8 @@
       </p>
     {/if}
     {#if tab === "history" && history}
-      <HistoryPanel {cwd} active={id} {...history} />
+      <!-- No {...history}: a spread makes every prop depend on the object, rebuilt on each poll, and the list reloads empty. -->
+      <HistoryPanel {cwd} active={id} open={history.open} onopen={history.onopen} onresume={history.onresume} />
     {:else if error}
       <p class="text-destructive p-2">{error}</p>
     {:else if !data}
