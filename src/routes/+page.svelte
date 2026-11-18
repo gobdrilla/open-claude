@@ -551,7 +551,9 @@
    * waehlt "Beenden" vor, ein zweites Enter beendete alle Sitzungen; hier hat Abbrechen den Fokus.
    */
   async function closeWindow(byKey = false) {
-    if (!byKey || tray) return void getCurrentWindow().close();
+    // Mit Tray nur verstecken; window.close() ginge durch CloseRequested und beendete wie Alt+F4.
+    if (tray) return void invoke("hide_window");
+    if (!byKey) return void getCurrentWindow().close();
     const lost = [sessions.length ? sessionsLost() : "", isDirty() ? t("Ungespeicherte Änderungen im Editor gehen dabei verloren.") : ""].filter(Boolean);
     const message = [t("Esc schließt das Fenster und beendet die App."), ...lost].join(" ");
     if (await confirm(message, t("Beenden"), t("L'Atelier de Claude beenden?"))) await invoke("quit_now");

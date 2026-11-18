@@ -111,9 +111,10 @@ Das Zahnrad rechts in der Suchleiste enthält Zoom, Hell/Dunkel/System, die Rüc
 Git-Aktionen, *Skill-Profile*, *Claude-Einstellungen* (wie `/config`) und *Nach Updates suchen*.
 Unter Windows und Linux kommen zwei Schalter dazu:
 
-- *Schließen legt ins Tray* (Standard: an): Schließen versteckt das Fenster nur, es kommt per
-  Klick aufs Tray-Icon zurück; beendet wird die App über *Beenden* im Kontextmenü des Tray-Icons.
-  Ist der Schalter aus, beendet Schließen die App samt allen laufenden Sitzungen.
+- *Schließen legt ins Tray* (Standard: an): ✕ und `Esc` verstecken das Fenster nur, es kommt per
+  Klick aufs Tray-Icon zurück. `Alt+F4` und *Fenster schließen* in der Taskleiste beenden die App
+  immer, genau wie *Beenden* im Kontextmenü des Tray-Icons.
+  Ist der Schalter aus, beendet auch ✕ die App samt allen laufenden Sitzungen.
 - *Autostart* startet die App bei der Anmeldung des Benutzers.
 
 Unter macOS gibt es beide nicht: Schließen versteckt das Fenster, ein Klick aufs Dock- oder Menüleisten-Icon holt es

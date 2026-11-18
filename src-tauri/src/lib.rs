@@ -621,6 +621,12 @@ fn hide(window: &tauri::Window) {
     });
 }
 
+/// Eigener Schliessen-Knopf und Esc bei Tray an: nur verstecken. Natives Schliessen (Alt+F4) beendet, siehe on_window_event.
+#[tauri::command]
+fn hide_window(window: tauri::Window) {
+    hide(&window);
+}
+
 /// Tray-Icon mit Menue. Mit Tray an der einzige Weg, die App wirklich zu beenden.
 /// Linux: tray-icon laedt libappindicator erst beim Bauen und bricht ohne sie per panic ab (Release: abort),
 /// das map_err in setup() kaeme nie dran. Und ohne StatusNotifierWatcher (GNOME ohne AppIndicator-Erweiterung)
@@ -793,6 +799,7 @@ pub fn run() {
             trash_repo,
             trash_check,
             set_tray,
+            hide_window,
             deps::deps_missing,
             deps::deps_install,
             pty::pty_open,
@@ -991,12 +998,13 @@ pub fn run() {
             TRAY.store(ok, Ordering::Relaxed);
             Ok(())
         })
-        // Mit Tray versteckt Schliessen nur — raus kommt man dann ueber das Tray-Menue.
-        // Ohne Tray beendet Schliessen die App: bei ungespeicherten Aenderungen im Editor erst fragen.
+        // Natives Schliessen: Windows/Linux Alt+F4 oder Taskleiste beenden die App (bei laufenden Sitzungen und
+        // ungespeicherten Aenderungen erst fragen); ins Tray legen dort nur der eigene Knopf und Esc (hide_window).
+        // macOS: roter Knopf versteckt bei Tray an, wie dort ueblich; Beenden ueber Cmd+Q oder das Tray-Menue.
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                if TRAY.load(Ordering::Relaxed) {
+                if cfg!(target_os = "macos") && TRAY.load(Ordering::Relaxed) {
                     hide(window);
                 } else {
                     preview::quit(window.app_handle());
