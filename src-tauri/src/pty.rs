@@ -121,15 +121,17 @@ pub(crate) const UNIX_SHELL: &str = if cfg!(target_os = "macos") { "/bin/zsh" } 
 /// `settings`: claude bekommt `--settings` aus $OPEN_CLAUDE_SETTINGS (Shell expandiert, kein Quoting).
 /// `resume`: earlier session to continue (`--resume`); only hex and `-` (checked in pty_open), safe in every shell.
 /// ocui-sh reads it from $OPEN_CLAUDE_RESUME itself.
+/// `flag`: start flag of a permission mode from mode_flag; ocui-sh reads it from $OPEN_CLAUDE_FLAG.
 fn shell(
     windows: bool,
     own: &str,
     settings: bool,
     resume: Option<&str>,
+    flag: Option<&str>,
     env: impl Fn(&str) -> Option<String>,
     exists: impl Fn(&str) -> bool,
 ) -> (String, Vec<String>) {
-    let tail = resume.map(|r| format!(" --resume {r}")).unwrap_or_default();
+    let tail = resume.map(|r| format!(" --resume {r}")).unwrap_or_default() + &flag.map(|f| format!(" {f}")).unwrap_or_default();
     let claude = format!("{}{tail}", if settings { "claude --settings \"$OPEN_CLAUDE_SETTINGS\"" } else { "claude" });
     if !windows {
         let sh = env("SHELL")
@@ -178,6 +180,15 @@ fn shell(
     ("cmd.exe".into(), vec!["/c".into(), format!("claude{tail}")])
 }
 
+/// Start flag for a permission mode that Shift+Tab may not reach; only these ever reach the command line.
+fn mode_flag(mode: &str) -> Option<&'static str> {
+    match mode {
+        "bypassPermissions" => Some("--dangerously-skip-permissions"),
+        "dontAsk" => Some("--permission-mode dontAsk"),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn pty_open(
@@ -191,6 +202,7 @@ pub fn pty_open(
     theme: String,
     dirs: Option<Vec<String>>,
     resume: Option<String>,
+    mode: Option<String>,
     out: Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
     // Session id from the Verlauf panel: never let anything else reach the command line.
@@ -198,6 +210,11 @@ pub fn pty_open(
     if resume.as_ref().is_some_and(|r| !r.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')) {
         return Err(tr!("Ungueltige Sitzung", "Invalid session"));
     }
+    // Restart into a permission mode (ClaudeBar): unknown names never reach the command line.
+    let flag = match mode.filter(|m| !m.is_empty()) {
+        Some(m) => Some(mode_flag(&m).ok_or_else(|| tr!("Ungueltiger Modus: {m}", "Invalid mode: {m}"))?),
+        None => None,
+    };
     // Repo-Gruppe: weitere Repos, die claude neben cwd kennt und bearbeiten darf. Nur vorhandene Ordner.
     let extra: Vec<String> = dirs
         .unwrap_or_default()
@@ -212,7 +229,7 @@ pub fn pty_open(
         .unwrap_or_default();
     let settings = session_settings(&app, &theme, &extra).map(|p| p.to_string_lossy().into_owned());
     let (program, args) =
-        shell(cfg!(windows), &own, settings.is_some(), resume.as_deref(), |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
+        shell(cfg!(windows), &own, settings.is_some(), resume.as_deref(), flag, |k| std::env::var(k).ok(), |p| Path::new(p).is_file());
     let dirs = mod_dirs(&app);
     // Ordner vorher sicher anlegen; geht das nicht (fremder Besitzer), laeuft die Sitzung ohne Panel.
     let panel = crate::activity::ensure_panel_dir()
@@ -235,6 +252,9 @@ pub fn pty_open(
     }
     if let Some(r) = &resume {
         env.push(("OPEN_CLAUDE_RESUME", r));
+    }
+    if let Some(f) = flag {
+        env.push(("OPEN_CLAUDE_FLAG", f));
     }
     // Unix: the login shell execs ocui-sh from here (see shell).
     env.push(("OCUI_SH", &own));
@@ -1074,7 +1094,7 @@ pub async fn pty_close(ptys: State<'_, Ptys>, ides: State<'_, crate::ide::Ides>,
 
 #[cfg(test)]
 mod tests {
-    use super::{plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, UNIX_SHELL};
+    use super::{mode_flag, plugin_dirs, run_command, shell, theme_for, valid_id, Profile, Target, UNIX_SHELL};
 
     /// Jede Datei der Mod muss in FILES stehen, sonst fehlt sie im Release.
     #[test]
@@ -1375,6 +1395,7 @@ mod tests {
             OWN,
             false,
             None,
+            None,
             |k| env.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string()),
             |p| files.contains(&p),
         )
@@ -1437,13 +1458,15 @@ mod tests {
 
     #[test]
     fn settings_nur_mit_flag() {
-        let s = |w| shell(w, OWN, true, None, |k| (k == "SHELL").then(|| "/bin/fish".into()), |p| p == "C:\\ps\\pwsh.exe" || p == OWN);
-        let fallback = shell(false, OWN, true, None, |k| (k == "SHELL").then(|| "/bin/fish".into()), |_| false);
+        let s = |w| shell(w, OWN, true, None, None, |k| (k == "SHELL").then(|| "/bin/fish".into()), |p| p == "C:\\ps\\pwsh.exe" || p == OWN);
+        let fallback = shell(false, OWN, true, None, None, |k| (k == "SHELL").then(|| "/bin/fish".into()), |_| false);
         assert_eq!(fallback.1, ["-lic", "exec claude --settings \"$OPEN_CLAUDE_SETTINGS\""]);
-        let resumed = shell(false, OWN, true, Some("ab-12"), |_| None, |_| false);
+        let resumed = shell(false, OWN, true, Some("ab-12"), None, |_| None, |_| false);
         assert_eq!(resumed.1, ["-lic", "exec claude --settings \"$OPEN_CLAUDE_SETTINGS\" --resume ab-12"]);
-        let cmd = shell(true, OWN, false, Some("ab-12"), |_| None, |_| false);
-        assert_eq!(cmd.1, ["/c", "claude --resume ab-12"]);
+        let cmd = shell(true, OWN, false, Some("ab-12"), mode_flag("bypassPermissions"), |_| None, |_| false);
+        assert_eq!(cmd.1, ["/c", "claude --resume ab-12 --dangerously-skip-permissions"]);
+        assert_eq!(mode_flag("dontAsk"), Some("--permission-mode dontAsk"));
+        assert_eq!(mode_flag("x; rm -rf ~"), None);
         // ocui-sh liest die Env selbst.
         assert_eq!(s(true).0, OWN);
     }

@@ -49,7 +49,13 @@ fn main() {
             .ok()
             .filter(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-'))
             .map(|r| format!(" --resume {r}"))
-            .unwrap_or_default();
+            .unwrap_or_default()
+            // Permission-mode start flag from pty_open (mode_flag): only letters, "-" and spaces.
+            + &std::env::var("OPEN_CLAUDE_FLAG")
+                .ok()
+                .filter(|f| !f.is_empty() && f.bytes().all(|b| b.is_ascii_alphabetic() || b == b'-' || b == b' '))
+                .map(|f| format!(" {f}"))
+                .unwrap_or_default();
         // Pfad von pty_open (App-Daten, ohne " oder $), siehe theme_settings.
         match std::env::var("OPEN_CLAUDE_SETTINGS") {
             Ok(p) if !p.is_empty() => sh.run(&format!("claude --settings \"{p}\"{resume}")),

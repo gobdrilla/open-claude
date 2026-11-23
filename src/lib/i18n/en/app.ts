@@ -35,6 +35,7 @@ export default {
   "Sitzung beenden …": "End session …",
   "Sitzung beenden?": "End session?",
   "Ein laufender claude-Prozess wird abgebrochen.": "A running claude process will be aborted.",
+  "Sitzung noch nicht bereit, bitte gleich nochmal": "Session not ready yet, please try again in a moment",
   "Gast: {host}": "Guest: {host}",
   "verbinde …": "connecting …",
   "Ohne Projekt": "No project",

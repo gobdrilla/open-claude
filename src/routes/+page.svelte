@@ -159,7 +159,8 @@
   // guest: Einladung einer geteilten Sitzung, claude laeuft beim Host; host = dessen cwd (nach dem Verbinden).
   // repo bleibt dann leer (frei), sonst hielte die App den Host-Ordner fuer ein eigenes Projekt.
   // resume: earlier session this tab continues (claude --resume), from the Verlauf panel.
-  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[]; guest?: string; host?: string; resume?: string }[]>([]);
+  // mode: permission mode claude starts in after a restart from ClaudeBar.
+  let sessions = $state<{ id: string; repo: Repo; group?: string; dirs?: string[]; guest?: string; host?: string; resume?: string; mode?: string }[]>([]);
   // Projekt-Sitzung, bei mehreren die aktive. Nie eine Gruppen-Sitzung.
   const sessionOf = (p: string) => {
     const own = sessions.filter((s) => !s.group && s.repo.path === p);
@@ -964,6 +965,19 @@
     const s = { id: crypto.randomUUID(), repo: cur.repo, group: cur.group, dirs: cur.dirs, resume: sid };
     sessions.push(s);
     active = s.id;
+  }
+  /** Mode Shift+Tab cannot reach (ClaudeBar): same tab, new claude with its start flag and --resume of this conversation. */
+  function restartSession(id: string, mode: string) {
+    const i = sessions.findIndex((s) => s.id === id);
+    const sid = panels[id]?.sid;
+    if (i < 0) return;
+    if (!sid) return void (notice = t("Sitzung noch nicht bereit, bitte gleich nochmal"));
+    const s = { ...sessions[i], id: crypto.randomUUID(), resume: sid, mode };
+    forget(id);
+    // Unmounting the old Terminal closes its PTY; order keeps the tab where it was.
+    sessions[i] = s;
+    order = order.map((o) => (o === id ? s.id : o));
+    if (active === id) active = s.id;
   }
   /** /rename in that session; claude keeps the name (also for /resume). Shown at once, confirmed by the next poll. */
   function renameSession(id: string, name: string) {
@@ -1820,6 +1834,7 @@
         onnew={s.guest ? undefined : s.group ? g && (() => launchGroup(g, true)) : () => launch(s.repo, true)}
         onskills={s.group || s.guest || isFree(s.repo) ? undefined : () => (skillsOpen = true)}
         onsettings={() => (claudeOpen = true)}
+        onrestart={s.guest ? undefined : (m) => restartSession(s.id, m)}
       />
     {/if}
     <!-- ClaudeBar spans the full width so the activity panel starts below its bottom border. -->
@@ -1832,6 +1847,7 @@
           cwd={s.repo.path}
           dirs={s.dirs}
           resume={s.resume}
+          startMode={s.mode}
           guest={s.guest}
           onguest={(cwd) => (s.host = cwd)}
           visible={s.id === active}

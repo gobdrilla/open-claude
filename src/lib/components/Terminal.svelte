@@ -40,12 +40,15 @@
     guest,
     onguest,
     resume,
+    startMode,
   }: {
     id: string;
     cwd: string;
     dirs?: string[];
     /** Earlier session to continue (claude --resume), from the Verlauf panel. */
     resume?: string;
+    /** Permission mode claude starts in (bypassPermissions, dontAsk), from a restart in ClaudeBar. */
+    startMode?: string;
     visible: boolean;
     onexit: () => void;
     onmode?: (mode: string) => void;
@@ -409,7 +412,7 @@
         onguest?.(h.cwd);
       });
     Promise.all(unlisten)
-      .then(() => (dead ? undefined : guest ? join(guest) : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, resume, out })))
+      .then(() => (dead ? undefined : guest ? join(guest) : invoke("pty_open", { id, cwd, cols, rows, theme: theme.dark ? "dark" : "light", dirs, resume, mode: startMode, out })))
       .then(() => {
         if (dead) return invoke("pty_close", { id });
         sent = `${cols}x${rows}`;

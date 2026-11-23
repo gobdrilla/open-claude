@@ -28,6 +28,7 @@
     onnew,
     onskills,
     onsettings,
+    onrestart,
   }: {
     id: string;
     mode?: string;
@@ -40,6 +41,8 @@
     onnew?: () => void;
     onskills?: () => void;
     onsettings: () => void;
+    /** Restart claude in this mode with --resume (modes with a start flag, see RESTART). */
+    onrestart?: (mode: string) => void;
   } = $props();
 
   const MODELS = [
@@ -94,13 +97,13 @@
     (e) => (error = String(e)),
   );
 
+  // Modi mit Startflag (pty.rs mode_flag): nicht per Umschalt+Tab erreichbar = claude damit neu starten, mit --resume.
+  const RESTART = ["bypassPermissions", "dontAsk"];
   // Alles erlauben ist nur im Zyklus, wenn claude mit --dangerously-skip-permissions lief; das zeigt sich, sobald die Fusszeile ihn einmal meldet.
-  // shortcut: manuell mit --allow-dangerously-skip-permissions gestartet bleibt er versteckt, bis er per Umschalt+Tab im Terminal einmal kommt.
   const bypassIn = new SvelteSet<string>();
   $effect(() => {
     if (mode === "bypassPermissions") bypassIn.add(id);
   });
-  const modes = $derived(bypassIn.has(id) ? MODES : MODES.filter(([, v]) => v !== "bypassPermissions"));
 
   // Ein Modus laesst sich nur per Umschalt+Tab weiterschalten: so oft, bis die Fusszeile ihn zeigt.
   // Wieder bei start (ab dem zweiten Druck, falls die Fusszeile nachhinkt) = einmal rum, Ziel nicht im Zyklus.
@@ -114,10 +117,16 @@
   };
   async function pickMode(target: string) {
     if (cycling) return;
+    // Nie gesehen = nicht im Zyklus: gleich neu starten statt erst durchzuschalten.
+    if (target === "bypassPermissions" && !bypassIn.has(id) && onrestart) return onrestart(target);
     cycling = true;
     const start = mode;
     await cycleTo(target, start);
-    // Nicht im Zyklus (z. B. Alles erlauben ohne --dangerously-skip-permissions): nicht still woanders stehen bleiben.
+    if (mode !== target && onrestart && RESTART.includes(target)) {
+      cycling = false;
+      return onrestart(target);
+    }
+    // Nicht im Zyklus und kein Neustart moeglich: nicht still woanders stehen bleiben.
     if (mode !== target) {
       error = t("Modus „{mode}“ ist in dieser Sitzung nicht wählbar", { mode: MODES.find(([, v]) => v === target)?.[0] ?? target });
       if (start) await cycleTo(start);
@@ -134,7 +143,7 @@
     <Select
       label={t("Modus")}
       value={mode ?? ""}
-      options={modes}
+      options={MODES}
       onchange={pickMode}
       placeholder="–"
       class={mode === "bypassPermissions" ? "border-destructive/60 text-destructive" : ""}
