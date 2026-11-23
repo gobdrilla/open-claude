@@ -967,12 +967,17 @@
     active = s.id;
   }
   /** Mode Shift+Tab cannot reach (ClaudeBar): same tab, new claude with its start flag and --resume of this conversation. */
-  function restartSession(id: string, mode: string) {
-    const i = sessions.findIndex((s) => s.id === id);
+  async function restartSession(id: string, mode: string) {
     const sid = panels[id]?.sid;
-    if (i < 0) return;
+    const cwd = sessions.find((s) => s.id === id)?.repo.path;
+    if (!cwd) return;
     if (!sid) return void (notice = t("Sitzung noch nicht bereit, bitte gleich nochmal"));
-    const s = { ...sessions[i], id: crypto.randomUUID(), resume: sid, mode };
+    // No message yet = no transcript, --resume would fail ("No conversation found"): then start fresh in that mode.
+    const past = await invoke<Past[]>("claude_sessions", { cwd }).catch(() => null);
+    if (!past) return void (notice = t("Sitzung noch nicht bereit, bitte gleich nochmal"));
+    const i = sessions.findIndex((s) => s.id === id);
+    if (i < 0) return;
+    const s = { ...sessions[i], id: crypto.randomUUID(), resume: past.some((p) => p.sid === sid) ? sid : undefined, mode };
     forget(id);
     // Unmounting the old Terminal closes its PTY; order keeps the tab where it was.
     sessions[i] = s;
