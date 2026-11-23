@@ -152,7 +152,7 @@ export default {
   "Berechtigungsmodus (Umschalt+Tab im Terminal)": "Permission mode (Shift+Tab in the terminal)",
   Berechtigungsmodus: "Permission mode",
   "Modell für diese Sitzung (/model)": "Model for this session (/model)",
-  Denken: "Thinking",
+  Denken: "Effort",
   Standard: "Default",
   "Wie gründlich Claude nachdenkt (/effort)": "How thoroughly Claude thinks (/effort)",
   "Skills und Plugins dieses Projekts": "Skills and plugins of this project",
@@ -168,7 +168,7 @@ export default {
   "Claude startet": "Claude is starting",
 
   // ClaudeSettingsDialog
-  "Modell & Denken": "Model & thinking",
+  "Modell & Denken": "Model & effort",
   "Standard (empfohlen)": "Default (recommended)",
   "Wie gründlich Claude nachdenkt": "How thoroughly Claude thinks",
   "Erweitertes Denken": "Extended thinking",
