@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import PlugIcon from "@lucide/svelte/icons/plug";
   import SettingsIcon from "@lucide/svelte/icons/settings";
   import Share2Icon from "@lucide/svelte/icons/share-2";
@@ -93,19 +94,29 @@
     (e) => (error = String(e)),
   );
 
+  // Alles erlauben ist nur im Zyklus, wenn claude mit --dangerously-skip-permissions lief; das zeigt sich, sobald die Fusszeile ihn einmal meldet.
+  // shortcut: manuell mit --allow-dangerously-skip-permissions gestartet bleibt er versteckt, bis er per Umschalt+Tab im Terminal einmal kommt.
+  const bypassIn = new SvelteSet<string>();
+  $effect(() => {
+    if (mode === "bypassPermissions") bypassIn.add(id);
+  });
+  const modes = $derived(bypassIn.has(id) ? MODES : MODES.filter(([, v]) => v !== "bypassPermissions"));
+
   // Ein Modus laesst sich nur per Umschalt+Tab weiterschalten: so oft, bis die Fusszeile ihn zeigt.
+  // Wieder bei start (ab dem zweiten Druck, falls die Fusszeile nachhinkt) = einmal rum, Ziel nicht im Zyklus.
   let cycling = false;
-  const cycleTo = async (target: string) => {
+  const cycleTo = async (target: string, start?: string) => {
     for (let i = 0; mode !== target && i < MODES.length; i++) {
       await invoke("pty_write", { id, data: "\x1b[Z" }).catch((e) => (error = String(e)));
       await sleep(250);
+      if (i > 0 && start && mode === start) return;
     }
   };
   async function pickMode(target: string) {
     if (cycling) return;
     cycling = true;
     const start = mode;
-    await cycleTo(target);
+    await cycleTo(target, start);
     // Nicht im Zyklus (z. B. Alles erlauben ohne --dangerously-skip-permissions): nicht still woanders stehen bleiben.
     if (mode !== target) {
       error = t("Modus „{mode}“ ist in dieser Sitzung nicht wählbar", { mode: MODES.find(([, v]) => v === target)?.[0] ?? target });
@@ -123,7 +134,7 @@
     <Select
       label={t("Modus")}
       value={mode ?? ""}
-      options={MODES}
+      options={modes}
       onchange={pickMode}
       placeholder="–"
       class={mode === "bypassPermissions" ? "border-destructive/60 text-destructive" : ""}
