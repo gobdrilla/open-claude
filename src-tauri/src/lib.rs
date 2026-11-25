@@ -992,6 +992,20 @@ pub fn run() {
                     }
                 });
             }
+            // Windows: WebView2's browser keys off (Ctrl+R/Ctrl+Shift+R/F5 reload, Ctrl+P print, Ctrl+F find, F12 DevTools,
+            // Back/Forward): a desktop app, not a browser. The page still gets the keydown, so the app's own shortcuts work.
+            // Dev builds keep them for reload and DevTools.
+            #[cfg(all(windows, not(debug_assertions)))]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|wv| unsafe {
+                    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+                    use windows::core::Interface;
+                    let settings = wv.controller().CoreWebView2().and_then(|c| c.Settings()).and_then(|s| s.cast::<ICoreWebView2Settings3>());
+                    if let Err(e) = settings.and_then(|s| s.SetAreBrowserAcceleratorKeysEnabled(false)) {
+                        eprintln!("WebView2 browser keys: {e}");
+                    }
+                });
+            }
             // Ohne Tray (Linux ohne AppIndicator-Bibliothek) weiterstarten, Schliessen beendet dann.
             let ok = tray_supported() && tray(app.handle()).map_err(|e| eprintln!("Tray nicht verfügbar: {e}")).is_ok();
             TRAY_OK.store(ok, Ordering::Relaxed);
