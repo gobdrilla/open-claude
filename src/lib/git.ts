@@ -252,7 +252,7 @@ export type ReleaseInput = {
   target: string | null;
 };
 
-export type RunAction = "rerun" | "rerun_failed" | "cancel";
+export type RunAction = "rerun" | "rerun_failed" | "cancel" | "play";
 
 export type RunStatus = "queued" | "running" | "success" | "failure" | "cancelled" | "skipped";
 
@@ -282,6 +282,8 @@ export type Job = {
   started_at: string | null;
   duration_s: number | null;
   web_url: string;
+  /** GitLab-Job mit `when: manual`, noch nicht gelaufen. */
+  manual: boolean;
 };
 
 export const forge = {
@@ -312,7 +314,7 @@ export const forge = {
     call<ForgeList<Run>>("forge_runs", { repo, remoteUrl, branch, page }),
   /** Jobs eines Runs bzw. einer Pipeline. */
   jobs: (repo: string, remoteUrl: string, runId: number) => call<Job[]>("forge_jobs", { repo, remoteUrl, runId }),
-  /** Neustart/Abbruch. GitHub: Run rerun|rerun_failed|cancel, Job rerun. GitLab: rerun_failed|cancel, Job rerun|cancel. */
+  /** Neustart/Abbruch. GitHub: Run rerun|rerun_failed|cancel, Job rerun. GitLab: rerun_failed|cancel, Job rerun|cancel|play. */
   runAction: (repo: string, remoteUrl: string, id: number, job: boolean, action: RunAction) =>
     call<void>("forge_run_action", { repo, remoteUrl, id, job, action }),
   repoAccount: (repo: string) => call<RepoAccount>("forge_repo_account", { repo }),

@@ -115,6 +115,8 @@ pub struct Job {
     started_at: Option<String>,
     duration_s: Option<u64>,
     web_url: String,
+    /// GitLab-Job mit `when: manual`, der noch nicht lief: per "play" startbar.
+    manual: bool,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -860,6 +862,7 @@ fn gh_job(j: &Value, now: i64) -> Job {
         started_at: opt(&j["started_at"]),
         duration_s: if j["status"] == "queued" { None } else { span(&j["started_at"], &j["completed_at"], now) },
         web_url: s(&j["html_url"]),
+        manual: false,
     }
 }
 
@@ -872,6 +875,7 @@ fn gl_job(j: &Value) -> Job {
         started_at: opt(&j["started_at"]),
         duration_s: j["duration"].as_f64().map(|d| d.max(0.0).round() as u64),
         web_url: s(&j["web_url"]),
+        manual: j["status"] == "manual",
     }
 }
 
@@ -1095,6 +1099,7 @@ fn run_action_path(github: bool, job: bool, id: u64, action: &str) -> Result<Str
         (true, false, "cancel") => "cancel",
         (false, _, "rerun_failed") => "retry",
         (false, true, "rerun") => "retry",
+        (false, true, "play") => "play",
         (false, _, "cancel") => "cancel",
         _ => return Err(tr!("Aktion nicht unterstützt: {action}", "Action not supported: {action}")),
     };
@@ -1378,6 +1383,8 @@ mod tests {
         assert_eq!(p(false, false, "rerun_failed").unwrap(), "/pipelines/7/retry");
         assert_eq!(p(false, false, "cancel").unwrap(), "/pipelines/7/cancel");
         assert_eq!(p(false, true, "rerun").unwrap(), "/jobs/7/retry");
+        assert_eq!(p(false, true, "play").unwrap(), "/jobs/7/play");
+        assert!(p(true, true, "play").is_err());
         assert_eq!(p(false, true, "cancel").unwrap(), "/jobs/7/cancel");
         // GitHub kann einzelne Jobs nicht abbrechen, GitLab Pipelines nicht komplett neu starten.
         assert!(p(true, true, "cancel").is_err());
@@ -1582,7 +1589,8 @@ mod tests {
         assert_eq!(j.duration_s, None);
         let j = gl_job(&json!({"id": 3, "name": "test", "stage": "test", "status": "failed",
             "started_at": "s", "duration": 12.6, "web_url": "u"}));
-        assert_eq!((j.stage.as_deref(), j.status, j.duration_s), (Some("test"), "failure", Some(13)));
+        assert_eq!((j.stage.as_deref(), j.status, j.duration_s, j.manual), (Some("test"), "failure", Some(13), false));
+        assert!(gl_job(&json!({"id": 4, "status": "manual"})).manual);
     }
 
     #[test]

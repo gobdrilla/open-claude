@@ -13,6 +13,7 @@
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import ListRestartIcon from "@lucide/svelte/icons/list-restart";
+  import PlayIcon from "@lucide/svelte/icons/play";
   import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
   import SquareIcon from "@lucide/svelte/icons/square";
 
@@ -313,6 +314,8 @@
                     {#if kind === "gitlab"}
                       {@render action(t("Job abbrechen"), () => act(r.id, j.id, true, "cancel"), SquareIcon, `true:${j.id}`)}
                     {/if}
+                  {:else if j.manual}
+                    {@render action(t("Job starten"), () => act(r.id, j.id, true, "play"), PlayIcon, `true:${j.id}`)}
                   {:else if j.status !== "skipped"}
                     {@render action(t("Job neu starten"), () => act(r.id, j.id, true, "rerun"), RotateCcwIcon, `true:${j.id}`)}
                   {/if}

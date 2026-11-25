@@ -140,6 +140,7 @@ export default {
   "Fehlgeschlagene Jobs neu starten": "Rerun failed jobs",
   "Job abbrechen": "Cancel job",
   "Job neu starten": "Rerun job",
+  "Job starten": "Run job",
   "Keine Jobs.": "No jobs.",
   "Mehr laden": "Load more",
   "Keine {label}.": "No {label}.",
